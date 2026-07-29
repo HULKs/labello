@@ -7,12 +7,11 @@ use axum::{
 };
 use labello_client::{
     AddMigrationSkeletonRequest, AppendEventRequest, AssignNextRequest, AssignmentActionRequest,
-    AssignmentAvailability,
-    AssignmentAvailabilityEntry, AssignmentAvailabilityRequest, ConfirmMigrationRequest,
-    CorrectionRequest, ExcludeMigrationTargetRequest, KeepMigrationTargetRequest,
-    ManualMigrationCommandResult, OfflineBundleRequest, PrelabelSuggestionRequest,
-    ReopenMigrationTargetRequest, ReviewMigrationRequest, SaveMigrationSkeletonRequest,
-    RevisitMigrationTargetRequest, StartMigrationPassRequest,
+    AssignmentAvailability, AssignmentAvailabilityEntry, AssignmentAvailabilityRequest,
+    ConfirmMigrationRequest, CorrectionRequest, ExcludeMigrationTargetRequest,
+    KeepMigrationTargetRequest, ManualMigrationCommandResult, OfflineBundleRequest,
+    PrelabelSuggestionRequest, ReopenMigrationTargetRequest, ReviewMigrationRequest,
+    RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest, StartMigrationPassRequest,
 };
 use labello_domain::{
     Actor, AdjudicationDecision, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind,
