@@ -30,8 +30,9 @@ Use documentation according to its status:
   acceptance and implementation ownership.
 - `docs/plans/README.md` classifies plans. Completed and historical plans are
   not current behavior references unless a maintained document says otherwise.
-- `docs/tracking/issues.md` and `docs/tracking/feature-requests.md` are backlogs,
-  not supported-behavior contracts.
+- [GitHub issues](https://github.com/HULKs/labello/issues) track planned work;
+  the maintainer-only [Labello project](https://github.com/orgs/HULKs/projects/12)
+  carries workflow metadata. Neither is a supported-behavior contract.
 - `labello.md` is target product intent and may describe unimplemented behavior.
 
 When behavior changes, update the relevant normative current document in the
@@ -62,8 +63,8 @@ revision-specific records instead of silently rewriting them as current.
   own workspace, lockfile, target directory, deterministic presets, and
   opt-in live-server mode.
 - `assets/`: tracked icon and font assets used by the product.
-- `docs/`: normative references, tracking backlogs, active/completed plans, and
-  historical delivery records.
+- `docs/`: normative references, active/completed plans, and historical
+  delivery records.
 
 Keep dependencies flowing from domain types toward storage/client, then API/UI,
 then executable apps. Do not move HTTP, filesystem, browser, or egui concerns

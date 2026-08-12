@@ -29,7 +29,11 @@ Supporting project material is grouped by purpose:
   inventory.
 - [`history/`](history/) contains baselines and delivery records retained for
   context. Historical records are not normative for current behavior.
-- [`tracking/`](tracking/) contains issue and feature-request backlogs.
+
+Planned work is tracked in [GitHub issues](https://github.com/HULKs/labello/issues)
+and organized for authorized maintainers in the
+[Labello project](https://github.com/orgs/HULKs/projects/12). Neither is
+evidence of current product support.
 
 [`labello.md`](../labello.md) is target product intent and can describe
 unimplemented behavior. The root [`README.md`](../README.md) is the current
@@ -48,7 +52,6 @@ Documents use these statuses:
 - **Historical:** a baseline or delivery record retained only for context.
 - **Target product:** desired product behavior that is not evidence of current
   implementation.
-- **Tracking:** a mutable backlog, not a behavior contract.
 
 Every normative current document must name its status, role-based owner,
 audience, and last verified date/revision. Add `Supersedes` when an older

@@ -110,8 +110,8 @@ Current explicit lifecycle logs are `import.created`, `import.sealed`,
 and `import.recovery.completed`. Import failures can currently appear only as
 the generic `api.error` or `api.request.rejected` events, and cancellation does
 not emit a dedicated lifecycle event. Do not build alerts that assume
-`import.failed` or `import.cancelled` exists until the corresponding tracking
-issue is completed.
+`import.failed` or `import.cancelled` exists until
+[issue #29](https://github.com/HULKs/labello/issues/29) is completed.
 
 Safe import fields are limited to import and destination IDs, actor ID,
 profile, phase, aggregate counts, elapsed time, and a bounded error category.
@@ -126,7 +126,8 @@ The storage service contains configured cleanup for retained failed,
 cancelled, and successful job metadata, but the production server does not
 currently invoke or schedule it. The retention settings are therefore not an
 operational cleanup guarantee. Terminal job metadata and API control records
-can grow until the cleanup and control-record retention issues are completed.
+can grow until [issue #27](https://github.com/HULKs/labello/issues/27) and
+[issue #28](https://github.com/HULKs/labello/issues/28) are completed.
 
 Import is available only when the configured filesystem passes secure
 beneath-open, file/directory sync, and atomic no-replace publication probes.
@@ -137,8 +138,9 @@ provides preflight phase durations plus aggregate source and output counts;
 `import.preflight.completed` provides a total diagnostic count. Diagnostic
 severity totals, cleanup failures, inactive-job age, and staged-byte gauges are
 not complete production signals. Monitor free space and dataset-root
-availability externally, and treat the richer import alert set in the tracking
-issue as unavailable until its instrumentation is implemented.
+availability externally, and treat the richer import alert set in
+[issue #30](https://github.com/HULKs/labello/issues/30) as unavailable until
+its instrumentation is implemented.
 
 ## Production Deployment
 

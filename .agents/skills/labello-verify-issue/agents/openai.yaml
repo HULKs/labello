@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Verify Issue"
+  short_description: "Independently verify a Labello issue implementation"
+  default_prompt: "Use $labello-verify-issue to independently verify an issue implementation against its acceptance criteria."
