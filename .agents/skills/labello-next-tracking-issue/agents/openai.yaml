@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Next Tracking Issue"
+  short_description: "Reserve, draft, and file the next Labello tracking item"
+  default_prompt: "Use $labello-next-tracking-issue to reserve, analyze, draft, and file the next unfiled Labello tracking item."

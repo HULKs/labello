@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello New Issue"
+  short_description: "Draft and file a prompt-supplied Labello issue"
+  default_prompt: "Use $labello-new-issue to turn my issue description into an approved GitHub issue."
