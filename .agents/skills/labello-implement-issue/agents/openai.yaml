@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Implement Issue"
+  short_description: "Implement a Labello issue with evidence-based handoff"
+  default_prompt: "Use $labello-implement-issue to implement a GitHub issue and return it ready for independent review."
