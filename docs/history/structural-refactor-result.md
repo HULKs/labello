@@ -6,7 +6,7 @@ Prepared: 2026-07-28
 
 Baseline: `09cb40d`
 
-Related issue: [Structural ownership refactor](../tracking/issues.md)
+Baseline record: [Structural refactor baseline](structural-refactor-baseline.md)
 
 ## Delivery
 

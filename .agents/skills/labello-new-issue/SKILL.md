@@ -1,6 +1,6 @@
 ---
 name: labello-new-issue
-description: "Analyze, draft, iterate, and only after explicit approval file a new Labello GitHub issue supplied directly by the user, including suitable labels, Labello project placement, status, and organization issue-field priority. Use when the user describes a bug, improvement, feature request, investigation, or documentation problem in the prompt and wants it turned into a GitHub issue. Do not use to select the next item from docs/tracking."
+description: "Analyze, draft, iterate, and only after explicit approval file a new Labello GitHub issue supplied directly by the user, including suitable labels, Labello project placement, status, and organization issue-field priority. Use when the user describes a bug, improvement, feature request, investigation, or documentation problem in the prompt and wants it turned into a GitHub issue."
 ---
 
 # Labello New Issue
@@ -12,7 +12,8 @@ Turn a prompt-supplied concern into a clear, evidence-backed GitHub issue. Prese
 1. Read the repository `AGENTS.md` and obey its ownership, safety, and verification rules.
 2. Extract the reported behavior, expected outcome, affected workflow, constraints, and any explicit scope exclusions from the prompt.
 3. Make safe, narrow assumptions when details can be discovered from the repository. Ask only when a missing product decision would materially change the issue.
-4. Search both open and closed issues in `HULKs/labello` and the unchecked items in `docs/tracking` for duplicates or useful existing context.
+4. Search open and closed issues in `HULKs/labello` semantically for duplicates
+   or useful existing context.
 5. If the issue already exists on GitHub, return its link and explain the match instead of drafting a duplicate.
 
 ## Investigate

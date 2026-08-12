@@ -438,7 +438,8 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 
 The broader product requirements and planned behavior are documented in
 [labello.md](labello.md). That document describes the target product and is
-not evidence of current support. Fully absent product capabilities are tracked
-in [feature requests](docs/tracking/feature-requests.md); partial behavior,
+not evidence of current support. Planned capabilities, partial behavior,
 contract disagreements, and implementation defects are tracked in
-[issues](docs/tracking/issues.md).
+[GitHub issues](https://github.com/HULKs/labello/issues) and organized for
+authorized maintainers in the
+[Labello project](https://github.com/orgs/HULKs/projects/12).
