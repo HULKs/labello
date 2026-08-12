@@ -68,43 +68,101 @@ Only after that continue with the next issue.
   - Completed on 2026-07-31 with chord, modifier, key-alias, conflict, and
     assignment-status search across keyboard and Pan-drag shortcuts.
 - [ ] When in the overview after finishing all objects in the current image, all object should be clickable to directly edit them again.
-- [ ] Move statistics from separate view into an overlay, to not have to leave the current assignment. 
-- [ ] Current activity live stats in the bottom bar. 
+  - Filed as [#1](https://github.com/HULKs/labello/issues/1) on 2026-08-12.
+- [ ] Move statistics from separate view into an overlay, to not have to leave the current assignment.
+  - Filed as [#2](https://github.com/HULKs/labello/issues/2) on 2026-08-12.
+- [ ] Current activity live stats in the bottom bar.
+  - Filed as [#3](https://github.com/HULKs/labello/issues/3) on 2026-08-12.
 - [ ] Image viewer border has a clipping pixel row on the left.
+  - Skipped on 2026-08-12: no viewport, image, or deterministic reproduction is
+    recorded, and the clipping artifact could not be established from the current
+    canvas code or tests.
 - [ ] Remove image grid overlay.
-- [ ] Remove zoom controls. 
+  - Filed as [#4](https://github.com/HULKs/labello/issues/4) on 2026-08-12.
+- [ ] Remove zoom controls.
+  - Filed as [#5](https://github.com/HULKs/labello/issues/5) on 2026-08-12.
 - [ ] Remove Mark as not present from UI when disabled.
+  - Skipped on 2026-08-12: the current UI already renders the action only when
+    the skeleton and keypoint configuration allow an absent state.
 - [ ] Distinsguish visible and occluded points rendered in image. In all views! Also Increase contrast of all things rendered on image, with e.g. a secondary color/border.
+  - Filed as [#6](https://github.com/HULKs/labello/issues/6) on 2026-08-12.
 - [ ] During review, added missing object keypoints that have no bounding boxes are not zoomed in on and are not listed in the inspector.
+  - Filed as [#7](https://github.com/HULKs/labello/issues/7) on 2026-08-12.
 - [ ] Add small Dot in the workflow selector, for the current workflow.
+  - Filed as [#8](https://github.com/HULKs/labello/issues/8) on 2026-08-12.
 - [ ] Add button to fully remove image from dataset, even from all other workflows.
+  - Filed as [#9](https://github.com/HULKs/labello/issues/9) on 2026-08-12.
 - [ ] Add button to mark entire image as unsure. To be reviewed.
+  - Skipped on 2026-08-12: the backlog does not define the persisted “unsure”
+    state, who may set it, or how it enters and exits review, so filing it would
+    require a major workflow-policy decision.
 - [ ] People page in admin can be visally improved. Full width, better margins...
+  - Skipped on 2026-08-12: the requested visual outcome is subjective and has no
+    concrete layout, viewport, or acceptance criteria.
 - [ ] Classes color: add color picker
+  - Filed as [#10](https://github.com/HULKs/labello/issues/10) on 2026-08-12.
 - [ ] Assignment balance policy from ratio to absolute window of x amount of images, can be between the most and least labeled classes.
+  - Filed as [#11](https://github.com/HULKs/labello/issues/11) on 2026-08-12.
 - [ ] Previous assignment in review
+  - Filed as [#12](https://github.com/HULKs/labello/issues/12) on 2026-08-12.
 - [ ] Validate Tutorial UI. Example images should be able to be provided. Image should be uploaded via file picker.
-- [ ] Confirm no guides & finish rename. 
+  - Filed as [#13](https://github.com/HULKs/labello/issues/13) on 2026-08-12.
+- [ ] Confirm no guides & finish rename.
+  - Skipped on 2026-08-12: neither the guide state to confirm nor the old and new
+    names are identified, so the intended behavior cannot be determined safely.
 - [ ] Shortcut text color in highlighted button needs be improved.
+  - Filed as [#14](https://github.com/HULKs/labello/issues/14) on 2026-08-12.
 - [ ] Remove Connection Setup section. Replace with proper login page, this should be cleaneup completely.
+  - Filed as [#15](https://github.com/HULKs/labello/issues/15) on 2026-08-12.
 - [ ] Improve wasm app loading time.
+  - Filed as [#16](https://github.com/HULKs/labello/issues/16) on 2026-08-12.
 - [ ] Webp image proxies.
+  - Filed as [#17](https://github.com/HULKs/labello/issues/17) on 2026-08-12.
 - [ ] Bounding boxes have minimum size currently. Investigate if this is correct and intended.
+  - Filed as [#18](https://github.com/HULKs/labello/issues/18) on 2026-08-12.
 - [ ] Second bar, more actions buttons collects some buttons even though more space is available.
+  - Filed as [#19](https://github.com/HULKs/labello/issues/19) on 2026-08-12.
 - [ ] Setup button icon should be home icon.
+  - Filed as [#20](https://github.com/HULKs/labello/issues/20) on 2026-08-12.
 - [ ] Look into lease expiration. Optimistic reclaiming, if no other claims happened after expiration.
+  - Filed as [#21](https://github.com/HULKs/labello/issues/21) on 2026-08-12.
 - [ ] Better, more obvious visual feedback, when the class changes after the current class is nto available for the next image.
+  - Filed as [#22](https://github.com/HULKs/labello/issues/22) on 2026-08-12.
 - [ ] Remove start correction pass.
+  - Filed as [#23](https://github.com/HULKs/labello/issues/23) on 2026-08-12.
 - [ ] Investigate api errors not showing up in server log.
-- [ ] Normal non-migration annotation view need major. 
+  - Filed as [#24](https://github.com/HULKs/labello/issues/24) on 2026-08-12.
+- [ ] Normal non-migration annotation view need major.
+  - Skipped on 2026-08-12: “need major” does not identify a defect, desired
+    behavior, or acceptance criteria.
 - [ ] Allow review correction does not seem to work. Causes api errors when accepting and not correction UI are available.
+  - Skipped on 2026-08-12: current UI, API, storage, replay, and persistence tests
+    cover bounding-box and skeleton reviewer correction, retry, and finalization;
+    the reported failure is no longer reproducible.
 - [ ] See if rejection during review is currently working and if it able to be reannotated
-- [ ] During review, one should be able to add missing objects with a location as a rejection reason  
+  - Skipped on 2026-08-12: current workflow and storage tests verify rejection
+    transitions to `NeedsCorrection`, and annotation claiming explicitly makes
+    that state eligible for reannotation.
+- [ ] During review, one should be able to add missing objects with a location as a rejection reason
+  - Skipped on 2026-08-12: the item does not define whether the location is a
+    new annotation, structured review evidence, or a correction target, nor how
+    it affects audit history and reannotation.
 - [ ] Review inspector with a bit of context on the current active item.
+  - Filed as [#25](https://github.com/HULKs/labello/issues/25) on 2026-08-12.
 - [ ] Debounce/edge trigger submission/accept buttons. Holding the button should only do one accept.
+  - Skipped on 2026-08-12: buttons use egui’s edge-triggered `clicked()` signal,
+    shortcuts consume press events, and pending-operation state prevents a
+    second submission while a request is active.
 - [ ] Review on mobile does not show the workflow type, making it imposibble to now what is being reviewed.
-- [ ] Mobile touch zoom behavior in annotation review is funky. Jumping when starting to zoom.  
-- [ ] While having no internet connection, actions like submit understandibly fail. But currently give no feedback instead silently doing nothing. 
+  - Filed as [#26](https://github.com/HULKs/labello/issues/26) on 2026-08-12.
+- [ ] Mobile touch zoom behavior in annotation review is funky. Jumping when starting to zoom.
+  - Skipped on 2026-08-12: current canvas code anchors pinch zoom at the prior
+    gesture center and has regression tests for initial pinch translation and
+    two-finger zoom; no current browser/device reproduction is recorded.
+- [ ] While having no internet connection, actions like submit understandibly fail. But currently give no feedback instead silently doing nothing.
+  - Skipped on 2026-08-12: failed workflow requests currently populate
+    `runtime.error`, and the application bar exposes that error through a
+    visible status control; the silent-failure report is no longer reproducible.
 
 ## Documentation deep-dive findings
 
@@ -116,6 +174,7 @@ before changing behavior.
 ### Enforce configured import-job retention
 
 - [ ] Make import-job retention effective in production.
+  - Filed as [#27](https://github.com/HULKs/labello/issues/27) on 2026-08-12.
   - `docs/configuration.md` documents `failedRetentionHours` and
     `successfulMetadataRetentionDays` as storage cleanup policy and now
     explicitly notes the production scheduling limitation.
@@ -140,6 +199,7 @@ before changing behavior.
 
 - [ ] Define and implement lifecycle rules for import API job records and
   idempotency-request records.
+  - Filed as [#28](https://github.com/HULKs/labello/issues/28) on 2026-08-12.
   - `ImportControlStore` persists API job records and request-id mappings under
     its control-store directories.
   - Import job cleanup removes job workspace directories, but does not define
@@ -178,6 +238,7 @@ before changing behavior.
 ### Complete import lifecycle event coverage
 
 - [ ] Add complete production log coverage for import terminal outcomes.
+  - Filed as [#29](https://github.com/HULKs/labello/issues/29) on 2026-08-12.
   - The operations guide previously listed `import.failed` and
     `import.cancelled`; it now documents that those events are not emitted.
   - Current explicit lifecycle logging covers creation, sealing, completed
@@ -198,6 +259,7 @@ before changing behavior.
 ### Make import monitoring guidance actionable
 
 - [ ] Add safe production signals for the full import monitoring set.
+  - Filed as [#30](https://github.com/HULKs/labello/issues/30) on 2026-08-12.
   - The previous guide recommended monitoring staged bytes, free disk space,
     phase duration, diagnostic severity totals, cleanup failures, and
     inactive-job age. The current guide now distinguishes existing signals from
@@ -390,6 +452,7 @@ before changing behavior.
 ### Add automated documentation validation
 
 - [ ] Add CI checks for documentation structure and code/document parity.
+  - Filed as [#31](https://github.com/HULKs/labello/issues/31) on 2026-08-12.
   - The example server configuration is exercised by tests, but Markdown,
     local links and anchors, code references, route inventories, lifecycle
     event names, profile identifiers, and validation constraints are not
@@ -428,6 +491,7 @@ before changing behavior.
 
 - [ ] Make the stated Rust 1.85 compatibility claim enforceable or correct the
   documentation.
+  - Filed as [#32](https://github.com/HULKs/labello/issues/32) on 2026-08-12.
   - The root README states a Rust 1.85 requirement, while the workspace manifest
     does not declare `rust-version` and CI does not visibly protect that minimum
     supported Rust version from dependency or language-feature drift.
@@ -469,6 +533,7 @@ in [`feature-requests.md`](feature-requests.md).
 ### Establish and verify a supported stylus-input contract
 
 - [ ] Verify, define, and document stylus support for annotation actions.
+  - Filed as [#33](https://github.com/HULKs/labello/issues/33) on 2026-08-12.
   - The canvas treats a single stylus like a generic pointer, but current
     documentation and tests do not establish the US-03 guarantees for supported
     browsers/devices or mixed pen, mouse, and touch input.
@@ -486,6 +551,7 @@ in [`feature-requests.md`](feature-requests.md).
 ### Render configured tutorial example images
 
 - [ ] Load and display task tutorial example images to annotators.
+  - Filed as [#34](https://github.com/HULKs/labello/issues/34) on 2026-08-12.
   - Administrators can edit `TutorialContent.exampleImages`, but the tutorial
     overlay currently renders only its title and example text.
   - Completion criteria:
@@ -503,6 +569,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Implement swipe-to-approve and swipe-to-reject for the active review
   object.
+  - Filed as [#35](https://github.com/HULKs/labello/issues/35) on 2026-08-12.
   - Approval review currently provides buttons and configurable shortcuts but
     does not implement the swipe interaction required by US-10.
   - Completion criteria:
@@ -518,6 +585,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Extend imbalance monitoring and assignment enforcement to cover both task
   and class aggregates.
+  - Filed as [#36](https://github.com/HULKs/labello/issues/36) on 2026-08-12.
   - Current eligibility compares completion counts among enabled tasks. Because
     each enabled task currently has exactly one class, this can look like class
     balancing but does not aggregate multiple tasks that share one class.
@@ -537,6 +605,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Decide and implement the authoritative dataset-configuration format
   contract.
+  - Filed as [#37](https://github.com/HULKs/labello/issues/37) on 2026-08-12.
   - The target design requires JSON dataset configuration and recommends
     `labello.dataset.json`; production uses versioned
     `labello.dataset.toml`. Keybindings are also TOML while workflow event/state
@@ -557,6 +626,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Reconcile the target `1 -> 2 -> 3` migration model with the supported
   `2 -> 3` implementation.
+  - Filed as [#38](https://github.com/HULKs/labello/issues/38) on 2026-08-12.
   - The target says persisted schema versions start at 1 and migrations are
     sequential. Current code recognizes version 3 and legacy version 2; version
     1 artifacts are rejected.
@@ -575,6 +645,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Add an annotator-owned prelabel-configuration selection for current and
   upcoming images.
+  - Filed as [#39](https://github.com/HULKs/labello/issues/39) on 2026-08-12.
   - Tasks currently identify all associated configurations and the client
     requests every one of them. US-12 requires the annotator to choose from
     configurations made available for that task.
@@ -594,6 +665,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Replace generic accepted-prelabel model identity with trusted exact
   provenance.
+  - Filed as [#40](https://github.com/HULKs/labello/issues/40) on 2026-08-12.
   - Accepted suggestions currently record
     `modelId = "browser-local-or-server"` instead of the selected configuration's
     model ID and version.
@@ -609,6 +681,7 @@ in [`feature-requests.md`](feature-requests.md).
 ### Maintain a target-to-current conformance matrix
 
 - [ ] Make the product specification a complete and reviewable target baseline.
+  - Filed as [#41](https://github.com/HULKs/labello/issues/41) on 2026-08-12.
   - `labello.md` has an empty Non-Goals section, contains an incomplete
     reviewer-correction event example, and does not classify major delivered
     capabilities such as import, snapshots, accessibility, or manual migration.
@@ -627,6 +700,7 @@ in [`feature-requests.md`](feature-requests.md).
 ### Add browser end-to-end coverage
 
 - [ ] Add a browser end-to-end suite for the deployed WASM client and API.
+  - Filed as [#42](https://github.com/HULKs/labello/issues/42) on 2026-08-12.
   - Current UI unit tests and the native inspector do not prove WASM startup,
     credentialed CORS, cookies, OAuth redirects, IndexedDB draft recovery,
     browser input, responsive rendering, or real image networking.
@@ -645,6 +719,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Replace process-local ingest job status with a durable or explicitly
   resumable lifecycle.
+  - Filed as [#43](https://github.com/HULKs/labello/issues/43) on 2026-08-12.
   - Current ingest jobs and some related caches disappear on restart, unlike the
     durable import job lifecycle.
   - Completion criteria:
@@ -661,6 +736,7 @@ in [`feature-requests.md`](feature-requests.md).
 
 - [ ] Establish and document tested dataset-scale limits for ingestion,
   assignment, statistics, snapshots, and supported imports.
+  - Filed as [#44](https://github.com/HULKs/labello/issues/44) on 2026-08-12.
   - Format correctness under configured ceilings is not an official COCO-scale
     performance or reliability claim.
   - Completion criteria:
