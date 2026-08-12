@@ -312,19 +312,25 @@ and has an opt-in live mode for local development servers.
 
 ## Development
 
-Run the workspace checks from the repository root:
+Run the canonical changed-path verification from the repository root:
 
 ```sh
-cargo build --workspace
-cargo test --workspace
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
+./scripts/verify.sh changed origin/main
 ```
 
-Build the browser distribution from `apps/labello-wasm`:
+It checks formatting, Clippy, all-feature workspace tests, inspector-preset UI
+tests, the standalone inspector with its tracked lockfile, and the WASM target.
+It also runs the locked release browser build when affected paths require it.
+Use `./scripts/verify.sh all` to run every machine check regardless of changed
+paths. Prerequisites, risk-specific checks, CI equivalence, evidence, and
+independent acceptance are defined in the
+[contributor guide](CONTRIBUTING.md) and
+[verification contract](docs/verification.md).
+
+To build only the browser distribution from `apps/labello-wasm`:
 
 ```sh
-trunk build --release
+trunk build --release --locked
 ```
 
 The output is written to `apps/labello-wasm/dist`. The API health endpoint is

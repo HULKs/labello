@@ -210,14 +210,19 @@ change only with that graph.
 
 ## Commands
 
-Run main workspace commands from the repository root:
+Run the canonical changed-path verification from the repository root:
 
 ```sh
-cargo build --workspace
-cargo test --workspace
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
+./scripts/verify.sh changed origin/main
 ```
+
+This fails closed on unclassified paths, runs the required locked baseline, and
+adds the locked release Trunk build when browser-affecting paths changed. Use
+`./scripts/verify.sh all` to run every machine check, `./scripts/verify.sh docs`
+for a proven documentation-only change, and `./scripts/verify.sh classify
+origin/main` to inspect the selected risk profiles. The exact commands,
+prerequisites, risk-specific manual checks, and CI equivalence are normative in
+`docs/verification.md`.
 
 Prefer focused checks while developing:
 
@@ -242,7 +247,7 @@ Run browser commands from `apps/labello-wasm`:
 
 ```sh
 trunk serve --address 127.0.0.1 --port 8081
-trunk build --release
+trunk build --release --locked
 ```
 
 For a compiler-only WASM check from the root:
@@ -260,6 +265,8 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
 ## Verification
 
 - Run focused tests first, then broader workspace checks proportional to risk.
+- Before handoff, run `./scripts/verify.sh changed origin/main`; never treat a
+  stale lockfile, unavailable required check, or unclassified path as passing.
 - Domain/event changes need replay, validation, versioned-wire, and schema
   coverage.
 - Storage changes need atomicity, cache recovery, authorization/assignment, and
@@ -283,6 +290,22 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
   the full Rust test suite unless a generated contract or example is exercised
   by code.
 - State clearly which checks were run and which were not.
+
+## Completion And Review
+
+- Map every acceptance criterion to evidence and record exact commands,
+  results, visual/browser artifacts, documentation impact, skipped checks,
+  residual risks, and preservation of unrelated worktree changes.
+- Report implementation work as **Ready for review**, never self-accepted.
+- Require a human reviewer or separately instructed verification agent to read
+  the original issue, inspect the final production diff and evidence, and try
+  to falsify the completion claims. The implementer cannot provide the
+  independent acceptance decision.
+- For high-risk work, the reviewer must trace the applicable transaction,
+  failure, recovery, authorization, compatibility, and redaction boundaries.
+- Do not close an issue, mark it accepted, or integrate it until the required
+  `Quality gate / Canonical verification` pull-request check and independent
+  review pass. See `CONTRIBUTING.md` and `docs/verification.md`.
 
 ## GUI Inspection
 
