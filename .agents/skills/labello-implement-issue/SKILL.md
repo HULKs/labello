@@ -51,7 +51,7 @@ For every command, retain the exact command, result, and material limitation. Re
 Do not call a change **Ready for review** merely because local checks pass. When the user has authorized a pull request and its metadata:
 
 1. Create or update the evidence-backed pull request without requesting review yet.
-2. Wait for the required `Quality gate / Canonical verification` check on the exact current head SHA. A stale success on an earlier head is not evidence.
+2. Wait for the required `Testing` check on the exact current head SHA. A stale success on an earlier head is not evidence.
 3. If the check fails, investigate and fix the issue within scope, rerun local verification, push the correction, and wait for the new exact-head result. If it is pending or unavailable, report `AWAITING CI`; if it remains failing, report `CHANGES REQUIRED`. Do not assign the review handoff, request reviewers, or move project status to In review.
 4. Only after the required check succeeds, assign the issue and pull request to the accountable human owner and request that owner as a reviewer when GitHub permits it and the owner is independent of the authored change. A pull-request author cannot approve their own work; in that case keep the owner as assignee and request a distinct eligible reviewer.
 5. When authorized, add the pull request to the Labello project/current iteration and move the issue or pull request to `In review` only at this successful-CI handoff boundary.

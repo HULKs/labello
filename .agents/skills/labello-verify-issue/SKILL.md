@@ -14,7 +14,7 @@ Decide whether the current implementation satisfies the issue in the real produc
 - Work read-only by default. Do not fix code, change tests, edit issue metadata, commit, close, merge, or move work to Done unless the user separately asks for that action after the verdict.
 - Treat the implementation handoff as a list of claims to test, not as evidence.
 - Run verification commands without silently updating tracked dependencies or artifacts. Recheck the worktree after verification and preserve unrelated changes.
-- Verify that the required `Quality gate / Canonical verification` check succeeded for the pull request's exact current head SHA. A success for an earlier commit does not satisfy the gate.
+- Verify that the required `Testing` check succeeded for the pull request's exact current head SHA. A success for an earlier commit does not satisfy the gate.
 
 ## Reconstruct the acceptance case
 

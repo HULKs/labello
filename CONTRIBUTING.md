@@ -41,8 +41,8 @@ that its tests pass.
 10. Have a human reviewer or separately instructed verification agent inspect
    the original issue, final diff, and evidence and try to disprove the
    completion claims. The implementer must not act as the independent reviewer.
-11. Integrate only through a pull request after the required `Quality gate /
-   Canonical verification` check and independent review pass. Repository
+11. Integrate only through a pull request after the required `Testing` check
+   and independent review pass. Repository
    administrators must protect `main` against direct pushes and require this
    status check before merge.
 

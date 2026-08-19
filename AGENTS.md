@@ -311,8 +311,8 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
 - For high-risk work, the reviewer must trace the applicable transaction,
   failure, recovery, authorization, compatibility, and redaction boundaries.
 - Do not close an issue, mark it accepted, or integrate it until the required
-  `Quality gate / Canonical verification` pull-request check and independent
-  review pass. See `CONTRIBUTING.md` and `docs/verification.md`.
+  `Testing` pull-request check and independent review pass. See
+  `CONTRIBUTING.md` and `docs/verification.md`.
 
 ## GUI Inspection
 

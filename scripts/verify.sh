@@ -34,7 +34,7 @@ require_literal() {
     local literal="$2"
 
     if ! grep -Fq -- "$literal" "$file"; then
-        printf 'quality-gate audit: %s must contain: %s\n' "$file" "$literal" >&2
+        printf 'ci audit: %s must contain: %s\n' "$file" "$literal" >&2
         return 1
     fi
 }
@@ -119,7 +119,7 @@ classify_changes() {
 
     while IFS= read -r path; do
         if ! path_profiles="$(profiles_for_path "$path")"; then
-            printf 'quality-gate classification: unclassified path: %s\n' "$path" >&2
+            printf 'ci classification: unclassified path: %s\n' "$path" >&2
             return 1
         fi
         printf '%s\n' "$path_profiles"
@@ -134,14 +134,17 @@ audit() {
     require_literal CONTRIBUTING.md './scripts/verify.sh changed origin/main'
     require_literal AGENTS.md './scripts/verify.sh changed origin/main'
     require_literal docs/verification.md './scripts/verify.sh changed origin/main'
-    require_literal .github/workflows/quality-gate.yml './scripts/verify.sh ci "$QUALITY_BASE_SHA"'
-    require_literal .github/workflows/quality-gate.yml 'name: Quality gate / Canonical verification'
-    require_literal .github/workflows/quality-gate.yml 'uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9'
-    require_literal .github/workflows/quality-gate.yml 'version: v0.21.14'
-    require_literal .github/workflows/quality-gate.yml 'uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532'
-    require_literal .github/workflows/quality-gate.yml 'tool: cargo-nextest@0.9.143'
-    require_literal .github/workflows/quality-gate.yml 'fallback: none'
-    require_literal docs/verification.md 'Quality gate / Canonical verification'
+    require_literal .github/workflows/ci.yml './scripts/verify.sh ci "$CI_BASE_SHA"'
+    require_literal .github/workflows/ci.yml 'name: Testing'
+    require_literal .github/workflows/ci.yml 'uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
+    require_literal .github/workflows/ci.yml 'apps/egui-mcp-inspector -> target'
+    require_literal .github/workflows/ci.yml 'cache-bin: false'
+    require_literal .github/workflows/ci.yml 'uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9'
+    require_literal .github/workflows/ci.yml 'version: v0.21.14'
+    require_literal .github/workflows/ci.yml 'uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532'
+    require_literal .github/workflows/ci.yml 'tool: cargo-nextest@0.9.143'
+    require_literal .github/workflows/ci.yml 'fallback: none'
+    require_literal docs/verification.md 'required `Testing` status check'
     require_literal .github/pull_request_template.md '## Acceptance criteria and evidence'
 
     local baseline_command
@@ -171,7 +174,7 @@ EOF
     local tracked_path
     while IFS= read -r tracked_path; do
         if ! profiles_for_path "$tracked_path" >/dev/null; then
-            printf 'quality-gate audit: tracked path has no risk profile: %s\n' "$tracked_path" >&2
+            printf 'ci audit: tracked path has no risk profile: %s\n' "$tracked_path" >&2
             return 1
         fi
     done < <(git ls-files)

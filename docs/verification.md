@@ -67,11 +67,14 @@ rewritten by verification.
 Prerequisites are stable Rust, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the same prerequisites in
-`.github/workflows/quality-gate.yml`, downloads the pinned prebuilt Trunk
+`.github/workflows/ci.yml`, restores dependency build artifacts for the root and
+standalone-inspector target directories, downloads the pinned prebuilt Trunk
 binary and cargo-nextest runner, and invokes this script rather than duplicating
-the verification commands. The script's audit checks those links, the PR
-evidence sections, shell syntax, diff whitespace, and complete classification
-of tracked paths.
+the verification commands. Cache keys include the Rust toolchain, job, Cargo
+manifests and lockfiles, and relevant compiler environment; caches therefore
+work across compatible hosted runners without relying on machine reuse. The
+script's audit checks those links, the PR evidence sections, shell syntax, diff
+whitespace, and complete classification of tracked paths.
 
 ## Risk Profiles
 
@@ -185,13 +188,13 @@ checks pass may an issue be accepted or closed.
 
 ## Repository Enforcement
 
-The pull-request workflow exposes the required `Quality gate / Canonical
-verification` status check with read-only repository permissions and uploads no
-artifacts. Repository administrators must configure a branch protection rule or
-ruleset for `main` that:
+The `CI` pull-request workflow exposes the required `Testing` status check with
+read-only repository permissions and uploads no artifacts. Repository
+administrators must configure a branch protection rule or ruleset for `main`
+that:
 
 - requires pull requests and at least one approving independent review;
-- requires `Quality gate / Canonical verification` to pass on the current head;
+- requires `Testing` to pass on the current head;
 - blocks direct pushes and force pushes, including administrator bypass unless
   an audited emergency procedure explicitly applies; and
 - requires conversations to be resolved before merge.
