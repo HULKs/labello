@@ -10,24 +10,215 @@ concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+  CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
 jobs:
-  testing:
-    name: Testing
+  plan:
+    name: Plan verification
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      CARGO_TERM_COLOR: always
-      CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    timeout-minutes: 5
+    outputs:
+      baseline: ${{ steps.plan.outputs.baseline }}
+      browser: ${{ steps.plan.outputs.browser }}
     steps:
       - name: Check out pull request
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
+      - name: Audit verification contract
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" audit
+
+      - name: Select verification stages
+        id: plan
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" plan >> "$GITHUB_OUTPUT"
+
+  formatting:
+    name: Formatting
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rustfmt
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --no-self-update
+          rustup default stable
+
+      - name: Check formatting
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" format
+
+  clippy:
+    name: Clippy
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
       - name: Install native build prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
+
+      - name: Install Clippy
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy --no-self-update
+          rustup default stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          cache-bin: false
+
+      - name: Run Clippy
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" clippy
+
+  workspace_tests:
+    name: Workspace tests
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          cache-bin: false
+
+      - name: Install prebuilt cargo-nextest
+        uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
+        with:
+          tool: cargo-nextest@0.9.143
+          fallback: none
+
+      - name: Run workspace tests
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" workspace-tests
+
+  ui_tests:
+    name: UI tests
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          cache-bin: false
+
+      - name: Install prebuilt cargo-nextest
+        uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
+        with:
+          tool: cargo-nextest@0.9.143
+          fallback: none
+
+      - name: Run UI tests
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" ui-tests
+
+  doctests:
+    name: Documentation tests
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          cache-bin: false
+
+      - name: Run documentation tests
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" doctests
+
+  inspector:
+    name: Inspector build
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install native build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/egui-mcp-inspector -> target
+          cache-bin: false
+
+      - name: Check inspector build
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" inspector
+
+  wasm:
+    name: WASM check
+    needs: plan
+    if: needs.plan.outputs.baseline == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust and WASM target
         run: |
@@ -38,9 +229,32 @@ jobs:
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: |
-            . -> target
-            apps/egui-mcp-inspector -> target
+          workspaces: . -> target
+          cache-bin: false
+
+      - name: Check WASM build
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" wasm
+
+  browser:
+    name: Browser release build
+    needs: plan
+    if: needs.plan.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Rust and WASM target
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
           cache-bin: false
 
       - name: Install prebuilt Trunk
@@ -48,11 +262,64 @@ jobs:
         with:
           version: v0.21.14
 
-      - name: Install prebuilt cargo-nextest
-        uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
-        with:
-          tool: cargo-nextest@0.9.143
-          fallback: none
+      - name: Build browser release
+        run: ./scripts/verify.sh ci "$CI_BASE_SHA" browser
 
-      - name: Run canonical verification
-        run: ./scripts/verify.sh ci "$CI_BASE_SHA"
+  testing:
+    name: Testing
+    needs:
+      - plan
+      - formatting
+      - clippy
+      - workspace_tests
+      - ui_tests
+      - doctests
+      - inspector
+      - wasm
+      - browser
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm selected verification jobs passed
+        env:
+          BASELINE_REQUIRED: ${{ needs.plan.outputs.baseline }}
+          BROWSER_REQUIRED: ${{ needs.plan.outputs.browser }}
+          PLAN_RESULT: ${{ needs.plan.result }}
+          FORMATTING_RESULT: ${{ needs.formatting.result }}
+          CLIPPY_RESULT: ${{ needs.clippy.result }}
+          WORKSPACE_TESTS_RESULT: ${{ needs.workspace_tests.result }}
+          UI_TESTS_RESULT: ${{ needs.ui_tests.result }}
+          DOCTESTS_RESULT: ${{ needs.doctests.result }}
+          INSPECTOR_RESULT: ${{ needs.inspector.result }}
+          WASM_RESULT: ${{ needs.wasm.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: |
+          require_result() {
+            local label="$1"
+            local required="$2"
+            local actual="$3"
+            local expected=skipped
+
+            if [[ "$required" == true ]]; then
+              expected=success
+            fi
+            if [[ "$actual" != "$expected" ]]; then
+              printf '%s: expected %s, got %s\n' "$label" "$expected" "$actual" >&2
+              return 1
+            fi
+          }
+
+          if [[ "$PLAN_RESULT" != success ]]; then
+            printf 'verification plan: expected success, got %s\n' "$PLAN_RESULT" >&2
+            exit 1
+          fi
+
+          require_result formatting "$BASELINE_REQUIRED" "$FORMATTING_RESULT"
+          require_result clippy "$BASELINE_REQUIRED" "$CLIPPY_RESULT"
+          require_result workspace-tests "$BASELINE_REQUIRED" "$WORKSPACE_TESTS_RESULT"
+          require_result ui-tests "$BASELINE_REQUIRED" "$UI_TESTS_RESULT"
+          require_result doctests "$BASELINE_REQUIRED" "$DOCTESTS_RESULT"
+          require_result inspector "$BASELINE_REQUIRED" "$INSPECTOR_RESULT"
+          require_result wasm "$BASELINE_REQUIRED" "$WASM_RESULT"
+          require_result browser "$BROWSER_REQUIRED" "$BROWSER_RESULT"

@@ -3,7 +3,7 @@
 > **Status:** Normative current reference
 > **Owner:** Labello maintainers
 > **Audience:** Maintainers, contributors, and reviewers
-> **Last verified:** 2026-08-12 at issue #57 implementation
+> **Last verified:** 2026-08-19 at issue #57 CI parallelization
 
 This contract separates implementation evidence, mechanically enforced checks,
 and independent acceptance. Passing commands is necessary evidence; it does not
@@ -18,8 +18,11 @@ comparison base with:
 ./scripts/verify.sh changed origin/main
 ```
 
-CI runs the equivalent `./scripts/verify.sh ci <pull-request-base-sha>` command.
-Both commands classify every changed path. An unclassified path fails closed.
+CI uses the equivalent `./scripts/verify.sh ci <pull-request-base-sha>` command
+contract. The hosted workflow first calls its `audit` and `plan` stages, then
+runs the selected verification stages as separate parallel jobs. Calling `ci`
+without a stage runs those same checks sequentially for local reproduction.
+Both forms classify every changed path, and an unclassified path fails closed.
 Documentation-only changes run the documentation profile; every other change
 runs the baseline, and browser-affecting changes also run the release Trunk
 build. Use `./scripts/verify.sh all` to run the baseline and browser build
@@ -31,27 +34,29 @@ The required baseline is:
 ```text
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
-cargo test --locked -p labello-ui --features inspector-presets
+cargo test --locked --workspace --all-features --exclude labello-ui
+cargo test --locked -p labello-ui --all-features
 cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 ```
 
-The explicit `labello-ui` command keeps inspector-preset coverage visible even
-though the all-features workspace command currently includes it. Browser,
-shared-rendering, browser-persistence, browser-import, deployment-asset, and
-relevant shared dependency changes additionally run, from `apps/labello-wasm`:
+The workspace and `labello-ui` tests are disjoint so CI can run them in
+parallel. The dedicated UI command uses all features, which keeps
+`inspector-presets` coverage explicit without executing those tests twice.
+Browser, shared-rendering, browser-persistence, browser-import,
+deployment-asset, and relevant shared dependency changes additionally run,
+from `apps/labello-wasm`:
 
 ```text
 trunk build --release --locked
 ```
 
-CI preserves those test selections but executes test binaries concurrently
-with pinned cargo-nextest 0.9.143:
+CI preserves those test selections with pinned cargo-nextest 0.9.143 and a
+separate doctest job:
 
 ```text
-cargo nextest run --locked --workspace --all-features
-cargo nextest run --locked -p labello-ui --features inspector-presets
+cargo nextest run --locked --workspace --all-features --exclude labello-ui
+cargo nextest run --locked -p labello-ui --all-features
 cargo test --locked --workspace --all-features --doc
 ```
 
@@ -66,15 +71,19 @@ rewritten by verification.
 
 Prerequisites are stable Rust, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
-by `eframe`. CI declares the same prerequisites in
-`.github/workflows/ci.yml`, restores dependency build artifacts for the root and
-standalone-inspector target directories, downloads the pinned prebuilt Trunk
-binary and cargo-nextest runner, and invokes this script rather than duplicating
-the verification commands. Cache keys include the Rust toolchain, job, Cargo
-manifests and lockfiles, and relevant compiler environment; caches therefore
-work across compatible hosted runners without relying on machine reuse. The
-script's audit checks those links, the PR evidence sections, shell syntax, diff
-whitespace, and complete classification of tracked paths.
+by `eframe`. CI declares the applicable prerequisites per job in
+`.github/workflows/ci.yml`, restores job-scoped dependency build artifacts for
+the root or standalone-inspector target directory, downloads pinned prebuilt
+Trunk and cargo-nextest binaries only where needed, and invokes this script
+rather than duplicating verification commands. Job identity is part of each
+cache key, preventing parallel jobs from racing to publish one immutable cache;
+keys also include the Rust toolchain, Cargo manifests and lockfiles, and relevant
+compiler environment. Caches therefore work across compatible hosted runners
+without relying on machine reuse. The final `Testing` job fails closed unless
+the plan and every selected parallel job succeeded, while requiring an
+unselected conditional job to be skipped. The script's audit checks those
+links, the PR evidence sections, shell syntax, diff whitespace, and complete
+classification of tracked paths.
 
 ## Risk Profiles
 
@@ -188,10 +197,12 @@ checks pass may an issue be accepted or closed.
 
 ## Repository Enforcement
 
-The `CI` pull-request workflow exposes the required `Testing` status check with
-read-only repository permissions and uploads no artifacts. Repository
-administrators must configure a branch protection rule or ruleset for `main`
-that:
+The `CI` pull-request workflow exposes descriptive parallel jobs behind the
+required `Testing` status check. Its aggregate job is the stable branch
+protection contract; the worker job names may evolve without changing that
+contract. The workflow has read-only repository permissions and uploads no
+artifacts. Repository administrators must configure a branch protection rule
+or ruleset for `main` that:
 
 - requires pull requests and at least one approving independent review;
 - requires `Testing` to pass on the current head;

@@ -9,11 +9,14 @@ test_runner="cargo"
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/verify.sh <command> [comparison-base]
+Usage: ./scripts/verify.sh <command> [comparison-base] [ci-stage]
 
 Commands:
   changed [base]  Run the required profile for changes since base plus local changes.
-  ci <base>       CI alias for changed; requires an explicit pull-request base SHA.
+  ci <base>       Run the complete CI profile sequentially with cargo-nextest.
+  ci <base> <stage>
+                  Run one CI stage: audit, plan, format, clippy,
+                  workspace-tests, ui-tests, doctests, inspector, wasm, or browser.
   baseline        Run the required non-browser repository baseline.
   all             Run the baseline and the release browser build.
   docs            Run the documentation-only checks.
@@ -134,8 +137,10 @@ audit() {
     require_literal CONTRIBUTING.md './scripts/verify.sh changed origin/main'
     require_literal AGENTS.md './scripts/verify.sh changed origin/main'
     require_literal docs/verification.md './scripts/verify.sh changed origin/main'
-    require_literal .github/workflows/ci.yml './scripts/verify.sh ci "$CI_BASE_SHA"'
+    require_literal .github/workflows/ci.yml './scripts/verify.sh ci "$CI_BASE_SHA" plan'
     require_literal .github/workflows/ci.yml 'name: Testing'
+    require_literal .github/workflows/ci.yml 'if: always()'
+    require_literal .github/workflows/ci.yml 'require_result browser "$BROWSER_REQUIRED" "$BROWSER_RESULT"'
     require_literal .github/workflows/ci.yml 'uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
     require_literal .github/workflows/ci.yml 'apps/egui-mcp-inspector -> target'
     require_literal .github/workflows/ci.yml 'cache-bin: false'
@@ -154,8 +159,8 @@ audit() {
     done <<'EOF'
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
-cargo test --locked -p labello-ui --features inspector-presets
+cargo test --locked --workspace --all-features --exclude labello-ui
+cargo test --locked -p labello-ui --all-features
 cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 trunk build --release --locked
@@ -166,9 +171,25 @@ EOF
         require_literal scripts/verify.sh "$ci_test_command"
         require_literal docs/verification.md "$ci_test_command"
     done <<'EOF'
-cargo nextest run --locked --workspace --all-features
-cargo nextest run --locked -p labello-ui --features inspector-presets
+cargo nextest run --locked --workspace --all-features --exclude labello-ui
+cargo nextest run --locked -p labello-ui --all-features
 cargo test --locked --workspace --all-features --doc
+EOF
+
+    local ci_stage
+    while IFS= read -r ci_stage; do
+        require_literal .github/workflows/ci.yml "./scripts/verify.sh ci \"\$CI_BASE_SHA\" $ci_stage"
+    done <<'EOF'
+audit
+plan
+format
+clippy
+workspace-tests
+ui-tests
+doctests
+inspector
+wasm
+browser
 EOF
 
     local tracked_path
@@ -185,17 +206,21 @@ docs_checks() {
     printf '%s\n' 'Documentation-only profile: complete the content, local-link, and anchor review recorded in the handoff.'
 }
 
-test_suite() {
+format_check() {
+    run cargo fmt --all -- --check
+}
+
+clippy_check() {
+    run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+}
+
+workspace_tests() {
     case "$test_runner" in
         cargo)
-            run cargo test --locked --workspace --all-features
-            run cargo test --locked -p labello-ui --features inspector-presets
+            run cargo test --locked --workspace --all-features --exclude labello-ui
             ;;
         nextest)
-            run cargo nextest run --locked --workspace --all-features
-            run cargo nextest run --locked -p labello-ui --features inspector-presets
-            # Nextest does not execute rustdoc test binaries on stable Rust.
-            run cargo test --locked --workspace --all-features --doc
+            run cargo nextest run --locked --workspace --all-features --exclude labello-ui
             ;;
         *)
             printf 'unsupported verification test runner: %s\n' "$test_runner" >&2
@@ -204,13 +229,45 @@ test_suite() {
     esac
 }
 
+ui_tests() {
+    case "$test_runner" in
+        cargo)
+            run cargo test --locked -p labello-ui --all-features
+            ;;
+        nextest)
+            run cargo nextest run --locked -p labello-ui --all-features
+            ;;
+        *)
+            printf 'unsupported verification test runner: %s\n' "$test_runner" >&2
+            return 1
+            ;;
+    esac
+}
+
+doctests() {
+    # Nextest does not execute rustdoc test binaries on stable Rust.
+    run cargo test --locked --workspace --all-features --doc
+}
+
+inspector_check() {
+    run cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+}
+
+wasm_check() {
+    run cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
+}
+
 baseline() {
     audit
-    run cargo fmt --all -- --check
-    run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-    test_suite
-    run cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
-    run cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
+    format_check
+    clippy_check
+    workspace_tests
+    ui_tests
+    if [[ "$test_runner" == nextest ]]; then
+        doctests
+    fi
+    inspector_check
+    wasm_check
 }
 
 browser_build() {
@@ -242,18 +299,84 @@ changed() {
     printf '%s\n' 'Machine checks passed. Complete the profile-specific review and evidence in docs/verification.md.'
 }
 
+ci_plan() {
+    local base="$1"
+    local profiles
+    local baseline_required=true
+    local browser_required=false
+
+    profiles="$(classify_changes "$base")"
+    if [[ "$profiles" == docs ]]; then
+        baseline_required=false
+    fi
+    if grep -qx browser <<<"$profiles"; then
+        browser_required=true
+    fi
+
+    printf 'baseline=%s\n' "$baseline_required"
+    printf 'browser=%s\n' "$browser_required"
+}
+
+ci_stage() {
+    local base="$1"
+    local stage="$2"
+
+    test_runner="nextest"
+    case "$stage" in
+        audit)
+            audit
+            ;;
+        plan)
+            ci_plan "$base"
+            ;;
+        format)
+            format_check
+            ;;
+        clippy)
+            clippy_check
+            ;;
+        workspace-tests)
+            workspace_tests
+            ;;
+        ui-tests)
+            ui_tests
+            ;;
+        doctests)
+            doctests
+            ;;
+        inspector)
+            inspector_check
+            ;;
+        wasm)
+            wasm_check
+            ;;
+        browser)
+            browser_build
+            ;;
+        *)
+            printf 'unsupported CI verification stage: %s\n' "$stage" >&2
+            usage >&2
+            return 2
+            ;;
+    esac
+}
+
 command="${1:-}"
 case "$command" in
     changed)
         changed "${2:-$(default_comparison_base)}"
         ;;
     ci)
-        if [[ $# -ne 2 ]]; then
+        if [[ $# -lt 2 || $# -gt 3 ]]; then
             usage >&2
             exit 2
         fi
-        test_runner="nextest"
-        changed "$2"
+        if [[ $# -eq 3 ]]; then
+            ci_stage "$2" "$3"
+        else
+            test_runner="nextest"
+            changed "$2"
+        fi
         ;;
     baseline)
         baseline
