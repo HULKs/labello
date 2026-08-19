@@ -14,6 +14,7 @@ Decide whether the current implementation satisfies the issue in the real produc
 - Work read-only by default. Do not fix code, change tests, edit issue metadata, commit, close, merge, or move work to Done unless the user separately asks for that action after the verdict.
 - Treat the implementation handoff as a list of claims to test, not as evidence.
 - Run verification commands without silently updating tracked dependencies or artifacts. Recheck the worktree after verification and preserve unrelated changes.
+- Verify that the required `Quality gate / Canonical verification` check succeeded for the pull request's exact current head SHA. A success for an earlier commit does not satisfy the gate.
 
 ## Reconstruct the acceptance case
 
@@ -32,6 +33,8 @@ Decide whether the current implementation satisfies the issue in the real produc
 Reproduce the issue at the current revision and challenge the happy path. Select checks according to the affected risk: invalid and long inputs, empty/loading/error states, retries, stale responses, concurrency, restart or interrupted recovery, authorization boundaries, redaction, version compatibility, and cross-target behavior.
 
 Run focused tests first, then broader checks proportional to risk. A passing test suite does not by itself prove the acceptance criteria. Record exact commands, outcomes, skipped checks, environmental limitations, and whether failures appear introduced, pre-existing, or unrelated.
+
+Treat a failed required exact-head CI check as a blocking finding and return `CHANGES REQUESTED`. Treat a pending, missing, cancelled, or inaccessible required check as missing evidence and return `NOT VERIFIED — MISSING EVIDENCE`. Do not substitute a local run for the repository's required hosted check.
 
 ### Product UI verification
 
@@ -61,5 +64,6 @@ Include:
 - visual states and runtime surfaces inspected when relevant;
 - residual risks and evidence limitations;
 - focused diff and worktree hygiene.
+- exact-head required CI status and the accountable owner, assignee, and requested-reviewer identities. Flag self-review or a missing independent reviewer as blocking the acceptance handoff.
 
 Do not soften missing evidence into a pass. A verifier verdict is an integration recommendation; it does not itself authorize closing the issue, merging, committing, or changing project status.

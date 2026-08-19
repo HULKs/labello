@@ -59,6 +59,7 @@ Before creating anything, preflight all required capabilities:
 3. Verify the token has project access.
 4. Resolve the organization-level issue field named `Priority` with `GET /orgs/HULKs/issue-fields`, and verify the approved option exists.
 5. Verify every approved label. Create a missing label only when its creation was explicitly included in the approved draft.
+6. If the user explicitly named an accountable implementation owner, verify that GitHub user can be assigned. Otherwise leave the new backlog issue unassigned; do not guess from authentication or authorship.
 
 If a preflight fails, stop before creating the issue and give the exact corrective action.
 
@@ -69,6 +70,7 @@ Then:
 3. Set project `Status` to the approved value, normally `Backlog`.
 4. Set priority through the organization issue-field-values API, because an issue-derived Priority field is not a writable project custom field.
 5. Verify the issue title, state, labels, project, project status, and priority through read-back calls.
-6. Return the issue link and applied metadata.
+6. Assign an explicitly approved implementation owner, if one was supplied. Do not request a reviewer for a backlog issue; review assignment belongs to the implementation pull-request handoff after the exact-head canonical CI check succeeds.
+7. Return the issue link and applied metadata.
 
 If creation succeeds but later metadata fails, repair the existing issue; never create a duplicate. Do not modify local repository files unless the user separately requests it.

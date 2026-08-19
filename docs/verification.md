@@ -147,13 +147,26 @@ Artifacts and logs must follow [`operations.md`](operations.md): never upload
 secrets, credentials, runtime datasets, raw request data, image bytes,
 annotation geometry, review comments, uploaded filenames, or import paths.
 
-The contributor leaves the change **Ready for review**. An independent human or
-separately instructed verification agent then reconstructs the contract from
-the original issue, audits the final production diff and proof bundle, and
-tries to falsify each claim. High-risk review follows the complete applicable
-transaction, failure, recovery, authorization, compatibility, and redaction
-boundaries. Only after that review and all required checks pass may an issue be
-accepted or closed.
+After assembling the proof bundle, the contributor leaves the change
+**Awaiting CI**. The required check must succeed for the pull request's exact
+current head SHA; a local run or success on an earlier head is not a substitute.
+A failed check returns the change to implementation, while a pending, missing,
+cancelled, or inaccessible check is recorded as not verified.
+
+Only after exact-head CI success may the change become **Ready for review**.
+At that boundary, assign both the issue and pull request to the accountable
+implementation owner. Request that owner as reviewer only when the owner is
+eligible and independent of the authored change. If the owner authored the pull
+request, retain the owner as assignee and request a distinct eligible reviewer;
+self-review never satisfies independent acceptance. Move project items to `In
+review` at the same gated handoff, not before it.
+
+An independent human or separately instructed verification agent then
+reconstructs the contract from the original issue, audits the final production
+diff and proof bundle, and tries to falsify each claim. High-risk review follows
+the complete applicable transaction, failure, recovery, authorization,
+compatibility, and redaction boundaries. Only after that review and all required
+checks pass may an issue be accepted or closed.
 
 ## Repository Enforcement
 

@@ -296,7 +296,14 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
 - Map every acceptance criterion to evidence and record exact commands,
   results, visual/browser artifacts, documentation impact, skipped checks,
   residual risks, and preservation of unrelated worktree changes.
-- Report implementation work as **Ready for review**, never self-accepted.
+- Report implementation work with an open pull request as **Awaiting CI** until
+  the required check succeeds on the exact current head SHA. A local or stale
+  success does not satisfy this gate; investigate failures before handoff.
+- After exact-head CI succeeds, assign the issue and pull request to the
+  accountable implementation owner. Request that owner as reviewer only when
+  GitHub permits it and they are independent of the authored change; otherwise
+  request a distinct eligible reviewer. Move project items to `In review` only
+  at this boundary, then report the change as **Ready for review**.
 - Require a human reviewer or separately instructed verification agent to read
   the original issue, inspect the final production diff and evidence, and try
   to falsify the completion claims. The implementer cannot provide the

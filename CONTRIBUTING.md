@@ -2,8 +2,10 @@
 
 Labello changes move through three distinct gates: contributor evidence,
 mechanical verification, and independent acceptance. An implementation is
-**Ready for review** after its evidence is assembled; it is not accepted merely
-because its author or implementation agent reports that its tests pass.
+**Awaiting CI** after its evidence is assembled. It becomes **Ready for review**
+only after the required check succeeds on the pull request's exact current head;
+it is not accepted merely because its author or implementation agent reports
+that its tests pass.
 
 ## Issue Workflow
 
@@ -26,11 +28,20 @@ because its author or implementation agent reports that its tests pass.
    checks that cannot be inferred from compilation or unit tests.
 7. Fill in the pull-request template with exact commands and results, an
    acceptance-criterion-to-evidence map, omitted checks, and unrelated-change
-   confirmation. Report the change as **Ready for review**.
-8. Have a human reviewer or separately instructed verification agent inspect
+   confirmation. Open or update the pull request as **Awaiting CI**.
+8. Wait for the required check to succeed on the exact current head. A failure
+   returns the change to implementation; a pending, cancelled, unavailable, or
+   stale check does not satisfy the gate.
+9. After that success, assign the issue and pull request to the accountable
+   implementation owner and request that owner as reviewer only when GitHub
+   permits it and the owner is independent of the authored change. When the
+   owner authored the pull request, keep them as assignee and request a distinct
+   eligible reviewer. Only then report the change as **Ready for review** and
+   move its project item to `In review`.
+10. Have a human reviewer or separately instructed verification agent inspect
    the original issue, final diff, and evidence and try to disprove the
    completion claims. The implementer must not act as the independent reviewer.
-9. Integrate only through a pull request after the required `Quality gate /
+11. Integrate only through a pull request after the required `Quality gate /
    Canonical verification` check and independent review pass. Repository
    administrators must protect `main` against direct pushes and require this
    status check before merge.

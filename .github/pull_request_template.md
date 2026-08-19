@@ -39,5 +39,9 @@
 
 ## Handoff status
 
-- [ ] **Ready for review**: implementation evidence is assembled, but acceptance is pending.
+- [ ] Implementation evidence is assembled and the pull request is **Awaiting CI**.
+- [ ] The required CI check succeeded on this pull request's exact current head SHA.
+- [ ] The accountable implementation owner is assigned to both the issue and pull request.
+- [ ] An eligible independent reviewer is requested (the owner when independent; otherwise a distinct reviewer).
+- [ ] **Ready for review**: the CI-gated ownership handoff is complete, but acceptance is pending.
 - [ ] An independent reviewer has inspected the original issue, final diff, and evidence and attempted to falsify the acceptance claims.
