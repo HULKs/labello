@@ -46,6 +46,20 @@ relevant shared dependency changes additionally run, from `apps/labello-wasm`:
 trunk build --release --locked
 ```
 
+CI preserves those test selections but executes test binaries concurrently
+with pinned cargo-nextest 0.9.143:
+
+```text
+cargo nextest run --locked --workspace --all-features
+cargo nextest run --locked -p labello-ui --features inspector-presets
+cargo test --locked --workspace --all-features --doc
+```
+
+The final Cargo command is intentionally retained because Nextest does not run
+doctests on stable Rust. The local `changed`, `baseline`, and `all` commands use
+ordinary `cargo test`, so contributors do not need cargo-nextest. The `ci`
+command requires it and fails if the pinned prebuilt tool was not installed.
+
 Every Cargo command that resolves dependencies and the Trunk build use locked
 mode. A stale tracked lockfile is therefore a failure and is never implicitly
 rewritten by verification.
@@ -54,9 +68,10 @@ Prerequisites are stable Rust, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the same prerequisites in
 `.github/workflows/quality-gate.yml`, downloads the pinned prebuilt Trunk
-binary, and invokes this script rather than duplicating the verification
-commands. The script's audit checks those links, the PR evidence sections,
-shell syntax, diff whitespace, and complete classification of tracked paths.
+binary and cargo-nextest runner, and invokes this script rather than duplicating
+the verification commands. The script's audit checks those links, the PR
+evidence sections, shell syntax, diff whitespace, and complete classification
+of tracked paths.
 
 ## Risk Profiles
 

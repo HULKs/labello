@@ -5,6 +5,8 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
+test_runner="cargo"
+
 usage() {
     cat <<'EOF'
 Usage: ./scripts/verify.sh <command> [comparison-base]
@@ -136,6 +138,9 @@ audit() {
     require_literal .github/workflows/quality-gate.yml 'name: Quality gate / Canonical verification'
     require_literal .github/workflows/quality-gate.yml 'uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9'
     require_literal .github/workflows/quality-gate.yml 'version: v0.21.14'
+    require_literal .github/workflows/quality-gate.yml 'uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532'
+    require_literal .github/workflows/quality-gate.yml 'tool: cargo-nextest@0.9.143'
+    require_literal .github/workflows/quality-gate.yml 'fallback: none'
     require_literal docs/verification.md 'Quality gate / Canonical verification'
     require_literal .github/pull_request_template.md '## Acceptance criteria and evidence'
 
@@ -153,6 +158,16 @@ cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 trunk build --release --locked
 EOF
 
+    local ci_test_command
+    while IFS= read -r ci_test_command; do
+        require_literal scripts/verify.sh "$ci_test_command"
+        require_literal docs/verification.md "$ci_test_command"
+    done <<'EOF'
+cargo nextest run --locked --workspace --all-features
+cargo nextest run --locked -p labello-ui --features inspector-presets
+cargo test --locked --workspace --all-features --doc
+EOF
+
     local tracked_path
     while IFS= read -r tracked_path; do
         if ! profiles_for_path "$tracked_path" >/dev/null; then
@@ -167,12 +182,30 @@ docs_checks() {
     printf '%s\n' 'Documentation-only profile: complete the content, local-link, and anchor review recorded in the handoff.'
 }
 
+test_suite() {
+    case "$test_runner" in
+        cargo)
+            run cargo test --locked --workspace --all-features
+            run cargo test --locked -p labello-ui --features inspector-presets
+            ;;
+        nextest)
+            run cargo nextest run --locked --workspace --all-features
+            run cargo nextest run --locked -p labello-ui --features inspector-presets
+            # Nextest does not execute rustdoc test binaries on stable Rust.
+            run cargo test --locked --workspace --all-features --doc
+            ;;
+        *)
+            printf 'unsupported verification test runner: %s\n' "$test_runner" >&2
+            return 1
+            ;;
+    esac
+}
+
 baseline() {
     audit
     run cargo fmt --all -- --check
     run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-    run cargo test --locked --workspace --all-features
-    run cargo test --locked -p labello-ui --features inspector-presets
+    test_suite
     run cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
     run cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 }
@@ -216,6 +249,7 @@ case "$command" in
             usage >&2
             exit 2
         fi
+        test_runner="nextest"
         changed "$2"
         ;;
     baseline)

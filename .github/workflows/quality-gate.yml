@@ -40,5 +40,11 @@ jobs:
         with:
           version: v0.21.14
 
+      - name: Install prebuilt cargo-nextest
+        uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
+        with:
+          tool: cargo-nextest@0.9.143
+          fallback: none
+
       - name: Run canonical verification
         run: ./scripts/verify.sh ci "$QUALITY_BASE_SHA"
