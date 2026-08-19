@@ -53,10 +53,10 @@ rewritten by verification.
 Prerequisites are stable Rust, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the same prerequisites in
-`.github/workflows/quality-gate.yml` and invokes this script rather than
-duplicating the verification commands. The script's audit checks those links,
-the PR evidence sections, shell syntax, diff whitespace, and complete
-classification of tracked paths.
+`.github/workflows/quality-gate.yml`, downloads the pinned prebuilt Trunk
+binary, and invokes this script rather than duplicating the verification
+commands. The script's audit checks those links, the PR evidence sections,
+shell syntax, diff whitespace, and complete classification of tracked paths.
 
 ## Risk Profiles
 

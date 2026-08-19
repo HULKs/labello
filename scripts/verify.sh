@@ -31,7 +31,7 @@ require_literal() {
     local file="$1"
     local literal="$2"
 
-    if ! rg --fixed-strings --quiet "$literal" "$file"; then
+    if ! grep -Fq -- "$literal" "$file"; then
         printf 'quality-gate audit: %s must contain: %s\n' "$file" "$literal" >&2
         return 1
     fi
@@ -134,6 +134,8 @@ audit() {
     require_literal docs/verification.md './scripts/verify.sh changed origin/main'
     require_literal .github/workflows/quality-gate.yml './scripts/verify.sh ci "$QUALITY_BASE_SHA"'
     require_literal .github/workflows/quality-gate.yml 'name: Quality gate / Canonical verification'
+    require_literal .github/workflows/quality-gate.yml 'uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9'
+    require_literal .github/workflows/quality-gate.yml 'version: v0.21.14'
     require_literal docs/verification.md 'Quality gate / Canonical verification'
     require_literal .github/pull_request_template.md '## Acceptance criteria and evidence'
 
