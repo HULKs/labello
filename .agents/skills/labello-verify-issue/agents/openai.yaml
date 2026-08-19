@@ -1,4 +1,4 @@
 interface:
   display_name: "Labello Verify Issue"
-  short_description: "Independently verify a Labello issue implementation"
-  default_prompt: "Use $labello-verify-issue to independently verify an issue implementation against its acceptance criteria."
+  short_description: "Verify a Labello change and its exact-head CI gate"
+  default_prompt: "Use $labello-verify-issue to independently verify an issue implementation, including its exact-head required CI result."
