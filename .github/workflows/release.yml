@@ -47,6 +47,9 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Trust the container workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Resolve and validate release identity
         id: identity
         env:
