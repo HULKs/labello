@@ -33,6 +33,7 @@ use crate::{
     error::{ApiError, ApiResult},
 };
 
+mod deployment;
 mod imports;
 mod ingest;
 mod oauth_routes;
@@ -117,6 +118,7 @@ pub fn router(state: ApiState) -> Router {
         .option_layer(cors);
     let app = Router::new()
         .route("/health", get(health))
+        .route("/deployment/readiness", get(deployment::readiness))
         .route("/me", get(me))
         .route("/logout", post(logout))
         .route("/auth/options", get(auth_options))

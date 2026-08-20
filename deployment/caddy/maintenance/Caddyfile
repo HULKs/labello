@@ -1,0 +1,3 @@
+{$LABELLO_SITE_ADDRESS} {
+    respond "Labello is temporarily unavailable during maintenance." 503
+}

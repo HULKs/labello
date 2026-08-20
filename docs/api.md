@@ -88,6 +88,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | Method and path | Access | Input → output |
 | --- | --- | --- |
 | `GET /health` | Public | No input → `{"ok":true,"service":"labello"}` |
+| `GET /deployment/readiness` | Public; production API is loopback-bound | No input → bounded release identity, schema version, dataset-root traversal, and authentication-store load state; HTTP 503 when a probe fails |
 | `GET /auth/options` | Public | No input → `AuthOptions` |
 | `POST /auth/local-admin` | Public, allowed origin, feature enabled | No body → `SessionInfo` plus session cookie |
 | `GET /auth/github/login` | Public, OAuth enabled | `OAuthLoginRequest` query → temporary provider redirect plus flow cookie |

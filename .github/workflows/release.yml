@@ -1,0 +1,187 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Canonical stable version such as v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify and publish stable release
+    if: github.ref == 'refs/heads/main'
+    environment: release
+    runs-on:
+      group: Default
+      labels: [self-hosted, linux, x64]
+    container:
+      image: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}
+    timeout-minutes: 120
+    steps:
+      - name: Require a digest-pinned build image
+        env:
+          BUILD_IMAGE: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}
+        run: |
+          case "$BUILD_IMAGE" in
+            *@sha256:*) ;;
+            *) printf 'LABELLO_RELEASE_BUILD_IMAGE must use an immutable sha256 digest\n' >&2; exit 1 ;;
+          esac
+
+      - name: Check out main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve and validate release identity
+        id: identity
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            printf 'version must be canonical vX.Y.Z SemVer\n' >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main
+          source_commit="$(git rev-parse origin/main)"
+          test "$(git rev-parse HEAD)" = "$source_commit"
+          test "$GITHUB_SHA" = "$source_commit"
+          test -z "$(git status --short)"
+          printf 'version=%s\nsource_commit=%s\n' "$VERSION" "$source_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned GitHub CLI
+        env:
+          GH_ARCHIVE_URL: https://github.com/cli/cli/releases/download/v2.97.0/gh_2.97.0_linux_amd64.tar.gz
+          GH_ARCHIVE_SHA256: a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112
+        run: |
+          archive="$RUNNER_TEMP/gh.tar.gz"
+          curl --fail --silent --show-error --location \
+            "$GH_ARCHIVE_URL" \
+            --output "$archive"
+          printf '%s  %s\n' "$GH_ARCHIVE_SHA256" "$archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/gh"
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP/gh" --strip-components=1
+          printf '%s\n' "$RUNNER_TEMP/gh/bin" >> "$GITHUB_PATH"
+
+      - name: Refuse an existing tag or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            printf 'release tag already exists\n' >&2
+            exit 1
+          fi
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            printf 'release already exists\n' >&2
+            exit 1
+          fi
+
+      - name: Verify pinned build tools
+        run: |
+          rustc --version
+          rustup target list --installed | grep --fixed-strings --line-regexp wasm32-unknown-unknown
+          trunk --version | grep --fixed-strings 'trunk 0.21.14'
+
+      - name: Run canonical verification
+        run: ./scripts/verify.sh all
+
+      - name: Build versioned payloads
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.identity.outputs.source_commit }}
+        run: |
+          LABELLO_RELEASE_TAG="$VERSION" LABELLO_SOURCE_COMMIT="$SOURCE_COMMIT" \
+            cargo build --locked --release -p labello-server -p labello-deploy
+
+          release_dir="$RUNNER_TEMP/release-assets"
+          candidate="$RUNNER_TEMP/candidate"
+          mkdir -p "$release_dir" "$candidate/server" "$candidate/browser"
+          install -m 0755 target/release/labello-server "$candidate/server/labello-server"
+          cp -a apps/labello-wasm/dist/. "$candidate/browser/"
+          printf '{"releaseTag":"%s","sourceCommit":"%s"}\n' \
+            "$VERSION" "$SOURCE_COMMIT" > "$candidate/browser/release.json"
+
+          (
+            cd "$candidate/browser"
+            find . -type f ! -name MANIFEST.sha256 -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > MANIFEST.sha256
+          )
+          target/release/labello-deploy manifest "$candidate" "$VERSION" "$SOURCE_COMMIT"
+
+          server_asset="labello-server-x86_64-linux-${VERSION}.tar.gz"
+          browser_asset="labello-browser-${VERSION}.tar.gz"
+          deployment_asset="labello-deployment-${VERSION}.tar.gz"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -C "$candidate/server" -cf - . | gzip -n > "$release_dir/$server_asset"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -C "$candidate/browser" -cf - . | gzip -n > "$release_dir/$browser_asset"
+          tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            -C "$candidate" -cf - . | gzip -n > "$release_dir/$deployment_asset"
+
+          server_sha="$(sha256sum "$release_dir/$server_asset" | cut -d' ' -f1)"
+          browser_sha="$(sha256sum "$release_dir/$browser_asset" | cut -d' ' -f1)"
+          deployment_sha="$(sha256sum "$release_dir/$deployment_asset" | cut -d' ' -f1)"
+          metadata="release-metadata-${VERSION}.json"
+          printf '{\n  "schemaVersion": 1,\n  "releaseTag": "%s",\n  "sourceCommit": "%s",\n  "payloads": [\n    {"name":"%s","sha256":"%s"},\n    {"name":"%s","sha256":"%s"},\n    {"name":"%s","sha256":"%s"}\n  ]\n}\n' \
+            "$VERSION" "$SOURCE_COMMIT" \
+            "$server_asset" "$server_sha" \
+            "$browser_asset" "$browser_sha" \
+            "$deployment_asset" "$deployment_sha" \
+            > "$release_dir/$metadata"
+          (
+            cd "$release_dir"
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
+
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ runner.temp }}/release-assets/*
+
+      - name: Create immutable stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.identity.outputs.source_commit }}
+        run: |
+          release_dir="$RUNNER_TEMP/release-assets"
+          gh release create "$VERSION" "$release_dir"/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_COMMIT" \
+            --title "$VERSION" \
+            --notes "Verified Labello release $VERSION from $SOURCE_COMMIT." \
+            --draft
+          gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          immutable="$(gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isImmutable,isPrerelease,tagName,targetCommitish \
+            --jq 'select(.isDraft == false and .isImmutable == true and .isPrerelease == false) | .targetCommitish')"
+          if [[ "$immutable" != "$SOURCE_COMMIT" ]]; then
+            printf 'published release is not immutable or targets the wrong commit\n' >&2
+            exit 1
+          fi
+
+      - name: Dispatch production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.identity.outputs.source_commit }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            --raw-field event_type=stable-release-published \
+            --raw-field "client_payload[releaseTag]=$VERSION" \
+            --raw-field "client_payload[sourceCommit]=$SOURCE_COMMIT"

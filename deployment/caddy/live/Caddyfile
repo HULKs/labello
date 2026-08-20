@@ -1,0 +1,18 @@
+{$LABELLO_SITE_ADDRESS} {
+    encode zstd gzip
+
+    handle_path /api/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    handle /labello.client.json {
+        root * /var/lib/labello/configurations/current/browser
+        header Cache-Control "no-store"
+        file_server
+    }
+
+    handle {
+        root * /var/lib/labello/releases/current/browser
+        file_server
+    }
+}

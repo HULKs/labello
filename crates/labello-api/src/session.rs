@@ -106,6 +106,21 @@ impl ServerStore {
         }
     }
 
+    pub(crate) fn probe(&self) -> ApiResult<()> {
+        self.ensure_loaded()?;
+        let cached_is_empty = {
+            let data = self.lock();
+            data.users.is_empty() && data.sessions.is_empty() && data.oauth_flows.is_empty()
+        };
+        match fs::read(self.path.as_ref()) {
+            Ok(bytes) => serde_json::from_slice::<StoreData>(&bytes)
+                .map(|_| ())
+                .map_err(|_| auth_probe_error()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && cached_is_empty => Ok(()),
+            Err(_) => Err(auth_probe_error()),
+        }
+    }
+
     pub(crate) fn upsert_user(&self, mut account: UserAccount) -> ApiResult<UserAccount> {
         self.ensure_loaded()?;
         let mut data = self.lock();
@@ -313,6 +328,10 @@ fn restrict_file(_path: &Path) -> ApiResult<()> {
 
 fn store_error(error: std::io::Error) -> ApiError {
     ApiError::Internal(format!("cannot persist server auth store: {error}"))
+}
+
+fn auth_probe_error() -> ApiError {
+    ApiError::Internal("cannot verify server auth store".to_string())
 }
 
 pub(crate) fn session_cookie(token: &str, secure: bool) -> String {

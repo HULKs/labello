@@ -588,7 +588,9 @@ fn parse_coco_keypoints(
     }
     let mut labeled = 0_u64;
     let mut output = Vec::with_capacity(category.keypoint_names.len());
-    for (name, values) in category.keypoint_names.iter().zip(values.chunks_exact(3)) {
+    let (keypoint_values, remainder) = values.as_chunks::<3>();
+    debug_assert!(remainder.is_empty());
+    for (name, values) in category.keypoint_names.iter().zip(keypoint_values) {
         let state = match values[2] {
             0.0 if values[0] == 0.0 && values[1] == 0.0 => KeypointState::Absent,
             0.0 => {

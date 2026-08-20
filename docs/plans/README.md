@@ -11,6 +11,7 @@ following one as guidance.
 
 | Plan or work package | Status | Owner | Last verified/classified | Current replacement or use |
 | --- | --- | --- | --- | --- |
+| [GitHub release and rootless deployment](github-release-deployment.md) | Active | Release and operations maintainers | 2026-08-20 in issue #63 worktree | [Release and deployment](../deployment.md) after rollout and acceptance |
 | [Availability contracts, cache retriggers, and Previous Assignment review](availability-assignment-plan.md) | Completed; historical implementation record | Storage and UI maintainers | 2026-07-30 at `4f9c332` | Current behavior is owned by storage assignment/cache code, UI live ownership, and their tests |
 | [Migration save latency](migration-save-latency-plan.md) | Completed; implementation/performance record | Storage maintainers | 2026-07-30 at `4f9c332` | [Architecture](../architecture.md) and current repository cache ownership |
 | [Pre-import refactor](pre-import-refactor-plan.md) | Completed; historical implementation record | Labello maintainers | 2026-07-30 at `4f9c332` | [Architecture](../architecture.md), [dataset import](../import.md), and [UI ownership](../ui-ownership.md) |

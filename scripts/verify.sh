@@ -42,6 +42,31 @@ require_literal() {
     fi
 }
 
+reject_literal() {
+    local file="$1"
+    local literal="$2"
+
+    if grep -Fq -- "$literal" "$file"; then
+        printf 'ci audit: %s must not contain: %s\n' "$file" "$literal" >&2
+        return 1
+    fi
+}
+
+require_before() {
+    local file="$1"
+    local first="$2"
+    local second="$3"
+    local first_line
+    local second_line
+
+    first_line="$(grep -nF -m1 -- "$first" "$file" | cut -d: -f1)"
+    second_line="$(grep -nF -m1 -- "$second" "$file" | cut -d: -f1)"
+    if [[ -z "$first_line" || -z "$second_line" || "$first_line" -ge "$second_line" ]]; then
+        printf 'ci audit: %s must contain %s before %s\n' "$file" "$first" "$second" >&2
+        return 1
+    fi
+}
+
 profiles_for_path() {
     local path="$1"
 
@@ -70,7 +95,7 @@ profiles_for_path() {
         apps/egui-mcp-inspector/*|opencode.json)
             printf '%s\n' ui
             ;;
-        Cargo.toml|Cargo.lock|.gitignore|scripts/*|.github/workflows/*)
+        Cargo.toml|Cargo.lock|.gitignore|scripts/*|.github/workflows/*|deployment/*|tools/*)
             printf '%s\n' infrastructure browser
             ;;
         *)
@@ -151,6 +176,31 @@ audit() {
     require_literal .github/workflows/ci.yml 'fallback: none'
     require_literal docs/verification.md 'required `Testing` status check'
     require_literal .github/pull_request_template.md '## Acceptance criteria and evidence'
+    require_literal .github/workflows/release.yml 'workflow_dispatch:'
+    require_literal .github/workflows/release.yml "if: github.ref == 'refs/heads/main'"
+    require_literal .github/workflows/release.yml 'group: Default'
+    require_literal .github/workflows/release.yml 'labels: [self-hosted, linux, x64]'
+    reject_literal .github/workflows/release.yml 'LABELLO_RELEASE_RUNNER'
+    require_literal .github/workflows/release.yml 'test "$GITHUB_SHA" = "$source_commit"'
+    require_literal .github/workflows/release.yml 'actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a'
+    require_literal .github/workflows/release.yml 'isImmutable == true'
+    require_literal .github/workflows/release.yml 'event_type=stable-release-published'
+    require_literal .github/workflows/deploy.yml 'repository_dispatch:'
+    require_literal .github/workflows/deploy.yml 'gh_2.97.0_linux_amd64.tar.gz'
+    require_literal .github/workflows/deploy.yml 'a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112'
+    require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy verify-release \'
+    require_before .github/workflows/deploy.yml 'gh attestation verify "$download/$asset"' '/var/lib/labello/bin/labello-deploy verify-release \'
+    require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy receive "$request_id"'
+    require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy status "$request_id"'
+    reject_literal .github/workflows/deploy.yml 'ssh'
+    reject_literal .github/workflows/deploy.yml 'sudo'
+    reject_literal .github/workflows/deploy.yml 'apt-get'
+    reject_literal .github/workflows/deploy.yml 'container:'
+    reject_literal .github/workflows/deploy.yml 'python'
+    reject_literal .github/workflows/deploy.yml 'Python'
+    require_literal docs/deployment.md 'Routine deployment is rootless.'
+    require_literal docs/deployment.md '`candidate_data_access_started`'
+    require_literal docs/deployment.md '`admission_started`'
 
     local baseline_command
     while IFS= read -r baseline_command; do

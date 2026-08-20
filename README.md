@@ -23,7 +23,9 @@ Labello currently supports:
   instances/keypoints ground-truth profiles;
 - guided box-to-skeleton migration with audited exclusions, replayed progress,
   assignment navigation, and read-only browsing of resolved objects;
-- loopback-only local administrator login and GitHub OAuth.
+- loopback-only local administrator login and GitHub OAuth;
+- verified stable GitHub releases and rootless transactional deployment to a
+  Debian 12 guest.
 
 The project is under active development. See [Current limitations](#current-limitations)
 before using it in production.
@@ -371,6 +373,8 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 - Run one Labello server process per dataset root; filesystem locks are
   process-local.
 - Back up the dataset root, image roots, and `.labello-server/auth.json`.
+- Use the [release and deployment guide](docs/deployment.md) for immutable
+  artifacts, rootless user services, Caddy, backup, rollback, and recovery.
 
 ## Current Limitations
 
@@ -429,8 +433,10 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 - Configured cleanup of retained import jobs is not invoked or scheduled by the
   production server, and import API control/idempotency records have no complete
   retention lifecycle.
-- `GET /health` is liveness only; there is no readiness endpoint covering the
-  authentication store, dataset-root mount, write capacity, or free space.
+- `GET /health` is liveness only. `GET /deployment/readiness` checks
+  dataset-root traversal and authentication-store loading for deployment
+  admission, but it does not cover write capacity, free space, representative
+  dataset reads, OAuth, or browser networking.
 - Graceful shutdown is wired to Ctrl-C, but there is no application drain
   deadline or documented SIGTERM handler.
 - Import format support is tested under configured limits, but official

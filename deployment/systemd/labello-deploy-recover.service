@@ -1,0 +1,16 @@
+[Unit]
+Description=Recover interrupted Labello deployments
+Before=labello-caddy.service labello-server.service
+
+[Service]
+Type=oneshot
+Environment=LABELLO_DEPLOY_ROOT=/var/lib/labello
+ExecStart=/var/lib/labello/bin/labello-deploy recover
+RemainAfterExit=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/labello
+
+[Install]
+WantedBy=default.target

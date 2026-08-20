@@ -58,6 +58,10 @@ impl ApiState {
         &self.datasets_root
     }
 
+    pub(crate) fn authentication_ready(&self) -> bool {
+        self.server_store.probe().is_ok()
+    }
+
     pub fn with_bootstrap_admins(mut self, admins: impl IntoIterator<Item = UserId>) -> Self {
         self.bootstrap_admins = Arc::new(admins.into_iter().collect());
         self
