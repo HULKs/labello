@@ -89,8 +89,27 @@ The API owns the external trust boundary:
 API import handlers do not perform raw durable control-file I/O. They use the
 storage-owned import control store through `ImportService`.
 
+The deployment-readiness handler is a narrow API trust boundary. It reports
+the compiled release identity and performs non-mutating dataset-root and
+authentication-store probes. It does not own deployment, backup, rollback, or
+service-control policy.
+
 The maintained route, authorization, transport, error, and compatibility
 reference is [`api.md`](api.md).
+
+## Release and deployment tooling
+
+`tools/labello-deploy` is an operational Rust tool outside the product crate
+dependency chain. It owns the guest-level deployment transaction, including
+the host lock, durable journal, release and configuration generations, full
+data backup, readiness admission, rollback, and boot recovery. Product storage
+does not call it, and it does not reach into storage-private artifacts. It
+treats the complete configured `datasetsRoot` as one opaque backup unit.
+
+The release and deploy workflows package and verify artifacts, then call the
+tool through `receive` and `status`. They do not reproduce its mutation policy.
+Systemd user services and Caddy are adapters at the process and network
+boundaries. See [`deployment.md`](deployment.md).
 
 ## UI
 

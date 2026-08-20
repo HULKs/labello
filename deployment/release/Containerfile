@@ -1,0 +1,22 @@
+FROM docker.io/library/rust:1.95.0-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1
+
+RUN apt-get update && apt-get install --no-install-recommends --yes \
+    ca-certificates \
+    curl \
+    git \
+    gzip \
+    libasound2-dev \
+    libdbus-1-dev \
+    libgl1-mesa-dev \
+    libudev-dev \
+    libwayland-dev \
+    libx11-dev \
+    libxi-dev \
+    libxkbcommon-dev \
+    pkg-config \
+    && rm --recursive --force /var/lib/apt/lists/*
+
+RUN rustup component add clippy rustfmt && \
+    rustup target add wasm32-unknown-unknown
+
+RUN cargo install --locked trunk --version 0.21.14 --root /usr/local

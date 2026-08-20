@@ -16,6 +16,7 @@ documents are maintained current references:
 | [Architecture](architecture.md) | Normative current | Labello maintainers | Maintainers, contributors | Crate boundaries and implementation ownership |
 | [Server configuration](configuration.md) | Normative current | Server maintainers | Operators, maintainers | Supported settings, defaults, validation, and deployment configuration |
 | [Dataset import](import.md) | Normative current | Import maintainers | Operators, maintainers, UI contributors | Supported sources, lifecycle, invariants, and ownership |
+| [Release and deployment](deployment.md) | Normative current | Release and operations maintainers | Operators, maintainers | Stable release, rootless guest transaction, rollback, and rollout contract |
 | [Operations](operations.md) | Normative current | Server maintainers | Operators, maintainers | Logging, redaction, health, deployment, backup, upgrade, and recovery |
 | [Persistence and recovery](persistence.md) | Normative current | Storage maintainers | Operators, maintainers | On-disk authority, schema compatibility, atomicity, snapshots, and repair |
 | [UI and design guidelines](ui-design-guidelines.md) | Normative current | UI maintainers | UI designers and contributors | UI behavior, design, accessibility, and verification acceptance |

@@ -373,3 +373,6 @@ replace GitHub OAuth. A partial set is ignored. See
   locking is process-local.
 - Back up `datasetsRoot`, including `.labello-server/auth.json`, separately from
   the application binaries.
+- Follow the rootless [release and deployment contract](deployment.md) for the
+  fixed `/var/lib/labello/data` root, matching executable/configuration
+  generations, Caddy gateway, and transactional full-root backup.

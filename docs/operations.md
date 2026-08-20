@@ -75,16 +75,25 @@ read the configuration, authentication store, dataset root, a dataset, import
 staging, or available disk space on each request. It is therefore not a
 readiness or durability check.
 
-Labello has no separate readiness endpoint. Startup is fail closed for
+`GET /deployment/readiness` is an unauthenticated, non-mutating admission
+probe for the rootless deployment manager. It checks that the configured
+dataset root is a traversable directory and that the authentication store
+loaded, then returns bounded `ok` or `failed` states plus the compiled release
+tag, source commit, and schema version. It does not test write capacity, free
+space, representative dataset reads, import filesystem capabilities, OAuth,
+or browser networking. The production API remains loopback-bound behind Caddy.
+
+Startup is fail closed for
 configuration parsing, authentication-store initialization, bind failure, and
 I/O errors while initializing the import service. Startup probes secure import
 publication; a safely detected unsupported platform leaves import unavailable
 instead of failing the whole server. A process that has emitted
 `server.started` has passed those startup checks, but later filesystem or disk
-failures remain request-time failures. Use `/health` for liveness and combine
-it with external checks for dataset-root mount presence, write capacity, and
-free space before routing production traffic. Do not implement a readiness
-probe by modifying a dataset.
+failures remain request-time failures. Use `/health` for liveness. Deployment
+uses `/deployment/readiness` for its bounded admission contract. Combine both
+with external checks for dataset-root mount presence, write capacity, and free
+space before routing production traffic. Never probe readiness by modifying a
+dataset.
 
 ## Graceful Shutdown
 
@@ -143,6 +152,13 @@ availability externally, and treat the richer import alert set in
 its instrumentation is implemented.
 
 ## Production Deployment
+
+The supported production release and rootless guest transaction are documented
+in [Release and deployment](deployment.md). The deployment runner lives inside
+the Debian 12 guest, verifies an immutable attested GitHub release, and submits
+it to the local Rust transaction manager. Automated SSH deployment, remote
+polling, sudo, job-level deployment containers, and Python are not part of the
+production path.
 
 Run the service under a dedicated, unprivileged account. That account needs:
 
@@ -283,7 +299,7 @@ The current persistence schema is version 3. The code accepts supported version
 schema, keybindings, and state caches through a durable migration journal.
 Event logs remain authoritative and are upcast during replay.
 
-For an upgrade:
+For a manual upgrade outside the supported release workflow:
 
 1. Read release notes and confirm the supported source schema and version hop.
 2. Complete and verify a full-root backup.
@@ -298,6 +314,11 @@ migration, do not point an older binary at the upgraded data unless that exact
 reverse compatibility is documented. The safe rollback is to stop the new
 binary, restore the pre-upgrade full-root backup into an empty location, and
 restart the old binary with its matching configuration and assets.
+
+The supported transaction manager automates this maintenance, backup, matching
+configuration generation, readiness, admission, and pre-admission restore
+sequence. From its flushed `admission_started` barrier onward, it forbids
+automatic data restoration and requires operator-led recovery.
 
 ## Corruption And Repair
 

@@ -157,6 +157,14 @@ run the baseline, and dependency/workflow/script changes conservatively run the
 browser build as well. An unknown path has no profile: if the classifier cannot
 prove a surface irrelevant, verification fails instead of skipping it.
 
+Release workflow, deploy workflow, `deployment/`, and `tools/` changes use the
+infrastructure profile. The baseline runs the Rust deployment transaction
+tests. The audit also rejects SSH, sudo, package installation, and Python in
+the deploy workflow and requires its pinned GitHub CLI checksum, local
+`receive`/`status` boundary, immutable-release check, attestation signer, and
+flushed barrier documentation. Real guest systemd, mount, Caddy, TLS, and
+GitHub environment tests remain manual rollout evidence.
+
 ## Evidence And Independent Acceptance
 
 The pull-request template is the required proof bundle. It records:
