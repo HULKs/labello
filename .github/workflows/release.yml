@@ -27,6 +27,9 @@ jobs:
       labels: [self-hosted, linux, x64]
     container:
       image: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 120
     steps:
       - name: Require a digest-pinned build image
