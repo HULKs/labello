@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
@@ -16,8 +16,9 @@ use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const JOURNAL_SCHEMA: u32 = 1;
+const JOURNAL_SCHEMA: u32 = 2;
 const MANIFEST_SCHEMA: u32 = 1;
+const RELEASE_METADATA_SCHEMA: u32 = 1;
 const MAX_ARCHIVE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 100_000;
 const MANIFEST_NAME: &str = "release-manifest.json";
@@ -41,6 +42,22 @@ pub struct ReleaseManifest {
 pub struct ManifestFile {
     pub path: String,
     pub sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReleaseMetadata {
+    schema_version: u32,
+    release_tag: String,
+    source_commit: String,
+    payloads: Vec<ReleasePayload>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReleasePayload {
+    name: String,
+    sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
@@ -103,6 +120,7 @@ struct Journal {
     release_tag: String,
     source_commit: String,
     previous_release: Option<String>,
+    previous_release_captured: bool,
     phase: Phase,
     candidate_data_access_started: bool,
     admission_started: bool,
@@ -224,6 +242,7 @@ impl Platform for RealPlatform {
                 && readiness.service == "labello"
                 && readiness.release_tag == release_tag
                 && readiness.source_commit == source_commit
+                && readiness.schema_version > 0
                 && readiness.persistence == "ok"
                 && readiness.authentication == "ok"
             {
@@ -246,6 +265,7 @@ struct ReadinessResponse {
     service: String,
     release_tag: String,
     source_commit: String,
+    schema_version: u32,
     persistence: String,
     authentication: String,
 }
@@ -275,6 +295,117 @@ pub fn create_release_manifest(
     };
     write_json(&root.join(MANIFEST_NAME), &manifest)?;
     validate_candidate(root)?;
+    Ok(())
+}
+
+pub fn verify_release_assets(
+    root: impl AsRef<Path>,
+    release_tag: &str,
+    source_commit: &str,
+) -> Result<()> {
+    let root = root.as_ref();
+    validate_release_tag(release_tag)?;
+    validate_source_commit(source_commit)?;
+    ensure!(root.is_dir(), "release asset directory is unavailable");
+
+    let server = format!("labello-server-x86_64-linux-{release_tag}.tar.gz");
+    let browser = format!("labello-browser-{release_tag}.tar.gz");
+    let deployment = format!("labello-deployment-{release_tag}.tar.gz");
+    let metadata_name = format!("release-metadata-{release_tag}.json");
+    let payload_names = BTreeSet::from([server, browser, deployment]);
+    let checksummed_names = payload_names
+        .iter()
+        .cloned()
+        .chain(std::iter::once(metadata_name.clone()))
+        .collect::<BTreeSet<_>>();
+    let expected_files = checksummed_names
+        .iter()
+        .cloned()
+        .chain(std::iter::once("SHA256SUMS".to_string()))
+        .collect::<BTreeSet<_>>();
+
+    let mut actual_files = BTreeSet::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        ensure!(
+            entry.file_type()?.is_file(),
+            "release asset is not a regular file"
+        );
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("release asset name is not UTF-8"))?;
+        ensure!(actual_files.insert(name), "duplicate release asset path");
+    }
+    ensure!(
+        actual_files == expected_files,
+        "release asset set is incomplete"
+    );
+
+    let checksum_text = fs::read_to_string(root.join("SHA256SUMS"))?;
+    let mut checksums = BTreeMap::new();
+    for line in checksum_text.lines() {
+        let (digest, name) = line
+            .split_once("  ")
+            .context("release checksum line is invalid")?;
+        validate_sha256(digest)?;
+        ensure!(
+            checksummed_names.contains(name),
+            "release checksum path is unexpected"
+        );
+        ensure!(
+            checksums
+                .insert(name.to_string(), digest.to_string())
+                .is_none(),
+            "release checksum path is duplicated"
+        );
+    }
+    ensure!(
+        checksums.keys().cloned().collect::<BTreeSet<_>>() == checksummed_names,
+        "release checksum inventory is incomplete"
+    );
+    for (name, digest) in &checksums {
+        ensure!(
+            hash_file(&root.join(name))? == *digest,
+            "release asset checksum does not match"
+        );
+    }
+
+    let metadata: ReleaseMetadata = serde_json::from_slice(&fs::read(root.join(&metadata_name))?)?;
+    ensure!(
+        metadata.schema_version == RELEASE_METADATA_SCHEMA,
+        "unsupported release metadata schema"
+    );
+    ensure!(
+        metadata.release_tag == release_tag && metadata.source_commit == source_commit,
+        "release metadata identity does not match"
+    );
+    let mut payloads = BTreeMap::new();
+    for payload in metadata.payloads {
+        validate_sha256(&payload.sha256)?;
+        ensure!(
+            payload_names.contains(&payload.name),
+            "release metadata payload is unexpected"
+        );
+        ensure!(
+            payloads.insert(payload.name, payload.sha256).is_none(),
+            "release metadata payload is duplicated"
+        );
+    }
+    let expected_payloads = payload_names
+        .into_iter()
+        .map(|name| {
+            let digest = checksums
+                .get(&name)
+                .expect("payload checksum was validated")
+                .clone();
+            (name, digest)
+        })
+        .collect::<BTreeMap<_, _>>();
+    ensure!(
+        payloads == expected_payloads,
+        "release metadata payload inventory does not match checksums"
+    );
     Ok(())
 }
 
@@ -308,6 +439,7 @@ impl<P: Platform> DeploymentManager<P> {
                 release_tag: manifest.release_tag,
                 source_commit: manifest.source_commit,
                 previous_release: None,
+                previous_release_captured: false,
                 phase: Phase::Received,
                 candidate_data_access_started: false,
                 admission_started: false,
@@ -384,6 +516,27 @@ impl<P: Platform> DeploymentManager<P> {
             if journal.phase.terminal() {
                 continue;
             }
+
+            if !journal.previous_release_captured {
+                journal.previous_release = self.current_release()?;
+                journal.previous_release_captured = true;
+                self.save_journal(&journal)?;
+            }
+
+            // `execute` persists `Maintenance` before its first service or
+            // symlink mutation. A durable `Received` request therefore has
+            // nothing to undo and must not disturb the live deployment.
+            if journal.phase == Phase::Received {
+                journal.phase = if journal.previous_release.is_some() {
+                    Phase::RolledBack
+                } else {
+                    Phase::FirstInstallFailed
+                };
+                journal.failure = Some(FailureCategory::Recovery);
+                self.save_journal(&journal)?;
+                continue;
+            }
+
             self.switch_caddy("maintenance")?;
             if journal.admission_started {
                 self.mark_manual_recovery(&mut journal, FailureCategory::Recovery)?;
@@ -418,15 +571,17 @@ impl<P: Platform> DeploymentManager<P> {
     }
 
     fn execute(&self, journal: &mut Journal) -> Result<()> {
-        if journal.previous_release.is_none() {
+        if !journal.previous_release_captured {
             journal.previous_release = self.current_release()?;
+            journal.previous_release_captured = true;
             self.save_journal(journal)?;
         }
 
-        self.switch_caddy("maintenance")?;
-        self.platform.reload_caddy()?;
         journal.phase = Phase::Maintenance;
         self.save_journal(journal)?;
+        self.switch_caddy("maintenance")?;
+        self.platform.reload_caddy()?;
+        self.platform.stop_server()?;
 
         self.back_up_data(&journal.request_id)?;
         journal.backup_created = true;
@@ -634,13 +789,8 @@ impl<P: Platform> DeploymentManager<P> {
         let backup = self.root.join("backups").join(request_id);
         ensure!(!backup.exists(), "backup generation already exists");
         fs::create_dir(&backup)?;
-        copy_tree(&self.root.join("data"), &backup.join("data"))?;
-        let expected = backup_inventory(&backup.join("data"))?;
+        let expected = copy_tree_verified(&self.root.join("data"), &backup.join("data"))?;
         write_json(&backup.join("inventory.json"), &expected)?;
-        ensure!(
-            expected == backup_inventory(&backup.join("data"))?,
-            "backup verification failed"
-        );
         sync_tree(&backup)?;
         sync_directory(backup.parent().expect("backup has a parent"))
     }
@@ -676,8 +826,16 @@ fn validate_journal(journal: &Journal, request_id: &str) -> Result<()> {
     validate_release_tag(&journal.release_tag)?;
     validate_source_commit(&journal.source_commit)?;
     if let Some(previous) = &journal.previous_release {
+        ensure!(
+            journal.previous_release_captured,
+            "journal previous release was not captured"
+        );
         validate_release_tag(previous)?;
     }
+    ensure!(
+        journal.previous_release_captured || journal.phase == Phase::Received,
+        "journal phase precedes previous release capture"
+    );
     ensure!(
         !journal.admission_started || journal.candidate_data_access_started,
         "journal barriers are inconsistent"
@@ -707,6 +865,7 @@ fn unpack_candidate_bounded(reader: impl Read, destination: &Path, max_bytes: u6
         let mut archive = tar::Archive::new(&mut limited);
         let mut count = 0usize;
         let mut extracted_bytes = 0u64;
+        let mut extracted_paths = BTreeSet::new();
         for entry in archive.entries()? {
             let mut entry = entry?;
             count += 1;
@@ -715,7 +874,11 @@ fn unpack_candidate_bounded(reader: impl Read, destination: &Path, max_bytes: u6
                 "candidate archive contains too many entries"
             );
             let path = entry.path()?.into_owned();
-            validate_archive_path(&path)?;
+            let normalized_path = normalized_archive_path(&path)?;
+            ensure!(
+                extracted_paths.insert(normalized_path),
+                "candidate archive contains a duplicate path"
+            );
             let kind = entry.header().entry_type();
             ensure!(
                 kind.is_file() || kind.is_dir(),
@@ -973,6 +1136,28 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
     copy_tree_contents(source, destination)
 }
 
+fn copy_tree_verified(source: &Path, destination: &Path) -> Result<Vec<BackupEntry>> {
+    copy_tree_verified_with(source, destination, copy_tree)
+}
+
+fn copy_tree_verified_with(
+    source: &Path,
+    destination: &Path,
+    copy: impl FnOnce(&Path, &Path) -> Result<()>,
+) -> Result<Vec<BackupEntry>> {
+    let expected = backup_inventory(source)?;
+    copy(source, destination)?;
+    ensure!(
+        expected == backup_inventory(source)?,
+        "managed data changed while the backup was copied"
+    );
+    ensure!(
+        expected == backup_inventory(destination)?,
+        "backup verification failed"
+    );
+    Ok(expected)
+}
+
 fn copy_tree_contents(source: &Path, destination: &Path) -> Result<()> {
     let mut entries = fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(|entry| entry.file_name());
@@ -1142,6 +1327,20 @@ fn validate_archive_path(path: &Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn normalized_archive_path(path: &Path) -> Result<PathBuf> {
+    validate_archive_path(path)?;
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        if let Component::Normal(component) = component {
+            normalized.push(component);
+        }
+    }
+    if normalized.as_os_str().is_empty() {
+        normalized.push(".");
+    }
+    Ok(normalized)
 }
 
 #[cfg(test)]

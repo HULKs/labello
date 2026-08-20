@@ -106,10 +106,11 @@ data backup, readiness admission, rollback, and boot recovery. Product storage
 does not call it, and it does not reach into storage-private artifacts. It
 treats the complete configured `datasetsRoot` as one opaque backup unit.
 
-The release and deploy workflows package and verify artifacts, then call the
-tool through `receive` and `status`. They do not reproduce its mutation policy.
-Systemd user services and Caddy are adapters at the process and network
-boundaries. See [`deployment.md`](deployment.md).
+The release and deploy workflows package and attest artifacts, then call the
+tool through the read-only `verify-release` command and the transactional
+`receive` and `status` commands. They do not reproduce its release-inventory or
+mutation policy. Systemd user services and Caddy are adapters at the process
+and network boundaries. See [`deployment.md`](deployment.md).
 
 ## UI
 

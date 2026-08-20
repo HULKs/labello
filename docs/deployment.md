@@ -103,7 +103,10 @@ same release.
 The release workflow generates GitHub build-provenance attestations for every
 asset. Deployment requires the `HULKs/labello` repository, the release workflow
 path, `refs/heads/main`, and the exact dispatched source digest. The deploy job
-does not trust a checksum file until its own attestation has passed.
+does not read the checksum or metadata files until their attestations have
+passed. The read-only Rust `verify-release` command then rejects unexpected or
+duplicate checksum paths and requires the metadata payload names and hashes to
+match that checksum inventory exactly.
 
 ## Guest layout
 
@@ -158,17 +161,20 @@ inventory, flushes the initial journal, and starts
 The worker takes an exclusive host lock and advances one flushed journal:
 
 1. Switch Caddy to maintenance and reload it.
-2. Copy the complete data root, including dot-directories and empty
-   directories, to a request backup.
-3. Record and verify file hashes, entry types, and permission modes, then sync
-   the backup tree.
-4. Publish the no-replace release and configuration generations.
-5. Flush `candidate_data_access_started` before switching generations or
+2. Stop Labello through its graceful systemd user-service shutdown and wait for
+   the process to exit.
+3. Inventory the stopped source, copy the complete data root, including
+   dot-directories and empty directories, to a request backup, then require the
+   source and copy to match the pre-copy inventory.
+4. Record file hashes, entry types, and permission modes, then sync the backup
+   tree.
+5. Publish the no-replace release and configuration generations.
+6. Flush `candidate_data_access_started` before switching generations or
    starting the candidate server.
-6. Restart the server and poll the loopback deployment-readiness route for the
+7. Restart the server and poll the loopback deployment-readiness route for the
    exact tag and source commit.
-7. Flush `admission_started` before switching Caddy to the live configuration.
-8. Reload Caddy and mark the transaction complete.
+8. Flush `admission_started` before switching Caddy to the live configuration.
+9. Reload Caddy and mark the transaction complete.
 
 The journal phases exposed by `status` contain only the request ID, release
 identity, barriers, phase, and a bounded failure category. They never contain
@@ -177,10 +183,12 @@ data.
 
 ### Failure and recovery
 
-Before candidate data access, a failure keeps the data untouched, selects the
-previous release and configuration when one exists, and remains in maintenance
-mode. A failed first installation has its own `first_install_failed` terminal
-state.
+After the maintenance transition begins and before candidate data access, a
+failure keeps the data untouched, selects the previous release and
+configuration when one exists, and remains in maintenance mode. A failed first
+installation has its own `first_install_failed` terminal state. Boot recovery
+leaves Caddy live only for a receipt-only request whose worker never began that
+transition.
 
 After candidate data access and before admission, the manager stops the
 candidate, verifies the backup again, clears only the managed data directory,
@@ -199,7 +207,9 @@ At guest boot, `labello-deploy-recover.service` examines every nonterminal
 journal before the Labello server starts. An uncertain pre-admission candidate
 is restored from its verified backup. A post-admission journal becomes
 `manual_recovery` and blocks the server. Boot recovery never resumes a new
-candidate automatically.
+candidate automatically. A request that never advanced beyond durable receipt
+has not changed a symlink or service; recovery records its previous release and
+leaves that live deployment untouched.
 
 ## Readiness and admission
 

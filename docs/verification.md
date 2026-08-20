@@ -161,9 +161,9 @@ Release workflow, deploy workflow, `deployment/`, and `tools/` changes use the
 infrastructure profile. The baseline runs the Rust deployment transaction
 tests. The audit also rejects SSH, sudo, package installation, and Python in
 the deploy workflow and requires its pinned GitHub CLI checksum, local
-`receive`/`status` boundary, immutable-release check, attestation signer, and
-flushed barrier documentation. Real guest systemd, mount, Caddy, TLS, and
-GitHub environment tests remain manual rollout evidence.
+`verify-release`/`receive`/`status` boundary, immutable-release check,
+attestation signer, and flushed barrier documentation. Real guest systemd,
+mount, Caddy, TLS, and GitHub environment tests remain manual rollout evidence.
 
 ## Evidence And Independent Acceptance
 

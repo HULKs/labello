@@ -52,6 +52,21 @@ reject_literal() {
     fi
 }
 
+require_before() {
+    local file="$1"
+    local first="$2"
+    local second="$3"
+    local first_line
+    local second_line
+
+    first_line="$(grep -nF -m1 -- "$first" "$file" | cut -d: -f1)"
+    second_line="$(grep -nF -m1 -- "$second" "$file" | cut -d: -f1)"
+    if [[ -z "$first_line" || -z "$second_line" || "$first_line" -ge "$second_line" ]]; then
+        printf 'ci audit: %s must contain %s before %s\n' "$file" "$first" "$second" >&2
+        return 1
+    fi
+}
+
 profiles_for_path() {
     local path="$1"
 
@@ -173,6 +188,8 @@ audit() {
     require_literal .github/workflows/deploy.yml 'repository_dispatch:'
     require_literal .github/workflows/deploy.yml 'gh_2.97.0_linux_amd64.tar.gz'
     require_literal .github/workflows/deploy.yml 'a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112'
+    require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy verify-release \'
+    require_before .github/workflows/deploy.yml 'gh attestation verify "$download/$asset"' '/var/lib/labello/bin/labello-deploy verify-release \'
     require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy receive "$request_id"'
     require_literal .github/workflows/deploy.yml '/var/lib/labello/bin/labello-deploy status "$request_id"'
     reject_literal .github/workflows/deploy.yml 'ssh'

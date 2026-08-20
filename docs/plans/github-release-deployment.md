@@ -30,16 +30,16 @@ runner's sudo and Docker access after one-time provisioning.
 | Canonical manual stable version resolves to exact `main` | `.github/workflows/release.yml` | Reject malformed SemVer, dirty checkout, existing tag/release, or mismatched head |
 | Full canonical verification precedes packaging | Release workflow and `scripts/verify.sh` | `./scripts/verify.sh all` on the resolved commit |
 | Pinned x86-64 build environment and immutable assets | Release environment and workflow | Digest validation, deterministic archives, GitHub immutable flag |
-| Payload, browser, and checksum inventories agree | Release workflow and Rust manifest validation | Reject missing, extra, duplicate, unsafe, or hash-mismatched files; checksum file excludes itself |
+| Payload, browser, and checksum inventories agree | Release workflow and Rust release validation | Attest fixed names before parsing; reject missing, extra, duplicate, unsafe, or hash-mismatched files; metadata and checksums agree; checksum file excludes itself |
 | Provenance binds workflow, repository, ref, and commit | GitHub attestation action and deploy workflow | Verify every asset with exact signer workflow, `main`, and source digest |
 | Publication explicitly starts deployment | Release workflow | Stable immutable release sends `repository_dispatch`; drafts and prereleases do not deploy |
 | Deployment enters locally without SSH or sudo | `.github/workflows/deploy.yml` | Verified bundle is piped to rootless `labello-deploy receive`; no SSH material or remote polling exists |
 | Runner loss does not kill the transaction | systemd user template | `receive` flushes the journal before starting the asynchronous worker |
-| One owner mutates deployment state | `tools/labello-deploy` | Workflow only calls `receive` and `status`; manager holds the host lock |
-| Complete backup precedes candidate access | Rust manager | Hash, type, permission, dot-directory, and empty-directory coverage; backup failure blocks the barrier |
+| One owner owns release validation and deployment state | `tools/labello-deploy` | Workflow attests fixed assets, then calls `verify-release`, `receive`, and `status`; manager holds the host lock for mutations |
+| Complete backup precedes candidate access | Rust manager | Graceful server stop; source-to-copy hash, type, permission, dot-directory, and empty-directory coverage; backup failure blocks the barrier |
 | Pre-admission failure restores safely | Rust manager | Tests inject candidate start/readiness failures and verify the complete original data and previous generation |
 | Admission forbids automatic restore | Rust manager | Failure after flushed admission barrier enters `manual_recovery` with candidate data intact |
-| Boot handles every barrier conservatively | Rust manager and recovery unit | Pre-admission uncertainty restores; post-admission uncertainty blocks startup for manual recovery |
+| Boot handles every barrier conservatively | Rust manager and recovery unit | Receipt-only crash leaves the live release alone; pre-admission candidate uncertainty restores; post-admission uncertainty blocks startup for manual recovery |
 | First install has a distinct safe state | Rust manager | No previous binary is guessed; original data is restored and maintenance stays active |
 | Readiness is explicit and non-mutating | API deployment handler | Healthy, missing-root, and corrupt-auth tests; bounded output contains no probe data |
 | Browser and API use one TLS gateway | Caddy and systemd user templates | Caddy serves current browser, strips `/api/`, and API binds loopback |

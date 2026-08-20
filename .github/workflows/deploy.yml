@@ -72,27 +72,28 @@ jobs:
         run: |
           download="$RUNNER_TEMP/download"
           mkdir -p "$download"
+          server_asset="labello-server-x86_64-linux-${RELEASE_TAG}.tar.gz"
+          browser_asset="labello-browser-${RELEASE_TAG}.tar.gz"
+          deployment_asset="labello-deployment-${RELEASE_TAG}.tar.gz"
+          metadata_asset="release-metadata-${RELEASE_TAG}.json"
+          payload_assets=("$server_asset" "$browser_asset" "$deployment_asset")
+          expected_assets=("${payload_assets[@]}" "$metadata_asset" SHA256SUMS)
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$download" \
-            --pattern "labello-server-x86_64-linux-${RELEASE_TAG}.tar.gz" \
-            --pattern "labello-browser-${RELEASE_TAG}.tar.gz" \
-            --pattern "labello-deployment-${RELEASE_TAG}.tar.gz" \
-            --pattern "release-metadata-${RELEASE_TAG}.json" \
+            --pattern "$server_asset" \
+            --pattern "$browser_asset" \
+            --pattern "$deployment_asset" \
+            --pattern "$metadata_asset" \
             --pattern SHA256SUMS
-          (
-            cd "$download"
-            sha256sum --check --strict SHA256SUMS
-          )
-          grep --fixed-strings --quiet "\"releaseTag\": \"$RELEASE_TAG\"" \
-            "$download/release-metadata-${RELEASE_TAG}.json"
-          grep --fixed-strings --quiet "\"sourceCommit\": \"$SOURCE_COMMIT\"" \
-            "$download/release-metadata-${RELEASE_TAG}.json"
-          for asset in "$download"/*; do
-            gh attestation verify "$asset" \
+
+          for asset in "${expected_assets[@]}"; do
+            gh attestation verify "$download/$asset" \
               --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
               --source-ref refs/heads/main \
               --source-digest "$SOURCE_COMMIT" >/dev/null
           done
+          /var/lib/labello/bin/labello-deploy verify-release \
+            "$download" "$RELEASE_TAG" "$SOURCE_COMMIT"
 
       - name: Submit deployment to the local transaction manager
         env:

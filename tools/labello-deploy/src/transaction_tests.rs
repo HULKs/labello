@@ -23,6 +23,7 @@ struct FakeState {
     actions: Vec<String>,
     fail_action: Option<String>,
     mutate_on_wait: bool,
+    mutate_on_stop: Option<Vec<u8>>,
 }
 
 impl FakePlatform {
@@ -39,6 +40,14 @@ impl FakePlatform {
 
     fn mutate_on_wait(&self) {
         self.state.lock().unwrap().mutate_on_wait = true;
+    }
+
+    fn mutate_on_stop(&self, contents: &[u8]) {
+        self.state.lock().unwrap().mutate_on_stop = Some(contents.to_vec());
+    }
+
+    fn actions(&self) -> Vec<String> {
+        self.state.lock().unwrap().actions.clone()
     }
 
     fn action(&self, name: &str) -> Result<()> {
@@ -69,7 +78,11 @@ impl Platform for FakePlatform {
     }
 
     fn stop_server(&self) -> Result<()> {
-        self.action("stop_server")
+        self.action("stop_server")?;
+        if let Some(contents) = self.state.lock().unwrap().mutate_on_stop.take() {
+            fs::write(self.data.join("authoritative.json"), contents)?;
+        }
+        Ok(())
     }
 
     fn wait_until_ready(&self, _release_tag: &str, _source_commit: &str) -> Result<()> {
@@ -215,6 +228,57 @@ fn candidate_archive_size_is_bounded_even_after_the_tar_terminator() {
 }
 
 #[test]
+fn readiness_adapter_accepts_the_api_schema_version_field() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0u8; 1024];
+        let _ = std::io::Read::read(&mut stream, &mut request).unwrap();
+        let body = serde_json::to_vec(&serde_json::json!({
+            "ok": true,
+            "service": "labello",
+            "releaseTag": "v1.2.3",
+            "sourceCommit": COMMIT,
+            "schemaVersion": 3,
+            "persistence": "ok",
+            "authentication": "ok"
+        }))
+        .unwrap();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+        .unwrap();
+        std::io::Write::write_all(&mut stream, &body).unwrap();
+    });
+    let platform = RealPlatform {
+        api_address: address,
+        systemctl: PathBuf::from("/not-used"),
+        readiness_attempts: 1,
+    };
+
+    platform.wait_until_ready("v1.2.3", COMMIT).unwrap();
+    server.join().unwrap();
+}
+
+#[test]
+fn receive_rejects_duplicate_archive_paths() {
+    let setup = Setup::new(false);
+    let result = setup.manager().receive(
+        "request-1",
+        Cursor::new(candidate_archive_with_duplicate("v1.2.3", COMMIT)),
+        ReceiveOptions {
+            start_worker: false,
+        },
+    );
+
+    assert!(result.is_err());
+    assert!(!setup.root.join("requests/request-1").exists());
+}
+
+#[test]
 fn an_existing_release_must_match_the_complete_candidate_manifest() {
     let setup = Setup::new(false);
     fs::create_dir_all(setup.root.join("releases/v1.2.3/server")).unwrap();
@@ -300,6 +364,45 @@ fn release_manifest_generation_inventories_candidate_files() {
 }
 
 #[test]
+fn release_asset_verification_cross_checks_metadata_and_checksums() {
+    let temp = tempfile::tempdir().unwrap();
+    write_release_assets(temp.path(), "v1.2.3", COMMIT);
+
+    verify_release_assets(temp.path(), "v1.2.3", COMMIT).unwrap();
+}
+
+#[test]
+fn release_asset_verification_rejects_an_untrusted_checksum_path() {
+    let temp = tempfile::tempdir().unwrap();
+    write_release_assets(temp.path(), "v1.2.3", COMMIT);
+    fs::write(
+        temp.path().join("SHA256SUMS"),
+        format!("{}  /etc/passwd\n", "0".repeat(64)),
+    )
+    .unwrap();
+
+    assert!(verify_release_assets(temp.path(), "v1.2.3", COMMIT).is_err());
+}
+
+#[test]
+fn release_asset_verification_rejects_metadata_payload_mismatch() {
+    let temp = tempfile::tempdir().unwrap();
+    write_release_assets(temp.path(), "v1.2.3", COMMIT);
+    let metadata_name = "release-metadata-v1.2.3.json";
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(temp.path().join(metadata_name)).unwrap()).unwrap();
+    metadata["payloads"][0]["sha256"] = serde_json::Value::String("0".repeat(64));
+    fs::write(
+        temp.path().join(metadata_name),
+        serde_json::to_vec(&metadata).unwrap(),
+    )
+    .unwrap();
+    write_release_checksums(temp.path(), "v1.2.3");
+
+    assert!(verify_release_assets(temp.path(), "v1.2.3", COMMIT).is_err());
+}
+
+#[test]
 fn candidate_rejects_a_browser_manifest_that_omits_a_file() {
     let temp = tempfile::tempdir().unwrap();
     let archive = candidate_archive("v1.2.3", COMMIT);
@@ -325,6 +428,57 @@ fn maintenance_failure_leaves_data_untouched() {
         fs::read(setup.root.join("data/authoritative.json")).unwrap(),
         b"original"
     );
+}
+
+#[test]
+fn backup_waits_for_server_quiescence_and_matches_its_source() {
+    let setup = Setup::new(true);
+    setup.receive("request-1");
+    setup.platform.mutate_on_stop(b"settled");
+
+    setup.manager().run("request-1").unwrap();
+
+    let backup_data = setup.root.join("backups/request-1/data");
+    assert_eq!(
+        fs::read(backup_data.join("authoritative.json")).unwrap(),
+        b"settled"
+    );
+    let recorded: Vec<BackupEntry> = serde_json::from_slice(
+        &fs::read(setup.root.join("backups/request-1/inventory.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        recorded,
+        backup_inventory(&setup.root.join("data")).unwrap()
+    );
+    assert_eq!(recorded, backup_inventory(&backup_data).unwrap());
+    let actions = setup.platform.actions();
+    let stop = actions
+        .iter()
+        .position(|action| action == "stop_server")
+        .expect("server was stopped");
+    let readiness = actions
+        .iter()
+        .position(|action| action == "wait_until_ready")
+        .expect("candidate readiness was checked");
+    assert!(stop < readiness);
+}
+
+#[test]
+fn verified_backup_copy_rejects_a_source_change_during_copy() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    let destination = temp.path().join("destination");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("authoritative.json"), b"before").unwrap();
+
+    let result = copy_tree_verified_with(&source, &destination, |source, destination| {
+        copy_tree(source, destination)?;
+        fs::write(source.join("authoritative.json"), b"after")?;
+        Ok(())
+    });
+
+    assert!(result.is_err());
 }
 
 #[test]
@@ -413,6 +567,7 @@ fn boot_recovery_rolls_back_an_uncertain_candidate() {
     let manager = setup.manager();
     let mut journal = manager.load_journal("request-1").unwrap();
     journal.previous_release = Some("v0.1.0".to_string());
+    journal.previous_release_captured = true;
     manager.back_up_data("request-1").unwrap();
     journal.backup_created = true;
     journal.candidate_data_access_started = true;
@@ -439,6 +594,7 @@ fn boot_recovery_marks_post_admission_crash_for_manual_recovery() {
     let manager = setup.manager();
     let mut journal = manager.load_journal("request-1").unwrap();
     journal.previous_release = Some("v0.1.0".to_string());
+    journal.previous_release_captured = true;
     journal.candidate_data_access_started = true;
     journal.admission_started = true;
     journal.phase = Phase::AdmissionStarted;
@@ -450,6 +606,29 @@ fn boot_recovery_marks_post_admission_crash_for_manual_recovery() {
         manager.status("request-1").unwrap().phase,
         Phase::ManualRecovery
     );
+}
+
+#[test]
+fn boot_recovery_of_received_request_preserves_live_previous_release() {
+    let setup = Setup::new(true);
+    symlink("live", setup.root.join("caddy/current")).unwrap();
+    setup.receive("request-1");
+
+    setup.manager().boot_recover().unwrap();
+
+    assert_eq!(
+        setup.manager().status("request-1").unwrap().phase,
+        Phase::RolledBack
+    );
+    assert_eq!(
+        fs::read_link(setup.root.join("releases/current")).unwrap(),
+        Path::new("v0.1.0")
+    );
+    assert_eq!(
+        fs::read_link(setup.root.join("caddy/current")).unwrap(),
+        Path::new("live")
+    );
+    assert!(setup.platform.actions().is_empty());
 }
 
 #[test]
@@ -465,14 +644,18 @@ fn managed_data_rejects_symbolic_links_before_backup() {
 }
 
 fn candidate_archive(tag: &str, commit: &str) -> Vec<u8> {
-    build_archive(tag, commit, false)
+    build_archive(tag, commit, false, false)
 }
 
 fn candidate_archive_with_extra(tag: &str, commit: &str) -> Vec<u8> {
-    build_archive(tag, commit, true)
+    build_archive(tag, commit, true, false)
 }
 
-fn build_archive(tag: &str, commit: &str, extra: bool) -> Vec<u8> {
+fn candidate_archive_with_duplicate(tag: &str, commit: &str) -> Vec<u8> {
+    build_archive(tag, commit, false, true)
+}
+
+fn build_archive(tag: &str, commit: &str, extra: bool, duplicate: bool) -> Vec<u8> {
     let mut files = BTreeMap::from([
         ("server/labello-server".to_string(), b"server".to_vec()),
         ("browser/index.html".to_string(), b"index".to_vec()),
@@ -536,6 +719,16 @@ fn build_archive(tag: &str, commit: &str, extra: bool) -> Vec<u8> {
                 .append_data(&mut header, path, Cursor::new(bytes))
                 .unwrap();
         }
+        if duplicate {
+            let bytes = b"index";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, "./browser/index.html", Cursor::new(bytes))
+                .unwrap();
+        }
         archive.finish().unwrap();
     }
     output
@@ -545,6 +738,58 @@ fn hash_bytes(bytes: &[u8]) -> String {
     let mut digest = Sha256::new();
     digest.update(bytes);
     format!("{:x}", digest.finalize())
+}
+
+fn write_release_assets(root: &Path, tag: &str, commit: &str) {
+    let server = format!("labello-server-x86_64-linux-{tag}.tar.gz");
+    let browser = format!("labello-browser-{tag}.tar.gz");
+    let deployment = format!("labello-deployment-{tag}.tar.gz");
+    let metadata_name = format!("release-metadata-{tag}.json");
+    let payloads = [
+        (server, b"server".as_slice()),
+        (browser, b"browser".as_slice()),
+        (deployment, b"deployment".as_slice()),
+    ];
+    for (name, contents) in &payloads {
+        fs::write(root.join(name), contents).unwrap();
+    }
+    let metadata = serde_json::json!({
+        "schemaVersion": RELEASE_METADATA_SCHEMA,
+        "releaseTag": tag,
+        "sourceCommit": commit,
+        "payloads": payloads
+            .iter()
+            .map(|(name, contents)| serde_json::json!({
+                "name": name,
+                "sha256": hash_bytes(contents),
+            }))
+            .collect::<Vec<_>>(),
+    });
+    fs::write(
+        root.join(metadata_name),
+        serde_json::to_vec(&metadata).unwrap(),
+    )
+    .unwrap();
+    write_release_checksums(root, tag);
+}
+
+fn write_release_checksums(root: &Path, tag: &str) {
+    let names = [
+        format!("labello-server-x86_64-linux-{tag}.tar.gz"),
+        format!("labello-browser-{tag}.tar.gz"),
+        format!("labello-deployment-{tag}.tar.gz"),
+        format!("release-metadata-{tag}.json"),
+    ];
+    let checksums = names
+        .iter()
+        .map(|name| {
+            format!(
+                "{}  {name}\n",
+                hash_bytes(&fs::read(root.join(name)).unwrap())
+            )
+        })
+        .collect::<String>();
+    fs::write(root.join("SHA256SUMS"), checksums).unwrap();
 }
 
 fn write_browser_manifest(root: &Path) {

@@ -1,7 +1,9 @@
 use std::{env, io, path::PathBuf, process::ExitCode};
 
 use anyhow::{Context, Result, bail};
-use labello_deploy::{DeploymentManager, RealPlatform, ReceiveOptions, create_release_manifest};
+use labello_deploy::{
+    DeploymentManager, RealPlatform, ReceiveOptions, create_release_manifest, verify_release_assets,
+};
 
 fn main() -> ExitCode {
     match run() {
@@ -27,6 +29,13 @@ fn run() -> Result<()> {
             let source_commit = arguments.next().context("missing source commit")?;
             no_more_arguments(&mut arguments)?;
             create_release_manifest(PathBuf::from(candidate_root), &release_tag, &source_commit)?;
+        }
+        "verify-release" => {
+            let assets_root = arguments.next().context("missing release assets root")?;
+            let release_tag = arguments.next().context("missing release tag")?;
+            let source_commit = arguments.next().context("missing source commit")?;
+            no_more_arguments(&mut arguments)?;
+            verify_release_assets(PathBuf::from(assets_root), &release_tag, &source_commit)?;
         }
         "receive" => {
             let manager = DeploymentManager::new(root, RealPlatform::from_environment()?);
