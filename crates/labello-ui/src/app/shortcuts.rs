@@ -294,24 +294,26 @@ impl LabelloApp {
                     self.discard_prelabel(suggestion.suggestion_id);
                 }
             }
-            UserAction::ToggleKeypointHidden if self.view == AppView::Annotate && ready => {
-                if self
-                    .selected_task()
-                    .and_then(|task| task.skeleton.as_ref())
-                    .is_some_and(|spec| spec.allow_hidden)
-                {
-                    self.work.next_keypoint_hidden = !self.work.next_keypoint_hidden;
-                }
-            }
-            UserAction::MarkKeypointAbsent if self.view == AppView::Annotate && ready => {
-                if self.work.active_skeleton.is_some()
+            UserAction::ToggleKeypointHidden
+                if self.view == AppView::Annotate
+                    && ready
                     && self
                         .selected_task()
                         .and_then(|task| task.skeleton.as_ref())
-                        .is_some_and(|spec| spec.allow_absent)
-                {
-                    self.skip_keypoint();
-                }
+                        .is_some_and(|spec| spec.allow_hidden) =>
+            {
+                self.work.next_keypoint_hidden = !self.work.next_keypoint_hidden;
+            }
+            UserAction::MarkKeypointAbsent
+                if self.view == AppView::Annotate
+                    && ready
+                    && self.work.active_skeleton.is_some()
+                    && self
+                        .selected_task()
+                        .and_then(|task| task.skeleton.as_ref())
+                        .is_some_and(|spec| spec.allow_absent) =>
+            {
+                self.skip_keypoint();
             }
             UserAction::RetryImageLoad
                 if self.view == AppView::Annotate
@@ -338,15 +340,15 @@ impl LabelloApp {
             {
                 self.refocus_active_object();
             }
-            UserAction::AcceptReviewObject if self.view == AppView::Review => {
-                if self.work.correction_draft.is_none() {
-                    self.request_review(labello_domain::ReviewDecision::Approved);
-                }
+            UserAction::AcceptReviewObject
+                if self.view == AppView::Review && self.work.correction_draft.is_none() =>
+            {
+                self.request_review(labello_domain::ReviewDecision::Approved);
             }
-            UserAction::RejectReviewObject if self.view == AppView::Review => {
-                if self.work.correction_draft.is_none() {
-                    self.request_review(labello_domain::ReviewDecision::Rejected);
-                }
+            UserAction::RejectReviewObject
+                if self.view == AppView::Review && self.work.correction_draft.is_none() =>
+            {
+                self.request_review(labello_domain::ReviewDecision::Rejected);
             }
             UserAction::SelectBoundingBoxTool
             | UserAction::SelectKeypointTool
