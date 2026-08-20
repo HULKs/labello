@@ -995,3 +995,4 @@ include!("tests/imports.rs");
 include!("tests/snapshots.rs");
 include!("tests/workflow.rs");
 include!("tests/logging_redaction.rs");
+include!("tests/deployment_readiness.rs");
