@@ -181,6 +181,7 @@ audit() {
     require_literal .github/workflows/release.yml 'group: Default'
     require_literal .github/workflows/release.yml 'labels: [self-hosted, linux, x64]'
     require_literal .github/workflows/release.yml 'shell: bash'
+    require_before .github/workflows/release.yml 'git config --global --add safe.directory "$GITHUB_WORKSPACE"' 'git fetch --no-tags origin main'
     reject_literal .github/workflows/release.yml 'LABELLO_RELEASE_RUNNER'
     require_literal .github/workflows/release.yml 'test "$GITHUB_SHA" = "$source_commit"'
     require_literal .github/workflows/release.yml 'actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a'
