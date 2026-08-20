@@ -1,0 +1,19 @@
+[Unit]
+Description=Labello Caddy gateway
+Wants=labello-deploy-recover.service
+After=labello-deploy-recover.service network-online.target
+
+[Service]
+Type=notify
+EnvironmentFile=/var/lib/labello/config/caddy.env
+Environment=XDG_CONFIG_HOME=/var/lib/labello/caddy/config
+Environment=XDG_DATA_HOME=/var/lib/labello/caddy/data
+ExecStart=/usr/bin/caddy run --config /var/lib/labello/caddy/current/Caddyfile
+ExecReload=/usr/bin/caddy reload --config /var/lib/labello/caddy/current/Caddyfile --force
+TimeoutStopSec=5s
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/labello
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=Labello API server
+Requires=labello-deploy-recover.service
+After=labello-deploy-recover.service network-online.target
+ConditionFileIsExecutable=/var/lib/labello/releases/current/server/labello-server
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/labello
+Environment=LABELLO_CONFIG=/var/lib/labello/configurations/current/labello.server.toml
+Environment=LABELLO_DATASETS_ROOT=/var/lib/labello/data
+Environment=LABELLO_BIND=127.0.0.1:8080
+EnvironmentFile=-/var/lib/labello/configurations/current/labello-server.env
+ExecStart=/var/lib/labello/releases/current/server/labello-server
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGINT
+TimeoutStopSec=300s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/labello
+
+[Install]
+WantedBy=default.target
