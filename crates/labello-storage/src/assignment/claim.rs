@@ -638,7 +638,6 @@ impl DatasetRepository {
         let Some(config) = metadata.imbalance.as_ref() else {
             return Ok(false);
         };
-        crate::completion_projection::validate_imbalance_config(config)?;
         let counts = if *kind == AssignmentKind::Annotation {
             self.task_annotation_counts().await?
         } else {
@@ -651,7 +650,6 @@ impl DatasetRepository {
             .map(|task| task.task_id.clone())
             .collect::<Vec<_>>();
         Ok(config
-            .policy
             .blocked_tasks(&enabled_task_ids, &counts)
             .contains(selected_task_id))
     }

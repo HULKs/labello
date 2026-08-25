@@ -163,32 +163,17 @@ Assignment balance belongs to each versioned `labello.dataset.toml`, not the
 server configuration above. Data administrators edit it through the
 Administration Automation view or the dataset administration API.
 
-Current configuration writes a tagged policy. This example enforces an
-absolute window of five completed images:
+This example enforces an absolute window of five completed images:
 
 ```toml
 [imbalance]
 enforce = true
-
-[imbalance.policy]
-kind = "absoluteWindow"
 maxDifference = 5
 ```
 
-The ratio policy uses `kind = "ratio"` and a finite `maxRatio` of at least
-`1.0`:
-
-```toml
-[imbalance]
-enforce = true
-
-[imbalance.policy]
-kind = "ratio"
-maxRatio = 2.0
-```
-
-Existing schema-version-2 or schema-version-3 dataset files with the legacy
-flat ratio shape remain readable:
+`maxDifference` is a non-negative 64-bit integer; zero is valid. Ratio-based
+configuration is not supported. Before starting this release, replace any
+existing ratio setting such as:
 
 ```toml
 [imbalance]
@@ -196,11 +181,12 @@ maxRatio = 2.0
 enforce = true
 ```
 
-The next dataset configuration save writes that legacy value in the current
-tagged form. `maxDifference` is a non-negative 64-bit integer; zero is valid.
-Omitting `imbalance`, or setting `enforce = false`, disables assignment
-blocking. See [Assignment](assignment.md#completion-balance) for count,
-denominator, peer, zero-count, and exact-boundary semantics.
+with an explicitly chosen `maxDifference`. Labello rejects `maxRatio`, tagged
+`policy` objects, negative values, and values larger than an unsigned 64-bit
+integer rather than guessing an absolute window. Omitting `imbalance`, or
+setting `enforce = false`, disables assignment blocking. See
+[Assignment](assignment.md#completion-balance) for count, denominator, peer,
+zero-count, and exact-boundary semantics.
 
 ## Top-Level Settings
 

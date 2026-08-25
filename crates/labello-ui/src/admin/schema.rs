@@ -1082,71 +1082,17 @@ fn edit_imbalance(ui: &mut egui::Ui, imbalance: &mut Option<ImbalanceConfig>) {
             *imbalance = configured.then(ImbalanceConfig::default);
         }
         if let Some(imbalance) = imbalance.as_mut() {
-            let mut absolute_window =
-                matches!(imbalance.policy, ImbalancePolicy::AbsoluteWindow { .. });
-            let policy_label = ui.label("Balance policy");
-            egui::ComboBox::from_id_salt("balance-policy")
-                .width(ui.available_width().min(360.0))
-                .selected_text(if absolute_window {
-                    "Absolute completion window"
-                } else {
-                    "Completion ratio"
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut absolute_window,
-                        false,
-                        "Completion ratio",
-                    );
-                    ui.selectable_value(
-                        &mut absolute_window,
-                        true,
-                        "Absolute completion window",
-                    );
-                })
-                .response
-                .labelled_by(policy_label.id);
-            if absolute_window
-                != matches!(imbalance.policy, ImbalancePolicy::AbsoluteWindow { .. })
-            {
-                imbalance.policy = if absolute_window {
-                    ImbalancePolicy::AbsoluteWindow { max_difference: 10 }
-                } else {
-                    ImbalancePolicy::Ratio { max_ratio: 2.0 }
-                };
-            }
             ui.horizontal_wrapped(|ui| {
-                match &mut imbalance.policy {
-                    ImbalancePolicy::Ratio { max_ratio } => {
-                        ui.label("Maximum completion ratio");
-                        ui.add(
-                            egui::DragValue::new(max_ratio)
-                                .range(1.0..=1000.0)
-                                .speed(0.1),
-                        )
-                        .on_hover_text(
-                            "Largest allowed ratio between the selected task and its least-completed enabled peer.",
-                        );
-                    }
-                    ImbalancePolicy::AbsoluteWindow { max_difference } => {
-                        ui.label("Maximum completion difference");
-                        ui.add(egui::DragValue::new(max_difference).range(0..=u64::MAX))
-                            .on_hover_text(
-                                "Largest allowed count gap between the selected task and its least-completed enabled peer.",
-                            );
-                    }
-                }
+                ui.label("Maximum completion difference");
+                ui.add(egui::DragValue::new(&mut imbalance.max_difference).range(0..=u64::MAX))
+                    .on_hover_text(
+                        "Largest allowed count gap between the selected task and its least-completed enabled peer.",
+                    );
                 ui.checkbox(&mut imbalance.enforce, "Enforce limit");
             });
-            ui.small(match &imbalance.policy {
-                ImbalancePolicy::Ratio { .. } => {
-                    "A task is blocked only when its current ratio is above the limit. A positive count is blocked while an enabled peer is zero."
-                }
-                ImbalancePolicy::AbsoluteWindow { .. } => {
-                    "A task is blocked only when its current count gap is above the limit. A gap equal to the limit remains eligible."
-                }
-            });
-            show_issues(ui, &imbalance_issues(Some(imbalance)));
+            ui.small(
+                "A task is blocked only when its current count gap is above the limit. A gap equal to the limit remains eligible.",
+            );
         }
     });
 }
@@ -1171,7 +1117,6 @@ fn config_issues(config: &DatasetMetadata, current_user: &UserId) -> Vec<String>
         &config.prelabel_configs,
     ));
     issues.extend(prelabel_issues(&config.prelabel_configs));
-    issues.extend(imbalance_issues(config.imbalance.as_ref()));
     issues.extend(role_issues(
         &config.role_assignments,
         &config.dataset_id,
@@ -1456,19 +1401,6 @@ fn prelabel_issues(configs: &[PrelabelConfig]) -> Vec<String> {
         }
     }
     issues
-}
-
-fn imbalance_issues(imbalance: Option<&ImbalanceConfig>) -> Vec<String> {
-    let Some(imbalance) = imbalance else {
-        return Vec::new();
-    };
-    match imbalance.policy.validate() {
-        Ok(()) => Vec::new(),
-        Err(_) => vec![
-            "Assignment balance: maximum completion ratio must be a finite value of at least 1."
-                .to_string(),
-        ],
-    }
 }
 
 fn role_issues(
