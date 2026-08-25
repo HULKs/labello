@@ -994,8 +994,79 @@ async fn config_rejects_invalid_imbalance_ratio() {
     let body = to_bytes(update.into_body(), usize::MAX).await.unwrap();
     assert!(
         String::from_utf8_lossy(&body)
-            .contains("imbalance maxRatio must be finite and at least 1.0")
+            .contains("imbalance ratio maxRatio must be finite and at least 1.0")
     );
+}
+
+#[tokio::test]
+async fn config_accepts_legacy_ratio_and_absolute_window_policies() {
+    let temp = tempfile::tempdir().unwrap();
+    let app = router(ApiState::new(temp.path()));
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    let admin = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/datasets/ds/admin")
+                .header("x-test-user-id", "admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = to_bytes(admin.into_body(), usize::MAX).await.unwrap();
+    let metadata: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    for (request_policy, expected_policy) in [
+        (
+            json!({ "maxRatio": 2.0, "enforce": true }),
+            json!({
+                "policy": { "kind": "ratio", "maxRatio": 2.0 },
+                "enforce": true
+            }),
+        ),
+        (
+            json!({
+                "policy": { "kind": "absoluteWindow", "maxDifference": 3 },
+                "enforce": true
+            }),
+            json!({
+                "policy": { "kind": "absoluteWindow", "maxDifference": 3 },
+                "enforce": true
+            }),
+        ),
+    ] {
+        let update = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/datasets/ds/admin")
+                    .header("x-test-user-id", "admin")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "name": metadata["name"],
+                            "imageRoots": metadata["imageRoots"],
+                            "labelClasses": metadata["labelClasses"],
+                            "tasks": metadata["tasks"],
+                            "roleAssignments": metadata["roleAssignments"],
+                            "imbalance": request_policy,
+                            "prelabelConfigs": metadata["prelabelConfigs"]
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(update.status(), StatusCode::OK);
+        let body = to_bytes(update.into_body(), usize::MAX).await.unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(saved["imbalance"], expected_policy);
+    }
 }
 
 #[tokio::test]

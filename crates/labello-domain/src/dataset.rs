@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     ClassId, DatasetId, DatasetRoleAssignment, ImageDimensions, ImageId, ImportId, LabelClass,
@@ -162,11 +162,135 @@ impl Default for ImagesIndex {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, JsonSchema)]
+#[schemars(rename_all = "camelCase")]
 pub struct ImbalanceConfig {
-    pub max_ratio: f32,
+    pub policy: ImbalancePolicy,
     pub enforce: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+#[schemars(rename_all = "camelCase")]
+pub enum ImbalancePolicy {
+    Ratio { max_ratio: f32 },
+    AbsoluteWindow { max_difference: u64 },
+}
+
+impl ImbalancePolicy {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        match self {
+            Self::Ratio { max_ratio } if max_ratio.is_finite() && *max_ratio >= 1.0 => Ok(()),
+            Self::Ratio { .. } => Err("imbalance ratio maxRatio must be finite and at least 1.0"),
+            Self::AbsoluteWindow { .. } => Ok(()),
+        }
+    }
+
+    pub fn blocks_count(&self, selected_count: usize, minimum_peer_count: usize) -> bool {
+        match self {
+            Self::Ratio { max_ratio } => {
+                if minimum_peer_count == 0 {
+                    selected_count > 0
+                } else {
+                    (selected_count as f64 / minimum_peer_count as f64) > f64::from(*max_ratio)
+                }
+            }
+            Self::AbsoluteWindow { max_difference } => {
+                selected_count.saturating_sub(minimum_peer_count) as u128
+                    > u128::from(*max_difference)
+            }
+        }
+    }
+
+    pub fn blocked_tasks(
+        &self,
+        enabled_task_ids: &[TaskId],
+        counts: &BTreeMap<TaskId, usize>,
+    ) -> BTreeSet<TaskId> {
+        if enabled_task_ids.len() < 2 {
+            return BTreeSet::new();
+        }
+        enabled_task_ids
+            .iter()
+            .filter_map(|selected_task_id| {
+                let selected_count = counts.get(selected_task_id).copied().unwrap_or_default();
+                let minimum_peer_count = enabled_task_ids
+                    .iter()
+                    .filter(|task_id| *task_id != selected_task_id)
+                    .map(|task_id| counts.get(task_id).copied().unwrap_or_default())
+                    .min()
+                    .expect("at least one enabled peer must exist");
+                self.blocks_count(selected_count, minimum_peer_count)
+                    .then(|| selected_task_id.clone())
+            })
+            .collect()
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImbalanceConfigRef<'a> {
+    policy: &'a ImbalancePolicy,
+    enforce: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ImbalanceConfigWire {
+    Current(CurrentImbalanceConfig),
+    LegacyRatio(LegacyRatioImbalanceConfig),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CurrentImbalanceConfig {
+    policy: ImbalancePolicy,
+    enforce: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyRatioImbalanceConfig {
+    max_ratio: f32,
+    enforce: bool,
+}
+
+impl Serialize for ImbalanceConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        ImbalanceConfigRef {
+            policy: &self.policy,
+            enforce: self.enforce,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ImbalanceConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match ImbalanceConfigWire::deserialize(deserializer)? {
+            ImbalanceConfigWire::Current(config) => Self {
+                policy: config.policy,
+                enforce: config.enforce,
+            },
+            ImbalanceConfigWire::LegacyRatio(config) => Self {
+                policy: ImbalancePolicy::Ratio {
+                    max_ratio: config.max_ratio,
+                },
+                enforce: config.enforce,
+            },
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -220,8 +344,91 @@ pub struct ImageExplorerPage {
 impl Default for ImbalanceConfig {
     fn default() -> Self {
         Self {
-            max_ratio: 2.0,
+            policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
             enforce: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod imbalance_tests {
+    use super::*;
+
+    #[test]
+    fn absolute_window_uses_strict_gap_boundary_and_zero_counts() {
+        let policy = ImbalancePolicy::AbsoluteWindow { max_difference: 2 };
+
+        assert!(!policy.blocks_count(0, 0));
+        assert!(!policy.blocks_count(2, 0));
+        assert!(policy.blocks_count(3, 0));
+        assert!(!policy.blocks_count(7, 5));
+        assert!(policy.blocks_count(8, 5));
+        assert!(!policy.blocks_count(3, 8));
+    }
+
+    #[test]
+    fn blocked_tasks_considers_only_the_supplied_enabled_peers() {
+        let first = TaskId::from("first");
+        let second = TaskId::from("second");
+        let disabled = TaskId::from("disabled");
+        let policy = ImbalancePolicy::AbsoluteWindow { max_difference: 1 };
+        let counts = BTreeMap::from([
+            (first.clone(), 2),
+            (second.clone(), 0),
+            (disabled.clone(), 100),
+        ]);
+
+        assert_eq!(
+            policy.blocked_tasks(&[first.clone(), second], &counts),
+            BTreeSet::from([first.clone()])
+        );
+        assert!(policy.blocked_tasks(&[first], &counts).is_empty());
+        assert!(policy.blocked_tasks(&[], &counts).is_empty());
+    }
+
+    #[test]
+    fn legacy_ratio_configuration_deserializes_into_tagged_policy() {
+        let legacy: ImbalanceConfig = serde_json::from_value(serde_json::json!({
+            "maxRatio": 2.0,
+            "enforce": true
+        }))
+        .unwrap();
+        assert_eq!(
+            legacy,
+            ImbalanceConfig {
+                policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
+                enforce: true,
+            }
+        );
+
+        assert_eq!(
+            serde_json::to_value(legacy).unwrap(),
+            serde_json::json!({
+                "policy": { "kind": "ratio", "maxRatio": 2.0 },
+                "enforce": true
+            })
+        );
+    }
+
+    #[test]
+    fn policy_validation_rejects_invalid_ratios_and_accepts_any_absolute_window() {
+        for max_ratio in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0, 0.999] {
+            assert!(ImbalancePolicy::Ratio { max_ratio }.validate().is_err());
+        }
+        for max_ratio in [1.0, 2.0, f32::MAX] {
+            assert!(ImbalancePolicy::Ratio { max_ratio }.validate().is_ok());
+        }
+        assert!(
+            ImbalancePolicy::AbsoluteWindow { max_difference: 0 }
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            ImbalancePolicy::AbsoluteWindow {
+                max_difference: u64::MAX,
+            }
+            .validate()
+            .is_ok()
+        );
     }
 }

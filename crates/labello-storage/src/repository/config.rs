@@ -3,7 +3,7 @@ use super::*;
 impl DatasetRepository {
     pub async fn initialize(&self, mut metadata: DatasetMetadata) -> StorageResult<()> {
         if let Some(config) = metadata.imbalance.as_ref() {
-            crate::completion_projection::validated_max_ratio(config)?;
+            crate::completion_projection::validate_imbalance_config(config)?;
         }
         self.ensure_layout().await?;
         metadata.schema_version = SCHEMA_VERSION;
@@ -62,7 +62,7 @@ impl DatasetRepository {
         self.ensure_artifact_migration().await?;
         labello_domain::validate_schema_version(metadata.schema_version)?;
         if let Some(config) = metadata.imbalance.as_ref() {
-            crate::completion_projection::validated_max_ratio(config)?;
+            crate::completion_projection::validate_imbalance_config(config)?;
         }
         write_toml_atomic(
             &self.dataset_path(),

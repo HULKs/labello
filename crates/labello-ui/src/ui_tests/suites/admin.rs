@@ -134,6 +134,75 @@ fn admin_workflow_saves_ingests_and_handles_browser_only_folder_upload() {
 }
 
 #[test]
+fn admin_and_statistics_expose_absolute_assignment_balance_semantics() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_admin_harness(api);
+    harness.set_size(egui::vec2(1100.0, 1200.0));
+    harness.state_mut().admin.section = AdminSection::Automation;
+    harness.state_mut().datasets.admin_config.as_mut().unwrap().imbalance =
+        Some(labello_domain::ImbalanceConfig {
+            policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+            enforce: true,
+        });
+    harness.step();
+
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Balance policy")
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label("Maximum completion difference")
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label_contains("A gap equal to the limit remains eligible")
+            .is_some()
+    );
+
+    let metadata = harness.state_mut().datasets.metadata.as_mut().unwrap();
+    metadata.imbalance = Some(labello_domain::ImbalanceConfig {
+        policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+        enforce: true,
+    });
+    harness.state_mut().datasets.stats.assignment_balance =
+        Some(labello_domain::AssignmentBalanceStats {
+            annotation_counts: BTreeMap::from([
+                (TaskId::from("bounding_box:person"), 4),
+                (TaskId::from("skeleton:person"), 0),
+            ]),
+            review_counts: BTreeMap::from([
+                (TaskId::from("bounding_box:person"), 1),
+                (TaskId::from("skeleton:person"), 0),
+            ]),
+            annotation_blocked_tasks: BTreeSet::from([TaskId::from("bounding_box:person")]),
+            review_blocked_tasks: BTreeSet::new(),
+        });
+    harness.state_mut().datasets.last_stats_completion = Some(Instant::now());
+    harness.state_mut().view = AppView::Stats;
+    harness.step();
+
+    assert!(harness.query_by_label("Assignment Balance").is_some());
+    assert!(
+        harness
+            .query_by_label("Enforced: Absolute completion window of 3 images")
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label_contains("Annotation balance counts submitted and completed images")
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label("Currently blocked for annotation: Person boxes")
+            .is_some()
+    );
+}
+
+#[test]
 fn admin_image_explorer_pages_and_snapshots_use_async_api_commands() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_admin_harness(api.clone());

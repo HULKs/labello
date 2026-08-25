@@ -638,29 +638,22 @@ impl DatasetRepository {
         let Some(config) = metadata.imbalance.as_ref() else {
             return Ok(false);
         };
-        let max_ratio = crate::completion_projection::validated_max_ratio(config)?;
+        crate::completion_projection::validate_imbalance_config(config)?;
         let counts = if *kind == AssignmentKind::Annotation {
             self.task_annotation_counts().await?
         } else {
             self.task_completion_counts().await?
         };
-        let selected = counts.get(selected_task_id).copied().unwrap_or_default();
-        let mut other_counts = metadata
+        let enabled_task_ids = metadata
             .tasks
             .iter()
-            .filter(|task| task.enabled && &task.task_id != selected_task_id)
-            .map(|task| counts.get(&task.task_id).copied().unwrap_or_default());
-        let Some(min_other) = other_counts
-            .next()
-            .map(|first| other_counts.fold(first, usize::min))
-        else {
-            return Ok(false);
-        };
-        if min_other == 0 {
-            Ok(selected > 0)
-        } else {
-            Ok((selected as f64 / min_other as f64) > max_ratio)
-        }
+            .filter(|task| task.enabled)
+            .map(|task| task.task_id.clone())
+            .collect::<Vec<_>>();
+        Ok(config
+            .policy
+            .blocked_tasks(&enabled_task_ids, &counts)
+            .contains(selected_task_id))
     }
 }
 

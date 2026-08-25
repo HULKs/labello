@@ -4,10 +4,10 @@ use labello_domain::{
     AdjudicationDecision, AdjudicationId, AdjudicationRecord, AnnotationGeometry, AnnotationOrigin,
     AnnotationType, AnnotationVersion, BoundingBox, ClassId, DatasetId, DatasetMetadata,
     DatasetRoleAssignment, HumanRevisionKind, ImageRecord, ImagesIndex, ImbalanceConfig,
-    ImportCoverage, ImportId, ImportTaskInitialization, KeypointAnnotation, KeypointSpec,
-    KeypointState, LabelClass, NormalizedPoint, ReviewConfig, ReviewDecision, ReviewId,
-    ReviewRecord, ReviewTarget, ReviewWorkflow, SCHEMA_VERSION, SkeletonGeometry, SkeletonSpec,
-    TaskDefinition, TutorialContent, now,
+    ImbalancePolicy, ImportCoverage, ImportId, ImportTaskInitialization, KeypointAnnotation,
+    KeypointSpec, KeypointState, LabelClass, NormalizedPoint, ReviewConfig, ReviewDecision,
+    ReviewId, ReviewRecord, ReviewTarget, ReviewWorkflow, SCHEMA_VERSION, SkeletonGeometry,
+    SkeletonSpec, TaskDefinition, TutorialContent, now,
 };
 
 use super::*;
@@ -2392,7 +2392,7 @@ async fn imbalance_blocks_positive_task_at_zero_peer_and_ignores_disabled_peer()
     second_task.name = "Second boxes".to_string();
     metadata.tasks.push(second_task.clone());
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 2.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
         enforce: true,
     });
     repo.save_dataset(&metadata).await.unwrap();
@@ -2451,7 +2451,7 @@ async fn imbalance_allows_two_zero_tasks_and_a_single_enabled_task() {
     second_task.name = "Second boxes".to_string();
     metadata.tasks.push(second_task);
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 1.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 1.0 },
         enforce: true,
     });
     repo.save_dataset(&metadata).await.unwrap();
@@ -2507,7 +2507,7 @@ async fn imbalance_counts_submitted_for_annotation_but_not_review() {
     let second_task_id = second_task.task_id.clone();
     metadata.tasks.push(second_task);
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 2.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
         enforce: true,
     });
     repo.save_dataset(&metadata).await.unwrap();
@@ -2557,7 +2557,7 @@ async fn imbalance_uses_strict_f64_ratio_boundary() {
     let second_task_id = second_task.task_id.clone();
     metadata.tasks.push(second_task);
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 2.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
         enforce: true,
     });
     repo.save_dataset(&metadata).await.unwrap();
@@ -2596,7 +2596,7 @@ async fn imbalance_uses_strict_f64_ratio_boundary() {
             .is_some(),
         "a ratio equal to maxRatio is allowed"
     );
-    metadata.imbalance.as_mut().unwrap().max_ratio = 1.5;
+    metadata.imbalance.as_mut().unwrap().policy = ImbalancePolicy::Ratio { max_ratio: 1.5 };
     repo.save_dataset(&metadata).await.unwrap();
     assert!(
         repo.assign_next_image(&users[0], &first_task_id, AssignmentKind::Annotation)
@@ -2604,6 +2604,148 @@ async fn imbalance_uses_strict_f64_ratio_boundary() {
             .unwrap()
             .is_none(),
         "a ratio strictly above maxRatio is blocked"
+    );
+}
+
+#[tokio::test]
+async fn absolute_window_matches_availability_queue_claims_and_statistics_across_transitions() {
+    let (_temp, repo, first_task_id, users) = annotation_repo(4, &["annotator"]).await;
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    let mut second_task = metadata.tasks[0].clone();
+    second_task.task_id = TaskId::from("bounding_box:second");
+    second_task.name = "Second boxes".to_string();
+    let second_task_id = second_task.task_id.clone();
+    metadata.tasks.push(second_task);
+    metadata.imbalance = Some(ImbalanceConfig {
+        policy: ImbalancePolicy::AbsoluteWindow { max_difference: 2 },
+        enforce: true,
+    });
+    repo.save_dataset(&metadata).await.unwrap();
+    let actor = Actor {
+        user_id: users[0].clone(),
+        role: DatasetRole::Annotator,
+    };
+    for image_id in ["img_0", "img_1"] {
+        repo.append_payload(
+            &ImageId::from(image_id),
+            &actor,
+            EventPayload::TaskStateChanged {
+                task_state: TaskState {
+                    task_id: first_task_id.clone(),
+                    status: TaskStatus::Completed,
+                    outcome: Some(TaskOutcome::AnnotationCompleted),
+                    assigned_to: None,
+                    completed_by: Some(users[0].clone()),
+                    completed_at: Some(now()),
+                    updated_at: now(),
+                },
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let boundary_availability = repo
+        .assignment_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(boundary_availability[&first_task_id]);
+    let boundary_stats = repo.dataset_stats().await.unwrap();
+    let boundary_balance = boundary_stats.assignment_balance.unwrap();
+    assert_eq!(boundary_balance.annotation_counts[&first_task_id], 2);
+    assert_eq!(boundary_balance.annotation_counts[&second_task_id], 0);
+    assert!(boundary_balance.annotation_blocked_tasks.is_empty());
+
+    let queued = repo
+        .assign_next_image_excluding(&users[0], &first_task_id, AssignmentKind::Annotation, &[])
+        .await
+        .unwrap()
+        .expect("the exact absolute-window boundary remains queue-eligible");
+    repo.append_payload(
+        &queued.image_id,
+        &actor,
+        EventPayload::TaskStateChanged {
+            task_state: TaskState {
+                task_id: first_task_id.clone(),
+                status: TaskStatus::Completed,
+                outcome: Some(TaskOutcome::AnnotationCompleted),
+                assigned_to: None,
+                completed_by: Some(users[0].clone()),
+                completed_at: Some(now()),
+                updated_at: now(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+
+    let blocked_availability = repo
+        .assignment_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(!blocked_availability[&first_task_id]);
+    assert!(blocked_availability[&second_task_id]);
+    assert!(
+        repo.assign_next_image(&users[0], &first_task_id, AssignmentKind::Annotation)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let blocked_stats = repo.dataset_stats().await.unwrap();
+    let blocked_balance = blocked_stats.assignment_balance.unwrap();
+    assert_eq!(blocked_balance.annotation_counts[&first_task_id], 3);
+    assert_eq!(
+        blocked_balance.annotation_blocked_tasks,
+        BTreeSet::from([first_task_id.clone()])
+    );
+
+    repo.append_payload(
+        &ImageId::from("img_3"),
+        &actor,
+        EventPayload::AnnotationVersionCreated {
+            annotation: AnnotationVersion {
+                annotation_id: AnnotationId::from("disabled_task_annotation"),
+                version: 1,
+                object_group_id: None,
+                origin: AnnotationOrigin::native(),
+                task_id: second_task_id,
+                class_id: metadata.tasks[1].class_ids[0].clone(),
+                annotation_type: AnnotationType::BoundingBox,
+                revision_source: RevisionSource::Human {
+                    action: HumanRevisionKind::Authored,
+                },
+                geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+                    x: 0.1,
+                    y: 0.1,
+                    width: 0.2,
+                    height: 0.2,
+                }),
+                author_user_id: users[0].clone(),
+                created_at: now(),
+                updated_at: now(),
+                deleted: false,
+            },
+            previous_version: None,
+            reason: None,
+        },
+    )
+    .await
+    .unwrap();
+    metadata.tasks[1].enabled = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    let single_peer_stats = repo.dataset_stats().await.unwrap();
+    assert!(
+        single_peer_stats
+            .assignment_balance
+            .unwrap()
+            .annotation_blocked_tasks
+            .is_empty()
+    );
+    assert!(
+        repo.assign_next_image(&users[0], &first_task_id, AssignmentKind::Annotation)
+            .await
+            .unwrap()
+            .is_some()
     );
 }
 
@@ -2617,7 +2759,7 @@ async fn global_task_imbalance_can_block_review_work() {
     peer.name = "Peer boxes".to_string();
     metadata.tasks.push(peer);
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 2.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
         enforce: true,
     });
     repo.save_dataset(&metadata).await.unwrap();
@@ -2663,7 +2805,7 @@ async fn disabled_imbalance_enforcement_does_not_initialize_projection() {
     let (_temp, repo, task_id, users) = annotation_repo(1, &["annotator"]).await;
     let mut metadata = repo.load_dataset_config().await.unwrap();
     metadata.imbalance = Some(ImbalanceConfig {
-        max_ratio: 2.0,
+        policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
         enforce: false,
     });
     repo.save_dataset(&metadata).await.unwrap();

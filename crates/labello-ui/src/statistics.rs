@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use eframe::egui::{self, RichText};
-use labello_domain::{ClassId, TaskId};
+use labello_domain::{ClassId, ImbalancePolicy, TaskId};
 
 use crate::{
     app::{LabelloApp, LayoutMode},
@@ -124,6 +124,65 @@ impl LabelloApp {
             });
         }
         ui.add_space(12.0);
+        if let (Some(imbalance), Some(balance)) = (
+            self.datasets
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.imbalance.as_ref()),
+            self.datasets.stats.assignment_balance.as_ref(),
+        ) {
+            theme::card_frame().show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.heading("Assignment Balance");
+                let policy = match &imbalance.policy {
+                    ImbalancePolicy::Ratio { max_ratio } => {
+                        format!("Completion ratio up to {max_ratio}")
+                    }
+                    ImbalancePolicy::AbsoluteWindow { max_difference } => format!(
+                        "Absolute completion window of {max_difference} image{}",
+                        if *max_difference == 1 { "" } else { "s" }
+                    ),
+                };
+                ui.label(format!(
+                    "{}: {policy}",
+                    if imbalance.enforce {
+                        "Enforced"
+                    } else {
+                        "Configured but not enforced"
+                    }
+                ));
+                ui.label(
+                    RichText::new(
+                        "Annotation balance counts submitted and completed images. Review balance counts completed images. Excluded denominator entries and disabled tasks do not participate.",
+                    )
+                    .color(theme::TEXT_MUTED),
+                );
+                ui.label(
+                    RichText::new(match &imbalance.policy {
+                        ImbalancePolicy::Ratio { .. } => {
+                            "The selected task is blocked when its count divided by the least-completed enabled peer is above the limit. A positive count is blocked while a peer is zero."
+                        }
+                        ImbalancePolicy::AbsoluteWindow { .. } => {
+                            "The selected task is blocked when its count exceeds the least-completed enabled peer by more than the window. A gap equal to the window remains eligible."
+                        }
+                    })
+                    .color(theme::TEXT_MUTED),
+                );
+                if imbalance.enforce {
+                    ui.label(format!(
+                        "Currently blocked for annotation: {}",
+                        task_set_summary(
+                            &balance.annotation_blocked_tasks,
+                            &task_names,
+                        )
+                    ));
+                    ui.label(format!(
+                        "Currently blocked for review: {}",
+                        task_set_summary(&balance.review_blocked_tasks, &task_names)
+                    ));
+                }
+            });
+        }
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Per Task");
@@ -223,6 +282,25 @@ impl LabelloApp {
             }
         });
     }
+}
+
+fn task_set_summary(
+    task_ids: &std::collections::BTreeSet<TaskId>,
+    task_names: &BTreeMap<TaskId, String>,
+) -> String {
+    if task_ids.is_empty() {
+        return "none".to_string();
+    }
+    task_ids
+        .iter()
+        .map(|task_id| {
+            task_names
+                .get(task_id)
+                .cloned()
+                .unwrap_or_else(|| task_id.to_string())
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn stats_task_grid(

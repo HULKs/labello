@@ -548,14 +548,11 @@ impl DatasetRepository {
     }
 }
 
-pub(crate) fn validated_max_ratio(config: &ImbalanceConfig) -> StorageResult<f64> {
-    if config.max_ratio.is_finite() && config.max_ratio >= 1.0 {
-        Ok(f64::from(config.max_ratio))
-    } else {
-        Err(StorageError::InvalidAssignment(
-            "imbalance maxRatio must be finite and at least 1.0".to_string(),
-        ))
-    }
+pub(crate) fn validate_imbalance_config(config: &ImbalanceConfig) -> StorageResult<()> {
+    config
+        .policy
+        .validate()
+        .map_err(|message| StorageError::InvalidAssignment(message.to_string()))
 }
 
 #[cfg(test)]
@@ -563,7 +560,7 @@ mod tests {
     use labello_domain::{
         Actor, AnnotationGeometry, AnnotationId, AnnotationType, BoundingBox, ClassId, DatasetId,
         DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageRecord, ImagesIndex,
-        ImportCoverage, LabelClass, OfflineAnnotationSource, OfflineMutation,
+        ImbalancePolicy, ImportCoverage, LabelClass, OfflineAnnotationSource, OfflineMutation,
         OfflineMutationFragment, OfflineSyncRequest, ReviewConfig, SCHEMA_VERSION, TaskDefinition,
         TaskOutcome, TaskState, TutorialContent, UserId, now,
     };
@@ -785,11 +782,11 @@ mod tests {
     }
 
     #[test]
-    fn invalid_max_ratios_are_rejected() {
+    fn invalid_imbalance_policies_are_rejected() {
         for max_ratio in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0, 0.999] {
             assert!(
-                validated_max_ratio(&ImbalanceConfig {
-                    max_ratio,
+                validate_imbalance_config(&ImbalanceConfig {
+                    policy: ImbalancePolicy::Ratio { max_ratio },
                     enforce: true,
                 })
                 .is_err()
@@ -797,13 +794,37 @@ mod tests {
         }
         for max_ratio in [1.0, 2.0, f32::MAX] {
             assert!(
-                validated_max_ratio(&ImbalanceConfig {
-                    max_ratio,
+                validate_imbalance_config(&ImbalanceConfig {
+                    policy: ImbalancePolicy::Ratio { max_ratio },
                     enforce: true,
                 })
                 .is_ok()
             );
         }
+        assert!(
+            validate_imbalance_config(&ImbalanceConfig {
+                policy: ImbalancePolicy::AbsoluteWindow { max_difference: 0 },
+                enforce: true,
+            })
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn legacy_ratio_toml_loads_and_rewrites_as_tagged_policy() {
+        let config: ImbalanceConfig = toml::from_str("maxRatio = 2.0\nenforce = true\n").unwrap();
+        assert_eq!(
+            config,
+            ImbalanceConfig {
+                policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
+                enforce: true,
+            }
+        );
+
+        let rewritten = toml::Value::try_from(config).unwrap();
+        assert_eq!(rewritten["policy"]["kind"].as_str(), Some("ratio"));
+        assert_eq!(rewritten["policy"]["maxRatio"].as_float(), Some(2.0));
+        assert!(rewritten.get("maxRatio").is_none());
     }
 
     #[tokio::test]
@@ -813,7 +834,7 @@ mod tests {
             let repository = DatasetRepository::new(temp.path());
             let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", now());
             metadata.imbalance = Some(ImbalanceConfig {
-                max_ratio,
+                policy: ImbalancePolicy::Ratio { max_ratio },
                 enforce: true,
             });
             assert!(repository.initialize(metadata).await.is_err());
@@ -825,7 +846,9 @@ mod tests {
         let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", now());
         repository.initialize(metadata.clone()).await.unwrap();
         metadata.imbalance = Some(ImbalanceConfig {
-            max_ratio: f32::NEG_INFINITY,
+            policy: ImbalancePolicy::Ratio {
+                max_ratio: f32::NEG_INFINITY,
+            },
             enforce: true,
         });
         assert!(repository.save_dataset(&metadata).await.is_err());
@@ -1006,7 +1029,7 @@ mod tests {
         let (_temp, repository, image_id, task_id, _actor) = repository_with_image().await;
         let mut metadata = repository.load_dataset_config().await.unwrap();
         metadata.imbalance = Some(ImbalanceConfig {
-            max_ratio: 2.0,
+            policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
             enforce: true,
         });
         repository.save_dataset(&metadata).await.unwrap();

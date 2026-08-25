@@ -5,9 +5,9 @@ use labello_client::DatasetUser;
 use labello_domain::{
     AgreementMetric, AgreementThreshold, AnnotationType, BrowserAcceleration, ClassId,
     DatasetMetadata, DatasetRole, DatasetRoleAssignment, DatasetSnapshot, ImageExplorerItem,
-    ImbalanceConfig, KeypointSpec, LabelClass, ModelSpec, OutputProcessing, PrelabelConfig,
-    PrelabelConfigId, PrelabelExecution, ReviewConfig, ReviewWorkflow, SkeletonEdge, SkeletonSpec,
-    TaskDefinition, TaskId, TaskStatus, TutorialContent, UserId,
+    ImbalanceConfig, ImbalancePolicy, KeypointSpec, LabelClass, ModelSpec, OutputProcessing,
+    PrelabelConfig, PrelabelConfigId, PrelabelExecution, ReviewConfig, ReviewWorkflow,
+    SkeletonEdge, SkeletonSpec, TaskDefinition, TaskId, TaskStatus, TutorialContent, UserId,
 };
 
 use crate::{
