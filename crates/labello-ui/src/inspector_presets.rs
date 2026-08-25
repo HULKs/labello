@@ -8,16 +8,19 @@ use labello_client::{
 };
 use labello_domain::{
     AnnotationGeometry, AnnotationId, AnnotationOrigin, AnnotationType, AnnotationVersion,
-    Assignment, AssignmentId, AssignmentKind, AssignmentStatus, BoundingBox, ClassId, ClassStats,
-    CorrectionId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, DatasetStats,
-    HumanRevisionKind, ImageState, KeypointSpec, ManualBoxGuideMigration, MigrationCardinality,
+    Assignment, AssignmentBalanceStats, AssignmentId, AssignmentKind, AssignmentStatus,
+    BoundingBox, ClassId, ClassStats, CorrectionId, DatasetMetadata, DatasetRole,
+    DatasetRoleAssignment, DatasetStats, HumanRevisionKind, ImageState, ImbalanceConfig,
+    ImbalancePolicy, KeypointSpec, ManualBoxGuideMigration, MigrationCardinality,
     MigrationDisposition, MigrationDispositionStatus, MigrationHashContext, MigrationPass,
     MigrationPassId, MigrationSequence, MigrationTarget, MigrationTargetSetInitialization,
     ObjectGroupId, RevisionSource, SkeletonSpec, TaskId, TaskStats, ThroughputPoint, UserAccount,
     UserId, migration_target_set_hash,
 };
 
-use crate::app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupSection};
+use crate::app::{
+    AdminSection, AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupSection,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorPreset {
@@ -970,12 +973,21 @@ fn setup_preset() -> LabelloApp {
 fn admin_preset() -> LabelloApp {
     let mut app = setup_preset();
     app.view = AppView::Admin;
+    app.admin.section = AdminSection::Automation;
+    app.datasets.admin_config.as_mut().unwrap().imbalance = Some(ImbalanceConfig {
+        policy: ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+        enforce: true,
+    });
     app
 }
 
 fn statistics_preset() -> LabelloApp {
     let mut app = setup_preset();
     app.view = AppView::Stats;
+    app.datasets.metadata.as_mut().unwrap().imbalance = Some(ImbalanceConfig {
+        policy: ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+        enforce: true,
+    });
     app.datasets.stats = DatasetStats {
         total_images: 24,
         completed_tasks: 18,
@@ -1031,7 +1043,20 @@ fn statistics_preset() -> LabelloApp {
         provenance: Default::default(),
         migration: Default::default(),
         import_coverage: Default::default(),
-        assignment_balance: None,
+        assignment_balance: Some(AssignmentBalanceStats {
+            annotation_counts: [
+                (TaskId::from("bounding_box:person"), 4),
+                (TaskId::from("skeleton:person"), 0),
+            ]
+            .into(),
+            review_counts: [
+                (TaskId::from("bounding_box:person"), 1),
+                (TaskId::from("skeleton:person"), 0),
+            ]
+            .into(),
+            annotation_blocked_tasks: [TaskId::from("bounding_box:person")].into(),
+            review_blocked_tasks: BTreeSet::new(),
+        }),
     };
     app.datasets.last_stats_completion =
         Some(web_time::Instant::now() + web_time::Duration::from_secs(100 * 365 * 24 * 60 * 60));

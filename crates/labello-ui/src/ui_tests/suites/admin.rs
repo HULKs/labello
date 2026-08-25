@@ -137,32 +137,56 @@ fn admin_workflow_saves_ingests_and_handles_browser_only_folder_upload() {
 fn admin_and_statistics_expose_absolute_assignment_balance_semantics() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_admin_harness(api);
-    harness.set_size(egui::vec2(1100.0, 1200.0));
     harness.state_mut().admin.section = AdminSection::Automation;
     harness.state_mut().datasets.admin_config.as_mut().unwrap().imbalance =
         Some(labello_domain::ImbalanceConfig {
-            max_difference: 3,
+            policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
             enforce: true,
         });
-    harness.step();
+    for (width, height, pixels_per_point) in [
+        (320.0, 568.0, 1.0),
+        (390.0, 844.0, 3.0),
+        (600.0, 800.0, 2.0),
+        (1288.0, 820.0, 1.0),
+        (1440.0, 1000.0, 2.0),
+        (320.0, 320.0, 1.0),
+        (720.0, 500.0, 2.0),
+    ] {
+        harness.set_size(egui::vec2(width, height));
+        harness.set_pixels_per_point(pixels_per_point);
+        harness.step();
 
-    assert!(
-        harness.query_by_label("Balance policy").is_none()
-    );
-    assert!(
-        harness
-            .query_by_label("Maximum completion difference")
-            .is_some()
-    );
-    assert!(
-        harness
-            .query_by_label_contains("A gap equal to the limit remains eligible")
-            .is_some()
-    );
+        assert!(
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Balance policy")
+                .is_some(),
+            "balance policy is inaccessible at {width}x{height} and DPR {pixels_per_point}"
+        );
+        assert!(
+            harness
+                .query_by_label("Maximum completion difference")
+                .is_some(),
+            "maximum difference is inaccessible at {width}x{height} and DPR {pixels_per_point}"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("A gap equal to the limit remains eligible")
+                .is_some(),
+            "boundary explanation is inaccessible at {width}x{height} and DPR {pixels_per_point}"
+        );
+        let card = harness.get_by_label("Assignment Balance card").rect();
+        let policy = harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Balance policy")
+            .rect();
+        assert!(
+            policy.left() >= card.left() && policy.right() <= card.right(),
+            "balance policy overflows its card at {width}x{height} and DPR {pixels_per_point}: policy={policy:?}, card={card:?}"
+        );
+    }
 
     let metadata = harness.state_mut().datasets.metadata.as_mut().unwrap();
     metadata.imbalance = Some(labello_domain::ImbalanceConfig {
-        max_difference: 3,
+        policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
         enforce: true,
     });
     harness.state_mut().datasets.stats.assignment_balance =
@@ -180,6 +204,8 @@ fn admin_and_statistics_expose_absolute_assignment_balance_semantics() {
         });
     harness.state_mut().datasets.last_stats_completion = Some(Instant::now());
     harness.state_mut().view = AppView::Stats;
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.set_pixels_per_point(2.0);
     harness.step();
 
     assert!(harness.query_by_label("Assignment Balance").is_some());

@@ -129,11 +129,12 @@ Role mutation retains bootstrap-administrator protections implemented by the
 handler; a data administrator cannot use this route to bypass those rules.
 
 `DatasetMetadata.imbalance` and `UpdateDatasetConfigRequest.imbalance` use the
-direct `maxDifference` representation documented in
+current tagged `policy` representation documented in
 [Server configuration](configuration.md#dataset-assignment-balance). The
-administration update route rejects ratio and tagged-policy shapes. Assignment
-statistics include the current annotation and review counts plus the task IDs
-blocked by the enforced window.
+administration update route also accepts the legacy flat `maxRatio` shape and
+normalizes its response to the tagged ratio policy. Assignment statistics
+include the current annotation and review counts plus the task IDs blocked by
+the enforced policy.
 
 ## Assignment And Image Routes
 

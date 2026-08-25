@@ -1,8 +1,8 @@
 use labello_domain::{
     Actor, AnnotationGeometry, AnnotationId, AnnotationOrigin, AnnotationType, BoundingBox,
     ClassId, DatasetId, DatasetMetadata, DatasetRole, EventPayload, HumanRevisionKind, ImageId,
-    ImageRecord, ImagesIndex, ImportId, ImportManifest, RevisionSource, SourceProfile, TaskId,
-    TaskState, UserId, now,
+    ImageRecord, ImagesIndex, ImbalanceConfig, ImbalancePolicy, ImportId, ImportManifest,
+    RevisionSource, SourceProfile, TaskId, TaskState, UserId, now,
 };
 
 use super::*;
@@ -747,6 +747,62 @@ async fn prepare_v2_artifact_migration_fixture(root: &Path) -> (ImageId, Vec<u8>
     .await
     .unwrap();
     (image_id, event_bytes, user_id)
+}
+
+#[tokio::test]
+async fn artifact_migration_accepts_v2_legacy_ratio_configuration() {
+    let temp = tempfile::tempdir().unwrap();
+    prepare_v2_artifact_migration_fixture(temp.path()).await;
+    let dataset_path = temp.path().join(paths::DATASET_FILE);
+    let mut config = tokio::fs::read_to_string(&dataset_path).await.unwrap();
+    config.push_str("\n[imbalance]\nmaxRatio = 2.0\nenforce = true\n");
+    tokio::fs::write(&dataset_path, config).await.unwrap();
+
+    let repository = DatasetRepository::new(temp.path());
+    let migrated = repository.load_dataset_config().await.unwrap();
+
+    assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+    assert_eq!(
+        migrated.imbalance,
+        Some(ImbalanceConfig {
+            policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
+            enforce: true,
+        })
+    );
+    let rewritten = tokio::fs::read_to_string(dataset_path).await.unwrap();
+    assert!(rewritten.contains("[imbalance.policy]"));
+    assert!(rewritten.contains("kind = \"ratio\""));
+    assert!(rewritten.contains("maxRatio = 2.0"));
+}
+
+#[tokio::test]
+async fn current_dataset_load_accepts_legacy_ratio_configuration() {
+    let temp = tempfile::tempdir().unwrap();
+    let writer = DatasetRepository::new(temp.path());
+    writer
+        .initialize(DatasetMetadata::new(
+            DatasetId::from("ds"),
+            "Dataset",
+            now(),
+        ))
+        .await
+        .unwrap();
+    let dataset_path = temp.path().join(paths::DATASET_FILE);
+    let mut config = tokio::fs::read_to_string(&dataset_path).await.unwrap();
+    config.push_str("\n[imbalance]\nmaxRatio = 2.0\nenforce = true\n");
+    tokio::fs::write(&dataset_path, config).await.unwrap();
+
+    let repository = DatasetRepository::new(temp.path());
+    let loaded = repository.load_dataset_config().await.unwrap();
+
+    assert_eq!(loaded.schema_version, SCHEMA_VERSION);
+    assert_eq!(
+        loaded.imbalance,
+        Some(ImbalanceConfig {
+            policy: ImbalancePolicy::Ratio { max_ratio: 2.0 },
+            enforce: true,
+        })
+    );
 }
 
 fn image_record(image_id: &str, hash: &str) -> ImageRecord {
