@@ -1,4 +1,4 @@
 interface:
   display_name: "Labello Implement Issue"
   short_description: "Implement an issue through CI fixes and review handoff"
-  default_prompt: "Use $labello-implement-issue to implement a GitHub issue, fix any exact-head CI failures, and hand the green pull request to independent review."
+  default_prompt: "Use $labello-implement-issue to implement a GitHub issue, fix any exact-head CI failures, and hand the green pull request to independent review without requesting a GitHub reviewer."

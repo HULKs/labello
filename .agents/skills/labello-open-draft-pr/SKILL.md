@@ -35,9 +35,9 @@ An equivalent direct user handoff is acceptable. Missing scope, verification, or
 1. Stage only approved pending paths. Commit them with a message describing the prepared change; do not create an empty commit when all approved work is already committed.
 2. Push the current `<type>/<description>` branch without disturbing unrelated local or remote work.
 3. Create an evidence-backed draft pull request, or update the existing draft for the branch. Use the supplied issue reference when present and never invent one.
-4. Fill the repository pull-request template from the handoff. Record behavior, production ownership, acceptance evidence, regression protection, exact verification results, manual evidence, documentation impact, risks, omitted checks, and preserved worktree changes. Check `Awaiting CI`; leave CI success, ownership, reviewer, Ready for review, and independent-review items unchecked.
+4. Fill the repository pull-request template from the handoff. Record behavior, production ownership, acceptance evidence, regression protection, exact verification results, manual evidence, documentation impact, risks, omitted checks, and preserved worktree changes. Check `Awaiting CI` and reviewer-request preservation; leave CI success, ownership, Ready for review, and independent-review items unchecked.
 5. Read back the pull request. Confirm its URL and number, draft state, base and head branches, and exact head SHA. Confirm the head SHA equals the pushed local head.
 
 Return `AWAITING CI` with the pull-request URL and number, exact head SHA, branch, comparison base and verified base SHA, committed files, verification summary, omitted checks, residual risks, and remaining worktree changes.
 
-Stop after the verified draft exists. Leave CI, draft promotion, assignments, reviewer requests, and project metadata to `$labello-ready-pr-for-review` when that workflow is requested.
+Stop after the verified draft exists. Leave CI, draft promotion, assignments, reviewer-request preservation, and project metadata to `$labello-ready-pr-for-review` when that workflow is requested.

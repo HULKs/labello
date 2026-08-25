@@ -1,4 +1,4 @@
 interface:
   display_name: "Labello Ready PR for Review"
   short_description: "Gate a draft PR on CI and hand it to review"
-  default_prompt: "Use $labello-ready-pr-for-review to wait for exact-head CI and hand this Labello draft pull request to an eligible reviewer."
+  default_prompt: "Use $labello-ready-pr-for-review to wait for exact-head CI and move this Labello draft pull request into the review lifecycle without changing requested reviewers."

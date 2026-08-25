@@ -32,15 +32,16 @@ that its tests pass.
 8. Wait for the required check to succeed on the exact current head. A failure
    returns the change to implementation; a pending, cancelled, unavailable, or
    stale check does not satisfy the gate.
-9. After that success, assign the issue and pull request to the accountable
-   implementation owner and request that owner as reviewer only when GitHub
-   permits it and the owner is independent of the authored change. When the
-   owner authored the pull request, keep them as assignee and request a distinct
-   eligible reviewer. Only then report the change as **Ready for review** and
-   move its project item to `In review`.
+9. After that success, use the pull-request author as the accountable
+   implementation owner and assign both the issue and pull request to that
+   user. Preserve existing reviewer requests. Request review as a lifecycle
+   transition by reporting the change as **Ready for review** and moving its
+   project item to `In review`. The agent does not add or remove requested
+   reviewers.
 10. Have a human reviewer or separately instructed verification agent inspect
-   the original issue, final diff, and evidence and try to disprove the
-   completion claims. The implementer must not act as the independent reviewer.
+    the original issue, final diff, and evidence and try to disprove the
+    completion claims. The implementer must not make the independent acceptance
+    decision.
 11. Integrate only through a pull request after the required `Testing` check
    and independent review pass. Repository
    administrators must protect `main` against direct pushes and require this
