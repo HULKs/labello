@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Open Draft PR"
+  short_description: "Publish a prepared Labello change as a draft PR"
+  default_prompt: "Use $labello-open-draft-pr to publish this prepared and verified Labello change as a draft pull request."

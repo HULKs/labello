@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Package Current Changes as PR"
+  short_description: "Check current changes and package them as a draft PR"
+  default_prompt: "Use $labello-package-current-changes-as-pr to check and review the current Labello changes, then publish them as a draft pull request."
