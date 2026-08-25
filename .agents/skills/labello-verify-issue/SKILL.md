@@ -11,6 +11,8 @@ Decide whether the current implementation satisfies the issue in the real produc
 
 - Read the repository instructions and relevant normative documents.
 - Prefer a fresh agent context. If prior implementation context is present, reconstruct the case from the raw issue, repository, and diff, and disclose that independence is reduced.
+- Use `git worktree list --porcelain` to identify the main worktree. If the current worktree is the main worktree, create a linked verification worktree under `<main-worktree>/.worktrees/` and continue there. If the current worktree is already non-main, keep using it after confirming its revision.
+- Pin the verification worktree to the pull request's exact current head. Use a detached checkout when the implementation branch is already checked out in another worktree. Do not create, rename, or move the implementation branch.
 - Work read-only by default. Do not fix code, change tests, edit issue metadata, commit, close, merge, or move work to Done unless the user separately asks for that action after the verdict.
 - Treat the implementation handoff as a list of claims to test, not as evidence.
 - Run verification commands without silently updating tracked dependencies or artifacts. Recheck the worktree after verification and preserve unrelated changes.
@@ -18,8 +20,8 @@ Decide whether the current implementation satisfies the issue in the real produc
 
 ## Reconstruct the acceptance case
 
-1. Load the exact issue, material comments, linked work, and current metadata.
-2. Inspect the current branch, worktree, appropriate base revision, and complete focused diff. Separate issue changes from pre-existing or unrelated work.
+1. Load the exact issue, material comments, linked work, and current metadata. At a Ready for review handoff, confirm the issue and pull request project items are both `In review`. Report any mismatch without changing it.
+2. Inspect the implementation branch name, verification revision, worktree, appropriate base revision, and complete focused diff. Confirm the branch follows `<type>/<description>`, such as `fix/selector-handling`, and the verification revision matches the pull request's exact head. Report naming mismatches without renaming the branch. Separate issue changes from pre-existing or unrelated work.
 3. Build an independent matrix for every explicit and implied acceptance criterion:
    - observable production behavior;
    - responsible shared owner and affected runtime surfaces;
