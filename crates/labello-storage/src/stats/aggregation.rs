@@ -203,12 +203,8 @@ impl StatsAggregation {
                 .collect::<BTreeMap<_, _>>();
             let (annotation_blocked_tasks, review_blocked_tasks) = if imbalance.enforce {
                 (
-                    imbalance
-                        .policy
-                        .blocked_tasks(&self.enabled_task_ids, &annotation_counts),
-                    imbalance
-                        .policy
-                        .blocked_tasks(&self.enabled_task_ids, &review_counts),
+                    imbalance.blocked_tasks(&self.enabled_task_ids, &annotation_counts),
+                    imbalance.blocked_tasks(&self.enabled_task_ids, &review_counts),
                 )
             } else {
                 (

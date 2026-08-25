@@ -141,15 +141,13 @@ fn admin_and_statistics_expose_absolute_assignment_balance_semantics() {
     harness.state_mut().admin.section = AdminSection::Automation;
     harness.state_mut().datasets.admin_config.as_mut().unwrap().imbalance =
         Some(labello_domain::ImbalanceConfig {
-            policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+            max_difference: 3,
             enforce: true,
         });
     harness.step();
 
     assert!(
-        harness
-            .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Balance policy")
-            .is_some()
+        harness.query_by_label("Balance policy").is_none()
     );
     assert!(
         harness
@@ -164,7 +162,7 @@ fn admin_and_statistics_expose_absolute_assignment_balance_semantics() {
 
     let metadata = harness.state_mut().datasets.metadata.as_mut().unwrap();
     metadata.imbalance = Some(labello_domain::ImbalanceConfig {
-        policy: labello_domain::ImbalancePolicy::AbsoluteWindow { max_difference: 3 },
+        max_difference: 3,
         enforce: true,
     });
     harness.state_mut().datasets.stats.assignment_balance =

@@ -111,12 +111,12 @@ keybindings, and state caches migrate through
 generation and each publication phase so a later access can resume after
 interruption. State caches are rebuilt from event history during migration.
 
-Current dataset configuration writes assignment balance as a tagged policy.
-Supported version-2 and version-3 dataset files may still contain the legacy
-flat `imbalance.maxRatio` representation; loading maps it to the ratio policy,
-and a later configuration save writes the tagged representation. This wire
-normalization does not change the dataset schema version or historical event
-bytes.
+Current dataset configuration writes assignment balance directly as
+`imbalance.maxDifference`. Ratio configuration cannot be converted to an
+equivalent absolute window without an operator choice. Before upgrading,
+replace `imbalance.maxRatio` in version-2 or version-3 dataset files with an
+explicit `maxDifference`; loading rejects ratio and tagged-policy shapes. This
+configuration change does not alter historical event bytes.
 
 An upgrade is one-way unless a release explicitly documents reverse
 compatibility. Preserve a full pre-upgrade backup; rollback means restoring

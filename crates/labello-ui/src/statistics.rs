@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use eframe::egui::{self, RichText};
-use labello_domain::{ClassId, ImbalancePolicy, TaskId};
+use labello_domain::{ClassId, TaskId};
 
 use crate::{
     app::{LabelloApp, LayoutMode},
@@ -134,15 +134,11 @@ impl LabelloApp {
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.heading("Assignment Balance");
-                let policy = match &imbalance.policy {
-                    ImbalancePolicy::Ratio { max_ratio } => {
-                        format!("Completion ratio up to {max_ratio}")
-                    }
-                    ImbalancePolicy::AbsoluteWindow { max_difference } => format!(
-                        "Absolute completion window of {max_difference} image{}",
-                        if *max_difference == 1 { "" } else { "s" }
-                    ),
-                };
+                let policy = format!(
+                    "Absolute completion window of {} image{}",
+                    imbalance.max_difference,
+                    if imbalance.max_difference == 1 { "" } else { "s" }
+                );
                 ui.label(format!(
                     "{}: {policy}",
                     if imbalance.enforce {
@@ -158,14 +154,9 @@ impl LabelloApp {
                     .color(theme::TEXT_MUTED),
                 );
                 ui.label(
-                    RichText::new(match &imbalance.policy {
-                        ImbalancePolicy::Ratio { .. } => {
-                            "The selected task is blocked when its count divided by the least-completed enabled peer is above the limit. A positive count is blocked while a peer is zero."
-                        }
-                        ImbalancePolicy::AbsoluteWindow { .. } => {
-                            "The selected task is blocked when its count exceeds the least-completed enabled peer by more than the window. A gap equal to the window remains eligible."
-                        }
-                    })
+                    RichText::new(
+                        "The selected task is blocked when its count exceeds the least-completed enabled peer by more than the window. A gap equal to the window remains eligible.",
+                    )
                     .color(theme::TEXT_MUTED),
                 );
                 if imbalance.enforce {
