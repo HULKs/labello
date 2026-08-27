@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,17 @@ pub struct DatasetStats {
     pub migration: MigrationStats,
     #[serde(default)]
     pub import_coverage: ImportCoverageStats,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignment_balance: Option<AssignmentBalanceStats>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignmentBalanceStats {
+    pub annotation_counts: BTreeMap<TaskId, usize>,
+    pub review_counts: BTreeMap<TaskId, usize>,
+    pub annotation_blocked_tasks: BTreeSet<TaskId>,
+    pub review_blocked_tasks: BTreeSet<TaskId>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

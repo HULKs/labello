@@ -142,7 +142,7 @@ US-13: Class And Task Imbalance Control
 User story:
 As a data admin, I want to limit class and task imbalance so that annotation progress remains balanced across the dataset.
 Acceptance criteria:
-- Admins can configure a maximum imbalance ratio.
+- Admins can configure a maximum absolute completion-count window.
 - The system monitors fully completed images.
 - The system monitors images with at least one pending task.
 - The system monitors progress per class.

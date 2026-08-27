@@ -404,9 +404,11 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 - The canvas routes a single pen like a generic pointer, but Labello does not
   currently claim tested stylus support for a named browser/device combination
   or guarantee that pen, mouse, and touch interactions do not conflict.
-- Assignment imbalance enforcement compares completion counts per enabled task.
-  It does not separately aggregate and enforce class-level balance when
-  multiple tasks share a class.
+- Assignment balance can enforce an absolute completion-count window across
+  enabled tasks. It does not separately aggregate and enforce class-level
+  balance when multiple tasks share a class.
+  See [Assignment](docs/assignment.md#completion-balance) for exact count and
+  boundary semantics.
 - There is no supported native desktop client. The native inspector is a
   development tool, not an offline or production client.
 

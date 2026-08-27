@@ -387,6 +387,7 @@ pub(super) fn stats(total_images: usize) -> DatasetStats {
         provenance: Default::default(),
         migration: Default::default(),
         import_coverage: Default::default(),
+        assignment_balance: None,
     }
 }
 

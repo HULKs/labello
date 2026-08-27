@@ -157,6 +157,37 @@ documented fields are required when the corresponding section is present.
 `[import.limits]` is optional, and each field within it independently defaults
 to the value shown above.
 
+## Dataset assignment balance
+
+Assignment balance belongs to each versioned `labello.dataset.toml`, not the
+server configuration above. Data administrators edit it through the
+Administration Automation view or the dataset administration API.
+
+This example enforces an absolute window of five completed images:
+
+```toml
+[imbalance]
+enforce = true
+maxDifference = 5
+```
+
+`maxDifference` is a non-negative 64-bit integer; zero is valid. Ratio-based
+configuration is not supported. Before starting this release, replace any
+existing ratio setting such as:
+
+```toml
+[imbalance]
+maxRatio = 2.0
+enforce = true
+```
+
+with an explicitly chosen `maxDifference`. Labello rejects `maxRatio`, tagged
+`policy` objects, negative values, and values larger than an unsigned 64-bit
+integer rather than guessing an absolute window. Omitting `imbalance`, or
+setting `enforce = false`, disables assignment blocking. See
+[Assignment](assignment.md#completion-balance) for count, denominator, peer,
+zero-count, and exact-boundary semantics.
+
 ## Top-Level Settings
 
 | Setting | Default | Description |

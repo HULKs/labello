@@ -4,7 +4,7 @@ use std::{
     time::Instant,
 };
 
-use labello_domain::{ImageId, ImageState, ImbalanceConfig, TaskId, TaskStatus};
+use labello_domain::{ImageId, ImageState, TaskId, TaskStatus};
 use parking_lot::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -548,22 +548,12 @@ impl DatasetRepository {
     }
 }
 
-pub(crate) fn validated_max_ratio(config: &ImbalanceConfig) -> StorageResult<f64> {
-    if config.max_ratio.is_finite() && config.max_ratio >= 1.0 {
-        Ok(f64::from(config.max_ratio))
-    } else {
-        Err(StorageError::InvalidAssignment(
-            "imbalance maxRatio must be finite and at least 1.0".to_string(),
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use labello_domain::{
         Actor, AnnotationGeometry, AnnotationId, AnnotationType, BoundingBox, ClassId, DatasetId,
         DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageRecord, ImagesIndex,
-        ImportCoverage, LabelClass, OfflineAnnotationSource, OfflineMutation,
+        ImbalanceConfig, ImportCoverage, LabelClass, OfflineAnnotationSource, OfflineMutation,
         OfflineMutationFragment, OfflineSyncRequest, ReviewConfig, SCHEMA_VERSION, TaskDefinition,
         TaskOutcome, TaskState, TutorialContent, UserId, now,
     };
@@ -785,50 +775,27 @@ mod tests {
     }
 
     #[test]
-    fn invalid_max_ratios_are_rejected() {
-        for max_ratio in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0, 0.999] {
-            assert!(
-                validated_max_ratio(&ImbalanceConfig {
-                    max_ratio,
-                    enforce: true,
-                })
-                .is_err()
-            );
-        }
-        for max_ratio in [1.0, 2.0, f32::MAX] {
-            assert!(
-                validated_max_ratio(&ImbalanceConfig {
-                    max_ratio,
-                    enforce: true,
-                })
-                .is_ok()
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn repository_rejects_invalid_imbalance_configuration() {
-        for max_ratio in [f32::NAN, f32::INFINITY, -1.0, 0.999] {
-            let temp = tempfile::tempdir().unwrap();
-            let repository = DatasetRepository::new(temp.path());
-            let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", now());
-            metadata.imbalance = Some(ImbalanceConfig {
-                max_ratio,
+    fn absolute_window_toml_round_trips_and_ratio_shapes_are_rejected() {
+        let config: ImbalanceConfig =
+            toml::from_str("maxDifference = 3\nenforce = true\n").unwrap();
+        assert_eq!(
+            config,
+            ImbalanceConfig {
+                max_difference: 3,
                 enforce: true,
-            });
-            assert!(repository.initialize(metadata).await.is_err());
-            assert!(!repository.dataset_path().exists());
-        }
+            }
+        );
 
-        let temp = tempfile::tempdir().unwrap();
-        let repository = DatasetRepository::new(temp.path());
-        let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", now());
-        repository.initialize(metadata.clone()).await.unwrap();
-        metadata.imbalance = Some(ImbalanceConfig {
-            max_ratio: f32::NEG_INFINITY,
-            enforce: true,
-        });
-        assert!(repository.save_dataset(&metadata).await.is_err());
+        let rewritten = toml::Value::try_from(config).unwrap();
+        assert_eq!(rewritten["maxDifference"].as_integer(), Some(3));
+        assert_eq!(rewritten["enforce"].as_bool(), Some(true));
+        assert!(toml::from_str::<ImbalanceConfig>("maxRatio = 2.0\nenforce = true\n").is_err());
+        assert!(
+            toml::from_str::<ImbalanceConfig>(
+                "enforce = true\n[policy]\nkind = \"ratio\"\nmaxRatio = 2.0\n"
+            )
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -1006,7 +973,7 @@ mod tests {
         let (_temp, repository, image_id, task_id, _actor) = repository_with_image().await;
         let mut metadata = repository.load_dataset_config().await.unwrap();
         metadata.imbalance = Some(ImbalanceConfig {
-            max_ratio: 2.0,
+            max_difference: 2,
             enforce: true,
         });
         repository.save_dataset(&metadata).await.unwrap();

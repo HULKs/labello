@@ -1031,6 +1031,7 @@ fn statistics_preset() -> LabelloApp {
         provenance: Default::default(),
         migration: Default::default(),
         import_coverage: Default::default(),
+        assignment_balance: None,
     };
     app.datasets.last_stats_completion =
         Some(web_time::Instant::now() + web_time::Duration::from_secs(100 * 365 * 24 * 60 * 60));

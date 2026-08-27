@@ -128,6 +128,13 @@ deserialization.
 Role mutation retains bootstrap-administrator protections implemented by the
 handler; a data administrator cannot use this route to bypass those rules.
 
+`DatasetMetadata.imbalance` and `UpdateDatasetConfigRequest.imbalance` use the
+direct `maxDifference` representation documented in
+[Server configuration](configuration.md#dataset-assignment-balance). The
+administration update route rejects ratio and tagged-policy shapes. Assignment
+statistics include the current annotation and review counts plus the task IDs
+blocked by the enforced window.
+
 ## Assignment And Image Routes
 
 | Method and path | Access | Input → output |
@@ -155,6 +162,11 @@ handler; a data administrator cannot use this route to bypass those rules.
 The assignment ID, image ID, task ID, actor, kind, current sequence, and live
 state are validated at the transaction boundary. Possessing an ID is not
 authorization.
+
+Availability, direct claims, and prepared queue claims apply the same
+completion-balance decision. The complete count, denominator, disabled-peer,
+zero-count, and exact-boundary contract is maintained in
+[Assignment](assignment.md#completion-balance).
 
 ## Manual Migration Routes
 

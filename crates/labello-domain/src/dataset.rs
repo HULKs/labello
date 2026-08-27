@@ -162,11 +162,41 @@ impl Default for ImagesIndex {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImbalanceConfig {
-    pub max_ratio: f32,
+    pub max_difference: u64,
     pub enforce: bool,
+}
+
+impl ImbalanceConfig {
+    pub fn blocks_count(&self, selected_count: usize, minimum_peer_count: usize) -> bool {
+        selected_count.saturating_sub(minimum_peer_count) as u128 > u128::from(self.max_difference)
+    }
+
+    pub fn blocked_tasks(
+        &self,
+        enabled_task_ids: &[TaskId],
+        counts: &BTreeMap<TaskId, usize>,
+    ) -> BTreeSet<TaskId> {
+        if enabled_task_ids.len() < 2 {
+            return BTreeSet::new();
+        }
+        enabled_task_ids
+            .iter()
+            .filter_map(|selected_task_id| {
+                let selected_count = counts.get(selected_task_id).copied().unwrap_or_default();
+                let minimum_peer_count = enabled_task_ids
+                    .iter()
+                    .filter(|task_id| *task_id != selected_task_id)
+                    .map(|task_id| counts.get(task_id).copied().unwrap_or_default())
+                    .min()
+                    .expect("at least one enabled peer must exist");
+                self.blocks_count(selected_count, minimum_peer_count)
+                    .then(|| selected_task_id.clone())
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -220,8 +250,88 @@ pub struct ImageExplorerPage {
 impl Default for ImbalanceConfig {
     fn default() -> Self {
         Self {
-            max_ratio: 2.0,
+            max_difference: 10,
             enforce: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod imbalance_tests {
+    use super::*;
+
+    #[test]
+    fn absolute_window_uses_strict_gap_boundary_and_zero_counts() {
+        let config = ImbalanceConfig {
+            max_difference: 2,
+            enforce: true,
+        };
+
+        assert!(!config.blocks_count(0, 0));
+        assert!(!config.blocks_count(2, 0));
+        assert!(config.blocks_count(3, 0));
+        assert!(!config.blocks_count(7, 5));
+        assert!(config.blocks_count(8, 5));
+        assert!(!config.blocks_count(3, 8));
+    }
+
+    #[test]
+    fn blocked_tasks_considers_only_the_supplied_enabled_peers() {
+        let first = TaskId::from("first");
+        let second = TaskId::from("second");
+        let disabled = TaskId::from("disabled");
+        let config = ImbalanceConfig {
+            max_difference: 1,
+            enforce: true,
+        };
+        let counts = BTreeMap::from([
+            (first.clone(), 2),
+            (second.clone(), 0),
+            (disabled.clone(), 100),
+        ]);
+
+        assert_eq!(
+            config.blocked_tasks(&[first.clone(), second], &counts),
+            BTreeSet::from([first.clone()])
+        );
+        assert!(config.blocked_tasks(&[first], &counts).is_empty());
+        assert!(config.blocked_tasks(&[], &counts).is_empty());
+    }
+
+    #[test]
+    fn absolute_window_is_the_only_supported_configuration_shape() {
+        let config: ImbalanceConfig = serde_json::from_value(serde_json::json!({
+            "maxDifference": 3,
+            "enforce": true
+        }))
+        .unwrap();
+        assert_eq!(
+            config,
+            ImbalanceConfig {
+                max_difference: 3,
+                enforce: true,
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({
+                "maxDifference": 3,
+                "enforce": true
+            })
+        );
+        assert!(
+            serde_json::from_value::<ImbalanceConfig>(serde_json::json!({
+                "maxRatio": 2.0,
+                "enforce": true
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<ImbalanceConfig>(serde_json::json!({
+                "policy": { "kind": "absoluteWindow", "maxDifference": 3 },
+                "enforce": true
+            }))
+            .is_err()
+        );
     }
 }

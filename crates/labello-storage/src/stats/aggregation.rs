@@ -3,6 +3,8 @@ use super::*;
 pub(super) struct StatsAggregation {
     stats: DatasetStats,
     throughput: BTreeMap<String, (usize, usize)>,
+    imbalance: Option<labello_domain::ImbalanceConfig>,
+    enabled_task_ids: Vec<TaskId>,
 }
 
 impl StatsAggregation {
@@ -25,6 +27,13 @@ impl StatsAggregation {
         Self {
             stats,
             throughput: BTreeMap::new(),
+            imbalance: metadata.imbalance.clone(),
+            enabled_task_ids: metadata
+                .tasks
+                .iter()
+                .filter(|task| task.enabled)
+                .map(|task| task.task_id.clone())
+                .collect(),
         }
     }
 
@@ -178,6 +187,38 @@ impl StatsAggregation {
                 },
             )
             .collect();
+        if let Some(imbalance) = self.imbalance {
+            let annotation_counts = self
+                .enabled_task_ids
+                .iter()
+                .map(|task_id| {
+                    let stats = &self.stats.per_task[task_id];
+                    (task_id.clone(), stats.completed + stats.unreviewed)
+                })
+                .collect::<BTreeMap<_, _>>();
+            let review_counts = self
+                .enabled_task_ids
+                .iter()
+                .map(|task_id| (task_id.clone(), self.stats.per_task[task_id].completed))
+                .collect::<BTreeMap<_, _>>();
+            let (annotation_blocked_tasks, review_blocked_tasks) = if imbalance.enforce {
+                (
+                    imbalance.blocked_tasks(&self.enabled_task_ids, &annotation_counts),
+                    imbalance.blocked_tasks(&self.enabled_task_ids, &review_counts),
+                )
+            } else {
+                (
+                    std::collections::BTreeSet::new(),
+                    std::collections::BTreeSet::new(),
+                )
+            };
+            self.stats.assignment_balance = Some(labello_domain::AssignmentBalanceStats {
+                annotation_counts,
+                review_counts,
+                annotation_blocked_tasks,
+                review_blocked_tasks,
+            });
+        }
         self.stats
     }
 }

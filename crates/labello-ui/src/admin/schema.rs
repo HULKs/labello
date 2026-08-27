@@ -1071,7 +1071,7 @@ fn edit_imbalance(ui: &mut egui::Ui, imbalance: &mut Option<ImbalanceConfig>) {
     admin_card(ui, "Assignment Balance card", |ui| {
         ui.heading("Assignment Balance");
         ui.label(
-            RichText::new("Limit how unevenly work may be distributed across classes.")
+            RichText::new("Limit how unevenly work may be distributed across enabled tasks.")
                 .color(theme::MUTED),
         );
         let mut configured = imbalance.is_some();
@@ -1083,18 +1083,16 @@ fn edit_imbalance(ui: &mut egui::Ui, imbalance: &mut Option<ImbalanceConfig>) {
         }
         if let Some(imbalance) = imbalance.as_mut() {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Maximum class ratio");
-                ui.add(
-                    egui::DragValue::new(&mut imbalance.max_ratio)
-                        .range(1.0..=1000.0)
-                        .speed(0.1),
-                )
-                .on_hover_text(
-                    "Largest allowed ratio between over- and under-represented classes.",
-                );
+                ui.label("Maximum completion difference");
+                ui.add(egui::DragValue::new(&mut imbalance.max_difference).range(0..=u64::MAX))
+                    .on_hover_text(
+                        "Largest allowed count gap between the selected task and its least-completed enabled peer.",
+                    );
                 ui.checkbox(&mut imbalance.enforce, "Enforce limit");
             });
-            show_issues(ui, &imbalance_issues(Some(imbalance)));
+            ui.small(
+                "A task is blocked only when its current count gap is above the limit. A gap equal to the limit remains eligible.",
+            );
         }
     });
 }
@@ -1119,7 +1117,6 @@ fn config_issues(config: &DatasetMetadata, current_user: &UserId) -> Vec<String>
         &config.prelabel_configs,
     ));
     issues.extend(prelabel_issues(&config.prelabel_configs));
-    issues.extend(imbalance_issues(config.imbalance.as_ref()));
     issues.extend(role_issues(
         &config.role_assignments,
         &config.dataset_id,
@@ -1404,20 +1401,6 @@ fn prelabel_issues(configs: &[PrelabelConfig]) -> Vec<String> {
         }
     }
     issues
-}
-
-fn imbalance_issues(imbalance: Option<&ImbalanceConfig>) -> Vec<String> {
-    let Some(imbalance) = imbalance else {
-        return Vec::new();
-    };
-    if imbalance.max_ratio.is_finite() && imbalance.max_ratio >= 1.0 {
-        Vec::new()
-    } else {
-        vec![
-            "Assignment balance: maximum class ratio must be a finite value of at least 1."
-                .to_string(),
-        ]
-    }
 }
 
 fn role_issues(
