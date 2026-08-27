@@ -189,12 +189,11 @@ A failed check returns the change to implementation, while a pending, missing,
 cancelled, or inaccessible check is recorded as not verified.
 
 Only after exact-head CI success may the change become **Ready for review**.
-At that boundary, assign both the issue and pull request to the accountable
-implementation owner. Request that owner as reviewer only when the owner is
-eligible and independent of the authored change. If the owner authored the pull
-request, retain the owner as assignee and request a distinct eligible reviewer;
-self-review never satisfies independent acceptance. Move project items to `In
-review` at the same gated handoff, not before it.
+At that boundary, use the pull-request author as the accountable implementation
+owner and assign both the issue and pull request to that user. Keep the
+existing reviewer requests unchanged. Request review as a lifecycle transition
+by moving project items to `In review` and reporting the change as **Ready for
+review**. The agent does not add or remove requested reviewers.
 
 An independent human or separately instructed verification agent then
 reconstructs the contract from the original issue, audits the final production

@@ -1,6 +1,6 @@
 ---
 name: labello-ready-pr-for-review
-description: "Manage a Labello draft pull request from Awaiting CI through the CI-gated Ready for review handoff. Use after `$labello-open-draft-pr` returns an exact draft head, especially within `$labello-implement-issue`. Keep implementation fixes with the caller; this skill owns hosted CI state, draft promotion, assignments, reviewer requests, and review-status metadata."
+description: "Manage a Labello draft pull request from Awaiting CI through the CI-gated Ready for review handoff. Use after `$labello-open-draft-pr` returns an exact draft head, especially within `$labello-implement-issue`. Keep implementation fixes with the caller; this skill owns hosted CI state, draft promotion, author assignments, reviewer-request preservation, and review-status metadata."
 ---
 
 # Labello Ready PR for Review
@@ -9,10 +9,10 @@ Move a verified draft pull request to human review only after the required hoste
 
 ## Establish the lifecycle state
 
-Require the draft pull-request URL or number, expected base and head branches, exact head SHA, accountable human owner, any linked issue, and the issue's recorded pre-work project status when cancellation recovery applies. Also require authorization for assignments, reviewer requests, draft promotion, and applicable Labello project metadata. Invocation from `$labello-implement-issue` carries its task-scoped authorization; a direct request to use this skill authorizes these lifecycle actions for the named pull request.
+Require the draft pull-request URL or number, expected base and head branches, exact head SHA, any linked issue, and the issue's recorded pre-work project status when cancellation recovery applies. Also require authorization for assignments, draft promotion, and applicable Labello project metadata. Invocation from `$labello-implement-issue` carries its task-scoped authorization; a direct request to use this skill authorizes these lifecycle actions for the named pull request.
 
 1. Read back the pull request and confirm it is still draft, has the expected branches, and points to the supplied head SHA. Return `STALE HEAD` without mutating state if it moved.
-2. Identify the accountable owner only from explicit task or coordination context. Never infer ownership from Git credentials, commit authorship, or the issue reporter.
+2. Read the pull-request author from GitHub and use that identity as the accountable owner.
 3. Record the issue and pull request's current assignments, project membership, iteration, and project status before changing them. Reuse existing project items and verify every write through read-back.
 4. For an issue-backed implementation, confirm the issue remains `In progress`. When authorized, add the pull request to the Labello project and current iteration and keep both items `In progress` while CI or CI fixes are pending.
 
@@ -32,15 +32,15 @@ Do not modify product code to accommodate an infrastructure failure. Return `BLO
 
 ## Complete the human handoff
 
-After `Testing` succeeds, read back the exact head once more. A missing owner, missing project authority required by the repository workflow, or lack of an eligible independent reviewer blocks the handoff and leaves the pull request draft.
+After `Testing` succeeds, read back the exact head once more. A missing pull-request author or missing project authority required by the repository workflow blocks the handoff and leaves the pull request draft.
 
 1. Assign the linked issue and pull request to the accountable owner.
-2. Determine reviewer eligibility. Request the owner only when GitHub permits it and the owner is independent of the authored change. If the owner authored the pull request, keep them as assignee and request a distinct eligible reviewer.
-3. Mark the pull request ready for review and request the selected reviewer.
+2. Preserve existing reviewer requests. Do not add or remove requested reviewers.
+3. Mark the pull request ready for review.
 4. Move the linked issue and pull request project items to `In review` at this same boundary. Never move either item to `Done`.
-5. Update the pull-request handoff checklist to record exact-head CI, assignment, reviewer request, and Ready for review. Leave independent review unchecked.
-6. Read back the pull request, assignments, requested reviewer, issue and pull-request project statuses, and exact head SHA.
+5. Update the pull-request handoff checklist to record exact-head CI, author assignment, reviewer-request preservation, and Ready for review. Leave independent review unchecked.
+6. Read back the pull request, assignments, existing reviewer requests, issue and pull-request project statuses, and exact head SHA.
 
 If a write fails after another succeeds, repair the existing items instead of creating duplicates. Do not report success until the remote state is coherent; report the exact partial state when it cannot be repaired.
 
-Return `READY FOR REVIEW` only when the exact current head passed `Testing`, the pull request is no longer draft, ownership and independent reviewer requirements are satisfied, and every applicable project item is `In review`. Include the pull-request link, exact head SHA, CI run, assignees, requested reviewer, and read-back project statuses. This is a human review handoff, not independent acceptance.
+Return `READY FOR REVIEW` only when the exact current head passed `Testing`, the pull request is no longer draft, the pull-request author owns the issue and pull request, and every applicable project item is `In review`. Include the pull-request link, exact head SHA, CI run, assignees, existing reviewer requests, and read-back project statuses. This is a human review lifecycle handoff, not independent acceptance.

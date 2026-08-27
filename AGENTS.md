@@ -299,11 +299,11 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
 - Report implementation work with an open pull request as **Awaiting CI** until
   the required check succeeds on the exact current head SHA. A local or stale
   success does not satisfy this gate; investigate failures before handoff.
-- After exact-head CI succeeds, assign the issue and pull request to the
-  accountable implementation owner. Request that owner as reviewer only when
-  GitHub permits it and they are independent of the authored change; otherwise
-  request a distinct eligible reviewer. Move project items to `In review` only
-  at this boundary, then report the change as **Ready for review**.
+- After exact-head CI succeeds, use the pull-request author as the accountable
+  implementation owner and assign both the issue and pull request to that user.
+  Preserve existing reviewer requests. Request review as a lifecycle transition
+  by moving project items to `In review` and reporting the change as **Ready for
+  review**. The agent does not add or remove requested reviewers.
 - Require a human reviewer or separately instructed verification agent to read
   the original issue, inspect the final production diff and evidence, and try
   to falsify the completion claims. The implementer cannot provide the

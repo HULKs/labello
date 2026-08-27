@@ -66,6 +66,6 @@ Include:
 - visual states and runtime surfaces inspected when relevant;
 - residual risks and evidence limitations;
 - focused diff and worktree hygiene.
-- exact-head required CI status and the accountable owner, assignee, and requested-reviewer identities. Flag self-review or a missing independent reviewer as blocking the acceptance handoff.
+- exact-head required CI status, pull-request author, and issue and pull-request assignees. Require the author to be the accountable owner and assignee. Requested-reviewer presence is not an acceptance criterion; record it as context without adding or removing reviewers.
 
 Do not soften missing evidence into a pass. A verifier verdict is an integration recommendation; it does not itself authorize closing the issue, merging, committing, or changing project status.

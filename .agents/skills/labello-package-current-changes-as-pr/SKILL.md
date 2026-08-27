@@ -42,4 +42,4 @@ Assemble a prepared-change handoff for `$labello-open-draft-pr` containing the r
 
 Continue with `$labello-open-draft-pr` using that handoff. End with the publisher's `AWAITING CI` result and include the draft pull-request link and exact head SHA.
 
-Stop there. Leave CI waiting, draft promotion, ownership, reviewer requests, and project status to a separately requested workflow.
+Stop there. Leave CI waiting, draft promotion, ownership, reviewer-request preservation, and project status to a separately requested workflow.
