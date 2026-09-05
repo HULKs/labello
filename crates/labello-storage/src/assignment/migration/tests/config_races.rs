@@ -64,12 +64,17 @@ async fn admin_repair_serializes_role_revocation_and_rechecks_later_requests() {
     metadata
         .role_assignments
         .retain(|role| role.user_id != UserId::from("admin"));
+    assert!(fixture.repository.review_config_lock.try_read().is_ok());
     let mut publication = std::pin::pin!(fixture.repository.save_dataset(&metadata));
     std::future::poll_fn(|cx| {
         assert!(publication.as_mut().poll(cx).is_pending());
         Poll::Ready(())
     })
     .await;
+    assert!(
+        fixture.repository.review_config_lock.try_read().is_err(),
+        "configuration publication must queue its writer on the same guard"
+    );
     drop(image_guard);
     tokio::time::timeout(Duration::from_secs(5), pending)
         .await
@@ -212,6 +217,7 @@ async fn configuration_publication_waits_for_each_companion_transaction() {
             .find(|task| task.task_id == fixture.guide_task_id)
             .unwrap()
             .enabled = false;
+        assert!(fixture.repository.review_config_lock.try_read().is_ok());
         let mut publication = std::pin::pin!(fixture.repository.save_dataset(&metadata));
         // Poll the production writer while the image transaction is waiting.
         // A timer would only prove the scheduler had not run it yet.
@@ -223,6 +229,10 @@ async fn configuration_publication_waits_for_each_companion_transaction() {
             Poll::Ready(())
         })
         .await;
+        assert!(
+            fixture.repository.review_config_lock.try_read().is_err(),
+            "{command:?}: configuration publication must queue its writer on the same guard"
+        );
         assert!(
             fixture
                 .repository
