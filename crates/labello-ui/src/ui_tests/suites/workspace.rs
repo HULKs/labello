@@ -2751,6 +2751,106 @@ fn render_workflow_notice(app: &mut LabelloApp) {
 }
 
 #[test]
+fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
+    let api = Rc::new(SpyApi::new());
+    let mut app = base_live_app(api.clone());
+    app.sync_work_config(api.metadata());
+    app.view = AppView::Review;
+    app.request_next_image();
+    let UiCommand::AssignmentAvailability { request, .. } =
+        app.runtime.commands.pop_back().unwrap()
+    else {
+        panic!("expected review availability before assignment claim");
+    };
+    app.runtime
+        .tx
+        .send(UiMessage::AssignmentAvailabilityLoaded {
+            request,
+            result: Ok(labello_client::AssignmentAvailability {
+                kind: AssignmentKind::Review,
+                tasks: BTreeMap::from([
+                    (TaskId::from("bounding_box:person"), false),
+                    (TaskId::from("bounding_box:vehicle"), true),
+                ]),
+                related: Vec::new(),
+            }),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(app.runtime.commands.is_empty());
+    let context_slot = Rc::new(std::cell::Cell::new(false));
+    let render_context_slot = context_slot.clone();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(320.0, 320.0))
+        .build_ui_state(
+            move |ui, app: &mut LabelloApp| {
+                if render_context_slot.get() {
+                    app.workspace_context_bar(ui, LayoutMode::Compact);
+                }
+                app.central(ui, LayoutMode::Compact);
+            },
+            app,
+        );
+    for _ in 0..4 {
+        harness.step();
+    }
+    let notice =
+        "Workflow changed automatically. From Person boxes (Person) to Vehicle boxes (Vehicle).";
+    assert!(harness.query_by_label(notice).is_some());
+    let dismiss =
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change");
+    assert!(dismiss.rect().height() >= 44.0);
+    assert!(dismiss.rect().right() <= 320.0);
+    assert!(
+        harness
+            .state()
+            .work
+            .automatic_workflow_change
+            .as_ref()
+            .unwrap()
+            .presented
+    );
+    assert_eq!(harness.state().runtime.commands.iter().filter(|command| matches!(command,
+        UiCommand::ClaimAssignment { task_id, .. } if *task_id == TaskId::from("bounding_box:vehicle")
+    )).count(), 1);
+    for _ in 0..3 {
+        harness.step();
+    }
+    assert!(harness.query_by_label(notice).is_some());
+    assert_eq!(
+        harness
+            .state()
+            .runtime
+            .commands
+            .iter()
+            .filter(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
+            .count(),
+        1
+    );
+    for visible in [true, false] {
+        context_slot.set(visible);
+        for _ in 0..3 {
+            harness.step();
+        }
+        assert_eq!(
+            harness.query_all_by_label(notice).count(),
+            1,
+            "exactly one current notice must survive context-slot changes"
+        );
+        assert_eq!(
+            harness
+                .state()
+                .runtime
+                .commands
+                .iter()
+                .filter(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
 fn automatic_workflow_change_scope_and_committed_selection_are_explicit() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);

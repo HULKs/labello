@@ -95,6 +95,11 @@ an accepted availability result changes the committed workflow. The shared
 workspace presents this nonmodal, dismissible status before claiming the next
 assignment. It does not require acknowledgement to continue work.
 
+The shared notice renderer records its current render pass when it is visible.
+The central workspace suppresses its fallback only when another workspace slot
+has already presented that notice in the same pass. Viewport size or presentation
+in an earlier frame cannot suppress the current fallback or leave a claim deferred.
+
 Image loading, prefetch, retry and unrelated status updates preserve the notice.
 A later fallback replaces it with that transition's identities. Dismissal,
 committed explicit workflow selection, authentication changes, dataset changes

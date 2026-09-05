@@ -177,7 +177,9 @@ and new task/class names. The new identity is emphasized, and the notice has a
 44px dismiss action. Long visible names truncate within the card while tooltips
 and the polite AccessKit status retain complete names. The card floats inside
 the workspace without reducing its canvas layout. On short compact screens it
-uses the existing identity row, leaving the small canvas unobscured. It is
+uses the existing identity row when that row presents the notice. Otherwise the
+workspace retains the floating notice, including in short review layouts. Only
+a notice actually presented in the current render pass suppresses that fallback. It is
 nonmodal and leaves ordinary work available after the new identity has been
 presented. Dismissing
 it retains the current workflow identity in the context bar and selector.

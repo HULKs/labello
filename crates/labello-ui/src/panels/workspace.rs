@@ -22,9 +22,9 @@ impl LabelloApp {
     }
 
     fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        if self.work.automatic_workflow_change.is_none()
-            || (Self::short_viewport(ctx.content_rect().size())
-                && LayoutMode::for_width(ctx.content_rect().width()) == LayoutMode::Compact)
+        if self.work.automatic_workflow_change.as_ref().is_none_or(|notice| {
+            notice.presented_pass == Some(ctx.cumulative_pass_nr())
+        })
         {
             return;
         }
@@ -87,6 +87,7 @@ impl LabelloApp {
             self.work.automatic_workflow_change = None;
         } else if presented && let Some(notice) = self.work.automatic_workflow_change.as_mut() {
             notice.presented = true;
+            notice.presented_pass = Some(ui.ctx().cumulative_pass_nr());
         }
         if !notice.presented && presented {
             self.request_next_image();
