@@ -786,7 +786,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert_label_inside(&harness, "Object 1 of 1", width, height);
+        assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
         for label in ["Pan", "Zoom out", "Zoom in", "Fit"] {
             assert_control_inside(
                 &harness,
@@ -846,9 +846,11 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
                  approve={approve_rect:?} reject={reject_rect:?}",
             );
             for label in ["Workflow", "Inspector"] {
-                let panel = harness
-                    .get_by_role_and_label(egui::accesskit::Role::Button, label)
-                    .rect();
+                let panel = if label == "Inspector" {
+                    harness.get_by_label_contains("Review details: Workflow:").rect()
+                } else {
+                    harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect()
+                };
                 assert!(
                     panel.top() >= context.top() && panel.bottom() <= context.bottom(),
                     "{label} must be in the second top bar at {width}x{height}: \
@@ -919,7 +921,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.state_mut().work.review_index = 1;
     harness.set_size(egui::vec2(320.0, 568.0));
     harness.step();
-    assert_label_inside(&harness, "Final check", 320.0, 568.0);
+    assert_review_bar_paints(&harness, "Bounding boxes · Final check");
 }
 
 #[test]

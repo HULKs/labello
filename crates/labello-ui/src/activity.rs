@@ -190,14 +190,23 @@ impl LabelloApp {
         })
     }
 
+    pub(crate) fn activity_retry_in_workspace(&self, ctx: &egui::Context) -> bool {
+        self.activity_available()
+            && self.datasets.activity.error.is_some()
+            && self.view == crate::app::AppView::Annotate
+            && self.manual_migration_active()
+            && Self::short_viewport(ctx.content_rect().size())
+    }
+
     pub(crate) fn activity_summary(&mut self, ui: &mut egui::Ui) {
         if !self.activity_available() {
             return;
         }
+        let retry_in_workspace = self.activity_retry_in_workspace(ui.ctx());
         let activity = &self.datasets.activity;
         let refreshing = activity.pending_request.is_some();
         let error = activity.error.is_some();
-        let full = if let Some(value) = &activity.value {
+        let mut full = if let Some(value) = &activity.value {
             format!(
                 "Annotation tasks submitted today in UTC: {}. Final task reviews completed today in UTC: {}.{}{}",
                 value.counts.annotation_tasks_submitted,
@@ -214,10 +223,14 @@ impl LabelloApp {
         } else {
             "Loading activity today in UTC.".into()
         };
+        if retry_in_workspace {
+            full.push_str(" Retry activity is available in the workspace More actions.");
+        }
         ui.spacing_mut().interact_size.y = 0.0;
         ui.horizontal(|ui| {
             // Allocate the real retry control first; labels use the remaining width.
             if error
+                && !retry_in_workspace
                 && ui
                     .add_enabled(
                         !refreshing,

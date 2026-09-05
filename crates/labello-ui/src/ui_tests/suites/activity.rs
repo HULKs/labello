@@ -285,3 +285,102 @@ fn activity_response_that_can_have_crossed_midnight_does_not_show_the_old_day() 
     assert!(app.datasets.activity.value.is_none());
     assert!(app.datasets.activity.error.is_some());
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn activity_footer_preserves_short_migration_confirmation_with_and_without_counts() {
+    for show_activity in [false, true] {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(320.0, 320.0))
+            .build_eframe(|ctx| {
+                let mut app = crate::inspector_presets::build(
+                    crate::inspector_presets::InspectorPreset::MigrationFullImage,
+                    &ctx.egui_ctx,
+                );
+                if show_activity {
+                    app.runtime.api = Some(Rc::new(SpyApi::new()));
+                    app.datasets.activity.identity = Some((
+                        app.config.api_base_url.clone(),
+                        app.config.user_id.clone(),
+                        app.config.dataset_id.clone(),
+                    ));
+                    app.datasets.activity.value =
+                        Some(activity_value(&app, labello_domain::now(), 123456));
+                    app.datasets.activity.last_attempt = Some(Instant::now());
+                }
+                app
+            });
+        harness.run_steps(4);
+        assert_eq!(harness.state().activity_available(), show_activity);
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        assert!(
+            canvas.height() >= 44.0,
+            "show_activity={show_activity}: {canvas:?}"
+        );
+        let confirm = harness.get_by_label_contains("Confirm & finish").rect();
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0));
+        assert!(viewport.contains_rect(confirm));
+        assert!(confirm.height() >= 44.0);
+        if show_activity {
+            let summary = harness.get_by_label("Annotation tasks submitted today in UTC: 123456. Final task reviews completed today in UTC: 2.").rect();
+            assert!(viewport.contains_rect(summary));
+            assert!(confirm.bottom() <= summary.top());
+        }
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn activity_retry_uses_short_migration_overflow_without_obscuring_canvas() {
+    for stale in [false, true] {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(320.0, 320.0))
+            .build_eframe(|ctx| {
+                let mut app = crate::inspector_presets::build(
+                    crate::inspector_presets::InspectorPreset::MigrationFullImage,
+                    &ctx.egui_ctx,
+                );
+                app.runtime.api = Some(Rc::new(SpyApi::new()));
+                app.datasets.activity.identity = Some((
+                    app.config.api_base_url.clone(),
+                    app.config.user_id.clone(),
+                    app.config.dataset_id.clone(),
+                ));
+                app.datasets.activity.value =
+                    stale.then(|| activity_value(&app, labello_domain::now(), 123456));
+                app.datasets.activity.error = Some("unavailable".into());
+                app.datasets.activity.last_attempt = Some(Instant::now());
+                app
+            });
+        harness.run_steps(4);
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        assert!(canvas.height() >= 44.0, "stale={stale}: {canvas:?}");
+        assert!(
+            harness
+                .get_by_label_contains("Confirm & finish")
+                .rect()
+                .height()
+                >= 44.0
+        );
+        assert!(
+            harness
+                .query_by_label_contains(
+                    "Retry activity is available in the workspace More actions"
+                )
+                .is_some()
+        );
+        assert!(harness.query_by_label("Retry").is_none());
+        harness.get_by_label("More").click();
+        harness.run_steps(3);
+        let retry = harness.get_by_label("Retry activity");
+        assert!(retry.rect().height() >= 44.0);
+        retry.focus();
+        harness.run_steps(2);
+        let before = harness.state().datasets.activity.last_attempt;
+        let assignment = harness.state().work.assignment.clone();
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(3);
+        assert_ne!(harness.state().datasets.activity.last_attempt, before);
+        assert_eq!(harness.state().work.assignment, assignment);
+    }
+}

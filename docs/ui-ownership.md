@@ -54,6 +54,13 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
+  stable command locations and overflow keyboard focus; workflow owners supply
+  action order, availability and command dispatch;
+- `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
+  interaction and context-row height;
+- `review_context.rs`: immutable exact-target context shared by review presentation;
+  assignment identity and authoritative target order/version reject stale summaries;
 - `review_revision.rs`: local staged replacement decisions and stable commit retries;
   effective decisions come from the domain review projection, not raw history;
 - `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
@@ -64,6 +71,11 @@ The canvas keeps its public state and entry points in `canvas.rs`. Its internal
 implementation is split only into rendering, painting, interaction,
 hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
 the canvas module so these boundaries do not weaken behavioral coverage.
+
+The shared workflow-state reducer retains every persisted annotation ID,
+including deleted versions. Undo/Redo rebases a restored annotation onto that
+latest authoritative version before saving; a failed save keeps the same draft
+available for retry. Visible annotations remain the active projection.
 
 ## Browser persistence
 
@@ -120,3 +132,19 @@ Visible wording condenses using measured text width; full counter names and
 control. This row leaves lower-right build-warning ownership with the existing
 shell warning layer and requires combined layout verification when that feature
 is present.
+
+At short heights, the activity summary and migration confirmation share the
+compact footer allocation. Its vertical padding stays removed when either the
+activity row is present or manual annotation migration needs the compact
+footer, preserving confirmation targets and canvas space in both states.
+
+A short manual-migration annotation view places failed-activity Retry in the
+existing measured secondary actions. The bottom summary retains unavailable or
+stale text and exposes the Retry location through its full accessible help.
+This keeps the retry target at 44 points without taking another full canvas row;
+other views retain the direct summary Retry control.
+
+The same short migration/activity combination removes only the canvas's vertical
+outer inset, retaining its horizontal inset. This preserves at least 44 points
+of canvas height at 320×320 with loaded counts or an activity failure, alongside
+44-point confirmation and Retry controls.

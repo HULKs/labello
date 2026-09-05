@@ -1295,7 +1295,9 @@ fn annotation_edits_debounce_once_and_undo_redo_remain_available() {
     click(&mut harness, "Accept");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
     assert_eq!(api.counts().append_event, 0);
-    click(&mut harness, "More actions");
+    if harness.query_by_label_contains("Undo").is_none() {
+        click(&mut harness, "More actions");
+    }
     assert!(harness.query_by_label_contains("Undo").is_some());
     harness.key_press(egui::Key::Escape);
     harness.step();
@@ -1335,6 +1337,88 @@ fn annotation_edits_debounce_once_and_undo_redo_remain_available() {
             .count(),
         1
     );
+}
+
+#[test]
+fn persisted_undo_redo_keeps_the_tombstoned_identity_across_save_retry() {
+    for (retry, redo_during_save) in [(false, false), (true, false), (false, true), (true, true)] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_work_harness(api.clone());
+        click(&mut harness, "Accept");
+        let original = harness.state().work.annotations[0].clone();
+        harness.state_mut().autosave();
+        step_until(&mut harness, 20, |app| {
+            app.work.save_status == SaveStatus::Saved
+        });
+
+        harness.state_mut().undo();
+        harness.state_mut().autosave();
+        if redo_during_save {
+            // The response must rebase the newer local edit onto the persisted deletion.
+            harness.state_mut().redo();
+        }
+        step_until(&mut harness, 20, |app| !app.loading.saving);
+        assert_eq!(
+            harness.state().work.save_status,
+            if redo_during_save {
+                SaveStatus::Dirty
+            } else {
+                SaveStatus::Saved
+            }
+        );
+        let tombstone = harness
+            .state()
+            .work
+            .current_state
+            .as_ref()
+            .unwrap()
+            .current_annotation(&original.annotation_id)
+            .unwrap();
+        assert!(tombstone.deleted);
+        assert_eq!(tombstone.version, original.version);
+
+        if !redo_during_save {
+            harness.state_mut().redo();
+        }
+        if retry {
+            api.fail_next_batch();
+        }
+        harness.state_mut().autosave();
+        if retry {
+            step_until(&mut harness, 20, |app| !app.loading.saving);
+            assert_eq!(harness.state().work.save_status, SaveStatus::Retry);
+            assert!(
+                harness
+                    .state()
+                    .work
+                    .current_state
+                    .as_ref()
+                    .unwrap()
+                    .current_annotation(&original.annotation_id)
+                    .unwrap()
+                    .deleted
+            );
+            assert_eq!(api.counts().append_event, 2);
+            harness.state_mut().request_save(false);
+        }
+        step_until(&mut harness, 20, |app| {
+            app.work.save_status == SaveStatus::Saved
+        });
+        let state = harness.state().work.current_state.as_ref().unwrap();
+        let restored = state.current_annotation(&original.annotation_id).unwrap();
+        assert!(!restored.deleted);
+        assert_eq!(restored.version, original.version + 1);
+        assert_eq!(restored.geometry, original.geometry);
+        assert_eq!(restored.origin, original.origin);
+        assert_eq!(state.annotations.len(), 1);
+        assert_eq!(state.annotations[&original.annotation_id].len(), 2);
+        assert_eq!(api.counts().append_event, 3);
+        assert!(
+            matches!(api.events().last().unwrap(), EventPayload::AnnotationVersionCreated {
+            annotation, previous_version: Some(1), ..
+        } if annotation.annotation_id == original.annotation_id && annotation.version == 2)
+        );
+    }
 }
 
 #[test]
@@ -2351,12 +2435,18 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     assert!(harness.state().work.correction_draft.is_some());
 
     api.fail_next_correction();
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 8, |app| !app.loading.saving);
     assert_eq!(api.counts().record_correction, 1);
     assert!(harness.state().work.correction_draft.is_some());
     assert!(harness.state().work.current.is_some());
 
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 12, |app| {
         api.counts().record_correction == 2

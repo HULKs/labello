@@ -1038,17 +1038,6 @@ impl LabelloApp {
         ui.label(RichText::new("Migration review").strong());
         if let Some(target) = targets.get(self.work.migration.review_index) {
             let status = self.migration_disposition(&target.object_group_id);
-            theme::compact_metric(
-                ui,
-                "Review target",
-                format!(
-                    "{} of {} | {}",
-                    self.work.migration.review_index + 1,
-                    targets.len(),
-                    disposition_label(status.as_ref())
-                ),
-            );
-            ui.label(format!("Object group: {}", target.object_group_id));
             if let Some(MigrationDispositionStatus::Excluded { exclusion }) = status.as_ref() {
                 ui.label(format!(
                     "Exclusion reason: {}",
@@ -1088,28 +1077,17 @@ impl LabelloApp {
         } else if let Some((_, target @ labello_client::MigrationReviewTarget::Discovered { .. })) =
             self.current_migration_review_target()
         {
-            let index = self.work.migration.review_index - targets.len();
-            ui.label(format!(
-                "Added object {} of {}",
-                index + 1,
-                self.discovered_migration_skeletons().len()
-            ));
             ui.label(
                 "Review this saved skeleton. Its companion box has a separate bounding-box review.",
             );
-            if let labello_client::MigrationReviewTarget::Discovered {
-                annotation_id,
-                version,
-            } = &target
+            if let labello_client::MigrationReviewTarget::Discovered { annotation_id, .. } = &target
             {
-                ui.small(format!("Skeleton version {version}"));
                 self.migration_companion_status(ui, annotation_id);
             }
             if show_primary_actions {
                 self.migration_review_buttons(ui, task_id, target, false, false);
             }
         } else if let Some(confirmation) = confirmation {
-            theme::compact_metric(ui, "Review target", "Full-image confirmation");
             egui::CollapsingHeader::new("Resolved objects")
                 .id_salt("migration-review-resolved-objects")
                 .show(ui, |ui| self.migration_status_list(ui));
@@ -1228,26 +1206,6 @@ impl LabelloApp {
             {
                 self.begin_revisit_migration_target(group_id);
             }
-            self.migration_object_navigation_button(ui);
-            if !compact
-                && ui
-                    .add(
-                        egui::Button::new(if self.inspection_next_returns_to_current() {
-                            "Return current"
-                        } else {
-                            "Next object"
-                        })
-                        .shortcut_text(
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::SelectNextObject,
-                            ),
-                        ),
-                    )
-                    .clicked()
-            {
-                self.inspect_migration_object(1);
-            }
         } else {
             let adding_missing_object = self.work.migration.adding_missing_object;
             if !adding_missing_object
@@ -1318,13 +1276,66 @@ impl LabelloApp {
                     self.remove_last_migration_keypoint();
                 }
             }
-            self.migration_object_navigation_button(ui);
         }
-        if compact {
-            self.migration_more_actions(ui);
-        } else {
-            self.migration_assignment_buttons(ui);
+        let mut actions = Vec::new();
+        if self.can_edit_previous_migration_object() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::SelectPreviousObject,
+                "Previous object",
+                true,
+                "Return to the previous object.",
+            ));
         }
+        if self.work.migration.inspected_group_id.is_some() {
+            actions.push(crate::panels::WorkspaceAction {
+                command: crate::panels::WorkspaceCommand::NextMigrationObject,
+                label: if self.inspection_next_returns_to_current() {
+                    "Return to current object"
+                } else {
+                    "Next object"
+                }
+                .into(),
+                shortcut: self
+                    .shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
+                enabled: true,
+                help: "Inspect the next object or return to the current object.",
+            });
+        }
+        let ready = self.work.assignment.is_some()
+            && self.runtime.api.is_some()
+            && !self.loading.saving
+            && !self.loading.image
+            && !self.work.migration.busy
+            && self.work.pending_transition.is_none();
+        if self.work.previous_assignment.is_some() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::PreviousImage,
+                "Previous assignment",
+                ready,
+                "Return to the previous assignment.",
+            ));
+        }
+        actions.push(self.workspace_secondary_action(
+            ui.ctx(),
+            labello_domain::UserAction::SkipAssignment,
+            "Skip",
+            ready,
+            "Release this assignment and claim another.",
+        ));
+        if self.activity_retry_in_workspace(ui.ctx()) {
+            actions.push(crate::panels::WorkspaceAction {
+                command: crate::panels::WorkspaceCommand::RetryActivity,
+                label: "Retry activity".into(),
+                shortcut: String::new(),
+                enabled: self.datasets.activity.pending_request.is_none(),
+                help: "Retry activity for today in UTC without changing the assignment.",
+            });
+        }
+        self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
+            ui, &actions, "More",
+        ));
     }
 
     fn migration_companion_status(&self, ui: &mut egui::Ui, annotation_id: &AnnotationId) {
@@ -1570,41 +1581,6 @@ impl LabelloApp {
         ui.separator();
         ui.label(RichText::new("Assignment").strong());
         self.migration_assignment_buttons(ui);
-    }
-
-    fn migration_more_actions(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button("More", |ui| {
-            if self.work.migration.inspected_group_id.is_some()
-                && ui
-                    .button(if self.inspection_next_returns_to_current() {
-                        "Return to current object"
-                    } else {
-                        "Next object"
-                    })
-                    .clicked()
-            {
-                self.inspect_migration_object(1);
-                ui.close();
-            }
-            let ready = self.work.assignment.is_some()
-                && self.runtime.api.is_some()
-                && !self.loading.saving
-                && !self.loading.image
-                && !self.work.migration.busy
-                && self.work.pending_transition.is_none();
-            if self.work.previous_assignment.is_some()
-                && ui
-                    .add_enabled(ready, egui::Button::new("Previous assignment"))
-                    .clicked()
-            {
-                self.trigger_user_action(labello_domain::UserAction::PreviousImage);
-                ui.close();
-            }
-            if ui.add_enabled(ready, egui::Button::new("Skip")).clicked() {
-                self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
-                ui.close();
-            }
-        });
     }
 
     fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool) {

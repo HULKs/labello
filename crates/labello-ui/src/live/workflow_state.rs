@@ -178,12 +178,8 @@ impl LabelloApp {
         self.work.current = Some(loaded.queued);
         self.work.current_state = Some(loaded.state.clone());
         self.work.annotations = loaded.annotations;
-        self.work.persisted_annotations = self
-            .work
-            .annotations
-            .iter()
-            .map(|annotation| annotation.annotation_id.clone())
-            .collect();
+        // Deleted annotations retain their version identity for a later Undo/Redo save.
+        self.work.persisted_annotations = loaded.state.annotations.keys().cloned().collect();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
         self.work.selected_prelabel = None;
@@ -303,12 +299,7 @@ impl LabelloApp {
     pub(crate) fn apply_state(&mut self, state: labello_domain::ImageState) {
         self.renew_assignment_from_state(&state);
         self.work.annotations = state.active_annotations().cloned().collect();
-        self.work.persisted_annotations = self
-            .work
-            .annotations
-            .iter()
-            .map(|annotation| annotation.annotation_id.clone())
-            .collect();
+        self.work.persisted_annotations = state.annotations.keys().cloned().collect();
         self.work.current_state = Some(state);
         self.work.modified_annotations.clear();
     }

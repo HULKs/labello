@@ -1096,8 +1096,8 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             canvas.bottom() <= primary.top(),
             "width={width} canvas={canvas:?} primary={primary:?}"
         );
-        for label in ["Undo last keypoint", "More"] {
-            let action = object.get_by_label(label).rect();
+        for label in ["Undo last keypoint", "Skip"] {
+            let action = object.query_by_label_contains(label).or_else(|| object.query_by_label("More")).unwrap().rect();
             assert!(
                 canvas.bottom() <= action.top(),
                 "width={width} canvas={canvas:?} {label}={action:?}"
@@ -1604,7 +1604,7 @@ fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
             let reject = harness.get_by_label(reject).rect();
             let width = harness.ctx.content_rect().width();
             let workflow = harness.get_by_label("Workflow").rect();
-            let inspector = harness.get_by_label("Inspector").rect();
+            let inspector = harness.get_by_label_contains("Review details: Workflow:").rect();
             let context = harness.get_by_label("Workspace context bar").rect();
             assert!((accept.center().y - reject.center().y).abs() <= 1.0);
             assert!(accept.right() <= reject.left());
@@ -1617,20 +1617,20 @@ fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
     harness.set_size(egui::vec2(570.0, 667.0));
     harness.step();
     assert_review_layout(&harness, "Accept", "Reject");
-    assert!(harness.get_by_label("Workflow").rect().width() > 80.0);
-    assert!(harness.get_by_label("Inspector").rect().width() > 80.0);
+    assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
+    assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() > 80.0);
 
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
     assert_review_layout(&harness, "Accept", "Reject");
     assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
-    assert!(harness.get_by_label("Inspector").rect().width() <= 44.5);
+    assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() >= 44.0);
 
     harness.set_size(egui::vec2(260.0, 667.0));
     harness.step();
     assert_review_layout(&harness, "Accept", "Reject");
     assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
-    assert!(harness.get_by_label("Inspector").rect().width() <= 44.5);
+    assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() >= 44.0);
 
     harness.set_size(egui::vec2(150.0, 667.0));
     harness.step();
