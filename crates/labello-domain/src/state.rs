@@ -102,6 +102,8 @@ impl ImageState {
 }
 
 mod annotation_replay;
+mod export;
+mod export_bounds;
 mod migration_replay;
 mod query;
 mod replay;

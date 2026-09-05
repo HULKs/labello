@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod deployment;
+mod exports;
 mod imports;
 mod ingest;
 mod oauth_routes;
@@ -98,6 +99,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/auth/github/login", get(oauth_routes::github_login))
         .route("/auth/github/callback", get(oauth_routes::github_callback))
         .merge(imports::routes(&state))
+        .merge(exports::routes())
         .route("/datasets", get(list_datasets).post(create_dataset))
         .route("/datasets/{dataset_id}", get(get_dataset))
         .route("/datasets/{dataset_id}/users", get(list_dataset_users))
