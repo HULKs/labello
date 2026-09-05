@@ -267,6 +267,25 @@ homepage field. The callback must point to the API, not the browser client.
 Keep the browser and callback hostnames consistent throughout local cookie
 flows.
 
+`redirectUri` must be an absolute HTTP(S) URL without user information, query,
+or fragment. Its path must end exactly in `/auth/github/callback`. An optional
+deployment prefix consists of nonempty slash-separated segments containing only
+ASCII letters, digits, `-`, `_`, `.`, or `~`. Dot segments `.` and `..`, repeated
+slashes, backslashes, whitespace, cookie-attribute delimiters, and all percent
+encoding are rejected at startup. Encoded paths are rejected rather than decoded
+or normalized, so the configured public path is the cookie path's authority.
+
+The OAuth flow cookie uses the callback's parent path for both creation and
+expiry. For example, callbacks at `/auth/github/callback`,
+`/api/auth/github/callback`, and `/labello/api/auth/github/callback` use
+`/auth/github`, `/api/auth/github`, and `/labello/api/auth/github`, respectively.
+The proxy may strip the deployment prefix before forwarding to the API; browsers
+match cookies against the public path before that forwarding happens. Session
+cookies retain `Path=/`. The flow cookie retains its ten-minute lifetime,
+HttpOnly and configured Secure/SameSite attributes. See the
+[rollout instructions](operations.md#oauth-cookie-path-rollout) when replacing a
+proxy cookie-path workaround.
+
 ## Dataset Import
 
 Dataset import is disabled when `[import]` is absent. Enabling it exposes the

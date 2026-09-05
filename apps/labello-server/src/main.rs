@@ -173,11 +173,13 @@ async fn build_state(config: ServerConfig, bind: SocketAddr) -> anyhow::Result<A
         .with_local_admin_login(local_admin_user_id)
         .with_import_root_owners(import_root_owners(config.import.as_ref())?);
     if let Some(github) = config.github_oauth {
-        state = state.with_github_oauth(GithubOAuthConfig {
-            client_id: github.client_id,
-            client_secret: github.client_secret,
-            redirect_uri: github.redirect_uri,
-        });
+        state = state
+            .with_github_oauth(GithubOAuthConfig {
+                client_id: github.client_id,
+                client_secret: github.client_secret,
+                redirect_uri: github.redirect_uri,
+            })
+            .context("invalid githubOauth.redirectUri")?;
     }
     let import_service = ImportService::new(
         &datasets_root,
@@ -517,6 +519,34 @@ diagnosticExamplesPerCode = 7
             .unwrap()
             .to_string();
         assert!(error.contains("unknown field"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn startup_rejects_invalid_oauth_callback_path() {
+        let datasets = std::env::temp_dir().join(format!(
+            "labello-invalid-oauth-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let config = ServerConfig {
+            datasets_root: datasets.to_string_lossy().to_string(),
+            github_oauth: Some(GithubOAuthFileConfig {
+                client_id: String::new(),
+                client_secret: String::new(),
+                redirect_uri: "https://example.com/api;invalid/auth/github/callback".to_string(),
+            }),
+            ..Default::default()
+        };
+        let result = build_state(config, "127.0.0.1:8080".parse().unwrap()).await;
+        let error = result
+            .err()
+            .expect("startup must reject unsafe callback path");
+        assert_eq!(error.to_string(), "invalid githubOauth.redirectUri");
+        assert!(!format!("{error:#}").contains("api;invalid"));
+        assert!(!datasets.exists());
     }
 
     #[tokio::test]

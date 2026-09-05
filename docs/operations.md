@@ -292,6 +292,31 @@ At each release and on the operator's normal backup cadence:
 This drill verifies the backup procedure, not snapshot restore, which remains
 unsupported.
 
+## OAuth cookie-path rollout
+
+The OAuth flow cookie follows the public callback path configured in
+[`githubOauth.redirectUri`](configuration.md#github-oauth), including any API
+prefix. Labello sets and expires that cookie at the callback's parent path.
+The proxy still strips the public prefix when forwarding API requests, and
+session-cookie paths remain unchanged.
+
+When upgrading a deployment that rewrites the flow-cookie Path in Caddy:
+
+1. Deploy the fixed server using the normal deployment transaction. Keep the
+   existing proxy workaround until the fixed server is running.
+2. Remove the production Caddy flow-cookie-path rewrite and validate/reload the
+   proxy configuration. Do not replace it with a broader cookie scope.
+3. Start a fresh login through the public prefixed URL. In browser developer
+   tools, verify that the flow cookie's Path includes that prefix, the callback
+   sends it, and login succeeds. The successful callback must expire the flow
+   cookie with exactly the same Path; verify that only the session remains.
+4. Verify authenticated API access and logout through that public URL. Retain
+   only redacted outcomes, never cookie values, OAuth state, codes, or raw URLs
+   with query strings in logs or evidence.
+
+Code acceptance covers the regression tests and these instructions. Removing
+and verifying the live workaround is an operator's post-deployment step.
+
 ## Upgrades And Rollback
 
 The current persistence schema is version 3. The code accepts supported version

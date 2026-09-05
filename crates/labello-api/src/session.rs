@@ -351,18 +351,18 @@ pub(crate) fn expired_session_cookie(secure: bool) -> String {
     )
 }
 
-pub(crate) fn oauth_flow_cookie(token: &str, secure: bool) -> String {
+pub(crate) fn oauth_flow_cookie(token: &str, path: &str, secure: bool) -> String {
     format!(
-        "{OAUTH_FLOW_COOKIE}={token}; Path=/auth/github; HttpOnly; {}; Max-Age={}{}",
+        "{OAUTH_FLOW_COOKIE}={token}; Path={path}; HttpOnly; {}; Max-Age={}{}",
         same_site(secure),
         OAUTH_STATE_LIFETIME_MINUTES * 60,
         secure_attribute(secure),
     )
 }
 
-pub(crate) fn expired_oauth_flow_cookie(secure: bool) -> String {
+pub(crate) fn expired_oauth_flow_cookie(path: &str, secure: bool) -> String {
     format!(
-        "{OAUTH_FLOW_COOKIE}=; Path=/auth/github; HttpOnly; {}; Max-Age=0{}",
+        "{OAUTH_FLOW_COOKIE}=; Path={path}; HttpOnly; {}; Max-Age=0{}",
         same_site(secure),
         secure_attribute(secure),
     )

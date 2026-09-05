@@ -27,7 +27,7 @@ pub struct ApiState {
     import_root_owners: Arc<BTreeMap<String, BTreeSet<UserId>>>,
     datasets_root_mutation: Arc<AsyncMutex<()>>,
     import_commands: Arc<AsyncMutex<()>>,
-    pub github_oauth: Option<GithubOAuthConfig>,
+    pub(crate) github_oauth: Option<GithubOAuthConfig>,
     pub(crate) github_oauth_endpoints: crate::oauth::GithubOAuthEndpoints,
     pub http: reqwest::Client,
 }
@@ -109,9 +109,10 @@ impl ApiState {
         self.server_store.create_session(user_id)
     }
 
-    pub fn with_github_oauth(mut self, config: GithubOAuthConfig) -> Self {
+    pub fn with_github_oauth(mut self, config: GithubOAuthConfig) -> ApiResult<Self> {
+        config.flow_cookie_path()?;
         self.github_oauth = Some(config);
-        self
+        Ok(self)
     }
 
     pub fn with_import_service(mut self, service: ImportService) -> Self {

@@ -8,7 +8,8 @@ async fn auth_options_are_public_and_only_advertise_capabilities() {
                 client_id: "client-id".to_string(),
                 client_secret: "oauth-secret".to_string(),
                 redirect_uri: "https://api.example.com/auth/github/callback".to_string(),
-            }),
+            })
+            .unwrap(),
     );
 
     let response = app
@@ -554,6 +555,26 @@ async fn legacy_sessions_receive_a_persisted_csrf_token_on_load() {
 
 #[tokio::test]
 async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_target() {
+    for prefix in ["", "/api", "/labello/api"] {
+        for secure in [false, true] {
+            oauth_flow_with_browser_cookie_paths(prefix, secure).await;
+        }
+    }
+}
+
+async fn oauth_flow_with_browser_cookie_paths(prefix: &str, secure: bool) {
+    use reqwest::cookie::CookieStore;
+
+    let callback_path = format!("{prefix}/auth/github/callback");
+    let login_path = format!("{prefix}/auth/github/login");
+    let origin = if secure {
+        "https://api.example.com"
+    } else {
+        "http://api.example.com"
+    };
+    let callback_url = url::Url::parse(&format!("{origin}{callback_path}")).unwrap();
+    let login_url = url::Url::parse(&format!("{origin}{login_path}")).unwrap();
+    let browser_a = reqwest::cookie::Jar::default();
     let temp = tempfile::tempdir().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mock_address = listener.local_addr().unwrap();
@@ -573,12 +594,13 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
     let state = ApiState::new(temp.path())
         .with_browser_origins(vec!["https://app.example.com".to_string()])
         .unwrap()
-        .with_session_cookie_secure(true)
+        .with_session_cookie_secure(secure)
         .with_github_oauth(crate::GithubOAuthConfig {
             client_id: "client".to_string(),
             client_secret: "secret".to_string(),
-            redirect_uri: "https://api.example.com/auth/github/callback".to_string(),
+            redirect_uri: callback_url.to_string(),
         })
+        .unwrap()
         .with_github_oauth_endpoints(crate::oauth::GithubOAuthEndpoints {
             token_url: format!("http://{mock_address}/token"),
             user_url: format!("http://{mock_address}/user"),
@@ -594,14 +616,18 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         ))
         .await
         .unwrap();
-    let app = router(state.clone());
+    let app = if prefix.is_empty() {
+        router(state.clone())
+    } else {
+        axum::Router::new().nest(prefix, router(state.clone()))
+    };
     let return_to = "https://app.example.com/datasets/ds?tab=review";
     let login = app
         .clone()
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/auth/github/login?returnTo={}",
+                    "{login_path}?returnTo={}",
                     urlencoding::encode(return_to)
                 ))
                 .body(Body::empty())
@@ -618,17 +644,29 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .unwrap();
     let browser_a_cookie = login.headers()[header::SET_COOKIE].to_str().unwrap();
     assert!(browser_a_cookie.starts_with("labello_oauth_flow="));
-    assert!(browser_a_cookie.contains("Path=/auth/github"));
+    browser_a.add_cookie_str(browser_a_cookie, &login_url);
+    // The cookie jar evaluates the public URL before the proxy strips its prefix.
+    let browser_a_cookie_header = browser_a
+        .cookies(&callback_url)
+        .expect("browser must send flow cookie to public callback");
+    assert!(browser_a_cookie.contains(&format!("Path={prefix}/auth/github;")));
+    assert!(browser_a_cookie.contains("Max-Age=600"));
     assert!(browser_a_cookie.contains("HttpOnly"));
-    assert!(browser_a_cookie.contains("SameSite=None"));
-    assert!(browser_a_cookie.contains("Secure"));
-    let browser_a_cookie = browser_a_cookie.split(';').next().unwrap().to_string();
+    assert!(browser_a_cookie.contains(if secure {
+        "SameSite=None"
+    } else {
+        "SameSite=Lax"
+    }));
+    assert_eq!(browser_a_cookie.contains("; Secure"), secure);
+    let browser_a_cookie = browser_a_cookie_header;
 
     let invalid_return = app
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/auth/github/login?returnTo=https%3A%2F%2Fevil.example%2Fsteal")
+                .uri(format!(
+                    "{login_path}?returnTo=https%3A%2F%2Fevil.example%2Fsteal"
+                ))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -640,9 +678,7 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!(
-                    "/auth/github/callback?code=unused&state={generated}"
-                ))
+                .uri(format!("{callback_path}?code=unused&state={generated}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -654,7 +690,9 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/auth/github/login?returnTo=https%3A%2F%2Fapp.example.com%2Fother")
+                .uri(format!(
+                    "{login_path}?returnTo=https%3A%2F%2Fapp.example.com%2Fother"
+                ))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -672,9 +710,7 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!(
-                    "/auth/github/callback?code=unused&state={generated}"
-                ))
+                .uri(format!("{callback_path}?code=unused&state={generated}"))
                 .header(header::COOKIE, browser_b_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -687,9 +723,7 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!(
-                    "/auth/github/callback?code=valid-code&state={generated}"
-                ))
+                .uri(format!("{callback_path}?code=valid-code&state={generated}"))
                 .header(header::COOKIE, &browser_a_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -707,12 +741,31 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
     assert_eq!(set_cookies.len(), 2);
     assert!(set_cookies.iter().any(|cookie| {
         cookie.starts_with("labello_session=")
-            && cookie.contains("SameSite=None")
-            && cookie.contains("Secure")
+            && cookie.contains(if secure {
+                "SameSite=None"
+            } else {
+                "SameSite=Lax"
+            })
+            && cookie.contains("HttpOnly")
+            && cookie.contains("Path=/;")
+            && cookie.contains("; Secure") == secure
     }));
     assert!(set_cookies.iter().any(|cookie| {
-        cookie.starts_with("labello_oauth_flow=;") && cookie.contains("Max-Age=0")
+        cookie.starts_with("labello_oauth_flow=;")
+            && cookie.contains("Max-Age=0")
+            && cookie.contains(&format!("Path={prefix}/auth/github;"))
     }));
+    for cookie in &set_cookies {
+        browser_a.add_cookie_str(cookie, &callback_url);
+    }
+    assert!(
+        !browser_a
+            .cookies(&callback_url)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("labello_oauth_flow")
+    );
     let metadata = state
         .repo(&dataset_id)
         .unwrap()
@@ -739,7 +792,7 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/me")
+                .uri(format!("{prefix}/me"))
                 .header(header::COOKIE, session_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -754,9 +807,7 @@ async fn oauth_flow_binds_state_to_browser_and_redirects_once_to_valid_return_ta
     let replay = app
         .oneshot(
             Request::builder()
-                .uri(format!(
-                    "/auth/github/callback?code=valid-code&state={generated}"
-                ))
+                .uri(format!("{callback_path}?code=valid-code&state={generated}"))
                 .header(header::COOKIE, browser_a_cookie)
                 .body(Body::empty())
                 .unwrap(),

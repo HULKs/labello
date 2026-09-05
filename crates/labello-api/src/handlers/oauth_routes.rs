@@ -29,6 +29,7 @@ pub(crate) async fn github_login(
         SET_COOKIE,
         HeaderValue::from_str(&crate::session::oauth_flow_cookie(
             &flow.cookie_token,
+            &config.flow_cookie_path()?,
             state.session_cookie_secure(),
         ))
         .map_err(|error| ApiError::Internal(error.to_string()))?,
@@ -83,6 +84,7 @@ pub(crate) async fn github_callback(
     response.headers_mut().append(
         SET_COOKIE,
         HeaderValue::from_str(&crate::session::expired_oauth_flow_cookie(
+            &config.flow_cookie_path()?,
             state.session_cookie_secure(),
         ))
         .map_err(|error| ApiError::Internal(error.to_string()))?,
