@@ -355,6 +355,7 @@ pub(crate) struct AutomaticWorkflowChange {
     pub(crate) dataset_id: DatasetId,
     pub(crate) view: AppView,
     pub(crate) presented: bool,
+    pub(crate) presented_pass: Option<u64>,
 }
 
 pub struct WorkState {

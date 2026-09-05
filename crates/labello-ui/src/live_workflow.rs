@@ -483,6 +483,7 @@ impl LabelloApp {
                 dataset_id: self.config.dataset_id.clone(),
                 view: self.view,
                 presented: false,
+                presented_pass: None,
             });
             self.runtime.persistence.expected_assignment = None;
             // Present the changed identity before the next assignment can accept input.
