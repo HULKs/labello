@@ -112,6 +112,11 @@ impl SpyApi {
     }
 
     #[cfg(feature = "inspector-presets")]
+    pub(super) fn respond_to_next_migration_with(&self, result: labello_client::ManualMigrationCommandResult) {
+        self.state.borrow_mut().migration_response = Some(result);
+    }
+
+    #[cfg(feature = "inspector-presets")]
     pub(super) fn image_state(&self, image_id: &ImageId) -> ImageState {
         self.state.borrow().states[image_id].clone()
     }
@@ -268,6 +273,7 @@ pub(super) struct SpyState {
     pub(super) last_import_plan_request: Option<labello_client::UpdateImportPlanRequest>,
     pub(super) fail_next_migration: bool,
     pub(super) migration_assignment: Option<Assignment>,
+    pub(super) migration_response: Option<labello_client::ManualMigrationCommandResult>,
 }
 
 impl SpyState {
@@ -395,6 +401,7 @@ impl SpyState {
             last_import_plan_request: None,
             fail_next_migration: false,
             migration_assignment: None,
+            migration_response: None,
         }
     }
 
@@ -1105,6 +1112,10 @@ impl SpyApi {
     ) -> ApiFuture<'a, labello_client::ManualMigrationCommandResult> {
         let mut state = self.state.borrow_mut();
         state.counts.migration_commands += 1;
+        if let Some(result) = state.migration_response.take() {
+            state.states.insert(image_id.clone(), result.image_state.clone());
+            return ready(Ok(result));
+        }
         let image_state = state
             .states
             .get(image_id)

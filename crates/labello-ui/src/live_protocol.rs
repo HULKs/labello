@@ -20,7 +20,7 @@ pub(crate) enum ReviewPhase {
     FullImage,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum MigrationAction {
     SaveSkeleton(labello_client::SaveMigrationSkeletonRequest),
     AddSkeleton(labello_client::AddMigrationSkeletonRequest),

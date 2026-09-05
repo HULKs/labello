@@ -1028,7 +1028,7 @@ async fn revisiting_a_resolved_target_is_audited_idempotent_and_returns_to_the_c
         revisited.image_state.migration_dependencies[&fixture.task_id]
             [&fixture.targets[0].object_group_id]
             .kind,
-        MigrationDependencyKind::CorrectionRequired
+        MigrationDependencyKind::ManualSelection
     );
 
     let sequence = revisited.image_state.current_sequence;
@@ -3610,3 +3610,253 @@ async fn discovered_skeleton_review_precedes_confirmation_and_rejection_requires
 }
 
 mod config_races;
+
+#[tokio::test]
+async fn direct_revisit_non_adjacent_save_returns_to_full_image_and_replays_retries() {
+    let fixture = fixture(ReviewWorkflow::None, 3).await;
+    let assignment = claim_annotator(&fixture).await;
+    let mut state = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    for (index, target) in fixture.targets.iter().enumerate() {
+        let result = fixture
+            .repository
+            .exclude_migration_target(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &expectation(&state, &fixture.task_id, target),
+                MigrationExclusionReason::ObjectNotPresent,
+                None,
+                &format!("direct-exclude-{index}"),
+            )
+            .await
+            .unwrap();
+        state = result.image_state;
+    }
+    assert_eq!(
+        state.migration_cursor(&fixture.task_id, None).unwrap(),
+        MigrationCursor::FullImage
+    );
+    let unchanged = state.migration_dispositions[&fixture.task_id].clone();
+    let expected = expectation(&state, &fixture.task_id, &fixture.targets[0]);
+    let revisit = fixture
+        .repository
+        .revisit_migration_target(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expected,
+            "direct-revisit-first",
+        )
+        .await
+        .unwrap();
+    let save_expected = expectation(&revisit.image_state, &fixture.task_id, &fixture.targets[0]);
+    let saved = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &save_expected,
+            skeleton(0.2),
+            "direct-save-first",
+        )
+        .await
+        .unwrap();
+    assert_eq!(saved.cursor, MigrationCursor::FullImage);
+    for target in &fixture.targets[1..] {
+        assert_eq!(
+            saved.image_state.migration_dispositions[&fixture.task_id][&target.object_group_id],
+            unchanged[&target.object_group_id]
+        );
+    }
+    let retry = fixture
+        .repository
+        .revisit_migration_target(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expected,
+            "direct-revisit-first",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retry.cursor, MigrationCursor::FullImage);
+    assert_eq!(
+        retry.image_state.current_sequence,
+        saved.image_state.current_sequence
+    );
+    let retry = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &save_expected,
+            skeleton(0.2),
+            "direct-save-first",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retry.image_state, saved.image_state);
+    let fresh = DatasetRepository::new(fixture._temp.path())
+        .rebuild_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    assert_eq!(fresh, saved.image_state);
+    assert_eq!(
+        fresh
+            .current_annotation(&fixture.targets[0].reserved_skeleton_annotation_id)
+            .unwrap()
+            .version,
+        1
+    );
+    assert!(
+        fixture
+            .repository
+            .revisit_migration_target(
+                &fixture.reviewers[0],
+                context(&assignment),
+                None,
+                &expectation(&fresh, &fixture.task_id, &fixture.targets[1]),
+                "wrong-revisit-owner"
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        fixture
+            .repository
+            .revisit_migration_target(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &expected,
+                "stale-revisit-version"
+            )
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn direct_revisit_finishes_selected_object_before_a_new_earlier_dependency() {
+    let fixture = fixture(ReviewWorkflow::None, 3).await;
+    let assignment = claim_annotator(&fixture).await;
+    let mut state = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    for (index, target) in fixture.targets.iter().enumerate() {
+        state = fixture
+            .repository
+            .save_migration_skeleton(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &expectation(&state, &fixture.task_id, target),
+                skeleton(0.2),
+                &format!("initial-direct-{index}"),
+            )
+            .await
+            .unwrap()
+            .image_state;
+    }
+    let expected = expectation(&state, &fixture.task_id, &fixture.targets[2]);
+    let revisited = fixture
+        .repository
+        .revisit_migration_target(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expected,
+            "direct-third",
+        )
+        .await
+        .unwrap();
+    let guide_assignment = open_guide_assignment(&fixture).await;
+    let old = revisited
+        .image_state
+        .current_annotation(&fixture.targets[0].guide_annotation_id)
+        .unwrap();
+    let mut corrected = old.clone();
+    corrected.version += 1;
+    corrected.revision_source = RevisionSource::Human {
+        action: HumanRevisionKind::Edited,
+    };
+    corrected.updated_at = labello_domain::now();
+    fixture
+        .repository
+        .append_for_assignment(
+            &fixture.annotator,
+            context(&guide_assignment),
+            vec![EventPayload::AnnotationVersionCreated {
+                annotation: corrected,
+                previous_version: Some(old.version),
+                reason: Some("synthetic earlier-guide correction".into()),
+            }],
+            false,
+        )
+        .await
+        .unwrap();
+    let changed = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(
+        matches!(changed.migration_cursor(&fixture.task_id,None).unwrap(),MigrationCursor::Object{object_group_id,..} if object_group_id==fixture.targets[2].object_group_id)
+    );
+    let saved = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expected,
+            skeleton(0.3),
+            "direct-third-save",
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(saved.cursor,MigrationCursor::Object{object_group_id,..} if object_group_id==fixture.targets[0].object_group_id)
+    );
+    assert!(
+        saved.image_state.migration_dependencies[&fixture.task_id]
+            .contains_key(&fixture.targets[0].object_group_id)
+    );
+    assert!(
+        !saved
+            .image_state
+            .migration_confirmations
+            .contains_key(&fixture.task_id)
+    );
+    let stale = expectation(&state, &fixture.task_id, &fixture.targets[0]);
+    assert!(
+        fixture
+            .repository
+            .save_migration_skeleton(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &stale,
+                skeleton(0.2),
+                "stale-guide-save"
+            )
+            .await
+            .is_err()
+    );
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    for end in 0..=events.len() {
+        rebuild_state(fixture.image_id.clone(), &events[..end]).unwrap();
+    }
+}

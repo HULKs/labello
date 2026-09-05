@@ -195,7 +195,11 @@ impl DatasetRepository {
             .migration_dependencies
             .get(context.task_id)
             .and_then(|markers| markers.get(&expected.object_group_id))
-            .is_some_and(|marker| marker.kind == MigrationDependencyKind::ManualSelection);
+            .is_some_and(|marker| marker.kind == MigrationDependencyKind::ManualSelection)
+            && matches!(
+                current_disposition(&state, context.task_id, &expected.object_group_id)?.status,
+                MigrationDispositionStatus::Pending
+            );
         if has_dependency(&state, context.task_id, &expected.object_group_id) && !pending_dependency
         {
             make_dependency_clearable(
@@ -1140,12 +1144,10 @@ impl DatasetRepository {
             .ok_or_else(|| conflict("migration guide is missing"))?;
         let marker = labello_domain::MigrationDependencyMarker {
             marker_version: 1,
-            kind: if pending {
-                MigrationDependencyKind::ManualSelection
-            } else if guide.deleted {
+            kind: if guide.deleted {
                 MigrationDependencyKind::GuideUnavailable
             } else {
-                MigrationDependencyKind::CorrectionRequired
+                MigrationDependencyKind::ManualSelection
             },
             required_disposition_version: expected.expected_disposition_version,
             event_id: primary_id,

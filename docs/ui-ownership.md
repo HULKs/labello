@@ -157,3 +157,21 @@ There is no image-quality selection, per-image representation override or saved
 quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
 failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
+
+## Direct Migration Revisit
+
+At full-image confirmation, the resolved-object overview uses named buttons and
+completed canonical skeletons and excluded guides can be selected on the canvas.
+Selection submits the existing audited revisit command. Busy/loading state blocks
+duplicate activation; canvas drags remain pan/edit gestures. Discard confirmation
+retains the current draft until the server accepts the new target. Failed opening
+can retry the exact request; repeated unchanged migration saves reuse their
+idempotency identity until acknowledged. Reloading after a canonical edit conflict
+requires discard confirmation; cancelling preserves the draft.
+
+The server owns the returned cursor. A direct save returns to full-image
+confirmation when all other targets are resolved and fresh, or to outstanding
+correction work when a dependency changed. The UI does not force confirmation.
+On return, keyboard focus goes to the overview entry, or the full-image primary
+control when the compact inspector is closed. Additional discovered objects keep
+their separate direct-edit and companion reconciliation workflow.

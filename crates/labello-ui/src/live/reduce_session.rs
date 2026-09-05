@@ -13,6 +13,9 @@ impl LabelloApp {
                         self.work.migration.pending_activate_target.take();
                     match *result {
                         Ok(result) => {
+                            self.work.migration.retry_request = None;
+                            self.work.migration.restore_revisit_focus = self.work.migration.direct_revisit_group.is_some()
+                                && matches!(result.cursor, Some(labello_domain::MigrationCursor::FullImage));
                             let completed_assignment =
                                 result.assignment.clone().filter(|assignment| {
                                     assignment.status

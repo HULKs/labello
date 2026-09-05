@@ -1923,3 +1923,272 @@ fn companion_reconciliation_escape_restores_invoking_button_focus() {
             .is_focused()
     );
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_overview_saves_non_final_target_and_restores_focus() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let api = Rc::new(SpyApi::new());
+    let mut app = inspector_presets::build(
+        InspectorPreset::MigrationFullImage,
+        &egui::Context::default(),
+    );
+    api.set_image_state(app.work.current_state.clone().unwrap());
+    app.runtime.api = Some(api.clone());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .with_max_steps(40)
+        .build_eframe(|_| app);
+    harness.step();
+    click(&mut harness, "Review 2 resolved objects");
+    let entry = harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Guide 1: Skeleton annotated; Guide present",
+    );
+    entry.click();
+    harness.step();
+    step_until(&mut harness, 10, |app| !app.work.migration.busy);
+    assert!(
+        matches!(harness.state().work.migration.cursor, Some(labello_domain::MigrationCursor::Object { ref object_group_id, .. }) if object_group_id.as_str() == "group-left")
+    );
+    let mut saved_state = harness.state().work.current_state.clone().unwrap();
+    saved_state
+        .migration_dependencies
+        .get_mut(&TaskId::from("skeleton:person"))
+        .unwrap()
+        .remove(&labello_domain::ObjectGroupId::from("group-left"));
+    api.respond_to_next_migration_with(labello_client::ManualMigrationCommandResult {
+        image_state: saved_state,
+        cursor: Some(labello_domain::MigrationCursor::FullImage),
+        progress: labello_client::ManualMigrationProgress {
+            expected: 2,
+            annotated: 1,
+            excluded: 1,
+            pending: 0,
+        },
+        active_pass: None,
+        confirmation: None,
+        assignment: harness.state().work.assignment.clone(),
+        annotation_id: None,
+    });
+    click_accesskit_button(&mut harness, "Save object changes");
+    step_until(&mut harness, 10, |app| !app.work.migration.busy);
+    harness.step();
+    assert_eq!(
+        harness.state().work.migration.cursor,
+        Some(labello_domain::MigrationCursor::FullImage)
+    );
+    assert_eq!(api.counts().migration_commands, 2);
+    assert!(
+        harness
+            .get_by_label("Guide 1: Skeleton annotated; Guide present")
+            .is_focused()
+    );
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_canvas_selects_completed_skeleton_without_drag_activation() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let api = Rc::new(SpyApi::new());
+    let mut app = inspector_presets::build(
+        InspectorPreset::MigrationFullImage,
+        &egui::Context::default(),
+    );
+    let skeleton = app
+        .work
+        .current_state
+        .as_ref()
+        .unwrap()
+        .current_annotation(&labello_domain::AnnotationId::from("reserved-left"))
+        .cloned();
+    let skeleton = skeleton.unwrap_or_else(|| {
+        app.work
+            .current_state
+            .as_ref()
+            .unwrap()
+            .active_annotations()
+            .find(|a| a.annotation_type == labello_domain::AnnotationType::Skeleton)
+            .unwrap()
+            .clone()
+    });
+    let labello_domain::AnnotationGeometry::Skeleton(geometry) = skeleton.geometry else {
+        unreachable!()
+    };
+    let point = geometry.keypoints.iter().find_map(|p| p.point).unwrap();
+    api.set_image_state(app.work.current_state.clone().unwrap());
+    app.runtime.api = Some(api.clone());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .with_max_steps(40)
+        .build_eframe(|_| app);
+    harness.step();
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    let aspect = 1280.0 / 800.0;
+    let size = if canvas.width() / canvas.height() > aspect {
+        egui::vec2(canvas.height() * aspect, canvas.height())
+    } else {
+        egui::vec2(canvas.width(), canvas.width() / aspect)
+    };
+    let image = egui::Rect::from_center_size(canvas.center(), size);
+    let position = egui::pos2(
+        image.left() + image.width() * point.x,
+        image.top() + image.height() * point.y,
+    );
+    drag_at(&mut harness, position, position + egui::vec2(20.0, 10.0));
+    assert_eq!(api.counts().migration_commands, 0);
+    harness.state_mut().work.canvas = Default::default();
+    harness.step();
+    click_at(&mut harness, position);
+    step_until(&mut harness, 10, |app| !app.work.migration.busy);
+    assert_eq!(api.counts().migration_commands, 1);
+    assert!(
+        matches!(harness.state().work.migration.cursor,Some(labello_domain::MigrationCursor::Object{ref object_group_id,..}) if object_group_id.as_str()=="group-left")
+    );
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_retry_keeps_exact_request_key_and_unsaved_workspace() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut app = inspector_presets::build(
+        InspectorPreset::MigrationFullImage,
+        &egui::Context::default(),
+    );
+    app.work.migration.draft_dirty = true;
+    app.work.migration.exclusion_note = "retained synthetic draft".into();
+    app.work.migration.pending_revisit_target =
+        Some(labello_domain::ObjectGroupId::from("group-left"));
+    app.confirm_pending_migration_revisit();
+    let command = app.runtime.commands.pop_back().unwrap();
+    let UiCommand::Migration {
+        request,
+        idempotency_key: first,
+        ..
+    } = command
+    else {
+        panic!("expected migration command")
+    };
+    app.runtime.active_requests.insert(request.request_id);
+    app.runtime
+        .tx
+        .send(UiMessage::MigrationFinished {
+            request,
+            result: Box::new(Err("synthetic transport failure".to_string().into())),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(app.work.migration.draft_dirty);
+    assert_eq!(
+        app.work.migration.exclusion_note,
+        "retained synthetic draft"
+    );
+    assert_eq!(
+        app.work.migration.cursor,
+        Some(labello_domain::MigrationCursor::FullImage)
+    );
+    app.request_revisit_migration_target(labello_domain::ObjectGroupId::from("group-left"));
+    let UiCommand::Migration {
+        idempotency_key: second,
+        ..
+    } = app.runtime.commands.pop_back().unwrap()
+    else {
+        panic!("expected retry")
+    };
+    assert_eq!(first, second);
+    app.request_revisit_migration_target(labello_domain::ObjectGroupId::from("group-right"));
+    assert!(
+        app.runtime.commands.is_empty(),
+        "busy activation must not duplicate work"
+    );
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_excluded_overview_is_keyboard_accessible_in_compact_and_medium_layouts() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+    ] {
+        let api = Rc::new(SpyApi::new());
+        let mut app = inspector_presets::build(
+            InspectorPreset::MigrationFullImage,
+            &egui::Context::default(),
+        );
+        api.set_image_state(app.work.current_state.clone().unwrap());
+        app.runtime.api = Some(api.clone());
+        let mut harness = Harness::builder()
+            .with_size(size)
+            .with_max_steps(40)
+            .build_eframe(|_| app);
+        harness.step();
+        click_accesskit_button(&mut harness, "Inspector");
+        harness.get_by_label("Review 2 resolved objects").focus();
+        harness.step();
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        let entry = harness.get_by_role_and_label(
+            egui::accesskit::Role::Button,
+            "Guide 2: Excluded; Guide present",
+        );
+        entry.focus();
+        for _ in 0..12 {
+            harness.step();
+        }
+        let visible = harness
+            .get_by_label("Guide 2: Excluded; Guide present")
+            .rect();
+        assert!(
+            visible.top() >= 0.0 && visible.bottom() <= size.y,
+            "focused entry clipped: {visible:?} in {size:?}"
+        );
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        step_until(&mut harness, 10, |app| !app.work.migration.busy);
+        assert!(
+            matches!(harness.state().work.migration.cursor,Some(labello_domain::MigrationCursor::Object{ref object_group_id,..})if object_group_id.as_str()=="group-right")
+        );
+        assert_eq!(api.counts().migration_commands, 1);
+        assert!(harness.state().work.migration.draft.is_some());
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_conflict_reload_requires_discard_confirmation() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut app =
+        inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
+    app.work.migration.draft_dirty = true;
+    app.reload_migration_assignment();
+    assert!(app.work.migration.pending_reload_discard);
+    assert!(app.work.migration.draft_dirty);
+    app.cancel_pending_migration_revisit();
+    assert!(!app.work.migration.pending_reload_discard);
+    assert!(app.work.migration.draft_dirty);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn direct_revisit_returns_focus_to_primary_action_when_overview_is_closed() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        let mut app = inspector_presets::build(
+            InspectorPreset::MigrationFullImage,
+            &egui::Context::default(),
+        );
+        app.work.inspector_panel_collapsed = true;
+        app.work.migration.direct_revisit_group =
+            Some(labello_domain::ObjectGroupId::from("group-left"));
+        app.work.migration.restore_revisit_focus = true;
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        assert!(harness.get_by_label_contains("Confirm").is_focused());
+    }
+}
