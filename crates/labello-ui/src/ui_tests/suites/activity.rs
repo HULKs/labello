@@ -509,3 +509,58 @@ fn activity_retry_stays_reachable_in_short_correction_and_migration_review() {
         assert_eq!(harness.state().work.assignment, assignment);
     }
 }
+
+#[test]
+fn activity_completion_keeps_an_open_retry_menu_until_the_user_acts() {
+    for previous in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        seed_review_annotation(
+            &api,
+            AnnotationGeometry::BoundingBox(BoundingBox {
+                x: 0.2,
+                y: 0.2,
+                width: 0.3,
+                height: 0.3,
+            }),
+            true,
+        );
+        let mut harness = loaded_review_harness(api.clone());
+        harness.set_size(egui::vec2(320.0, 320.0));
+        if previous {
+            let mut assignment = harness.state().work.assignment.clone().unwrap();
+            assignment.assignment_id = labello_domain::AssignmentId::from("previous-review");
+            assignment.status = labello_domain::AssignmentStatus::Completed;
+            harness.state_mut().work.previous_assignment = Some(assignment);
+        }
+        harness.state_mut().datasets.activity.error = Some("unavailable".into());
+        harness.state_mut().datasets.activity.last_attempt = Some(Instant::now());
+        harness.run_steps(6);
+        let request = held_activity_request(harness.state_mut());
+        harness
+            .state_mut()
+            .runtime
+            .commands
+            .retain(|command| !matches!(command, UiCommand::CurrentUserActivity { .. }));
+        harness.get_by_label("More").click();
+        harness.run_steps(3);
+        let retry = harness.get_by_label("Retry activity").rect();
+        let assignment = harness.state().work.assignment.clone();
+        let reviews = api.counts().record_review;
+        let review_index = harness.state().work.review_index;
+        let value = activity_value(harness.state(), labello_domain::now(), 4);
+        harness.state_mut().accept_activity(request, Ok(value));
+        harness.run_steps(4);
+        assert!(harness.state().datasets.activity.error.is_none());
+        assert_eq!(harness.get_by_label("Retry activity").rect(), retry);
+        let before = api.counts().current_user_activity;
+        click_at(&mut harness, retry.center());
+        step_until(&mut harness, 12, |_| {
+            api.counts().current_user_activity > before
+        });
+        harness.run_steps(4);
+        assert_eq!(api.counts().record_review, reviews);
+        assert_eq!(harness.state().work.review_index, review_index);
+        assert_eq!(harness.state().work.assignment, assignment);
+        assert!(harness.query_by_label("Retry activity").is_none());
+    }
+}

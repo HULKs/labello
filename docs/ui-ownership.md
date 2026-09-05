@@ -160,6 +160,12 @@ labels. Correction mode keeps its own actions, and migration review uses the sam
 bounded retry placement. This changes neither review decisions nor assignment
 ownership.
 
+An open Retry activity menu remains in place when an asynchronous refresh
+succeeds. The shared overflow owner records its open menu's commands, so activity
+can retain that presentation until activation or dismissal. The summary updates
+immediately, but refresh completion cannot replace a Retry pointer target with
+the review decision underneath it.
+
 Short review layout uses the shared review-context projection to keep revision
 mode in the existing context identity line. The central workspace omits its
 redundant caption only when valid compact revision details are present; missing

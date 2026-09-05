@@ -192,7 +192,11 @@ impl LabelloApp {
 
     pub(crate) fn activity_retry_in_workspace(&self, ctx: &egui::Context) -> bool {
         self.activity_available()
-            && self.datasets.activity.error.is_some()
+            && (self.datasets.activity.error.is_some()
+                || crate::panels::workspace_command_in_open_menu(
+                    ctx,
+                    crate::panels::WorkspaceCommand::RetryActivity,
+                ))
             && Self::short_viewport(ctx.content_rect().size())
             && ((self.view == crate::app::AppView::Annotate && self.manual_migration_active())
                 || (self.view == crate::app::AppView::Review

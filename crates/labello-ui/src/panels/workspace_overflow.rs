@@ -29,8 +29,21 @@ impl WorkspaceAction {
 #[derive(Clone, Default)]
 struct WorkspaceOverflowFocus {
     inline: Vec<(WorkspaceCommand, egui::Id)>,
+    menu_commands: Vec<WorkspaceCommand>,
     pending: Option<WorkspaceCommand>,
     trigger: Option<egui::Id>,
+}
+
+pub(crate) fn workspace_command_in_open_menu(
+    ctx: &egui::Context,
+    command: WorkspaceCommand,
+) -> bool {
+    let owner = egui::Id::new("workspace-secondary-actions");
+    egui::Popup::is_id_open(ctx, owner.with("popup"))
+        && ctx.data(|data| {
+            data.get_temp::<WorkspaceOverflowFocus>(owner)
+                .is_some_and(|focus| focus.menu_commands.contains(&command))
+        })
 }
 
 pub(crate) fn remember_workspace_action_response(
@@ -222,6 +235,10 @@ pub(crate) fn workspace_secondary_actions(
         focus.trigger = None;
     }
     focus.inline = inline;
+    focus.menu_commands = actions[prefix..]
+        .iter()
+        .map(|action| action.command)
+        .collect();
     ui.ctx().data_mut(|data| data.insert_temp(owner, focus));
     clicked
 }
