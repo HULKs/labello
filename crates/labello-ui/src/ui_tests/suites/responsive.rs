@@ -1340,13 +1340,27 @@ fn wide_inspector_uses_the_toolbar_toggle_and_returns_its_width_to_the_canvas() 
             && inspector_toggle.left() - workflow_toggle.right() <= 12.0,
         "the side-panel controls should form one toolbar group"
     );
-    let more_actions = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "More actions")
-        .rect();
-    assert!(
-        more_actions.right() <= 1288.0,
-        "the paired panel controls must not push workspace actions off-screen: {more_actions:?}"
-    );
+    // Secondary actions may be inline when the remaining toolbar width permits it.
+    let secondary_actions: &[&str] = if harness
+        .query_by_role_and_label(egui::accesskit::Role::Button, "More actions")
+        .is_some()
+    {
+        &["More actions"]
+    } else {
+        &["Undo", "Redo"]
+    };
+    for label in ["Save", "Submit & next", "Skip"]
+        .iter()
+        .chain(secondary_actions)
+    {
+        assert_control_inside(
+            &harness,
+            label,
+            egui::accesskit::Role::Button,
+            1288.0,
+            900.0,
+        );
+    }
     harness
         .get_by_role_and_label(egui::accesskit::Role::Button, "Collapse inspector panel")
         .click_accesskit();
