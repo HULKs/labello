@@ -1038,17 +1038,6 @@ impl LabelloApp {
         ui.label(RichText::new("Migration review").strong());
         if let Some(target) = targets.get(self.work.migration.review_index) {
             let status = self.migration_disposition(&target.object_group_id);
-            theme::compact_metric(
-                ui,
-                "Review target",
-                format!(
-                    "{} of {} | {}",
-                    self.work.migration.review_index + 1,
-                    targets.len(),
-                    disposition_label(status.as_ref())
-                ),
-            );
-            ui.label(format!("Object group: {}", target.object_group_id));
             if let Some(MigrationDispositionStatus::Excluded { exclusion }) = status.as_ref() {
                 ui.label(format!(
                     "Exclusion reason: {}",
@@ -1088,28 +1077,17 @@ impl LabelloApp {
         } else if let Some((_, target @ labello_client::MigrationReviewTarget::Discovered { .. })) =
             self.current_migration_review_target()
         {
-            let index = self.work.migration.review_index - targets.len();
-            ui.label(format!(
-                "Added object {} of {}",
-                index + 1,
-                self.discovered_migration_skeletons().len()
-            ));
             ui.label(
                 "Review this saved skeleton. Its companion box has a separate bounding-box review.",
             );
-            if let labello_client::MigrationReviewTarget::Discovered {
-                annotation_id,
-                version,
-            } = &target
+            if let labello_client::MigrationReviewTarget::Discovered { annotation_id, .. } = &target
             {
-                ui.small(format!("Skeleton version {version}"));
                 self.migration_companion_status(ui, annotation_id);
             }
             if show_primary_actions {
                 self.migration_review_buttons(ui, task_id, target, false, false);
             }
         } else if let Some(confirmation) = confirmation {
-            theme::compact_metric(ui, "Review target", "Full-image confirmation");
             egui::CollapsingHeader::new("Resolved objects")
                 .id_salt("migration-review-resolved-objects")
                 .show(ui, |ui| self.migration_status_list(ui));

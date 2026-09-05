@@ -2350,12 +2350,18 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     assert!(harness.state().work.correction_draft.is_some());
 
     api.fail_next_correction();
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 8, |app| !app.loading.saving);
     assert_eq!(api.counts().record_correction, 1);
     assert!(harness.state().work.correction_draft.is_some());
     assert!(harness.state().work.current.is_some());
 
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 12, |app| {
         api.counts().record_correction == 2
