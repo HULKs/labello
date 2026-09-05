@@ -1,3 +1,5 @@
+pub(crate) const COMPACT_MORE_LABEL: &str = "…";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum WorkspaceCommand {
     User(labello_domain::UserAction),
@@ -200,7 +202,7 @@ pub(crate) fn workspace_secondary_actions(
                 ui.add(more_button)
             })
             .inner;
-        if more_label == "⋯" {
+        if more_label == COMPACT_MORE_LABEL {
             response.clone().on_hover_text("More actions");
             response
                 .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "More"));

@@ -55,7 +55,7 @@ impl LabelloApp {
         });
         ui.horizontal_wrapped(|ui| {
             if self.work.correction_draft.is_none() {
-                let more = egui::Button::new("⋯")
+                let more = egui::Button::new(COMPACT_MORE_LABEL)
                     .min_size(egui::Vec2::splat(44.0))
                     .wrap_mode(egui::TextWrapMode::Extend);
                 let more_width = workspace_button_size(ui, &more).x;
@@ -76,7 +76,11 @@ impl LabelloApp {
                     },
                 );
             }
-            self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "⋯"));
+            self.dispatch_workspace_secondary(workspace_secondary_actions(
+                ui,
+                &actions,
+                COMPACT_MORE_LABEL,
+            ));
         });
         true
     }

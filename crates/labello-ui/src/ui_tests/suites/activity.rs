@@ -15,6 +15,18 @@ fn activity_value(
     }
 }
 
+#[test]
+fn compact_activity_more_label_is_supported_by_the_workspace_font() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.run();
+    let font = egui::TextStyle::Button.resolve(&harness.ctx.global_style());
+    assert!(
+        harness
+            .ctx
+            .fonts_mut(|fonts| { fonts.has_glyphs(&font, crate::panels::COMPACT_MORE_LABEL) })
+    );
+}
+
 fn held_activity_request(app: &mut LabelloApp) -> RequestIdentity {
     app.request_activity();
     app.runtime
