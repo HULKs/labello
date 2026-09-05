@@ -135,7 +135,6 @@ async fn assign_initial_annotator_role(state: &ApiState, user_id: &UserId) -> Ap
             Err(_) => {
                 tracing::warn!(
                     event = "auth.oauth.default_role.skipped",
-                    dataset_id = %dataset_id,
                     error_kind = "invalid_id",
                     "invalid dataset directory ignored"
                 );
@@ -149,7 +148,6 @@ async fn assign_initial_annotator_role(state: &ApiState, user_id: &UserId) -> Ap
                     event = "auth.oauth.default_role.skipped",
                     dataset_id = %dataset_id,
                     error_kind = error.kind(),
-                    diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                     "unreadable dataset ignored"
                 );
                 continue;

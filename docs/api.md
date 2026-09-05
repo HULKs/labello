@@ -61,7 +61,10 @@ browser file registration JSON to 8 MiB, and an import chunk to the advertised
 `uploadChunkBytes` limit. These nested limits replace the default for their
 routes.
 
-Every response carries `x-request-id`. Successful JSON responses use the status
+Every response carries `x-request-id`. A supplied ID is retained only when it is
+a single, nonempty value of at most 128 ASCII letters, digits, hyphens or
+underscores. Missing or invalid IDs are replaced with a generated UUID before
+logging and response propagation. Successful JSON responses use the status
 selected by the handler, normally 200. Logout returns 204. OAuth endpoints
 redirect. Binary endpoints return their media type instead of JSON.
 

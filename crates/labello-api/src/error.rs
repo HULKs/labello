@@ -29,6 +29,14 @@ pub enum ApiError {
     #[error("unprocessable entity: {0}")]
     Unprocessable(String),
 
+    // Retain the public rejection while distinguishing enforced quotas from conflicts.
+    #[error("{0}")]
+    ResourceLimit(Box<ApiError>),
+
+    // Some ownership denials deliberately use a public 404.
+    #[error("{0}")]
+    HiddenDenial(Box<ApiError>),
+
     #[error("invalid id: {0}")]
     InvalidId(#[from] labello_domain::IdValidationError),
 
@@ -55,52 +63,27 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status();
         let error_kind = self.kind();
-        if status.is_server_error() {
-            match &self {
-                ApiError::Storage(error) => tracing::error!(
-                    event = "api.error",
-                    error_kind,
-                    diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
-                    "request failed"
-                ),
-                ApiError::Http(error) => tracing::error!(
-                    event = "api.error",
-                    error_kind,
-                    timeout = error.is_timeout(),
-                    connect = error.is_connect(),
-                    upstream_status = error.status().map(|status| status.as_u16()),
-                    "request failed"
-                ),
-                ApiError::Json(error) => tracing::error!(
-                    event = "api.error",
-                    error_kind,
-                    line = error.line(),
-                    column = error.column(),
-                    "request failed"
-                ),
-                _ => tracing::error!(event = "api.error", error_kind, "request failed"),
-            }
-        } else {
-            tracing::debug!(
-                event = "api.request.rejected",
-                error_kind,
-                status = status.as_u16(),
-                "request rejected"
-            );
-        }
-        (
+        let mut response = (
             status,
             Json(ErrorBody {
                 error: self.public_message(),
             }),
         )
-            .into_response()
+            .into_response();
+        response
+            .extensions_mut()
+            .insert(crate::logging::FailureDiagnostic {
+                error_kind,
+                warn: matches!(self, Self::ResourceLimit(_) | Self::HiddenDenial(_)),
+            });
+        response
     }
 }
 
 impl ApiError {
     fn status(&self) -> StatusCode {
         match self {
+            ApiError::ResourceLimit(error) | ApiError::HiddenDenial(error) => error.status(),
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::InvalidId(_) => StatusCode::BAD_REQUEST,
             ApiError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
@@ -143,6 +126,8 @@ impl ApiError {
 
     fn kind(&self) -> &'static str {
         match self {
+            Self::ResourceLimit(_) => "resource_limit",
+            Self::HiddenDenial(_) => "forbidden",
             Self::BadRequest(_) => "bad_request",
             Self::Unauthorized(_) => "unauthorized",
             Self::Forbidden(_) => "forbidden",
@@ -160,6 +145,7 @@ impl ApiError {
 
     fn public_message(&self) -> String {
         match self {
+            Self::ResourceLimit(error) | Self::HiddenDenial(error) => error.public_message(),
             Self::Storage(labello_storage::StorageError::NotFound(_)) => "not found".to_string(),
             Self::Storage(labello_storage::StorageError::AlreadyExists(_)) => {
                 "already exists".to_string()

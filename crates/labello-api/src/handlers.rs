@@ -1,10 +1,10 @@
-use std::{collections::BTreeSet, time::Duration};
+use std::collections::BTreeSet;
 
 use axum::{
     Json, Router,
     body::Body,
-    extract::{DefaultBodyLimit, MatchedPath, Path, Query, State},
-    http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode, header},
+    extract::{DefaultBodyLimit, Path, Query, State},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::IntoResponse,
     routing::{get, post, put},
 };
@@ -19,10 +19,8 @@ use labello_domain::{
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
-    request_id::{MakeRequestUuid, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
-    trace::TraceLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
 };
-use tracing::Span;
 
 use crate::{
     ApiState,
@@ -78,42 +76,12 @@ pub fn router(state: ApiState) -> Router {
                 ]),
         )
     };
-    let trace = TraceLayer::new_for_http()
-        .make_span_with(|request: &Request<Body>| {
-            let route = request
-                .extensions()
-                .get::<MatchedPath>()
-                .map(MatchedPath::as_str)
-                .unwrap_or("<unmatched>");
-            let request_id = request
-                .extensions()
-                .get::<RequestId>()
-                .and_then(|request_id| request_id.header_value().to_str().ok())
-                .unwrap_or("<missing>");
-            tracing::info_span!(
-                "http.request",
-                request_id,
-                method = %request.method(),
-                route
-            )
-        })
-        .on_request(())
-        .on_response(
-            |response: &Response<Body>, latency: Duration, _span: &Span| {
-                tracing::info!(
-                    event = "http.request.completed",
-                    status = response.status().as_u16(),
-                    latency_ms = latency.as_millis() as u64,
-                    "request completed"
-                );
-            },
-        )
-        .on_body_chunk(())
-        .on_eos(())
-        .on_failure(());
     let middleware = ServiceBuilder::new()
+        .layer(axum::middleware::from_fn(
+            crate::logging::normalize_request_id,
+        ))
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-        .layer(trace)
+        .layer(axum::middleware::from_fn(crate::logging::observe_response))
         .layer(PropagateRequestIdLayer::x_request_id())
         .option_layer(cors);
     let app = Router::new()
@@ -636,7 +604,6 @@ async fn list_datasets(
             Err(_) => {
                 tracing::warn!(
                     event = "dataset.entry.skipped",
-                    dataset_id = %dataset_id,
                     error_kind = "invalid_id",
                     "invalid dataset directory ignored"
                 );
@@ -650,7 +617,6 @@ async fn list_datasets(
                     event = "dataset.entry.skipped",
                     dataset_id = %dataset_id,
                     error_kind = error.kind(),
-                    diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                     "unreadable dataset ignored"
                 );
                 continue;
@@ -667,7 +633,6 @@ async fn list_datasets(
                     event = "dataset.image_count.failed",
                     dataset_id = %dataset_id,
                     error_kind = error.kind(),
-                    diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                     "could not count dataset images"
                 );
                 0

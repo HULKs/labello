@@ -105,7 +105,6 @@ pub(super) async fn start_ingest_job(
                     dataset_id = %finished.dataset_id,
                     job_id = %finished.job_id,
                     error_kind = error.kind(),
-                    diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                     latency_ms = started.elapsed().as_millis() as u64,
                     "dataset ingest failed"
                 );
@@ -174,11 +173,7 @@ pub(super) async fn upload_images(
     let root = normalize_upload_root(&query.root)?;
     repo.safe_relative_root(&root)?;
     let mut written_files = 0usize;
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|error| ApiError::BadRequest(error.to_string()))?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(multipart_error)? {
         if field.name() != Some("files") {
             continue;
         }
@@ -195,10 +190,7 @@ pub(super) async fn upload_images(
                 }
             })?;
         }
-        let bytes = field
-            .bytes()
-            .await
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        let bytes = field.bytes().await.map_err(multipart_error)?;
         tokio::fs::write(&path, bytes).await.map_err(|source| {
             labello_storage::StorageError::Io {
                 path: path.clone(),
@@ -320,5 +312,46 @@ mod tests {
         assert_eq!(report.duplicate_files.len(), MAX_INGEST_REPORT_DETAILS);
         assert_eq!(report.changed_paths.len(), MAX_INGEST_REPORT_DETAILS);
         assert_eq!(report.unreadable_files.len(), MAX_INGEST_REPORT_DETAILS);
+    }
+}
+
+fn multipart_error(error: axum::extract::multipart::MultipartError) -> ApiError {
+    let limited = error.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE;
+    let rejection = ApiError::BadRequest(error.to_string());
+    if limited {
+        ApiError::ResourceLimit(Box::new(rejection))
+    } else {
+        rejection
+    }
+}
+
+#[cfg(test)]
+mod logging_tests {
+    use super::*;
+    use axum::{Router, extract::DefaultBodyLimit, routing::post};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn multipart_stream_limit_keeps_public_400_and_warn_diagnostic() {
+        async fn read(mut multipart: Multipart) -> ApiResult<()> {
+            while let Some(field) = multipart.next_field().await.map_err(multipart_error)? {
+                field.bytes().await.map_err(multipart_error)?;
+            }
+            Ok(())
+        }
+        let app = Router::new()
+            .route("/", post(read))
+            .layer(DefaultBodyLimit::max(16));
+        let response = app.oneshot(axum::http::Request::builder().method("POST").uri("/")
+            .header(axum::http::header::CONTENT_TYPE, "multipart/form-data; boundary=fixture")
+            .body(axum::body::Body::from("--fixture\r\nContent-Disposition: form-data; name=\"files\"\r\n\r\nfixture\r\n--fixture--\r\n"))
+            .unwrap()).await.unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+        let diagnostic = response
+            .extensions()
+            .get::<crate::logging::FailureDiagnostic>()
+            .unwrap();
+        assert_eq!(diagnostic.error_kind, "resource_limit");
+        assert!(diagnostic.warn);
     }
 }

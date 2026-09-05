@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{http::StatusCode, response::IntoResponse};
     use labello_domain::{DatasetId, SCHEMA_VERSION, now};
     use serde_json::json;
 
@@ -11,7 +12,67 @@ mod tests {
             message: "import parsing exceeded the parser time budget".to_string(),
         });
 
-        assert!(matches!(error, ApiError::Unprocessable(_)));
+        assert!(matches!(error, ApiError::ResourceLimit(_)));
+        assert_eq!(
+            error.into_response().status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+
+    #[test]
+    fn operational_import_categories_preserve_public_statuses() {
+        for (code, status, category) in [
+            (
+                "generated_event_limit",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "resource_limit",
+            ),
+            (
+                "descriptor_byte_limit",
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "resource_limit",
+            ),
+            (
+                "staging_quota_exceeded",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "resource_limit",
+            ),
+            ("reservation_limit", StatusCode::CONFLICT, "resource_limit"),
+            (
+                "upload_concurrency_limit",
+                StatusCode::CONFLICT,
+                "resource_limit",
+            ),
+            (
+                "build_concurrency_limit",
+                StatusCode::CONFLICT,
+                "resource_limit",
+            ),
+            (
+                "descriptor_inspection_busy",
+                StatusCode::CONFLICT,
+                "resource_limit",
+            ),
+            (
+                "parser_time_limit",
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "resource_limit",
+            ),
+            ("import_owner_mismatch", StatusCode::NOT_FOUND, "forbidden"),
+        ] {
+            let response = map_storage(storage::StorageError::Import {
+                code: code.into(),
+                message: "redacted fixture".into(),
+            })
+            .into_response();
+            assert_eq!(response.status(), status);
+            let diagnostic = response
+                .extensions()
+                .get::<crate::logging::FailureDiagnostic>()
+                .unwrap();
+            assert_eq!(diagnostic.error_kind, category);
+            assert!(diagnostic.warn);
+        }
     }
 
     fn attestations() -> client::ImportAttestations {
@@ -196,8 +257,7 @@ mod tests {
     #[test]
     fn commit_rejects_a_stale_plan_while_a_mapping_update_is_pending() {
         let mut control = control(client::ImportProfile::CocoInstancesGtV1);
-        control.pending_plan_request =
-            Some(serde_json::from_value(valid_mapping_json()).unwrap());
+        control.pending_plan_request = Some(serde_json::from_value(valid_mapping_json()).unwrap());
 
         let error = ensure_plan_update_settled(&control).unwrap_err();
         assert!(matches!(
