@@ -323,8 +323,9 @@ checks pass may an issue be accepted or closed.
 The `CI` pull-request workflow exposes descriptive parallel jobs behind the
 required `Testing` status check. Its aggregate job is the stable branch
 protection contract; the worker job names may evolve without changing that
-contract. The workflow has read-only repository permissions and uploads no
-artifacts. Repository administrators must configure a branch protection rule
+contract. The workflow has read-only repository permissions and uploads only
+the allowlisted synthetic browser evidence described above. Repository
+administrators must configure a branch protection rule
 or ruleset for `main` that:
 
 - requires pull requests and at least one approving independent review;

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EventEmitter } from "node:events";
+import { EventEmitter, once } from "node:events";
+import { rm } from "node:fs/promises";
 import { PNG } from "pngjs";
 import {
   capture,
@@ -10,6 +11,7 @@ import {
   fixture,
   cleanup,
   until,
+  waitForSettingsPaint,
 } from "./support.mjs";
 
 test("artifacts refuse an arbitrary environment before accessing the page", async () => {
@@ -59,6 +61,78 @@ test("admitted fixtures reject unknown states and foreign origins before capture
     capture(environment, page, "annotation-wide"),
     /artifact.non_fixture/,
   );
+});
+
+test("settings waits observe painted state without repeating input actions", async () => {
+  const environment = await fixture("boxes");
+  let captures = 0;
+  const page = {
+    url: () => environment.url,
+    screenshot: async () => {
+      const png = new PNG({ width: 4, height: 4 });
+      const color = ++captures === 1 ? [29, 43, 68] : [17, 94, 89];
+      for (let offset = 0; offset < png.data.length; offset += 4) {
+        png.data.set([...color, 255], offset);
+      }
+      return PNG.sync.write(png);
+    },
+  };
+  try {
+    await waitForSettingsPaint(environment, page, "recording");
+    assert.equal(captures, 2);
+    for (const invalid of ["unknown", "__proto__", "toString"]) {
+      await assert.rejects(
+        waitForSettingsPaint(environment, page, invalid),
+        /artifact.state/,
+      );
+    }
+    await assert.rejects(
+      waitForSettingsPaint({}, page, "recording"),
+      /artifact.non_fixture/,
+    );
+    await assert.rejects(
+      waitForSettingsPaint(
+        environment,
+        { url: () => "https://example.invalid" },
+        "recording",
+      ),
+      /artifact.origin/,
+    );
+  } finally {
+    await cleanup(environment);
+  }
+});
+
+test("cleanup handles a fixture process that already exited from a signal", async () => {
+  const environment = await fixture("boxes");
+  const stopped = once(environment.process, "exit");
+  environment.process.kill("SIGKILL");
+  await stopped;
+  assert.equal(environment.process.exitCode, null);
+  assert.equal(environment.process.signalCode, "SIGKILL");
+  const cleaned = cleanup(environment);
+  try {
+    assert.deepEqual(
+      await Promise.race([
+        cleaned,
+        new Promise((_, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error("signalled cleanup did not finish")),
+            1000,
+          );
+          timer.unref();
+        }),
+      ]),
+      { directoryRemoved: true, serverExited: true, webStopped: true },
+    );
+  } finally {
+    // A regression must not strand the test fixture's listener.
+    if (environment.web.listening) {
+      environment.web.closeAllConnections();
+      await new Promise((resolve) => environment.web.close(resolve));
+    }
+    await rm(environment.directory, { recursive: true, force: true });
+  }
 });
 
 test("visual comparison detects a paint-only mismatch and dimension changes", () => {

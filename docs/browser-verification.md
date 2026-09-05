@@ -183,6 +183,10 @@ this inventory remain unresolved and must not be described as full parity.
 The driver waits for a compositor round trip while each click or key is held,
 and again after release. The round trip captures and
 immediately discards one static background pixel; it creates no artifact.
-Animation-frame callbacks alone proved insufficient during repeated shortcut
-recording and save interactions. Each workflow still runs once and fails on an
+Neither animation-frame callbacks nor a compositor round trip proves that egui
+has consumed an input event. Shortcut recording therefore waits for the actual
+selected recording-button paint before sending the new key, then waits for the
+enabled Save button before clicking it. Those bounded reads inspect and discard
+only fixed settings-button regions on admitted synthetic origins; they repeat
+no input action. Each workflow still runs once and fails on an
 unmet durable outcome; the gate does not retry a failed workflow.

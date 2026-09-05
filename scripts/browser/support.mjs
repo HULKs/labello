@@ -201,7 +201,11 @@ export async function fixture(scenario) {
 
 export async function cleanup(environment) {
   admitted.delete(environment);
-  if (environment.process && environment.process.exitCode === null) {
+  if (
+    environment.process &&
+    environment.process.exitCode === null &&
+    environment.process.signalCode === null
+  ) {
     environment.process.kill("SIGINT");
     await new Promise((resolve) => {
       const timer = setTimeout(() => environment.process.kill("SIGKILL"), 3000);
@@ -292,6 +296,36 @@ export function comparePng(actual, baseline) {
     ratio: different / (a.width * a.height),
     diff: PNG.sync.write(diff),
   };
+}
+
+// Canvas widgets have no browser AX names. Wait for the actual settings paint
+// before the next action, rather than assuming a compositor/rAF round trip
+// means egui has consumed the preceding input. These pixels are discarded.
+export async function waitForSettingsPaint(environment, page, phase) {
+  ensure(admitted.has(environment), "artifact.non_fixture");
+  ensure(new URL(page.url()).origin === environment.url, "artifact.origin");
+  const expected = new Map([
+    ["recording", { x: 865, y: 325, color: [17, 94, 89] }],
+    ["save-enabled", { x: 965, y: 792, color: [45, 212, 191] }],
+  ]).get(phase);
+  ensure(expected, "artifact.state");
+  await until(async () => {
+    ensure(new URL(page.url()).origin === environment.url, "artifact.origin");
+    const png = PNG.sync.read(
+      await page.screenshot({
+        clip: { x: expected.x, y: expected.y, width: 4, height: 4 },
+      }),
+    );
+    let matching = 0;
+    for (let offset = 0; offset < png.data.length; offset += 4) {
+      if (
+        expected.color.every(
+          (value, channel) => Math.abs(png.data[offset + channel] - value) <= 2,
+        )
+      ) matching++;
+    }
+    return matching >= png.width * png.height * 0.9;
+  }, `keybindings.${phase}_paint`);
 }
 
 export async function capture(

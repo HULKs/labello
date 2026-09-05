@@ -1,4 +1,10 @@
-import { capture, ensure, until, comparePng } from "./support.mjs";
+import {
+  capture,
+  ensure,
+  until,
+  comparePng,
+  waitForSettingsPaint,
+} from "./support.mjs";
 import {
   frames,
   click,
@@ -86,7 +92,9 @@ export async function annotation(page, environment, options) {
   await frames(page, 10);
   screenshots.push(await capture(environment, page, "settings-wide", options));
   await click(page, 921, 327);
+  await waitForSettingsPaint(environment, page, "recording");
   await key(page, "Enter");
+  await waitForSettingsPaint(environment, page, "save-enabled");
   await click(page, 1016, 817);
   await until(
     async () =>
@@ -212,7 +220,9 @@ export async function migration(page, environment, options) {
   await key(page, "Control+,");
   await key(page, "Tab");
   await click(page, 921, 327);
+  await waitForSettingsPaint(environment, page, "recording");
   await key(page, "Enter");
+  await waitForSettingsPaint(environment, page, "save-enabled");
   await click(page, 1016, 817);
   await until(
     async () =>
