@@ -8,6 +8,12 @@ export async function frames(page, count = 3) {
 
 // egui consumes input per animation frame. Keep press/release in distinct
 // frames; dispatching both in a single frame can miss a canvas interaction.
+async function paintedFrame(page) {
+  // Finish a compositor round trip before the next action. Animation-frame
+  // callbacks alone can race canvas updates. Discard the static corner pixel.
+  await page.screenshot({ clip: { x: 0, y: 0, width: 1, height: 1 } });
+}
+
 export async function click(page, x, y) {
   await page.mouse.move(x, y);
   await frames(page);
@@ -15,6 +21,7 @@ export async function click(page, x, y) {
   await frames(page);
   await page.mouse.up();
   await frames(page);
+  await paintedFrame(page);
 }
 
 export async function key(page, value) {
@@ -23,6 +30,7 @@ export async function key(page, value) {
   await frames(page);
   for (const part of keys.reverse()) await page.keyboard.up(part);
   await frames(page);
+  await paintedFrame(page);
 }
 
 export async function drag(page, from, to, button = "left") {

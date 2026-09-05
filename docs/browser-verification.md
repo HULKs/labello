@@ -179,3 +179,10 @@ The comparison below concerns current behavior, not full product parity:
 
 Defects in the initial shared contracts block handoff. Broader product gaps in
 this inventory remain unresolved and must not be described as full parity.
+
+The driver separates input press/release frames and waits for a compositor
+round trip before the next click or key action. The round trip captures and
+immediately discards one static background pixel; it creates no artifact.
+Animation-frame callbacks alone proved insufficient during repeated shortcut
+recording and save interactions. Each workflow still runs once and fails on an
+unmet durable outcome; the gate does not retry a failed workflow.
