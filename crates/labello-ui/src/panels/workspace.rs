@@ -20,11 +20,21 @@ impl LabelloApp {
 
     pub(crate) fn overlays(&mut self, ctx: &egui::Context, layout: LayoutMode) {
         if self.runtime.persistence.recovery.is_some() {
+            self.navigation.statistics = Default::default();
             self.draft_recovery_modal(ctx);
             return;
         }
-        if self.work.migration.pending_companion_reconciliation.is_some() {
+        if self
+            .work
+            .migration
+            .pending_companion_reconciliation
+            .is_some()
+        {
             self.migration_companion_reconciliation_modal(ctx);
+            return;
+        }
+        if self.navigation.statistics.open {
+            self.statistics_overlay(ctx);
             return;
         }
         if self.work.migration.pending_revisit_target.is_some() || self.work.migration.pending_reload_discard {
@@ -67,11 +77,9 @@ impl LabelloApp {
             };
             if let Some(drawer) = self.work.drawer {
                 let (title, align, offset) = match drawer {
-                    Drawer::Workflow => (
-                        "Workflow",
-                        egui::Align2::LEFT_CENTER,
-                        egui::vec2(12.0, 0.0),
-                    ),
+                    Drawer::Workflow => {
+                        ("Workflow", egui::Align2::LEFT_CENTER, egui::vec2(12.0, 0.0))
+                    }
                     Drawer::Inspector => (
                         "Inspector",
                         egui::Align2::RIGHT_CENTER,
@@ -172,9 +180,7 @@ impl LabelloApp {
             }
         };
         let stack_controls = layout == LayoutMode::Compact
-            || (layout == LayoutMode::Medium
-                && view != AppView::Annotate
-                && current.is_some());
+            || (layout == LayoutMode::Medium && view != AppView::Annotate && current.is_some());
         let show_panel_buttons =
             layout != LayoutMode::Wide && matches!(view, AppView::Annotate | AppView::Review);
         let response = if stack_controls {
@@ -276,21 +282,18 @@ impl LabelloApp {
         if !self.work.availability.loading || !self.work.availability.tasks.is_empty() {
             return;
         }
-        ui.with_layout(
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                let spinner = ui
-                    .spinner()
-                    .on_hover_text("Checking assignment availability…");
-                spinner.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::ProgressIndicator,
-                        true,
-                        "Loading workflow assignment availability",
-                    )
-                });
-            },
-        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let spinner = ui
+                .spinner()
+                .on_hover_text("Checking assignment availability…");
+            spinner.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::ProgressIndicator,
+                    true,
+                    "Loading workflow assignment availability",
+                )
+            });
+        });
     }
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -407,5 +410,4 @@ impl LabelloApp {
             }
         });
     }
-
 }

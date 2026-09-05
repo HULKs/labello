@@ -144,8 +144,7 @@ impl LabelloApp {
         if self.runtime.api.is_none()
             || self.datasets.metadata.is_none()
             || self.loading.stats
-            || matches!(self.view, AppView::Setup)
-            || !matches!(self.view, AppView::Stats)
+            || !self.statistics_visible()
         {
             return;
         }

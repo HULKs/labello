@@ -36,7 +36,10 @@ impl LabelloApp {
         } else {
             self.runtime.error = None;
         }
-        if requested == AppView::Admin {
+        if requested == AppView::Stats {
+            self.view = AppView::Setup;
+            self.open_statistics();
+        } else if requested == AppView::Admin {
             self.request_admin_dataset();
         } else {
             self.view = requested;

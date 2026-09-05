@@ -17,7 +17,7 @@ explicit feature states:
 - `admin`: administration filters, snapshots, roles, and staged configuration.
 - `import`: the import wizard, source registration, planning, and job progress.
 - `navigation`: responsive application-drawer visibility, atomic app-bar
-  collapse ownership, and focus restoration.
+  collapse ownership, statistics-overlay visibility, and focus restoration.
 - `work`: assignment, annotation, review, adjudication, migration, canvas, and
   edit-history state.
 
@@ -66,6 +66,7 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/task_selector.rs`: task selection;
 - `panels/inspector.rs`: annotation, review, and adjudication controls;
 - `panels/workspace.rs`: central workspace and canvas controls;
+- `statistics.rs`: the dataset statistics modal and its existing metric renderer;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -181,3 +182,9 @@ remain readable. Reloading an assignment resumes its latest persisted pass at th
 first outstanding object. The normal keep, edit and exclude controls record exact
 current decisions until full-image confirmation is available. Resolved overview
 entries then use the same direct revisit path as assignments without a pass.
+
+Statistics data, remote status, and active request identity remain dataset-owned.
+The navigation-owned modal does not perform an assignment transition or start a
+workspace epoch. Refresh uses the existing request/epoch gate and may run while
+assignment requests are active. Authentication/workspace invalidation dismisses
+the modal; losing its original assignment dismisses it without restoring work.

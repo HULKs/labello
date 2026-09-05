@@ -358,6 +358,17 @@ impl DatasetState {
 pub(crate) struct NavigationState {
     pub(crate) drawer_open: bool,
     pub(crate) restore_drawer_trigger_focus: bool,
+    pub(crate) statistics: StatisticsOverlayState,
+}
+
+#[derive(Default)]
+pub(crate) struct StatisticsOverlayState {
+    pub(crate) open: bool,
+    pub(crate) assignment_id: Option<labello_domain::AssignmentId>,
+    pub(crate) invoker: Option<egui::Id>,
+    pub(crate) from_navigation: bool,
+    pub(crate) focus_close: bool,
+    pub(crate) restore_focus: Option<egui::Id>,
 }
 
 pub struct WorkState {

@@ -300,6 +300,7 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
+        self.navigation.statistics = Default::default();
         self.builds.copying = false;
         let build_request = self.builds.pending_request_id;
         self.runtime.commands.retain(|command| {

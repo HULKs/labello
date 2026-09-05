@@ -536,16 +536,18 @@ impl LabelloApp {
             );
             ui.label(RichText::new(description).color(theme::TEXT_MUTED));
             let width = 320.0_f32.min(ui.available_width());
-            if theme::primary_button(
+            let action = theme::primary_button(
                 ui,
                 !self.loading.dataset,
                 egui::Button::new(format!("Continue with {}", dataset.name))
                     .min_size(egui::vec2(width, 44.0))
                     .truncate(),
             )
-            .on_hover_text(description)
-            .clicked()
-            {
+            .on_hover_text(description);
+            if action.clicked() {
+                if recommended_view(&dataset.roles) == AppView::Stats {
+                    action.request_focus();
+                }
                 self.open_dataset(dataset.dataset_id.clone(), recommended_view(&dataset.roles));
             }
         });
@@ -611,6 +613,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn open_view(&mut self, view: AppView) {
+        if view == AppView::Stats && self.datasets.metadata.is_some() {
+            self.open_statistics();
+            return;
+        }
         if self.view == AppView::Admin && view != AppView::Admin && self.admin_changes_dirty() {
             self.runtime.error =
                 Some("Save or discard staged Admin changes before leaving Admin.".to_string());
@@ -723,6 +729,9 @@ fn dataset_action(ui: &mut egui::Ui, enabled: bool, label: &str, dataset_name: &
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, accessible_label.clone())
     });
+    if response.clicked() && label == "Stats" {
+        response.request_focus();
+    }
     response.clicked()
 }
 
