@@ -149,6 +149,10 @@ has been recorded.
   annotated dispositions, excluded objects, discovered skeletons and confirmation;
   excluded objects show disposition version without inventing an annotation version.
   Correction mode shows the base persisted version and whether input is unsaved.
+  Short compact decision revisions keep a visible Revising indication in the
+  existing identity line. The full accessible details explain that geometry is
+  unchanged; no redundant caption row consumes canvas space. If target context
+  is unavailable, retain the revision caption without showing stale target details.
   Decision revisions distinguish the current effective decision from a staged,
   uncommitted replacement. Loading, missing/stale targets and lost assignments
   clear the previous context; a missing image preview is labeled separately while

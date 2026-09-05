@@ -101,3 +101,9 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+Short review layout uses the shared review-context projection to keep revision
+mode in the existing context identity line. The central workspace omits its
+redundant caption only when valid compact revision details are present; missing
+or stale target context retains the caption fallback. This presentation does not
+change captured targets, staging, or commit policy.

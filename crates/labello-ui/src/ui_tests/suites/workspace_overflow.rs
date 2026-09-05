@@ -304,3 +304,39 @@ fn migration_final_overflow_preserves_primary_confirmation_and_short_canvas() {
     harness.run_steps(3);
     assert!(harness.query_by_label_contains("Previous object").is_some());
 }
+
+#[test]
+fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api);
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.run_steps(4);
+    let original_canvas = harness.get_by_label("Annotation canvas").rect();
+    let original_bar = harness.get_by_label("Workspace context bar").rect();
+    enter_test_review_revision(harness.state_mut());
+    harness.run_steps(4);
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    assert!(canvas.height() >= original_canvas.height() - 0.5,
+        "revision mode must use the existing context allocation: before={original_canvas:?} after={canvas:?}");
+    assert_eq!(harness.get_by_label("Workspace context bar").rect().height(), original_bar.height());
+    let context = harness.state().review_context().unwrap();
+    assert!(context.revision_mode);
+    let identity = if context.workflow_name == context.class_name {
+        context.workflow_name.clone()
+    } else { format!("{} · {}", context.workflow_name, context.class_name) };
+    assert_review_bar_paints(&harness, &format!("Revising · {identity}"));
+    assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+    let details = harness.get_by_label_contains("Review details: Workflow:");
+    assert!(details.accesskit_node().label().unwrap().contains("Decision revision mode; geometry unchanged"));
+    assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_none());
+
+    // An invalid target cannot claim that the context bar presented revision details.
+    harness.state_mut().work.annotations[0].version += 1;
+    harness.run_steps(4);
+    assert!(harness.state().review_revision_active());
+    assert!(harness.state().review_context().is_none());
+    assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_some());
+}
