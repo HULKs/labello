@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -81,6 +82,26 @@ class DriftTests(unittest.TestCase):
         path.write_text('[package]\nname = "unregistered"\nversion = "0.1.0"\n')
         with self.assertRaisesRegex(ValueError, "every maintained Cargo manifest"):
             toolchain.audit()
+
+    def test_missing_compiler_fails_before_a_proxy_can_install_it(self):
+        with patch.object(toolchain.subprocess, "check_output", return_value="stable-x86_64-unknown-linux-gnu\n") as command:
+            with self.assertRaisesRegex(ValueError, "not preinstalled"):
+                toolchain.check()
+            self.assertEqual(command.call_count, 1)
+            self.assertEqual(command.call_args.args[0], ["rustup", "toolchain", "list"])
+
+    def test_missing_components_and_target_fail_before_compiler_invocation(self):
+        version = toolchain.policy()["channel"]
+        installed = f"{version}-x86_64-unknown-linux-gnu\n"
+        for responses, message in [
+            ([installed, "rustfmt-x86_64-unknown-linux-gnu\n"], "missing toolchain component"),
+            ([installed, "rustfmt-x86_64-unknown-linux-gnu\nclippy-x86_64-unknown-linux-gnu\n", ""], "missing WASM target"),
+        ]:
+            with self.subTest(message=message):
+                with patch.object(toolchain.subprocess, "check_output", side_effect=responses) as command:
+                    with self.assertRaisesRegex(ValueError, message):
+                        toolchain.check()
+                    self.assertTrue(all(call.args[0][0] == "rustup" for call in command.call_args_list))
 
 
 if __name__ == "__main__":

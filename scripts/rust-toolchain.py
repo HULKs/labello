@@ -90,16 +90,23 @@ def audit():
 
 def check():
     pin = policy()
+    # Check installation before invoking rustup's proxies: a proxy can otherwise
+    # download the pinned compiler and hide an outdated release build image.
+    installed = subprocess.check_output(["rustup", "toolchain", "list"], cwd=ROOT, text=True).splitlines()
+    require(any(line.split()[0].startswith(pin["channel"] + "-") for line in installed),
+            "pinned compiler is not preinstalled; run the explicit install command")
+    components = subprocess.check_output(["rustup", "component", "list", "--toolchain", pin["channel"],
+                                         "--installed"], cwd=ROOT, text=True)
+    for component in pin["components"]:
+        require(any(line.startswith(component + "-") for line in components.splitlines()),
+                f"missing toolchain component: {component}")
+    targets = subprocess.check_output(["rustup", "target", "list", "--toolchain", pin["channel"],
+                                      "--installed"], cwd=ROOT, text=True).splitlines()
+    require(all(target in targets for target in pin["targets"]), "missing WASM target")
     for directory in (ROOT, ROOT / "apps/egui-mcp-inspector"):
         for tool in ("rustc", "cargo"):
             version = subprocess.check_output([tool, "--version"], cwd=directory, text=True).split()
             require(version[1] == pin["channel"], f"{tool}: expected {pin['channel']} in {directory.relative_to(ROOT)}")
-        components = subprocess.check_output(["rustup", "component", "list", "--installed"], cwd=directory, text=True)
-        for component in pin["components"]:
-            require(any(line.startswith(component + "-") for line in components.splitlines()),
-                    f"missing toolchain component: {component}")
-        targets = subprocess.check_output(["rustup", "target", "list", "--installed"], cwd=directory, text=True).splitlines()
-        require(all(target in targets for target in pin["targets"]), "missing WASM target")
     print(f"Both workspaces use Rust {pin['channel']} with the required components and WASM target")
 
 
