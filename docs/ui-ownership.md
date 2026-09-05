@@ -112,3 +112,8 @@ Compact review availability uses a reserved slot in the identity line. Only that
 truncatable line gives up text width; type/phase and canvas allocation remain
 stable while loading. The shared spinner description retains its existing
 progress-indicator name and tooltip across workspace placements.
+
+The shared shell measures the compact action panel against its allocated bottom edge.
+When cached panel height leaves a gap after a resize, it requests the next repaint
+to settle the new content height without waiting for pointer input. This preserves
+dynamic wrapping and does not discard a pass or replay input commands.

@@ -204,3 +204,7 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+Responsive workspace checks must also resize through the viewport matrix while
+running only requested frames. Compact action panels must settle without a later
+pointer or keyboard event; forced extra frames can conceal a cached-height gap.
