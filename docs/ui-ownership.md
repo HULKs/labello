@@ -97,8 +97,10 @@ assignment. It does not require acknowledgement to continue work.
 
 The shared notice renderer records its current render pass when it is visible.
 The central workspace suppresses its fallback only when another workspace slot
-has already presented that notice in the same pass. Viewport size or presentation
-in an earlier frame cannot suppress the current fallback or leave a claim deferred.
+has already presented that notice in the same pass. A compact short fallback
+owns an inline slot before the canvas; the shell reclaims the vertical canvas
+inset for that slot, preserving the review identity and controls without covering
+the image. Viewport size or presentation in an earlier frame cannot suppress the current fallback or leave a claim deferred.
 
 Image loading, prefetch, retry and unrelated status updates preserve the notice.
 A later fallback replaces it with that transition's identities. Dismissal,

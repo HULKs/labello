@@ -16,9 +16,30 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
         }
+        if self.workflow_change_needs_inline_slot(ui.ctx()) {
+            let width = ui.available_width();
+            let notice = egui::Frame::new()
+                .inner_margin(egui::Margin::symmetric(6, 0))
+                .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+            ui.painter().rect_stroke(
+                notice.response.rect,
+                6,
+                egui::Stroke::new(2.0, theme::AMBER),
+                egui::StrokeKind::Inside,
+            );
+        }
         let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
         self.automatic_workflow_change_notice(ui.ctx(), canvas_rect);
+    }
+
+    pub(crate) fn workflow_change_needs_inline_slot(&self, ctx: &egui::Context) -> bool {
+        let viewport = ctx.content_rect().size();
+        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
+            && Self::short_viewport(viewport)
+            && self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
+                notice.presented_pass != Some(ctx.cumulative_pass_nr())
+            })
     }
 
     fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {

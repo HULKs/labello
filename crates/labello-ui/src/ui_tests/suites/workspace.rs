@@ -2786,6 +2786,9 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
             move |ui, app: &mut LabelloApp| {
                 if render_context_slot.get() {
                     app.workspace_context_bar(ui, LayoutMode::Compact);
+                } else {
+                    // A 320px review viewport leaves 96px after its bars and footer.
+                    ui.set_max_height(96.0);
                 }
                 app.central(ui, LayoutMode::Compact);
             },
@@ -2801,6 +2804,15 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change");
     assert!(dismiss.rect().height() >= 44.0);
     assert!(dismiss.rect().right() <= 320.0);
+    harness.state_mut().work.current = Some(crate::queue::QueuedImage {
+        image: image_record("notice-review", "synthetic-notice.png", 640, 480),
+        prelabels: Vec::new(),
+    });
+    harness.step();
+    let dismiss = harness.get_by_label("Dismiss workflow change");
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    assert!(canvas.height() >= 44.0);
+    assert!(dismiss.rect().bottom() <= canvas.top(), "notice must not cover the review canvas");
     assert!(
         harness
             .state()
