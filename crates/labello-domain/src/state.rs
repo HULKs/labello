@@ -44,6 +44,8 @@ pub struct ImageState {
     pub migration_passes: BTreeMap<MigrationPassId, MigrationPass>,
     #[serde(default)]
     pub migration_confirmations: BTreeMap<TaskId, MigrationConfirmation>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub migration_companions: BTreeMap<AnnotationId, crate::MigrationCompanion>,
 }
 
 impl ImageState {
@@ -66,6 +68,7 @@ impl ImageState {
             migration_dependencies: BTreeMap::new(),
             migration_passes: BTreeMap::new(),
             migration_confirmations: BTreeMap::new(),
+            migration_companions: BTreeMap::new(),
         }
     }
 }

@@ -17,6 +17,9 @@ impl ImageState {
         }
         event.validate_shape()?;
         match &event.payload {
+            EventPayload::MigrationCompanionLinked { companion } => {
+                self.apply_migration_companion(companion)?
+            }
             EventPayload::AnnotationVersionCreated {
                 annotation,
                 previous_version,

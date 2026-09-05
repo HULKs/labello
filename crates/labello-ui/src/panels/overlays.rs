@@ -201,6 +201,39 @@ impl LabelloApp {
         }
     }
 
+    fn migration_companion_reconciliation_modal(&mut self, ctx: &egui::Context) {
+        let mut dismissed = false;
+        let response = theme::modal(ctx, egui::Id::new("migration-companion-reconciliation-modal"))
+            .show(ctx, |ui| {
+                ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(240.0, 560.0));
+                let height = (ctx.content_rect().height() - 64.0).max(100.0);
+                if ctx.content_rect().height() < 480.0 {
+                    ui.set_height(height);
+                }
+                egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
+                    ui.heading("Reconcile companion box?");
+                    ui.label("Create or regenerate the box from the saved skeleton. This replaces the current box geometry and reopens its correction and review workflow. Earlier versions and reviews remain in history. Your unsaved skeleton draft is retained.");
+                    ui.horizontal_wrapped(|ui| {
+                        let regenerate = theme::danger_button(ui, !self.work.migration.busy,
+                            egui::Button::new("Regenerate companion box"));
+                        if regenerate.has_focus() { regenerate.scroll_to_me(Some(egui::Align::Center)); }
+                        if regenerate.clicked()
+                            && let Some(annotation_id) = self.work.migration.pending_companion_reconciliation.take()
+                        { self.work.migration.companion_focus_return = None; self.request_reconcile_migration_companion(annotation_id); }
+                        let cancel = theme::quiet_button(ui, true, egui::Button::new("Cancel"));
+                        if cancel.has_focus() { cancel.scroll_to_me(Some(egui::Align::Center)); }
+                        if cancel.clicked() { dismissed = true; }
+                    });
+                });
+            });
+        response.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Reconcile companion box")
+        });
+        if dismissed || response.should_close() {
+            self.work.migration.pending_companion_reconciliation = None;
+            ctx.request_repaint();
+        }
+    }
     fn migration_revisit_discard_modal(&mut self, ctx: &egui::Context) {
         let response =
             theme::modal(ctx, egui::Id::new("migration-revisit-discard-modal")).show(ctx, |ui| {

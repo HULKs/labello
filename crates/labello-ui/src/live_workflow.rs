@@ -649,6 +649,9 @@ impl LabelloApp {
         } else {
             Vec::new()
         };
+        self.work.migration.reloading_discovery_draft = self.manual_migration_active()
+            && self.work.migration.editing_missing_annotation_id.is_some()
+            && self.work.migration.draft.is_some();
         let operation_id = self.begin_load();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
         self.queue_command(UiCommand::ReloadAssignment {

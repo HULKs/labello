@@ -16,6 +16,9 @@ use super::{
     lease_expiration,
 };
 
+mod companions;
+use companions::*;
+
 const MAX_IDEMPOTENCY_KEY_BYTES: usize = 200;
 const MAX_EXCLUSION_NOTE_BYTES: usize = 2_000;
 const MAX_REVIEW_COMMENT_BYTES: usize = 2_000;
@@ -39,6 +42,10 @@ pub struct ManualMigrationProgress {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MigrationReviewTarget {
+    Discovered {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Disposition {
         object_group_id: ObjectGroupId,
         disposition_version: u32,
@@ -97,7 +104,8 @@ impl DatasetRepository {
                         .sequence_index,
                     object_group_id,
                 },
-                CanonicalReviewTarget::Confirmation { .. } => MigrationCursor::FullImage,
+                CanonicalReviewTarget::Confirmation { .. }
+                | CanonicalReviewTarget::Discovered { .. } => MigrationCursor::FullImage,
             };
             let mut result = command_result(state, context.task_id, None, None, None)?;
             result.cursor = cursor;
@@ -337,7 +345,8 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, image_dimensions) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (task, guide, image_dimensions) =
+            migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -444,6 +453,17 @@ impl DatasetRepository {
                 reason: Some("object discovered during full-image migration review".to_string()),
             },
         )?;
+        update_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            image_dimensions,
+            &annotation,
+            user_id,
+            now,
+            &mut payloads,
+            None,
+        )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
         payloads.push(EventPayload::AssignmentUpdated {
@@ -486,7 +506,8 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, image_dimensions) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (task, guide, image_dimensions) =
+            migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -562,6 +583,15 @@ impl DatasetRepository {
             annotation_id,
             expected_version,
         )?;
+        if !state.migration_companions.contains_key(annotation_id) {
+            let events = self.load_events(context.image_id).await?;
+            if !events.iter().any(|event| matches!(&event.payload,
+                EventPayload::AnnotationVersionCreated { annotation, previous_version: None, reason }
+                    if annotation.annotation_id == *annotation_id && annotation.task_id == *context.task_id
+                        && reason.as_deref() == Some("object discovered during full-image migration review"))) {
+                return Err(conflict("this group-less skeleton has no unambiguous migration discovery history; resolve its provenance before pairing"));
+            }
+        }
         let annotation = AnnotationVersion {
             annotation_id: current.annotation_id.clone(),
             version: current
@@ -607,6 +637,17 @@ impl DatasetRepository {
                 reason: Some("edited object discovered during full-image review".to_string()),
             },
         )?;
+        update_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            image_dimensions,
+            &annotation,
+            user_id,
+            now,
+            &mut payloads,
+            None,
+        )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
         payloads.push(EventPayload::AssignmentUpdated {
@@ -648,7 +689,7 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (task, guide, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -734,6 +775,15 @@ impl DatasetRepository {
                     "removed object discovered during full-image migration review".to_string(),
                 ),
             },
+        )?;
+        delete_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            annotation_id,
+            user_id,
+            now,
+            &mut payloads,
         )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
@@ -1507,6 +1557,21 @@ impl DatasetRepository {
                 review_target
             }
             (
+                CanonicalReviewTarget::Discovered {
+                    annotation_id,
+                    version,
+                },
+                MigrationReviewTarget::Discovered {
+                    annotation_id: requested_id,
+                    version: requested_version,
+                },
+            ) if annotation_id == *requested_id && version == *requested_version => {
+                ReviewTarget::AnnotationVersion {
+                    annotation_id,
+                    version,
+                }
+            }
+            (
                 CanonicalReviewTarget::Confirmation { confirmation_hash },
                 MigrationReviewTarget::Confirmation {
                     confirmation_hash: requested_hash,
@@ -1539,15 +1604,16 @@ impl DatasetRepository {
                     .targets
                     .iter()
                     .find(|target| &target.reserved_skeleton_annotation_id == annotation_id)
-                    .map(|target| target.object_group_id.clone())
-                    .expect("canonical skeleton review belongs to a migration target");
-                payloads.push(correction_marker_payload(
-                    &state,
-                    context.task_id,
-                    &group_id,
-                    &primary_id,
-                    now,
-                )?);
+                    .map(|target| target.object_group_id.clone());
+                if let Some(group_id) = group_id {
+                    payloads.push(correction_marker_payload(
+                        &state,
+                        context.task_id,
+                        &group_id,
+                        &primary_id,
+                        now,
+                    )?);
+                }
             } else if let ReviewTarget::MigrationDisposition {
                 object_group_id, ..
             } = &review_target
@@ -1647,6 +1713,16 @@ impl DatasetRepository {
         primary_index: usize,
         timestamp: Timestamp,
     ) -> StorageResult<ImageState> {
+        if payloads
+            .iter()
+            .any(|payload| matches!(payload, EventPayload::MigrationCompanionLinked { .. }))
+        {
+            crate::fsjson::write_json_atomic(
+                &self.schema_path(),
+                &labello_domain::labello_schema_bundle(),
+            )
+            .await?;
+        }
         let mut state = self.load_image_state(image_id).await?;
         let events = payloads
             .into_iter()
@@ -1756,6 +1832,11 @@ pub(crate) fn append_guide_invalidation_payloads(
                 || set.targets.iter().any(|target| {
                     changed_ids.contains(&&target.guide_annotation_id)
                         || changed_ids.contains(&&target.reserved_skeleton_annotation_id)
+                })
+                || state.migration_companions.values().any(|link| {
+                    &link.migration_task_id == *task_id
+                        && (changed_ids.contains(&&link.box_annotation_id)
+                            || changed_ids.contains(&&link.skeleton_annotation_id))
                 })
         })
         .map(|(task_id, _)| task_id.clone())
@@ -2368,6 +2449,10 @@ fn cancel_competing_reviews(
 
 #[derive(Debug)]
 enum CanonicalReviewTarget {
+    Discovered {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Object {
         object_group_id: ObjectGroupId,
         disposition_version: u32,
@@ -2421,6 +2506,22 @@ fn canonical_review_target(
                 object_group_id: target.object_group_id.clone(),
                 disposition_version: disposition.disposition_version,
                 review_target,
+            });
+        }
+    }
+    for annotation in state.migration_discovered_skeletons(task_id) {
+        let review_target = ReviewTarget::AnnotationVersion {
+            annotation_id: annotation.annotation_id.clone(),
+            version: annotation.version,
+        };
+        if !round.iter().any(|review| {
+            review.reviewer_user_id == *reviewer
+                && review.decision == ReviewDecision::Approved
+                && review.target == review_target
+        }) {
+            return Ok(CanonicalReviewTarget::Discovered {
+                annotation_id: annotation.annotation_id.clone(),
+                version: annotation.version,
             });
         }
     }
@@ -2538,6 +2639,18 @@ fn review_request_matches(
     requested: &MigrationReviewTarget,
 ) -> bool {
     match requested {
+        MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        } => {
+            state
+                .migration_discovered_skeletons(task_id)
+                .iter()
+                .any(|annotation| {
+                    annotation.annotation_id == *annotation_id && annotation.version == *version
+                })
+                && matches!(&review.target, ReviewTarget::AnnotationVersion { annotation_id: reviewed_id, version: reviewed_version } if reviewed_id == annotation_id && reviewed_version == version)
+        }
         MigrationReviewTarget::Disposition {
             object_group_id,
             disposition_version,

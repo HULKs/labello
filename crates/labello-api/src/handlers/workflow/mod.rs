@@ -11,8 +11,9 @@ use labello_client::{
     AssignmentRevalidation, ConfirmMigrationRequest, CorrectionRequest,
     DeleteMigrationSkeletonRequest, EditMigrationSkeletonRequest, ExcludeMigrationTargetRequest,
     KeepMigrationTargetRequest, ManualMigrationCommandResult, OfflineBundleRequest,
-    PrelabelSuggestionRequest, ReopenMigrationTargetRequest, ReviewMigrationRequest,
-    RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest, StartMigrationPassRequest,
+    PrelabelSuggestionRequest, ReconcileMigrationCompanionRequest, ReopenMigrationTargetRequest,
+    ReviewMigrationRequest, RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest,
+    StartMigrationPassRequest,
 };
 use labello_domain::{
     Actor, AdjudicationDecision, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind,
@@ -634,6 +635,42 @@ pub(crate) async fn delete_migration_skeleton(
     Ok(Json(client_migration_result(result)))
 }
 
+pub(crate) async fn reconcile_migration_companion(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+    Json(request): Json<ReconcileMigrationCompanionRequest>,
+) -> ApiResult<Json<ManualMigrationCommandResult>> {
+    let key = migration_idempotency_key(&headers)?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let assignment = migration_assignment(
+        &repo,
+        &image_id,
+        &request.assignment_id,
+        &actor,
+        DatasetRole::Annotator,
+    )
+    .await?;
+    let result = repo
+        .reconcile_migration_companion(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &request.task_id,
+                kind: AssignmentKind::Annotation,
+            },
+            request.pass_id.as_ref(),
+            &request.annotation_id,
+            request.expected_version,
+            request.expected_box_version,
+            key,
+        )
+        .await?;
+    Ok(Json(client_migration_result(result)))
+}
+
 pub(crate) async fn exclude_migration_target(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
@@ -839,6 +876,13 @@ pub(crate) async fn review_migration(
     )
     .await?;
     let target = match request.target {
+        labello_client::MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        } => labello_storage::assignment::MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        },
         labello_client::MigrationReviewTarget::Disposition {
             object_group_id,
             disposition_version,

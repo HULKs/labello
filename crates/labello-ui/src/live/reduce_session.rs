@@ -7,6 +7,8 @@ impl LabelloApp {
         match message {
                 UiMessage::MigrationFinished { request, result } => {
                     self.work.migration.busy = false;
+                    let retained_draft = std::mem::take(&mut self.work.migration.preserving_companion_draft)
+                        .then(|| self.work.migration.clone());
                     let pending_activate_target =
                         self.work.migration.pending_activate_target.take();
                     match *result {
@@ -46,6 +48,17 @@ impl LabelloApp {
                             self.work.migration.exclusion_note.clear();
                             self.work.migration.exclusion_dirty = false;
                             self.work.migration.error = None;
+                            if let Some(retained) = retained_draft {
+                                self.work.migration.adding_missing_object = retained.adding_missing_object;
+                                self.work.migration.editing_missing_annotation_id = retained.editing_missing_annotation_id;
+                                self.work.migration.draft = retained.draft;
+                                self.work.migration.draft_group = retained.draft_group;
+                                self.work.migration.draft_dirty = retained.draft_dirty;
+                                self.work.migration.keypoint_index = retained.keypoint_index;
+                                self.work.migration.next_hidden = retained.next_hidden;
+                                self.work.migration.exclusion_note = retained.exclusion_note;
+                                self.work.migration.exclusion_dirty = retained.exclusion_dirty;
+                            }
                             if self.view == AppView::Review {
                                 self.work.migration.review_index =
                                     self.canonical_migration_review_index();

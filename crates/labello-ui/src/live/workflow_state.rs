@@ -156,6 +156,22 @@ impl LabelloApp {
     }
 
     fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
+        let retained_discovery = if std::mem::take(&mut self.work.migration.reloading_discovery_draft) {
+            let same_assignment = self.work.assignment.as_ref().is_some_and(|assignment|
+                assignment.assignment_id == loaded.assignment.assignment_id
+                    && assignment.image_id == loaded.assignment.image_id
+                    && assignment.task_id == loaded.assignment.task_id);
+            let same_skeleton = self.work.migration.editing_missing_annotation_id.as_ref().is_some_and(|id|
+                self.work.current_state.as_ref().and_then(|state| state.current_annotation(id))
+                    .zip(loaded.state.current_annotation(id)).is_some_and(|(old, new)| old.version == new.version && !new.deleted));
+            let same_cursor = loaded.state.migration_cursor(&loaded.assignment.task_id,
+                self.work.migration.active_pass_id.as_ref()).ok() == Some(labello_domain::MigrationCursor::FullImage);
+            if !same_assignment || !same_skeleton || !same_cursor {
+                self.work.migration.error = Some("The assignment or saved skeleton changed. Your draft is retained; cancel editing before loading the changed work.".into());
+                return;
+            }
+            Some(self.work.migration.clone())
+        } else { None };
         let image_id = loaded.queued.image.image_id.clone();
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);
@@ -211,7 +227,14 @@ impl LabelloApp {
         if let Some(state) = self.work.current_state.clone() {
             self.renew_assignment_from_state(&state);
         }
-        self.request_work_draft_load();
+        if let Some(mut retained) = retained_discovery {
+            retained.error = None;
+            retained.busy = false;
+            retained.progress = None;
+            self.work.migration = retained;
+        } else {
+            self.request_work_draft_load();
+        }
         self.request_prefetch();
     }
 

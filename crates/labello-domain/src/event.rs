@@ -34,6 +34,7 @@ pub struct MigrationTargetSetInitialization {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
+    MigrationCompanionLinked,
     AnnotationVersionCreated,
     AnnotationDeleted,
     TaskStateChanged,
@@ -56,6 +57,7 @@ pub enum EventType {
 impl std::fmt::Display for EventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::MigrationCompanionLinked => "migration_companion_linked",
             Self::AnnotationVersionCreated => "annotation_version_created",
             Self::AnnotationDeleted => "annotation_deleted",
             Self::TaskStateChanged => "task_state_changed",
@@ -80,6 +82,9 @@ impl std::fmt::Display for EventType {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EventPayload {
+    MigrationCompanionLinked {
+        companion: crate::MigrationCompanion,
+    },
     AnnotationVersionCreated {
         annotation: AnnotationVersion,
         previous_version: Option<u32>,
@@ -158,6 +163,7 @@ pub enum EventPayload {
 impl EventPayload {
     pub fn event_type(&self) -> EventType {
         match self {
+            Self::MigrationCompanionLinked { .. } => EventType::MigrationCompanionLinked,
             Self::AnnotationVersionCreated { .. } => EventType::AnnotationVersionCreated,
             Self::AnnotationDeleted { .. } => EventType::AnnotationDeleted,
             Self::TaskStateChanged { .. } => EventType::TaskStateChanged,

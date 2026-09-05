@@ -15,7 +15,9 @@ pub(super) fn validate_payload(
         EventPayload::AnnotationVersionCreated { annotation, .. } => {
             if matches!(
                 annotation.revision_source,
-                RevisionSource::ReviewerCorrection { .. } | RevisionSource::Import { .. }
+                RevisionSource::ReviewerCorrection { .. }
+                    | RevisionSource::Import { .. }
+                    | RevisionSource::MigrationSkeleton { .. }
             ) {
                 return Err(ApiError::BadRequest(
                     "import and reviewer correction provenance is created by dedicated server endpoints only"
@@ -82,6 +84,7 @@ pub(super) fn validate_payload(
         | EventPayload::MigrationDependencyCleared { .. }
         | EventPayload::MigrationPassStarted { .. }
         | EventPayload::MigrationPassItemRecorded { .. }
+        | EventPayload::MigrationCompanionLinked { .. }
         | EventPayload::MigrationFullImageConfirmed { .. } => {
             return Err(server_owned_payload_error());
         }
@@ -177,7 +180,9 @@ pub(super) fn construct_annotation_mutation(
                 action: HumanRevisionKind::Authored,
             },
             source @ RevisionSource::PrelabelSuggestion { .. } => source,
-            RevisionSource::Import { .. } | RevisionSource::ReviewerCorrection { .. } => {
+            RevisionSource::Import { .. }
+            | RevisionSource::ReviewerCorrection { .. }
+            | RevisionSource::MigrationSkeleton { .. } => {
                 return Err(ApiError::BadRequest(
                     "import and reviewer correction provenance is server-owned".to_string(),
                 ));
@@ -256,6 +261,7 @@ pub(super) fn required_role_for_payload(
         | EventPayload::MigrationDependencyCleared { .. }
         | EventPayload::MigrationPassStarted { .. }
         | EventPayload::MigrationPassItemRecorded { .. }
+        | EventPayload::MigrationCompanionLinked { .. }
         | EventPayload::MigrationFullImageConfirmed { .. } => Err(server_owned_payload_error()),
     }
 }
@@ -310,6 +316,7 @@ pub(super) fn validate_annotation_assignment_payload(
         | EventPayload::MigrationDependencyCleared { .. }
         | EventPayload::MigrationPassStarted { .. }
         | EventPayload::MigrationPassItemRecorded { .. }
+        | EventPayload::MigrationCompanionLinked { .. }
         | EventPayload::MigrationFullImageConfirmed { .. } => {
             return Err(ApiError::BadRequest(
                 "annotation assignments only accept annotation mutations".to_string(),
@@ -380,6 +387,7 @@ pub(super) fn validate_admin_repair_payload(
         | EventPayload::MigrationDependencyCleared { .. }
         | EventPayload::MigrationPassStarted { .. }
         | EventPayload::MigrationPassItemRecorded { .. }
+        | EventPayload::MigrationCompanionLinked { .. }
         | EventPayload::MigrationFullImageConfirmed { .. } => Err(server_owned_payload_error()),
     }
 }
