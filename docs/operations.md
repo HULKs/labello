@@ -444,3 +444,24 @@ errors:
 Unknown temporary files or interrupted migration/import directories must not be
 deleted solely because their names look stale; recovery may require their
 journals or sealed artifacts.
+
+## Derived Preview Cache
+
+The configured preview directory is private (0700 directory, 0600 entries on
+Unix), derived, and excluded from dataset backups. Do not serve it directly
+through a static host. Every API cache hit still checks authorization and source
+identity; delivered pixels cannot be revoked from a client that already saw
+them. Normal browser image/prefetch references are cleared on session/endpoint
+changes and obsolete replies are ignored.
+
+Cache storage is finite and evicts old entries. A corrupt entry regenerates;
+unavailable storage or worker capacity produces a bounded error. Standard UI
+loads may retry once through the bounded legacy RGBA route. Data Saver does not
+automatically fetch a larger representation. Logs contain only static preview
+failure/fallback categories, never encoded bytes, source paths, or decoder text.
+
+To discard or relocate previews, stop the server, remove only the configured
+cache directory, adjust `previews.cacheRoot` if needed, and restart. Never remove
+an active cache lock or edit cache entries while the service runs. A second
+owner, unexpected files, or unsafe paths fail closed; fix the directory while
+stopped. Derived cache loss never requires restoring authoritative dataset data.

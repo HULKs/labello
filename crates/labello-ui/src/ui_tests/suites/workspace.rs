@@ -125,7 +125,7 @@ fn image_load_failure_shows_retry_and_loads_image() {
     assert_visible_controls_clamped(&harness, 320.0, 568.0);
     click(&mut harness, "Retry image load");
     step_until(&mut harness, 12, |app| app.work.current.is_some());
-    assert!(api.counts().get_image_preview >= 2);
+    assert!(api.counts().get_encoded_image_preview >= 2);
     assert_eq!(api.counts().assign_next_image, 2);
 }
 
@@ -999,7 +999,7 @@ fn space_submits_and_claims_a_different_image() {
 
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
     let next = harness.state().work.queue.prepared_image_ids()[0].clone();
-    let previews_before = api.counts().get_image_preview;
+    let previews_before = api.counts().get_encoded_image_preview;
     harness.key_press(egui::Key::Space);
     step_until(&mut harness, 16, |app| {
         app.work.assignment
@@ -1010,7 +1010,7 @@ fn space_submits_and_claims_a_different_image() {
     assert_eq!(api.counts().complete_assignment, 1);
     assert_eq!(api.counts().release_assignment, 0);
     assert_eq!(harness.state().work.assignment.as_ref().unwrap().image_id, next);
-    assert_eq!(api.counts().get_image_preview, previews_before);
+    assert_eq!(api.counts().get_encoded_image_preview, previews_before);
     assert!(!harness.state().loading.image);
     assert!(harness.state().work.current_texture.is_some());
 }
@@ -1084,8 +1084,8 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
         counts_before.get_image_record
     );
     assert_eq!(
-        api.counts().get_image_preview,
-        counts_before.get_image_preview
+        api.counts().get_encoded_image_preview,
+        counts_before.get_encoded_image_preview
     );
     assert_eq!(
         harness
@@ -1212,8 +1212,8 @@ fn failed_review_revalidation_clears_old_image_and_releases_claimed_assignment()
         counts_before.get_image_record
     );
     assert_eq!(
-        api.counts().get_image_preview,
-        counts_before.get_image_preview
+        api.counts().get_encoded_image_preview,
+        counts_before.get_encoded_image_preview
     );
 }
 
@@ -1478,7 +1478,7 @@ fn skip_releases_then_claims_another_assignment() {
         .clone();
 
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
-    let previews_before = api.counts().get_image_preview;
+    let previews_before = api.counts().get_encoded_image_preview;
     click(&mut harness, "Skip");
     assert!(
         harness
@@ -1493,7 +1493,7 @@ fn skip_releases_then_claims_another_assignment() {
 
     assert_eq!(api.counts().release_assignment, 1);
     assert_eq!(api.counts().complete_assignment, 0);
-    assert_eq!(api.counts().get_image_preview, previews_before);
+    assert_eq!(api.counts().get_encoded_image_preview, previews_before);
     assert!(api.exclusions().last().unwrap().contains(&original));
 }
 
@@ -2680,4 +2680,30 @@ fn history_covers_bbox_edits_deletion_and_keypoint_creation() {
     assert!(harness.state().work.annotations.is_empty());
     harness.state_mut().redo();
     assert_eq!(harness.state().work.annotations.len(), 1);
+}
+
+#[test]
+fn working_previews_use_encoded_bytes_and_standard_fallback_only_once() {
+    let api = SpyApi::new();
+    let dataset_id = DatasetId::from("demo");
+    let image_id = ImageId::from("img_1");
+    let standard = labello_client::ImagePreviewProfile::StandardV1;
+    let saver = labello_client::ImagePreviewProfile::DataSaverV1;
+    let load = |profile| futures::executor::block_on(crate::live_workflow::load_working_preview(&api, &dataset_id, &image_id, profile));
+    assert_eq!(load(standard).unwrap().rgba, [32, 48, 64, 255].repeat(12));
+    assert_eq!(api.counts().get_encoded_image_preview, 1);
+    assert_eq!(api.counts().get_image_preview, 0);
+    api.state.borrow_mut().fail_encoded_previews = true;
+    assert!(load(standard).is_ok());
+    assert_eq!(api.counts().get_encoded_image_preview, 2);
+    assert_eq!(api.counts().get_image_preview, 1);
+    assert!(load(saver).is_err());
+    assert_eq!(api.counts().get_encoded_image_preview, 3);
+    assert_eq!(api.counts().get_image_preview, 1);
+    api.fail_next_preview();
+    assert!(load(standard).is_err());
+    assert_eq!(api.counts().get_encoded_image_preview, 4);
+    assert_eq!(api.counts().get_image_preview, 2);
+    assert!(api.state.borrow().active_assignments.is_empty());
+    assert!(api.events().is_empty());
 }

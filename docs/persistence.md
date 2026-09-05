@@ -200,3 +200,31 @@ The current contract is exercised by:
 
 Persistence-format changes must update this reference and the smallest fixture
 or test that would fail if the stated compatibility or recovery rule regressed.
+
+## Derived Preview Cache
+
+Encoded previews are disposable derived artifacts outside `datasetsRoot` in the
+production server. They are not dataset images, image-index entries, import
+outputs, events, export/snapshot contents, or authoritative backup contents.
+The embedded `ApiState` default uses its private `.labello-server/previews`
+subdirectory for tests/in-process composition; production overrides that default
+with the configured separate cache root.
+
+A cache key includes dataset repository identity, image ID, original BLAKE3,
+source decoder format, fixed versioned profile, resize/orientation/color/alpha
+policy, and a build-time digest of the dependency lockfile (covering encoder and
+decoder versions). Uploaded names or arbitrary requested dimensions cannot name
+cache files. Every read opens the indexed original beneath the dataset root,
+rejects symlinks/traversal, and verifies its hash. Removed or changed originals
+therefore cannot yield stale cached pixels, even before index reconciliation.
+Unreachable entries are evicted under the finite quota.
+
+Each private entry contains a bounded header and checksummed WebP payload.
+Publication writes and syncs a private temporary file, renames it, then syncs the
+directory. Corrupt or missing entries regenerate. A filesystem lock excludes
+another live cache owner. Restart removes recognized interrupted temporary
+files, validates the bounded directory inventory, and enforces quotas. Eviction
+uses least-recently-read order in a process and oldest publication time after
+restart. Unrecognized files are preserved and fail cache initialization.
+Cancelling a caller before work starts publishes nothing; after start its bounded
+worker retains permits and completes or cleans up atomic publication.

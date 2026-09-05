@@ -156,7 +156,8 @@ blocked by the enforced window.
 | `GET /datasets/{dataset_id}/images/{image_id}` | Any role | No input → `ImageState` |
 | `GET /datasets/{dataset_id}/images/{image_id}/record` | Any role | No input → `ImageRecord` |
 | `GET /datasets/{dataset_id}/images/{image_id}/file` | Any role | No input → original image bytes and stored media type |
-| `GET /datasets/{dataset_id}/images/{image_id}/preview` | Any role | `max` query clamped to 256–4096 → raw RGBA bytes (`application/octet-stream`) plus `x-image-width` and `x-image-height` |
+| `GET /datasets/{dataset_id}/images/{image_id}/preview` | Any role | `max` query clamped to 256–4096 → raw RGBA bytes (`application/octet-stream`) plus `x-image-width` and `x-image-height`; bounded legacy fallback |
+| `GET /datasets/{dataset_id}/images/{image_id}/encoded-preview` | Any role | `profile=standard_v1` (default) or `data_saver_v1` → bounded `image/webp`, `x-image-width`, `x-image-height`, `x-original-width`, `x-original-height`, `x-preview-profile` |
 | `POST /datasets/{dataset_id}/images/{image_id}/events` | Assigned annotator; role also derived from allowed payload | `AssignmentActionRequest` query plus `AppendEventRequest` → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/annotation-batch` | Assigned annotator | `AssignmentActionRequest` query plus `AnnotationBatchRequest` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/admin/events` | Data admin | `AppendEventRequest` with permitted repair payload → `EventLogEntry` |
@@ -259,3 +260,34 @@ authentication probe, and remains HTTP 200 when `/deployment/readiness` returns
 The client uses a ten-second request timeout, validates the two-field DTO and
 rejects responses over 1024 bytes. The response must not expose readiness,
 configuration, authentication state, paths, or other server details.
+
+## Encoded Working Previews
+
+Standard v1 resizes to at most 1600 pixels on the longest edge and encodes
+lossless WebP. Data Saver v1 uses at most 1280 pixels and lossy WebP quality 80
+(on libwebp's 0–100 scale). Neither profile upscales. Both preserve the existing
+Triangle resize at the decoder's native channel depth followed by RGBA8
+conversion, first-frame behavior, and no EXIF orientation or ICC conversion.
+Standard decoded RGBA, including transparent RGB, is identical to the legacy
+1600 preview. Original record dimensions remain authoritative for geometry.
+
+Both routes authenticate and authorize each request, including cache hits, and
+recheck session, roles, and image index after worker completion. Source content
+is verified against its authoritative BLAKE3 hash before every cache read.
+Responses use `Cache-Control: private, no-store`; encoded dimension and profile
+headers are exposed by credentialed CORS. Encoded responses are at most 16 MiB.
+Limits are configured under [previews](configuration.md#image-preview-limits).
+Oversized source/pixel/decoder requests return 413; busy workers, exhausted cache
+quota, or stale source identity return 409; unsupported/unavailable sources and
+decoding failures return 422; unavailable cache/encoder failures return 500.
+Errors never include source paths or decoder text.
+
+`ImageApi::get_encoded_image_preview` returns `EncodedImagePreview`, separate
+from `ImagePreview::rgba`. HTTP clients bound streaming response bytes and
+validate MIME/profile/metadata; native and WASM use the same bounded Rust WebP
+decoder. Standard is the UI load and prefetch default. Generation, transfer, or
+decode failure permits one 1600-pixel legacy RGBA request with the same server
+source/decoder/worker bounds. Data Saver errors propagate without requesting
+RGBA or original bytes. Image assignment, annotation geometry and draft state
+are independent of the representation. Existing request/auth/workspace epochs
+reject stale image replies and clear account-scoped texture/prefetch state.

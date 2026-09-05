@@ -426,3 +426,36 @@ replace GitHub OAuth. A partial set is ignored. See
 - Follow the rootless [release and deployment contract](deployment.md) for the
   fixed `/var/lib/labello/data` root, matching executable/configuration
   generations, Caddy gateway, and transactional full-root backup.
+
+## Image Preview Limits
+
+The optional `[previews]` section has `cacheRoot = ".labello-preview-cache"`,
+relative to the process working directory. It must be separate from, and neither
+an ancestor nor a descendant of, `datasetsRoot` after resolving existing path
+components. The production service working directory is `/var/lib/labello`, so
+the default cache is outside `/var/lib/labello/data` backups. The server creates
+the private cache lazily; one process owns its filesystem lock.
+
+`[previews.limits]` fields can be overridden independently:
+
+| Field | Default | Accepted bound |
+| --- | --- | --- |
+| `maxSourceBytes` | 67,108,864 (64 MiB) | 1–536,870,912 |
+| `maxPixels` | 32,000,000 | 1–100,000,000 |
+| `maxDecodedBytes` | 268,435,456 (256 MiB) | 1–1,073,741,824 |
+| `workers` | 2 | 1–8 |
+| `cacheBytes` | 2,147,483,648 (2 GiB) | 1–1,099,511,627,776 |
+| `cacheEntries` | 4096 | 1–16,384 |
+
+Source bytes, decoded pixel count, decoder allocation budget and decoded output
+bytes are checked before generation. Resize/encoder work is additionally bounded
+by source pixels and the fixed output profiles; `maxDecodedBytes` is a decoder
+budget, not a total process-RSS cap. The same worker pool and source/decoder
+limits cover encoded previews and legacy RGBA fallback. Saturated workers fail
+promptly; identical source/profile requests share one generation. Encoded output
+is limited to 16 MiB. Cache accounting includes per-entry metadata and reserves
+space before temporary publication; the zero-byte lock file is not charged.
+
+The service rejects zero/out-of-range limits and unknown settings. Changing
+limits requires restart. Smaller cache limits trigger eviction on first access.
+See [operations](operations.md#derived-preview-cache) for disposal and recovery.

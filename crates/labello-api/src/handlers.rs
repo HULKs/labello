@@ -72,6 +72,9 @@ pub fn router(state: ApiState) -> Router {
                 .expose_headers([
                     header::HeaderName::from_static("x-image-width"),
                     header::HeaderName::from_static("x-image-height"),
+                    header::HeaderName::from_static("x-original-width"),
+                    header::HeaderName::from_static("x-original-height"),
+                    header::HeaderName::from_static("x-preview-profile"),
                     header::HeaderName::from_static("x-request-id"),
                 ]),
         )
@@ -171,6 +174,10 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/datasets/{dataset_id}/images/{image_id}/file",
             get(workflow::get_image_file),
+        )
+        .route(
+            "/datasets/{dataset_id}/images/{image_id}/encoded-preview",
+            get(workflow::get_encoded_preview),
         )
         .route(
             "/datasets/{dataset_id}/images/{image_id}/preview",

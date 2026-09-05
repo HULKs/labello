@@ -8,7 +8,9 @@ repository.workspace = true
 
 [dependencies]
 labello-domain = { path = "../labello-domain" }
-reqwest = { workspace = true, features = ["cookies"] }
+reqwest = { workspace = true, features = ["cookies", "stream"] }
+futures.workspace = true
+image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

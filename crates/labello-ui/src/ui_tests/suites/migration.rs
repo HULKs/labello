@@ -946,7 +946,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
         .with_max_steps(40)
         .build_eframe(|_| app);
     harness.step();
-    let previews_before = api.counts().get_image_preview;
+    let previews_before = api.counts().get_encoded_image_preview;
     let availability_checks_before = api.counts().assignment_availability;
 
     harness.key_press(egui::Key::Space);
@@ -959,7 +959,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
                 .is_some_and(|assignment| assignment.image_id == next_image_id)
     });
     assert_eq!(api.counts().migration_commands, 1);
-    assert_eq!(api.counts().get_image_preview, previews_before);
+    assert_eq!(api.counts().get_encoded_image_preview, previews_before);
     assert_eq!(api.counts().release_assignment, 0);
     assert!(!harness.state().loading.image);
     assert!(
@@ -1048,8 +1048,8 @@ fn migration_review_approval_promotes_cached_work_without_refetching_image_data(
         counts_before.get_image_record
     );
     assert_eq!(
-        api.counts().get_image_preview,
-        counts_before.get_image_preview
+        api.counts().get_encoded_image_preview,
+        counts_before.get_encoded_image_preview
     );
     assert!(harness.state().work.current_texture.is_some());
 }

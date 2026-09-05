@@ -198,6 +198,7 @@ pub(super) struct CallCounts {
     pub(super) get_image_record: usize,
     pub(super) get_image_state: usize,
     pub(super) get_image_preview: usize,
+    pub(super) get_encoded_image_preview: usize,
     pub(super) append_event: usize,
     pub(super) annotation_batch: usize,
     pub(super) rebuild_image: usize,
@@ -236,6 +237,7 @@ pub(super) struct SpyState {
     pub(super) next_image: usize,
     pub(super) events: Vec<EventPayload>,
     pub(super) fail_next_preview: bool,
+    pub(super) fail_encoded_previews: bool,
     pub(super) fail_next_revalidation: bool,
     pub(super) no_assignment: bool,
     pub(super) availability_overrides: BTreeMap<TaskId, bool>,
@@ -356,6 +358,7 @@ impl SpyState {
             next_image: 0,
             events: Vec::new(),
             fail_next_preview: false,
+            fail_encoded_previews: false,
             fail_next_revalidation: false,
             no_assignment: false,
             availability_overrides: BTreeMap::new(),
@@ -842,12 +845,9 @@ impl ImportApi for SpyApi {
             progress: migration_progress(&image_state, &task_id),
             image_state,
             cursor,
-            active_pass: request.pass_id.and_then(|pass_id| {
-                state.states[image_id]
-                    .migration_passes
-                    .get(&pass_id)
-                    .cloned()
-            }),
+            active_pass: request
+                .pass_id
+                .and_then(|pass_id| state.states[image_id].migration_passes.get(&pass_id).cloned()),
             confirmation: None,
             assignment: None,
             annotation_id: None,
@@ -917,12 +917,9 @@ impl ImportApi for SpyApi {
             progress: migration_progress(&image_state, &task_id),
             image_state,
             cursor,
-            active_pass: request.pass_id.and_then(|pass_id| {
-                state.states[image_id]
-                    .migration_passes
-                    .get(&pass_id)
-                    .cloned()
-            }),
+            active_pass: request
+                .pass_id
+                .and_then(|pass_id| state.states[image_id].migration_passes.get(&pass_id).cloned()),
             confirmation: None,
             assignment: None,
             annotation_id: None,
@@ -1645,6 +1642,41 @@ impl ImageApi for SpyApi {
             width: 4,
             height: 3,
             rgba: [32, 48, 64, 255].repeat(12),
+        }))
+    }
+
+    fn get_encoded_image_preview<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        profile: labello_client::ImagePreviewProfile,
+    ) -> ApiFuture<'a, labello_client::EncodedImagePreview> {
+        let mut state = self.state.borrow_mut();
+        state.counts.get_encoded_image_preview += 1;
+        if state.fail_next_preview || state.fail_encoded_previews {
+            // Keep the failure for the standard fallback as well.
+            return ready(Err(ClientError::Demo("preview failed".into())));
+        }
+        let record = match state.record(image_id) {
+            Ok(record) => record,
+            Err(error) => return ready(Err(error)),
+        };
+        let webp: &[u8] = match profile {
+            labello_client::ImagePreviewProfile::StandardV1 => {
+                include_bytes!("../fixtures/standard.webp")
+            }
+            labello_client::ImagePreviewProfile::DataSaverV1 => {
+                include_bytes!("../fixtures/data-saver.webp")
+            }
+        };
+        ready(Ok(labello_client::EncodedImagePreview {
+            image_id: image_id.clone(),
+            profile,
+            width: 4,
+            height: 3,
+            original_width: record.width,
+            original_height: record.height,
+            webp: webp.to_vec(),
         }))
     }
 

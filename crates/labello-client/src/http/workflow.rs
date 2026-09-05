@@ -87,9 +87,7 @@ impl ImageApi for HttpLabelloApi {
             Self::send_json(
                 self.request(
                     Method::POST,
-                    &format!(
-                        "/datasets/{dataset_id}/images/{image_id}/assignments/revalidate"
-                    ),
+                    &format!("/datasets/{dataset_id}/images/{image_id}/assignments/revalidate"),
                 )?,
                 &request,
             )
@@ -231,11 +229,71 @@ impl ImageApi for HttpLabelloApi {
             let response = Self::ensure_success(response).await?;
             let width = preview_dimension(response.headers(), "x-image-width")?;
             let height = preview_dimension(response.headers(), "x-image-height")?;
+            let edge = max_dimension.clamp(256, 4096);
+            if width == 0 || height == 0 || width.max(height) > edge {
+                return Err(crate::preview::invalid_preview());
+            }
+            let expected = width as usize * height as usize * 4;
+            let rgba = crate::preview::bounded_body(response, expected).await?;
+            if rgba.len() != expected {
+                return Err(crate::preview::invalid_preview());
+            }
             Ok(ImagePreview {
                 image_id: image_id.clone(),
                 width,
                 height,
-                rgba: response.bytes().await?.to_vec(),
+                rgba,
+            })
+        })
+    }
+
+    fn get_encoded_image_preview<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        profile: crate::ImagePreviewProfile,
+    ) -> crate::ApiFuture<'a, crate::EncodedImagePreview> {
+        Box::pin(async move {
+            let response = Self::ensure_success(
+                self.request(
+                    Method::GET,
+                    &format!(
+                        "/datasets/{dataset_id}/images/{image_id}/encoded-preview?profile={}",
+                        profile.as_str()
+                    ),
+                )?
+                .send()
+                .await?,
+            )
+            .await?;
+            if response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                != Some("image/webp")
+                || response
+                    .headers()
+                    .get("x-preview-profile")
+                    .and_then(|value| value.to_str().ok())
+                    != Some(profile.as_str())
+            {
+                return Err(crate::preview::invalid_preview());
+            }
+            let width = preview_dimension(response.headers(), "x-image-width")?;
+            let height = preview_dimension(response.headers(), "x-image-height")?;
+            let original_width = preview_dimension(response.headers(), "x-original-width")?;
+            let original_height = preview_dimension(response.headers(), "x-original-height")?;
+            let webp =
+                crate::preview::bounded_body(response, crate::preview::MAX_ENCODED_PREVIEW_BYTES)
+                    .await?;
+            Ok(crate::EncodedImagePreview {
+                image_id: image_id.clone(),
+                profile,
+                width,
+                height,
+                original_width,
+                original_height,
+                webp,
             })
         })
     }
