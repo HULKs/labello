@@ -89,6 +89,15 @@ process stops after that boundary, later state loading replays the event log.
 No transaction spans multiple server processes, multiple dataset roots, or an
 external backup tool.
 
+Migration transactions complete artifact migration, acquire the repository
+configuration read guard, load and authorize current configuration, then acquire
+the image lock. They retain both guards through event publication and cache
+updates. Dataset configuration publication takes the matching write guard, so
+a guide/task/role change either precedes command validation or waits for its
+commit. This configuration-before-image order also covers explicit companion
+reconciliation and administrator migration repair. The guard is process-local;
+external configuration-file edits do not participate in this serialization.
+
 Image-index publication is serialized with replacement of the shared parsed
 cache. Dataset-root mutation locking coordinates normal dataset creation and
 import publication only inside one process. Running multiple server processes

@@ -54,12 +54,15 @@ pub struct DatasetRepository {
     root: Arc<PathBuf>,
     locks: Arc<Mutex<BTreeMap<ImageId, Arc<AsyncMutex<()>>>>>,
     migration_lock: Arc<AsyncMutex<()>>,
+    pub(crate) review_config_lock: Arc<AsyncRwLock<()>>,
     migration_complete: Arc<AtomicBool>,
     pub(crate) images_index_cache: Arc<AsyncRwLock<Option<Arc<ImagesIndex>>>>,
     pub(crate) assignment_cursors: Arc<Mutex<BTreeMap<String, usize>>>,
     pub(crate) stats_cache: Arc<StatsCache>,
     pub(crate) task_completion_cache: Arc<TaskCompletionCache>,
     pub(crate) assignment_availability_cache: Arc<AssignmentAvailabilityCache>,
+    #[cfg(test)]
+    pub(crate) migration_config_captured: Arc<Mutex<Option<Arc<Notify>>>>,
     #[cfg(test)]
     migration_failure: Arc<Mutex<Option<ArtifactMigrationPhase>>>,
     #[cfg(test)]
@@ -87,12 +90,15 @@ impl DatasetRepository {
             root: Arc::new(root.into()),
             locks: Arc::new(Mutex::new(BTreeMap::new())),
             migration_lock: Arc::new(AsyncMutex::new(())),
+            review_config_lock: Arc::new(AsyncRwLock::new(())),
             migration_complete: Arc::new(AtomicBool::new(false)),
             images_index_cache: Arc::new(AsyncRwLock::new(None)),
             assignment_cursors: Arc::new(Mutex::new(BTreeMap::new())),
             stats_cache: Arc::new(StatsCache::default()),
             task_completion_cache: Arc::new(TaskCompletionCache::default()),
             assignment_availability_cache: Arc::new(AssignmentAvailabilityCache::default()),
+            #[cfg(test)]
+            migration_config_captured: Arc::new(Mutex::new(None)),
             #[cfg(test)]
             migration_failure: Arc::new(Mutex::new(None)),
             #[cfg(test)]
