@@ -279,6 +279,7 @@ impl LabelloApp {
                             self.runtime.error = None;
                             self.request_stats();
                             if completed {
+                                self.activity_work_completed();
                                 if let Some(mut assignment) =
                                     self.work.assignment.clone().filter(|assignment| {
                                         assignment.kind
@@ -421,6 +422,7 @@ impl LabelloApp {
                                         assignment.status = labello_domain::AssignmentStatus::Completed;
                                         self.remember_previous_assignment(assignment);
                                     }
+                                    self.activity_work_completed();
                                     self.request_stats();
                                     if !self.promote_prepared_assignment(ctx, None) {
                                         self.clear_current_image();

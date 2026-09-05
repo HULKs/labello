@@ -59,12 +59,34 @@ async fn run() -> Result<(), JsValue> {
                 app.set_import_chunk_uploader(std::rc::Rc::new(|request| {
                     Box::pin(raw_import::upload_chunk(request))
                 }));
+                install_activity_visibility_listener(
+                    app.activity_visibility_notifier(creation_context.egui_ctx.clone()),
+                );
                 Ok(Box::new(app))
             }),
         )
         .await?;
     remove_startup_status();
     Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn install_activity_visibility_listener(notify: std::rc::Rc<dyn Fn()>) {
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        return;
+    };
+    let current_document = document.clone();
+    let listener = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+        if !current_document.hidden() {
+            notify();
+        }
+    });
+    if document
+        .add_event_listener_with_callback("visibilitychange", listener.as_ref().unchecked_ref())
+        .is_ok()
+    {
+        listener.forget();
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

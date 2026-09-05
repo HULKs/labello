@@ -1,7 +1,10 @@
+pub(crate) const COMPACT_MORE_LABEL: &str = "…";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum WorkspaceCommand {
     User(labello_domain::UserAction),
     NextMigrationObject,
+    RetryActivity,
 }
 
 pub(crate) struct WorkspaceAction {
@@ -28,8 +31,37 @@ impl WorkspaceAction {
 #[derive(Clone, Default)]
 struct WorkspaceOverflowFocus {
     inline: Vec<(WorkspaceCommand, egui::Id)>,
+    menu_commands: Vec<WorkspaceCommand>,
     pending: Option<WorkspaceCommand>,
     trigger: Option<egui::Id>,
+}
+
+pub(crate) fn workspace_command_in_open_menu(
+    ctx: &egui::Context,
+    command: WorkspaceCommand,
+) -> bool {
+    let owner = egui::Id::new("workspace-secondary-actions");
+    egui::Popup::is_id_open(ctx, owner.with("popup"))
+        && ctx.data(|data| {
+            data.get_temp::<WorkspaceOverflowFocus>(owner)
+                .is_some_and(|focus| focus.menu_commands.contains(&command))
+        })
+}
+
+pub(crate) fn remember_workspace_action_response(
+    ui: &egui::Ui,
+    command: WorkspaceCommand,
+    response: &egui::Response,
+) {
+    let owner = egui::Id::new("workspace-secondary-actions");
+    ui.ctx().data_mut(|data| {
+        let mut focus = data
+            .get_temp::<WorkspaceOverflowFocus>(owner)
+            .unwrap_or_default();
+        focus.inline.retain(|(existing, _)| *existing != command);
+        focus.inline.push((command, response.id));
+        data.insert_temp(owner, focus);
+    });
 }
 
 // Measure the same atoms, font, frame and target as the rendered button, without
@@ -170,6 +202,11 @@ pub(crate) fn workspace_secondary_actions(
                 ui.add(more_button)
             })
             .inner;
+        if more_label == COMPACT_MORE_LABEL {
+            response.clone().on_hover_text("More actions");
+            response
+                .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "More"));
+        }
         focus.trigger = Some(response.id);
         if moved.is_some() {
             response.request_focus();
@@ -200,6 +237,10 @@ pub(crate) fn workspace_secondary_actions(
         focus.trigger = None;
     }
     focus.inline = inline;
+    focus.menu_commands = actions[prefix..]
+        .iter()
+        .map(|action| action.command)
+        .collect();
     ui.ctx().data_mut(|data| data.insert_temp(owner, focus));
     clicked
 }
@@ -226,6 +267,7 @@ impl LabelloApp {
         match command {
             Some(WorkspaceCommand::User(action)) => self.trigger_user_action(action),
             Some(WorkspaceCommand::NextMigrationObject) => self.inspect_migration_object(1),
+            Some(WorkspaceCommand::RetryActivity) => self.request_activity(),
             None => {}
         }
     }

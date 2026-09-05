@@ -1,4 +1,8 @@
 pub trait StatsApi {
+    fn current_user_activity<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+    ) -> ApiFuture<'a, crate::CurrentUserActivity>;
     fn dataset_stats<'a>(&'a self, dataset_id: &'a DatasetId) -> ApiFuture<'a, DatasetStats>;
 }
 

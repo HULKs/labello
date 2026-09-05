@@ -74,6 +74,7 @@ impl LabelloApp {
                                 self.request_revisit_migration_target(target);
                             }
                             if migration_completed {
+                                self.activity_work_completed();
                                 self.assignment_availability_mutation_completed(
                                     request
                                         .dataset_id

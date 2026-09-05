@@ -115,6 +115,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `POST /datasets/{dataset_id}/prelabels` | Data admin | `PrelabelConfig` → `PrelabelConfig` |
 | `GET /datasets/{dataset_id}/images` | Data admin | `ImageExplorerQuery` → `ImageExplorerPage` |
 | `GET /datasets/{dataset_id}/stats` | Any role | No input → `DatasetStats` |
+| `GET /datasets/{dataset_id}/stats/me` | Any role | No user selector → `CurrentUserActivity` for the authenticated account and server UTC day; `Cache-Control: no-store` |
 | `GET /datasets/{dataset_id}/keybindings` | Any role | No input → authenticated user's `KeybindingSet` |
 | `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | `KeybindingSet` → normalized `KeybindingSet` |
 | `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest` → `PrelabelSuggestion[]` |
@@ -286,3 +287,26 @@ update this document in the same change. The router and focused API tests are
 the route/access regression suite. The open documentation-automation issue
 still tracks generated inventory or an explicit test that detects omissions in
 this table.
+
+
+## Current-user daily activity
+
+`CurrentUserActivity` identifies `datasetId`, authenticated `userId`, the inclusive
+UTC `window.start`, exclusive `window.end`, server `sampledAt`, and two integer
+counts: `annotationTasksSubmitted` and `finalTaskReviews`. The route has no
+client-selected user or time window. It requires a current dataset role and
+returns a fixed-size aggregate, never another user's history. A scan crossing
+midnight retries once for the new day, then returns a retryable error if the
+window changes again. The HTTP client
+uses the existing 20-second statistics timeout and credentialed session.
+
+Annotation activity counts committed normal or guided-migration submissions,
+including completion with no review stage. Review activity counts committed
+final task or migration-confirmation decisions, approved or rejected. Each
+counter deduplicates dataset/image/task/user within that UTC day. Saves, imports,
+skips, object decisions and reviewer corrections alone do not count. Reopening,
+later rejection and superseding a decision do not retract historical activity.
+Same-day replacement commits count once; a later-day submission or final-review
+replacement counts on its new commit day. Compound review revisions use the
+event's server commit time, not timestamps of locally staged review records.
+Dataset-wide `DatasetStats` semantics remain unchanged.

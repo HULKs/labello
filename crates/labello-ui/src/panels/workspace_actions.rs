@@ -1,11 +1,88 @@
 impl LabelloApp {
     fn previous_review_action(&mut self, ui: &mut egui::Ui) {
-        if self.view == AppView::Review && self.work.previous_assignment.is_some()
-            && ui.add_enabled(!self.loading.saving && !self.loading.image && self.work.pending_transition.is_none(),
-                egui::Button::new("Previous")).on_hover_text("Return to the immediately previous skipped or completed review.").clicked()
-        {
+        if self.view != AppView::Review || self.work.previous_assignment.is_none() {
+            return;
+        }
+        let response = ui
+            .add_enabled(
+                !self.loading.saving
+                    && !self.loading.image
+                    && self.work.pending_transition.is_none(),
+                egui::Button::new("Previous"),
+            )
+            .on_hover_text("Return to the immediately previous skipped or completed review.");
+        remember_workspace_action_response(
+            ui,
+            WorkspaceCommand::User(labello_domain::UserAction::PreviousImage),
+            &response,
+        );
+        if response.clicked() {
             self.trigger_user_action(labello_domain::UserAction::PreviousImage);
         }
+    }
+
+    fn short_review_activity_actions(&mut self, ui: &mut egui::Ui) -> bool {
+        if self.view != AppView::Review || !self.activity_retry_in_workspace(ui.ctx()) {
+            return false;
+        }
+        let ready =
+            !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
+        let mut actions = Vec::new();
+        if self.work.previous_assignment.is_some() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::PreviousImage,
+                "Previous",
+                ready,
+                "Return to the immediately previous skipped or completed review.",
+            ));
+        }
+        if self.work.correction_draft.is_some() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::SkipAssignment,
+                "Skip",
+                ready,
+                "Release this assignment and claim another.",
+            ));
+        }
+        actions.push(WorkspaceAction {
+            command: WorkspaceCommand::RetryActivity,
+            label: "Retry activity".into(),
+            shortcut: String::new(),
+            enabled: self.datasets.activity.pending_request.is_none(),
+            help: "Retry activity for today in UTC without changing the assignment.",
+        });
+        ui.horizontal_wrapped(|ui| {
+            if self.work.correction_draft.is_none() {
+                let more = egui::Button::new(COMPACT_MORE_LABEL)
+                    .min_size(egui::Vec2::splat(44.0))
+                    .wrap_mode(egui::TextWrapMode::Extend);
+                let more_width = workspace_button_size(ui, &more).x;
+                let primary_width =
+                    (ui.available_width() - more_width - ui.spacing().item_spacing.x).max(0.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(primary_width, 44.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        let revision = self.review_revision_active();
+                        if self.manual_migration_active() {
+                            if let Some((task, target)) = self.current_migration_review_target() {
+                                self.migration_review_buttons(ui, task, target, true, revision);
+                            }
+                        } else {
+                            self.review_decision_buttons(ui, revision, true);
+                        }
+                    },
+                );
+            }
+            self.dispatch_workspace_secondary(workspace_secondary_actions(
+                ui,
+                &actions,
+                COMPACT_MORE_LABEL,
+            ));
+        });
+        true
     }
 
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -91,6 +168,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn compact_workspace_actions(&mut self, ui: &mut egui::Ui) {
+        if self.short_review_activity_actions(ui) {
+            return;
+        }
         if self.manual_migration_active() {
             ui.horizontal_wrapped(|ui| {
                 if self.view == AppView::Review {
