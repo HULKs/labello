@@ -70,6 +70,7 @@ impl LabelloApp {
             show_tutorial: false,
             pending_transition: None,
             drawer: None,
+            review_details_focus_return: None,
             workflow_panel_collapsed: false,
             inspector_panel_collapsed: false,
             show_settings: false,

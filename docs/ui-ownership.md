@@ -54,6 +54,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
+  interaction and context-row height;
 - `review_context.rs`: immutable exact-target context shared by review presentation;
   assignment identity and authoritative target order/version reject stale summaries;
 - `review_revision.rs`: local staged replacement decisions and stable commit retries;

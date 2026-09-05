@@ -147,6 +147,14 @@ has been recorded.
   clear the previous context; a missing image preview is labeled separately while
   valid authoritative target context remains available. Long values wrap with a
   complete accessible summary, and compact Inspector drawers scroll.
+  Review bars use that same current target in every layout. Reserve space for the
+  workflow/class identity, full annotation type and canonical phase before optional
+  filename text and secondary controls. Only the identity line may truncate; type
+  and phase wrap at their measured text width and the shell reserves the resulting
+  height. At compact sizes, the summary opens Inspector details by touch or keyboard,
+  a separate Workflow control stays reachable, and canvas controls occupy a second
+  row. Short viewports retain identity and phase. Loading or missing targets replace
+  the previous summary rather than pairing old identity with a new phase.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.
