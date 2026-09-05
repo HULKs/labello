@@ -20,6 +20,11 @@ impl ImageState {
             !annotation.deleted
                 && annotation.class_id == pose.class_id
                 && annotation.annotation_type == AnnotationType::BoundingBox
+                && !self.effective_reviews_for_task(&annotation.task_id).any(|review| {
+                    review.decision == crate::ReviewDecision::Rejected
+                        && matches!(&review.target, crate::ReviewTarget::AnnotationVersion { annotation_id, version }
+                            if annotation_id == &annotation.annotation_id && *version == annotation.version)
+                })
                 && matches!(annotation.geometry, AnnotationGeometry::BoundingBox(bounds) if bounds.validate().is_ok())
                 && match &annotation.revision_source {
                     RevisionSource::PrelabelSuggestion { .. } => false,

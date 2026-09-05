@@ -46,7 +46,10 @@ Visible is `2`, Occluded is `1`, and Not present is `0` with zero coordinates.
 Numbers use nine decimal places. Labels that collapse to duplicate float32
 rows block the export because the target reader would drop objects.
 
-A pose uses its current valid linked box when available. Otherwise its placed
+A pose uses its current valid linked box when available. An effective rejection
+of that exact box version makes it unusable; a superseded rejection does not.
+An unselected box task need not establish complete coverage for other objects.
+Otherwise the pose's placed
 keypoints define a clipped envelope with at least one original pixel of width
 and height. Derived bounds are recorded in the manifest. An all-absent pose
 requires a valid linked box. Multiple current linked boxes, unusable bounds,
