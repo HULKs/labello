@@ -418,6 +418,19 @@ fn geometry_matches(a: &AnnotationGeometry, b: &AnnotationGeometry) -> bool {
 async fn both_profiles_round_trip_through_production_import_with_explicit_losses() {
     let root = tempfile::tempdir().unwrap();
     let (source, annotations) = source(root.path()).await;
+    if let Some(destination) = std::env::var_os("LABELLO_EXPORT_NATIVE_FIXTURE") {
+        let destination = std::path::PathBuf::from(destination);
+        std::fs::create_dir(&destination).unwrap();
+        for entry in walkdir::WalkDir::new(source.root()).min_depth(1) {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.path().strip_prefix(source.root()).unwrap());
+            if entry.file_type().is_dir() {
+                std::fs::create_dir_all(target).unwrap();
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
     let original_index = source.load_images_index().await.unwrap();
     let export = ExportService::new(root.path(), ExportLimits::default())
         .await

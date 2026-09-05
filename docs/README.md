@@ -17,6 +17,7 @@ documents are maintained current references:
 | [Assignment](assignment.md) | Normative current | Workflow maintainers | Operators, data administrators, maintainers | Assignment eligibility, completion balance, counts, boundaries, and cache consistency |
 | [Server configuration](configuration.md) | Normative current | Server maintainers | Operators, maintainers | Supported settings, defaults, validation, and deployment configuration |
 | [Dataset import](import.md) | Normative current | Import maintainers | Operators, maintainers, UI contributors | Supported sources, lifecycle, invariants, and ownership |
+| [Dataset export](export.md) | Normative current | Storage and API maintainers | Dataset administrators, operators, contributors | Selection, capture, artifacts, and explicit round-trip guarantees |
 | [Release and deployment](deployment.md) | Normative current | Release and operations maintainers | Operators, maintainers | Stable release, rootless guest transaction, rollback, and rollout contract |
 | [Operations](operations.md) | Normative current | Server maintainers | Operators, maintainers | Logging, redaction, health, deployment, backup, upgrade, and recovery |
 | [Persistence and recovery](persistence.md) | Normative current | Storage maintainers | Operators, maintainers | On-disk authority, schema compatibility, atomicity, snapshots, and repair |

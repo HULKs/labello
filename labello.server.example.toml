@@ -76,3 +76,17 @@ cacheEntries = 4096
 # clientId = "your-github-client-id"
 # clientSecret = "your-github-client-secret"
 # redirectUri = "https://api.example.com/auth/github/callback"
+
+# Optional Linux dataset-export limits; omitted fields use these defaults.
+# [export]
+# maxImages = 10_000
+# maxFiles = 30_010
+# maxSourceBytes = 10_737_418_240
+# maxFileBytes = 536_870_912
+# maxDecodedImageBytes = 268_435_456
+# maxArchiveBytes = 12_884_901_888
+# maxMetadataBytes = 33_554_432
+# maxConcurrentJobs = 1
+# maxConcurrentDownloads = 2
+# maxRetainedJobs = 8
+# retentionSeconds = 86_400
