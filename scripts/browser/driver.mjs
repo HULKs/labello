@@ -18,6 +18,7 @@ export async function click(page, x, y) {
   await page.mouse.move(x, y);
   await frames(page);
   await page.mouse.down();
+  await paintedFrame(page);
   await frames(page);
   await page.mouse.up();
   await frames(page);
@@ -27,6 +28,7 @@ export async function click(page, x, y) {
 export async function key(page, value) {
   const keys = value.split("+");
   for (const part of keys) await page.keyboard.down(part);
+  await paintedFrame(page);
   await frames(page);
   for (const part of keys.reverse()) await page.keyboard.up(part);
   await frames(page);
