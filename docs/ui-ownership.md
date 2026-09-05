@@ -106,6 +106,11 @@ only when its complete identity and current workspace still match.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
 
+Continuing an active skeleton after an earlier keypoint autosave creates the next
+human-edited annotation revision. The edit owner marks the persisted annotation
+modified before saving later keypoints, preserving Visible, Occluded and
+coordinate-free Not present outcomes through save and reload.
+
 ## Build information
 
 `build_information.rs` owns public artifact identity state, comparison, About

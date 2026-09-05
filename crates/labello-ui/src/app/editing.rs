@@ -142,6 +142,12 @@ impl LabelloApp {
             return;
         };
         if let Some(active_id) = self.work.active_skeleton.clone() {
+            let persisted_version = self
+                .work
+                .current_state
+                .as_ref()
+                .and_then(|state| state.current_annotation(&active_id))
+                .map(|annotation| annotation.version);
             self.record_edit();
             let keypoint_index = self.work.skeleton_keypoint_index;
             let hidden = self.work.next_keypoint_hidden;
@@ -165,6 +171,16 @@ impl LabelloApp {
                 keypoint.point = Some(point);
                 annotation.updated_at = labello_domain::now();
                 let completed = keypoint_index + 1 >= skeleton.keypoints.len();
+                // Autosave may have committed the earlier keypoints while this
+                // skeleton remained active. Continuing it is now a revision.
+                if let Some(version) = persisted_version {
+                    annotation.version = version + 1;
+                    annotation.revision_source = RevisionSource::Human {
+                        action: HumanRevisionKind::Edited,
+                    };
+                    annotation.author_user_id = self.config.user_id.clone();
+                    self.work.modified_annotations.insert(active_id);
+                }
                 self.work.skeleton_keypoint_index = keypoint_index + 1;
                 self.work.next_keypoint_hidden = false;
                 if completed {
