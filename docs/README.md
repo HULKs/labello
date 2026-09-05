@@ -26,6 +26,9 @@ documents are maintained current references:
 
 Supporting project material is grouped by purpose:
 
+- The [parallel development guide](parallel-development.md) defines the
+  contributor workflow for issue tracks, stacked PRs, isolated worktrees, and
+  combined group verification.
 - The [native inspector guide](../apps/egui-mcp-inspector/README.md) covers
   headless setup, MCP operation, parallel-agent isolation, and native UI
   verification. Browser acceptance remains in the verification reference.

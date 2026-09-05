@@ -26,6 +26,9 @@ Use documentation according to its status:
   recovery, and repair contract.
 - `docs/configuration.md`, `docs/import.md`, and `docs/operations.md` define
   server configuration, import behavior, and operational/security rules.
+- `docs/deployment.md` owns release publication, deployment transactions,
+  rollback, and rollout verification. Read it before changing release or
+  deployment code, workflows, or assets.
 - `docs/ui-design-guidelines.md` and `docs/ui-ownership.md` define current UI
   acceptance and implementation ownership.
 - `docs/plans/README.md` classifies plans. Completed and historical plans are
@@ -62,6 +65,8 @@ revision-specific records instead of silently rewriting them as current.
 - `apps/egui-mcp-inspector`: standalone native inspection application with its
   own workspace, lockfile, target directory, deterministic presets, and
   opt-in live-server mode.
+- `tools/labello-deploy`: release verification and deployment transactions.
+- `deployment/`: release images, guest setup, Caddy, and systemd assets.
 - `assets/`: tracked icon and font assets used by the product.
 - `docs/`: normative references, active/completed plans, and historical
   delivery records.
@@ -127,8 +132,9 @@ claim:
 - One server process per datasets root is required. Locks and caches are
   process-local.
 
-Keep `README.md#current-limitations`, feature requests, and issues synchronized
-when one of these boundaries changes.
+Update `README.md#current-limitations` when one of these boundaries changes.
+Update related issues and project metadata within the authorized workflow;
+otherwise report the follow-up needed.
 
 ## Persistence And Workflow Invariants
 
@@ -160,14 +166,23 @@ when one of these boundaries changes.
 
 ## Working Approach
 
+- Carry authorized work through to the requested endpoint. Resolve routine,
+  reversible implementation choices from the issue, code, and session context.
+  Ask only when missing information materially changes scope or correctness,
+  or an action needs authorization not already given.
+- Explicit user instructions take precedence over repository and skill
+  guidelines. If an instruction requires a pause, name its file and quote the
+  applicable rule; distinguish that rule from your interpretation.
+- Before orchestrating multiple issues, delegating implementation tracks, or
+  testing stacked PRs together, read
+  [`docs/parallel-development.md`](docs/parallel-development.md). It owns track
+  allocation, worktree isolation, branch dependencies, and group verification.
 - Inspect the complete flow and its callers before editing; fix the root cause
   at the narrowest shared owner.
 - Search with `rg`/`rg --files` and reuse existing patterns before adding an
   abstraction, dependency, facade, or framework.
 - Check `git status` and the relevant diff before editing. Preserve unrelated
   worktree changes and never revert files you did not change.
-- Keep domain policy pure, transport validation at the API boundary, filesystem
-  mechanics in storage, and request/rendering state in the UI.
 - Add or update the smallest test that would fail if non-trivial behavior
   regressed.
 - Treat import, auth, schema, event, and migration changes as high-risk even
@@ -194,8 +209,9 @@ when one of these boundaries changes.
 - Live inspector sessions can claim assignments and mutate datasets. Use
   disposable development data.
 
-Do not edit or commit runtime/generated paths unless the task explicitly
-requires it:
+Builds and tests may generate their normal outputs and use disposable local
+runtime data. Keep these paths out of commits and avoid hand-editing them unless
+the task explicitly requires it. Preserve existing user data and configuration:
 
 - `target/`
 - `apps/egui-mcp-inspector/target/`
@@ -216,28 +232,29 @@ Run the canonical changed-path verification from the repository root:
 ./scripts/verify.sh changed origin/main
 ```
 
-This fails closed on unclassified paths, runs the required locked baseline, and
-adds the locked release Trunk build when browser-affecting paths changed. Use
-`./scripts/verify.sh all` to run every machine check, `./scripts/verify.sh docs`
-for a proven documentation-only change, and `./scripts/verify.sh classify
-origin/main` to inspect the selected risk profiles. The exact commands,
+This fails closed on unclassified paths, selects the documentation profile for
+documentation-only changes, and otherwise runs the required locked baseline.
+Browser-affecting changes also run the locked release Trunk build. Use
+`./scripts/verify.sh all` to run the baseline and release browser build,
+`./scripts/verify.sh docs` for a proven documentation-only change, and
+`./scripts/verify.sh classify origin/main` to inspect selected risk profiles. The exact commands,
 prerequisites, risk-specific manual checks, and CI equivalence are normative in
 `docs/verification.md`.
 
 Prefer focused checks while developing:
 
 ```sh
-cargo test -p labello-domain
-cargo test -p labello-storage
-cargo test -p labello-client
-cargo test -p labello-api
-cargo test -p labello-ui
+cargo test --locked -p labello-domain
+cargo test --locked -p labello-storage
+cargo test --locked -p labello-client
+cargo test --locked -p labello-api
+cargo test --locked -p labello-ui
 ```
 
 Run the server from the repository root:
 
 ```sh
-cargo run -p labello-server
+cargo run --locked -p labello-server
 ```
 
 The server creates local configuration when needed, exposes `GET /health`, and
@@ -246,73 +263,60 @@ does not serve the WASM distribution.
 Run browser commands from `apps/labello-wasm`:
 
 ```sh
-trunk serve --address 127.0.0.1 --port 8081
+trunk serve --locked --address 127.0.0.1 --port 8081
 trunk build --release --locked
 ```
 
 For a compiler-only WASM check from the root:
 
 ```sh
-cargo check -p labello-wasm --target wasm32-unknown-unknown
+cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 ```
 
 Check the standalone inspector through its manifest:
 
 ```sh
-cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
+cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
 ```
 
 ## Verification
 
-- Run focused tests first, then broader workspace checks proportional to risk.
-- Before handoff, run `./scripts/verify.sh changed origin/main`; never treat a
-  stale lockfile, unavailable required check, or unclassified path as passing.
-- Domain/event changes need replay, validation, versioned-wire, and schema
-  coverage.
-- Storage changes need atomicity, cache recovery, authorization/assignment, and
-  restart/interruption coverage where applicable.
-- API changes need route, role, CSRF/CORS, limit, safe-error, and redaction
-  coverage.
-- Import changes need format/plan/build/publication/recovery tests and must
-  preserve bounded resource behavior.
-- UI changes should use existing `egui_kittest` harnesses and verify behavior,
-  layout, and AccessKit semantics. Test long content, loading/failure states,
-  and stale-response ownership where relevant.
-- Build with Trunk after browser bootstrap, WASM, browser persistence, raw folder
-  import, or deployment-asset changes.
-- Validate relevant GUI states using the viewport, DPR, zoom, keyboard, and
-  accessibility matrix in `docs/ui-design-guidelines.md`.
-- Chromium is required to validate real WASM startup, browser networking,
-  cookies, IndexedDB, browser input, and responsive rendering. The repository
-  does not yet have a browser end-to-end suite.
+- Before handing off a change, run the canonical changed-path command above.
+  Use the appropriate comparison base for a stacked PR and record its SHA.
+  Read `docs/verification.md` for every selected risk profile and complete its
+  additional manual checks. A stale lockfile, unavailable required check, or
+  unclassified path is not a pass.
+- Run focused checks while developing and complete required checks on the final
+  change. After they pass, repeat or broaden checks only for changed code,
+  failures, or unresolved concerns. Read-only analysis does not require builds.
+- UI changes use `egui_kittest` for deterministic behavior, layout, and AccessKit
+  semantics. Read `docs/ui-design-guidelines.md` for the applicable viewport,
+  DPR, zoom, keyboard, and accessibility matrix, then use the inspection
+  guidance below. Chromium is required for actual WASM/browser claims.
 - Documentation-only changes require content review, local-link/anchor checks,
-  `git diff --check`, and inspection of the focused diff; they do not require
-  the full Rust test suite unless a generated contract or example is exercised
-  by code.
-- State clearly which checks were run and which were not.
+  `git diff --check`, and focused diff inspection. They do not require the Rust
+  baseline unless they exercise generated contracts or examples.
+- Record acceptance evidence, exact commands and results, omitted checks,
+  residual risks, and preservation of unrelated changes in the PR template.
 
 ## Completion And Review
 
-- Map every acceptance criterion to evidence and record exact commands,
-  results, visual/browser artifacts, documentation impact, skipped checks,
-  residual risks, and preservation of unrelated worktree changes.
-- Report implementation work with an open pull request as **Awaiting CI** until
-  the required check succeeds on the exact current head SHA. A local or stale
-  success does not satisfy this gate; investigate failures before handoff.
-- After exact-head CI succeeds, use the pull-request author as the accountable
-  implementation owner and assign both the issue and pull request to that user.
-  Preserve existing reviewer requests. Request review as a lifecycle transition
-  by moving project items to `In review` and reporting the change as **Ready for
-  review**. The agent does not add or remove requested reviewers.
-- Require a human reviewer or separately instructed verification agent to read
-  the original issue, inspect the final production diff and evidence, and try
-  to falsify the completion claims. The implementer cannot provide the
-  independent acceptance decision.
-- For high-risk work, the reviewer must trace the applicable transaction,
-  failure, recovery, authorization, compatibility, and redaction boundaries.
-- Do not close an issue, mark it accepted, or integrate it until the required
-  `Testing` pull-request check and independent review pass. See
-  `CONTRIBUTING.md` and `docs/verification.md`.
+Follow the [workflow scope](docs/verification.md#workflow-scope) for the user's
+requested endpoint. A request to package changes as a PR ends with a verified
+remote draft marked **Awaiting CI**. End-to-end issue implementation also owns
+CI failure fixes and the CI-gated **Ready for review** handoff. A standalone PR
+without an issue does not require creating one.
+
+Only report **Ready for review** after the required `Testing` check succeeds on
+the PR's exact current head SHA and the authorized handoff is complete. Follow
+`docs/verification.md` for assignments and project transitions. Preserve
+existing reviewer requests; agents do not add or remove requested reviewers.
+
+Independent acceptance belongs to a human or separately instructed verification
+agent who audits the original requirements, final diff, and evidence. The
+implementer cannot provide that decision. Merging, closing issues, and marking
+work accepted require both the CI and independent-review gates plus user
+authorization for those actions.
 
 ## GUI Inspection
 
@@ -338,7 +342,10 @@ lists browser-only omissions and the required Chromium checks.
 
 ## Commits
 
-- Commit only when explicitly requested.
+- Commit when requested directly or as a necessary part of an authorized PR
+  publication or end-to-end issue implementation. Those requests authorize
+  task-scoped commits, pushes, and draft PR publication after verification.
+  Ordinary edits and analysis do not authorize commits.
 - Stage only task-related files.
 - Never commit secrets, runtime data, generated distributions, or unrelated
   worktree changes.
