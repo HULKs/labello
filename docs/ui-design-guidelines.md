@@ -167,7 +167,9 @@ has been recorded.
   and phase wrap at their measured text width and the shell reserves the resulting
   height. At compact sizes, the summary opens Inspector details by touch or keyboard,
   a separate Workflow control stays reachable, and canvas controls occupy a second
-  row. Short viewports retain identity and phase. Loading or missing targets replace
+  row. Compact availability feedback shares the truncatable identity line; it
+  must not take width from the full type/phase line or add a context row.
+  Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present

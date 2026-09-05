@@ -171,3 +171,8 @@ mode in the existing context identity line. The central workspace omits its
 redundant caption only when valid compact revision details are present; missing
 or stale target context retains the caption fallback. This presentation does not
 change captured targets, staging, or commit policy.
+
+Compact review availability uses a reserved slot in the identity line. Only that
+truncatable line gives up text width; type/phase and canvas allocation remain
+stable while loading. The shared spinner description retains its existing
+progress-indicator name and tooltip across workspace placements.
