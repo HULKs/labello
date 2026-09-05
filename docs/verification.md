@@ -171,6 +171,40 @@ the deploy workflow and requires its pinned GitHub CLI checksum, local
 attestation signer, and flushed barrier documentation. Real guest systemd,
 mount, Caddy, TLS, and GitHub environment tests remain manual rollout evidence.
 
+## Workflow scope
+
+The requested task determines which lifecycle stages the agent owns. These
+boundaries do not waive verification or independent acceptance:
+
+| Request | Endpoint and owner |
+| --- | --- |
+| Analyze or review | Findings and evidence; no implementation or publication unless requested |
+| Clean up or implement a change, then open a PR | Finish the authorized edits, verify, then publish a draft marked **Awaiting CI** |
+| Package existing changes as a PR | Verify and publish the prepared scope as a draft marked **Awaiting CI**; report implementation blockers to the caller |
+| Implement an existing issue end to end | Implement, verify, publish, fix CI failures, and complete the CI-gated **Ready for review** handoff |
+| Ready a draft for review | Manage CI state and handoff metadata; return implementation failures to the implementation owner |
+| Independently verify | Audit the requirements, final diff, and evidence; report an acceptance decision separately from implementation |
+
+The repository skills implement these stages:
+[package current changes](../.agents/skills/labello-package-current-changes-as-pr/SKILL.md),
+[open a draft](../.agents/skills/labello-open-draft-pr/SKILL.md),
+[implement an issue](../.agents/skills/labello-implement-issue/SKILL.md),
+[ready for review](../.agents/skills/labello-ready-pr-for-review/SKILL.md), and
+[independent verification](../.agents/skills/labello-verify-issue/SKILL.md).
+Finish edits authorized by the user before entering the packaging stage.
+Publication alone does not authorize CI management, assignments, or project
+transitions. A later request can extend that scope without repeating completed
+preparation when the verified revision and base remain unchanged.
+
+For a PR without an issue, use the user's requirements as its acceptance
+contract and apply issue/project updates only to existing linked items. Do not
+create an issue to satisfy the handoff checklist. Merging, closing issues, and
+marking work accepted require user authorization as well as the gates below.
+
+Before coordinating multiple issues or testing dependent PRs together, follow
+[parallel development](parallel-development.md) for worktree ownership and
+verification of the combined group. Each PR still needs its own required CI.
+
 ## Evidence And Independent Acceptance
 
 The pull-request template is the required proof bundle. It records:
@@ -188,15 +222,16 @@ Artifacts and logs must follow [`operations.md`](operations.md): never upload
 secrets, credentials, runtime datasets, raw request data, image bytes,
 annotation geometry, review comments, uploaded filenames, or import paths.
 
-After assembling the proof bundle, the contributor leaves the change
-**Awaiting CI**. The required check must succeed for the pull request's exact
+After assembling the proof bundle and publishing a draft, the contributor
+leaves the change **Awaiting CI**. The required check must succeed for the pull request's exact
 current head SHA; a local run or success on an earlier head is not a substitute.
 A failed check returns the change to implementation, while a pending, missing,
 cancelled, or inaccessible check is recorded as not verified.
 
-Only after exact-head CI success may the change become **Ready for review**.
+Within an authorized review handoff, only after exact-head CI success may the
+change become **Ready for review**.
 At that boundary, use the pull-request author as the accountable implementation
-owner and assign both the issue and pull request to that user. Keep the
+owner and assign the pull request and any linked issue to that user. Keep the
 existing reviewer requests unchanged. Request review as a lifecycle transition
 by moving project items to `In review` and reporting the change as **Ready for
 review**. The agent does not add or remove requested reviewers.

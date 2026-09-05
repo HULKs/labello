@@ -9,6 +9,12 @@ that its tests pass.
 
 ## Issue Workflow
 
+The sequence below covers end-to-end issue implementation. For analysis,
+publication of prepared changes, or a separate review handoff, use the
+[workflow scope](docs/verification.md#workflow-scope) to determine the requested
+endpoint. Before orchestrating multiple issues, read the
+[parallel development guide](docs/parallel-development.md).
+
 1. Confirm the issue is current, actionable, and not already owned elsewhere.
 2. Read the affected normative contracts and trace the complete production
    path, including target-specific adapters and failure boundaries.
