@@ -188,6 +188,10 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         succeeded: bool,
     },
+    ExportFinished {
+        request: RequestIdentity,
+        result: Box<Result<crate::export_flow::ExportReply, String>>,
+    },
     ImportCapabilitiesLoaded {
         request: ImportRequestIdentity,
         result: Result<ImportCapabilities, UiRequestError>,
@@ -407,6 +411,11 @@ pub(crate) enum UiMessage {
 pub(crate) enum UiCommand {
     BuildInformation {
         request: RequestIdentity,
+    },
+    Export {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+        action: crate::export_flow::ExportAction,
     },
     ImportCapabilities {
         request: ImportRequestIdentity,
@@ -689,6 +698,7 @@ impl UiCommand {
             | Self::CommitImport { .. }
             | Self::CancelImport { .. } => panic!("import commands use import_request"),
             Self::BuildInformation { request }
+            | Self::Export { request, .. }
             | Self::AuthOptions { request }
             | Self::Session { request }
             | Self::LocalAdminLogin { request }
@@ -966,6 +976,7 @@ impl UiMessage {
             Self::ImportBrowserFilesSelected { .. } => None,
             Self::BuildInformationLoaded { request, .. }
             | Self::BuildInformationCopied { request, .. }
+            | Self::ExportFinished { request, .. }
             | Self::AuthOptionsLoaded { request, .. }
             | Self::SessionLoaded { request, .. }
             | Self::LogoutFinished { request, .. }

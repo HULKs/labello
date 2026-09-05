@@ -66,6 +66,7 @@ fn poll_ready_task(mut future: Pin<Box<dyn Future<Output = ()> + 'static>>) {
 // Keep feature suites in this module so every test exercises the same assembled harness.
 include!("suites/setup.rs");
 include!("suites/admin.rs");
+include!("suites/export.rs");
 include!("suites/workspace.rs");
 include!("suites/import.rs");
 include!("suites/migration.rs");

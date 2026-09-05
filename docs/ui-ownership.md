@@ -201,3 +201,44 @@ remain readable. Reloading an assignment resumes its latest persisted pass at th
 first outstanding object. The normal keep, edit and exclude controls record exact
 current decisions until full-image confirmation is available. Resolved overview
 entries then use the same direct revisit path as assignments without a pass.
+
+
+## Dataset export administration
+
+`admin.export`, implemented in `export_flow`, owns the saved-configuration
+selection, retained job history, current capture, summary acknowledgement and
+one pending export action. The closed `UiCommand::Export` and
+`UiMessage::ExportFinished` delegate to the export dispatcher and reducer.
+The shared request identity checks auth/workspace epochs and dataset ownership
+before applying any reply. Auth or workspace invalidation clears export state.
+Queue and dispatch failures clear pending state and remain in the export region.
+
+The Export section loads capabilities and server history, restores the latest
+retained job after reload, and polls active jobs at most once per second while
+that section is visible. Requests coalesce. Failed refreshes retain the last
+loaded job with a stale marker and Retry. An uncertain mutation response retries
+by refreshing history, so it does not blindly create another preflight.
+
+Selection uses saved dataset metadata, explicit task/class identities and a
+versioned detect or pose profile. Train is the default fallback for images
+without split provenance. Split conflicts offer explicit per-image choices.
+Domain `ExportOptions::class_mapping` supplies local compatibility feedback;
+server preflight owns coverage, image, geometry, source consistency and bounds.
+A retained capture must be cancelled before another preflight. Start requires
+a Ready job, an explicit summary acknowledgement, unchanged options and saved
+Admin configuration. Captured options and bounded omission/blocker examples
+remain inspectable in history.
+
+Completed exports use the client's authorization check and open the attachment
+URL with the existing browser session. WASM never buffers archive bytes. The UI
+reports only that a download was requested; the browser owns transfer progress
+and completion. Native inspection presets model shared states and do not create
+archives. Real download behavior requires an isolated server and Chromium.
+
+The import plan offers an explicit policy for YOLO pose rows with no placed
+keypoints. The default leaves coverage incomplete. PreserveAbsent is an opt-in
+assertion that all-zero entries explicitly represent absent keypoints on an
+existing object. The plan request and recovery preserve this choice, changing
+it invalidates an accepted plan, and encountered preservation diagnostics still
+require acknowledgement before commit. This choice does not infer labels for
+an unlabelled source.

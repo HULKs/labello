@@ -120,6 +120,10 @@ impl LabelloApp {
     }
 
     fn reduce_message(&mut self, ctx: &egui::Context, message: UiMessage) {
+        let message = match self.reduce_export_message(ctx, message) {
+            None => return,
+            Some(message) => message,
+        };
         let message = match self.reduce_build_message(message) {
             None => return,
             Some(message) => message,
@@ -153,6 +157,10 @@ impl LabelloApp {
         let Some(api) = self.runtime.api.clone() else {
             self.rollback_command(&command, "API is not configured");
             return;
+        };
+        let command = match self.dispatch_export_command(api.clone(), command) {
+            None => return,
+            Some(command) => command,
         };
         let command = match self.dispatch_import_command(api.clone(), command) {
             None => return,
@@ -188,6 +196,8 @@ include!("live/reduce_import.rs");
 include!("live/reduce_session.rs");
 include!("live/reduce_workflow.rs");
 include!("live/reduce_support.rs");
+include!("live/dispatch_export.rs");
+include!("live/reduce_export.rs");
 include!("live/dispatch_import.rs");
 include!("live/dispatch_migration.rs");
 include!("live/dispatch_auth.rs");

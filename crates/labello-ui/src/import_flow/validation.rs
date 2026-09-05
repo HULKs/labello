@@ -607,6 +607,18 @@ impl LabelloApp {
                 );
             }
             if profile == ImportProfile::UltralyticsYoloPoseV1
+                && self.import.yolo_zero_keypoints
+                    == labello_client::YoloZeroKeypointPolicy::PreserveAbsent
+            {
+                push_mapping_issue(
+                    validation,
+                    ImportMappingIssueSeverity::Warning,
+                    None,
+                    ImportMappingField::Compatibility(ImportCompatibilityField::YoloZeroKeypoints),
+                    "All-zero YOLO keypoints will preserve the object with every point absent. Choose this only when the source explicitly uses zeros for absent points; diagnostic acknowledgement is required when encountered.",
+                );
+            }
+            if profile == ImportProfile::UltralyticsYoloPoseV1
                 && self.import.missing_keypoint_names
                     == labello_client::MissingKeypointNamesPolicy::GenerateIndexed
             {
@@ -642,8 +654,7 @@ impl LabelloApp {
                 ),
                 labello_client::CocoCrowdPolicy::Block => {}
             }
-            if self.import.coco_structure
-                == labello_client::CocoStructurePolicy::BboxCompatibility
+            if self.import.coco_structure == labello_client::CocoStructurePolicy::BboxCompatibility
             {
                 push_mapping_issue(
                     validation,

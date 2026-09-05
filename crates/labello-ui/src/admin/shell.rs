@@ -227,11 +227,7 @@ impl LabelloApp {
                     .selected_text(self.admin.section.label())
                     .show_ui(ui, |ui| {
                         for section in AdminSection::ALL {
-                            ui.selectable_value(
-                                &mut self.admin.section,
-                                section,
-                                section.label(),
-                            );
+                            ui.selectable_value(&mut self.admin.section, section, section.label());
                         }
                     })
                     .response
@@ -273,6 +269,7 @@ impl LabelloApp {
             AdminSection::Schema => self.admin_schema(ui),
             AdminSection::Automation => self.admin_automation(ui),
             AdminSection::Backups => self.snapshots_section(ui, layout),
+            AdminSection::Export => self.export_section(ui),
         }
     }
 }

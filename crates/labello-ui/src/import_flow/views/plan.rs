@@ -71,12 +71,7 @@ impl LabelloApp {
         self.import_mapping_editor(ui);
         let mappings_complete = self.import_mappings_complete();
         let plan_covers_source = self.import_plan_covers_all_categories();
-        if let Some(plan) = self
-            .import
-            .plan
-            .as_ref()
-            .filter(|_| !plan_covers_source)
-        {
+        if let Some(plan) = self.import.plan.as_ref().filter(|_| !plan_covers_source) {
             let (required_categories, required_tasks) = self.import_required_output_counts();
             theme::inline_message(
                 ui,
@@ -135,10 +130,8 @@ impl LabelloApp {
         ui: &mut egui::Ui,
         diagnostics: &[labello_client::ImportDiagnosticSummary],
     ) {
-        let overview = ImportDiagnosticOverview::from_diagnostics(
-            diagnostics,
-            &self.import.acknowledgements,
-        );
+        let overview =
+            ImportDiagnosticOverview::from_diagnostics(diagnostics, &self.import.acknowledgements);
         let compact = ui.available_width() < 480.0;
         let label = overview.disclosure_label(compact);
         let color = overview.color();
@@ -182,9 +175,7 @@ impl LabelloApp {
                             .changed()
                         {
                             if acknowledged {
-                                self.import
-                                    .acknowledgements
-                                    .insert(diagnostic.code.clone());
+                                self.import.acknowledgements.insert(diagnostic.code.clone());
                             } else {
                                 self.import.acknowledgements.remove(&diagnostic.code);
                             }
@@ -274,10 +265,7 @@ impl LabelloApp {
                 "This API contract reports only a category count, not the discovered category keys, IDs, names, or skeleton schemas required for a valid plan. Mapping and commit are disabled; Labello will not guess sparse source IDs.",
             );
             if ui
-                .add_enabled(
-                    !self.import.busy,
-                    egui::Button::new("Restart import setup"),
-                )
+                .add_enabled(!self.import.busy, egui::Button::new("Restart import setup"))
                 .clicked()
             {
                 self.restart_import_setup();
@@ -617,6 +605,38 @@ impl LabelloApp {
                 ImportMappingField::Compatibility(ImportCompatibilityField::YoloDuplicateRows),
             );
             if self.import.profile == ImportProfile::UltralyticsYoloPoseV1 {
+                let label = ui.label("YOLO poses with no placed keypoints");
+                egui::ComboBox::from_id_salt("yolo-zero-keypoint-policy")
+                    .width(ui.available_width().min(360.0))
+                    .selected_text(match self.import.yolo_zero_keypoints {
+                        labello_client::YoloZeroKeypointPolicy::Incomplete => {
+                            "Leave coverage incomplete"
+                        }
+                        labello_client::YoloZeroKeypointPolicy::PreserveAbsent => {
+                            "Preserve object; all points absent"
+                        }
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.import.yolo_zero_keypoints,
+                            labello_client::YoloZeroKeypointPolicy::Incomplete,
+                            "Leave coverage incomplete",
+                        );
+                        ui.selectable_value(
+                            &mut self.import.yolo_zero_keypoints,
+                            labello_client::YoloZeroKeypointPolicy::PreserveAbsent,
+                            "Preserve object; all points absent",
+                        );
+                    })
+                    .response
+                    .labelled_by(label.id);
+                ui.small("Preserve only when all-zero keypoint entries explicitly mean that the object exists and every point is absent. This does not infer labels for an unlabelled source.");
+                show_mapping_issues(
+                    ui,
+                    &validation,
+                    None,
+                    ImportMappingField::Compatibility(ImportCompatibilityField::YoloZeroKeypoints),
+                );
                 egui::ComboBox::from_label("Missing keypoint names")
                     .selected_text(format!("{:?}", self.import.missing_keypoint_names))
                     .show_ui(ui, |ui| {
@@ -728,5 +748,4 @@ impl LabelloApp {
             ImportMappingField::Compatibility(ImportCompatibilityField::CrossSplitDuplicates),
         );
     }
-
 }

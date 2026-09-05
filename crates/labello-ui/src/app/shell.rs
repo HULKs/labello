@@ -28,6 +28,7 @@ impl eframe::App for LabelloApp {
         self.refresh_assignment_availability_if_due();
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();
+        self.refresh_export_if_due(ui.ctx());
         self.autosave_if_due();
         self.handle_shortcuts(ui.ctx());
         if self.navigation.statistics.restore_focus.is_some() {
@@ -84,9 +85,8 @@ impl eframe::App for LabelloApp {
                     .show(ui, |_| {});
             }
         }
-        let show_wide_inspector = self.work_view()
-            && layout == LayoutMode::Wide
-            && !self.work.inspector_panel_collapsed;
+        let show_wide_inspector =
+            self.work_view() && layout == LayoutMode::Wide && !self.work.inspector_panel_collapsed;
         let inspector_left = show_wide_inspector.then(|| {
             ui.ctx().content_rect().right() - LayoutMode::INSPECTOR_PANEL_WIDTH - theme::SPACE_2
         });
@@ -145,10 +145,7 @@ impl eframe::App for LabelloApp {
                 let mut work_rect = ui.available_rect_before_wrap();
                 if let Some(action_height) = compact_action_height {
                     let action_top = ui.ctx().content_rect().bottom() - action_height;
-                    work_rect.max.y = work_rect
-                        .max
-                        .y
-                        .min(action_top - theme::SPACE_2);
+                    work_rect.max.y = work_rect.max.y.min(action_top - theme::SPACE_2);
                 }
                 if let Some(inspector_left) = inspector_left {
                     work_rect.max.x = work_rect.max.x.min(inspector_left);

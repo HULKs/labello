@@ -16,13 +16,14 @@ use crate::{
 };
 
 impl AdminSection {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Overview,
         Self::People,
         Self::Images,
         Self::Schema,
         Self::Automation,
         Self::Backups,
+        Self::Export,
     ];
 
     fn label(self) -> &'static str {
@@ -33,6 +34,7 @@ impl AdminSection {
             Self::Schema => "Schema",
             Self::Automation => "Automation",
             Self::Backups => "Backups",
+            Self::Export => "Export",
         }
     }
 }

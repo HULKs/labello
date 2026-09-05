@@ -262,6 +262,9 @@ pub(super) struct SpyState {
     pub(super) last_image_query: Option<ImageExplorerQuery>,
     pub(super) last_oauth_return_to: Option<String>,
     pub(super) snapshots: Vec<DatasetSnapshot>,
+    pub(super) export_jobs: Vec<labello_client::ExportJob>,
+    pub(super) export_calls: Vec<String>,
+    pub(super) fail_next_export: bool,
     pub(super) fail_next_correction: bool,
     pub(super) fail_next_batch: bool,
     pub(super) fail_next_admin_save: bool,
@@ -390,6 +393,9 @@ impl SpyState {
             last_image_query: None,
             last_oauth_return_to: None,
             snapshots: Vec::new(),
+            export_jobs: Vec::new(),
+            export_calls: Vec::new(),
+            fail_next_export: false,
             fail_next_correction: false,
             fail_next_batch: false,
             fail_next_admin_save: false,
@@ -718,9 +724,12 @@ impl ImportApi for SpyApi {
             progress: migration_progress(&image_state, &request.task_id),
             image_state,
             cursor: Some(labello_domain::MigrationCursor::FullImage),
-            active_pass: request
-                .pass_id
-                .and_then(|pass_id| state.states[image_id].migration_passes.get(&pass_id).cloned()),
+            active_pass: request.pass_id.and_then(|pass_id| {
+                state.states[image_id]
+                    .migration_passes
+                    .get(&pass_id)
+                    .cloned()
+            }),
             confirmation: None,
             assignment: None,
             annotation_id: Some(annotation_id),
@@ -744,8 +753,7 @@ impl ImportApi for SpyApi {
         assert_eq!(current.version, request.expected_version);
         let mut annotation = current;
         annotation.version += 1;
-        annotation.geometry =
-            labello_domain::AnnotationGeometry::Skeleton(request.skeleton);
+        annotation.geometry = labello_domain::AnnotationGeometry::Skeleton(request.skeleton);
         annotation.revision_source = labello_domain::RevisionSource::Human {
             action: labello_domain::HumanRevisionKind::Edited,
         };
@@ -760,9 +768,12 @@ impl ImportApi for SpyApi {
             progress: migration_progress(&image_state, &request.task_id),
             image_state,
             cursor: Some(labello_domain::MigrationCursor::FullImage),
-            active_pass: request
-                .pass_id
-                .and_then(|pass_id| state.states[image_id].migration_passes.get(&pass_id).cloned()),
+            active_pass: request.pass_id.and_then(|pass_id| {
+                state.states[image_id]
+                    .migration_passes
+                    .get(&pass_id)
+                    .cloned()
+            }),
             confirmation: None,
             assignment: None,
             annotation_id: Some(request.annotation_id),
@@ -791,9 +802,12 @@ impl ImportApi for SpyApi {
             progress: migration_progress(&image_state, &request.task_id),
             image_state,
             cursor: Some(labello_domain::MigrationCursor::FullImage),
-            active_pass: request
-                .pass_id
-                .and_then(|pass_id| state.states[image_id].migration_passes.get(&pass_id).cloned()),
+            active_pass: request.pass_id.and_then(|pass_id| {
+                state.states[image_id]
+                    .migration_passes
+                    .get(&pass_id)
+                    .cloned()
+            }),
             confirmation: None,
             assignment: None,
             annotation_id: Some(request.annotation_id),
@@ -807,7 +821,9 @@ impl ImportApi for SpyApi {
         _request: labello_client::ReconcileMigrationCompanionRequest,
         _idempotency_key: &'a str,
     ) -> ApiFuture<'a, labello_client::ManualMigrationCommandResult> {
-        ready(Err(labello_client::ClientError::Demo("companion reconciliation unavailable in this fixture".into())))
+        ready(Err(labello_client::ClientError::Demo(
+            "companion reconciliation unavailable in this fixture".into(),
+        )))
     }
 
     fn exclude_migration_target<'a>(
@@ -1134,6 +1150,91 @@ impl SpyApi {
 }
 
 impl DatasetApi for SpyApi {
+    fn export_capabilities<'a>(
+        &'a self,
+        _: &'a DatasetId,
+    ) -> ApiFuture<'a, labello_client::ExportCapabilities> {
+        self.state
+            .borrow_mut()
+            .export_calls
+            .push("capabilities".into());
+        ready(Ok(labello_client::ExportCapabilities {
+            available: true,
+            limits: Default::default(),
+        }))
+    }
+    fn list_exports<'a>(
+        &'a self,
+        _: &'a DatasetId,
+    ) -> ApiFuture<'a, Vec<labello_client::ExportJob>> {
+        let mut state = self.state.borrow_mut();
+        state.export_calls.push("list".into());
+        if std::mem::take(&mut state.fail_next_export) {
+            return ready(Err(ClientError::Demo(
+                "synthetic export request failed".into(),
+            )));
+        }
+        ready(Ok(state.export_jobs.clone()))
+    }
+    fn preflight_export<'a>(
+        &'a self,
+        dataset: &'a DatasetId,
+        options: labello_domain::ExportOptions,
+    ) -> ApiFuture<'a, labello_client::ExportJob> {
+        let mut state = self.state.borrow_mut();
+        state.export_calls.push("preflight".into());
+        let at = now();
+        let job = labello_client::ExportJob {
+            job_id: format!("export-{}", state.export_jobs.len()),
+            dataset_id: dataset.clone(),
+            summary: Some(labello_client::ExportSummary {
+                classes: options.class_mapping(&state.metadata).unwrap(),
+                included_images: 1,
+                objects: 1,
+                ..Default::default()
+            }),
+            options,
+            phase: labello_client::ExportPhase::Ready,
+            failure: None,
+            created_at: at,
+            updated_at: at,
+            expires_at: at + chrono::Duration::hours(24),
+            archive_bytes: None,
+            archive_blake3: None,
+        };
+        state.export_jobs.push(job.clone());
+        ready(Ok(job))
+    }
+    fn get_export<'a>(
+        &'a self,
+        _: &'a DatasetId,
+        id: &'a str,
+    ) -> ApiFuture<'a, labello_client::ExportJob> {
+        self.export_test_job(id, "poll")
+    }
+    fn start_export<'a>(
+        &'a self,
+        _: &'a DatasetId,
+        id: &'a str,
+    ) -> ApiFuture<'a, labello_client::ExportJob> {
+        self.export_test_job(id, "start")
+    }
+    fn cancel_export<'a>(
+        &'a self,
+        _: &'a DatasetId,
+        id: &'a str,
+    ) -> ApiFuture<'a, labello_client::ExportJob> {
+        self.export_test_job(id, "cancel")
+    }
+    fn export_download_url<'a>(&'a self, _: &'a DatasetId, _: &'a str) -> ApiFuture<'a, String> {
+        let mut state = self.state.borrow_mut();
+        state.export_calls.push("download".into());
+        if std::mem::take(&mut state.fail_next_export) {
+            return ready(Err(ClientError::Demo("download access denied".into())));
+        }
+        ready(Ok("http://127.0.0.1:18116/synthetic-export.zip".into()))
+    }
+
     fn list_datasets<'a>(&'a self) -> ApiFuture<'a, Vec<DatasetSummary>> {
         let mut state = self.state.borrow_mut();
         state.counts.list_datasets += 1;
@@ -2251,5 +2352,36 @@ impl UserApi for SpyApi {
 impl labello_client::BuildInformationApi for SpyApi {
     fn build_information(&self) -> ApiFuture<'_, labello_client::BuildIdentity> {
         Box::pin(async { Ok(labello_client::BuildIdentity::default()) })
+    }
+}
+
+impl SpyApi {
+    fn export_test_job<'a>(
+        &'a self,
+        id: &str,
+        action: &str,
+    ) -> ApiFuture<'a, labello_client::ExportJob> {
+        let mut state = self.state.borrow_mut();
+        state.export_calls.push(action.into());
+        if std::mem::take(&mut state.fail_next_export) {
+            return ready(Err(ClientError::Demo(
+                "synthetic export request failed".into(),
+            )));
+        }
+        let job = state
+            .export_jobs
+            .iter_mut()
+            .find(|j| j.job_id == id)
+            .unwrap();
+        match action {
+            "start" => job.phase = labello_client::ExportPhase::Building,
+            "cancel" => job.phase = labello_client::ExportPhase::Cancelled,
+            "poll" if job.phase == labello_client::ExportPhase::Building => {
+                job.phase = labello_client::ExportPhase::Succeeded;
+                job.archive_bytes = Some(1234);
+            }
+            _ => {}
+        }
+        ready(Ok(job.clone()))
     }
 }
