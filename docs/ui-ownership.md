@@ -159,6 +159,22 @@ quality preference. Old `:data-saver` browser keys are ignored. Existing image-l
 failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
+Statistics data, remote status, and active request identity remain dataset-owned.
+The navigation-owned modal does not perform an assignment transition or start a
+workspace epoch. Refresh uses the existing request/epoch gate and may run while
+assignment requests are active. Authentication/workspace invalidation dismisses
+the modal; losing its original assignment dismisses it without restoring work.
+Viewport changes trigger one modal sizing pass and an immediate follow-up repaint,
+so the open overlay stays constrained without waiting for statistics refresh or
+new input. This geometry cache belongs to egui and carries no workflow state.
+
+Required draft recovery and migration companion reconciliation take precedence
+when Statistics is open. Recovery clears the overlay under the existing recovery
+rules; reconciliation temporarily covers it without discarding its open state.
+After reconciliation is cancelled or completed, Statistics resumes ahead of
+ordinary revisit/assignment-transition dialogs. Closing Statistics preserves the
+underlying migration assignment and draft.
+
 ## Direct Migration Revisit
 
 At full-image confirmation, the resolved-object overview uses named buttons and
@@ -182,9 +198,3 @@ remain readable. Reloading an assignment resumes its latest persisted pass at th
 first outstanding object. The normal keep, edit and exclude controls record exact
 current decisions until full-image confirmation is available. Resolved overview
 entries then use the same direct revisit path as assignments without a pass.
-
-Statistics data, remote status, and active request identity remain dataset-owned.
-The navigation-owned modal does not perform an assignment transition or start a
-workspace epoch. Refresh uses the existing request/epoch gate and may run while
-assignment requests are active. Authentication/workspace invalidation dismisses
-the modal; losing its original assignment dismisses it without restoring work.

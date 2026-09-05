@@ -314,3 +314,96 @@ fn statistics_overlay_keeps_an_unsaved_annotation_and_its_selection() {
     assert_eq!(harness.state().work.assignment, assignment);
     assert_eq!(harness.state().work.queue.len(), queue_len);
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn statistics_overlay_cannot_mask_companion_reconciliation_and_resumes_after_cancel() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(320.0, 320.0)] {
+        let mut harness = Harness::builder().with_size(size).build_eframe(|ctx| {
+            inspector_presets::build(InspectorPreset::MigrationDiscovery, &ctx.egui_ctx)
+        });
+        harness.run_steps(3);
+        let assignment = harness.state().work.assignment.clone();
+        let annotations = harness.state().work.annotations.clone();
+        let cursor = harness.state().work.migration.cursor.clone();
+        let epoch = harness.state().workspace_epoch;
+        harness.state_mut().open_view(AppView::Stats);
+        harness
+            .state_mut()
+            .work
+            .migration
+            .pending_companion_reconciliation =
+            Some(labello_domain::AnnotationId::from("discovered-object-1"));
+        harness.run_steps(3);
+        assert!(harness.state().navigation.statistics.open);
+        assert!(harness.query_by_label("Reconcile companion box?").is_some());
+        assert!(harness.query_by_label("Dataset statistics").is_none());
+        harness.key_press(egui::Key::ArrowRight);
+        harness.run_steps(2);
+        assert!(!harness.state().work.migration.busy);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(
+            harness
+                .state()
+                .work
+                .migration
+                .pending_companion_reconciliation
+                .is_none()
+        );
+        assert!(harness.query_by_label("Dataset statistics").is_some());
+        assert!(harness.state().navigation.statistics.open);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(!harness.state().navigation.statistics.open);
+        assert_eq!(harness.state().work.assignment, assignment);
+        assert_eq!(harness.state().work.annotations, annotations);
+        assert_eq!(harness.state().work.migration.cursor, cursor);
+        assert_eq!(harness.state().workspace_epoch, epoch);
+    }
+}
+
+#[test]
+fn statistics_overlay_resizes_using_immediate_repaints_without_waiting_for_refresh() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.state_mut().open_view(AppView::Stats);
+    harness.run();
+    let assignment = harness.state().work.assignment.clone();
+    let annotations = harness.state().work.annotations.clone();
+    let epoch = harness.state().workspace_epoch;
+    let counts = api.counts();
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        harness.set_size(size);
+        // Honor immediate repaint requests, without forcing later timer/input frames.
+        harness.run();
+        let rect = harness.get_by_label("Dataset statistics").rect();
+        assert!(
+            rect.left() >= -0.5
+                && rect.top() >= -0.5
+                && rect.right() <= size.x + 0.5
+                && rect.bottom() <= size.y + 0.5,
+            "statistics did not settle inside {size:?}: {rect:?}"
+        );
+        assert_control_inside(
+            &harness,
+            "Close statistics",
+            egui::accesskit::Role::Button,
+            size.x,
+            size.y,
+        );
+        assert_eq!(harness.state().work.assignment, assignment);
+        assert_eq!(harness.state().work.annotations, annotations);
+        assert_eq!(harness.state().workspace_epoch, epoch);
+    }
+    assert_eq!(api.counts().release_assignment, counts.release_assignment);
+    assert_eq!(api.counts().record_review, counts.record_review);
+}

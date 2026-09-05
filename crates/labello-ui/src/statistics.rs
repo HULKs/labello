@@ -56,8 +56,16 @@ impl LabelloApp {
         let width = (screen.width() - 56.0).clamp(200.0, 1050.0);
         let max_height = (screen.height() - 56.0).max(160.0);
         let id = egui::Id::new("statistics-overlay");
+        let resized = ctx.data_mut(|data| {
+            let viewport_id = id.with("viewport");
+            let previous = data.get_temp::<egui::Rect>(viewport_id);
+            data.insert_temp(viewport_id, screen);
+            previous.is_some_and(|previous| previous != screen)
+        });
         let area = egui::Modal::default_area(id)
             .default_width(width)
+            // Remeasure the anchored area and repaint immediately after a viewport change.
+            .sizing_pass(resized)
             .constrain_to(screen);
         let mut close = false;
         let response = theme::modal(ctx, id).area(area).show(ctx, |ui| {
