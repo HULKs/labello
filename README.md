@@ -200,9 +200,11 @@ staged until `Save changes` is selected. The Pan toggle defaults to `P`. Its
 primary-button drag gesture has a separately configurable modifier that defaults
 to `Ctrl`.
 
-The canvas zooms with two-finger touchpad movement, pinch, or the configured
-zoom keys. Press the configured Pan key to toggle Pan mode, then left-drag a
-zoomed image. Press it again or `Escape` to return to annotation input. The
+The canvas zooms with the mouse wheel, two-finger touchpad scrolling, pinch, or
+the configured zoom keys. Settings lists Zoom in and Zoom out with their current
+bindings and gesture instructions. The context bar keeps Pan, Fit, and the
+applicable Refocus control; it has no zoom buttons or percentage display.
+Press the configured Pan key to toggle Pan mode, then left-drag a zoomed image. Press it again or `Escape` to return to annotation input. The
 configured modifier plus left-drag (`Ctrl+left-drag` by default), middle-drag,
 touch gestures, and double-click-to-fit remain available. Use Refocus in the
 workspace context bar, or press its configurable shortcut (`R` by default), to

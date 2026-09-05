@@ -235,8 +235,12 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
         }
         UserAction::RetryImageLoad => "Try to claim and load an image again.",
         UserAction::TogglePanMode => "Use primary drag to move a zoomed image.",
-        UserAction::ZoomIn => "Increase canvas magnification.",
-        UserAction::ZoomOut => "Decrease canvas magnification.",
+        UserAction::ZoomIn => {
+            "Zoom in with the mouse wheel, two-finger touchpad scrolling, or pinch."
+        }
+        UserAction::ZoomOut => {
+            "Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch."
+        }
         UserAction::FitImage => "Fit and center the image.",
         UserAction::RefocusObject => "Center and zoom to the active review or migration object.",
         UserAction::AcceptReviewObject => "Approve the current review object.",
