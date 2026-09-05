@@ -103,6 +103,12 @@ inspector evidence proves shared egui behavior only; use Chromium for browser
 layout, zoom, input, accessibility-tree, networking, cookie, or IndexedDB
 claims. Shared-rendering changes require the locked release Trunk build.
 
+For native inspection, follow the
+[inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
+It includes headless startup, MCP readiness checks, independent parallel
+instances, and evidence tied to the tested checkout. Headless execution does
+not remove the visual checks or replace the Chromium evidence above.
+
 ### Browser And WASM
 
 Read [`ui-ownership.md`](ui-ownership.md),
