@@ -26,6 +26,7 @@ use super::{
 };
 
 pub(super) struct Capture {
+    pub repository: DatasetRepository,
     source: Arc<Source>,
     originals: Vec<ImageRecord>,
     pub files: Vec<CapturedFile>,
@@ -409,6 +410,7 @@ pub(super) async fn prepare(
         &limits,
     )?;
     let capture = Capture {
+        repository,
         source,
         originals,
         files: writer.files,
