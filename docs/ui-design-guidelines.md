@@ -216,3 +216,7 @@ Measured workspace action buttons use the same state-dependent shortcut
 foreground both inline and in wrapped overflow menus. Moving an action into
 More changes only its placement; its shortcut contrast and accessible command
 identity remain the same.
+
+Responsive workspace checks must also resize through the viewport matrix while
+running only requested frames. Compact action panels must settle without a later
+pointer or keyboard event; forced extra frames can conceal a cached-height gap.

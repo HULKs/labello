@@ -378,3 +378,48 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
         assert!(harness.state().work.drawer.is_none());
     }
 }
+
+fn assert_workspace_resize_settles_without_input(mut harness: Harness<'_, LabelloApp>) {
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.run_steps(6);
+    let settled = harness.get_by_label("Annotation canvas").rect();
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(1288.0, 820.0),
+        egui::vec2(600.0, 800.0), egui::vec2(390.0, 844.0),
+        egui::vec2(320.0, 568.0), egui::vec2(320.0, 320.0)] {
+        harness.set_size(size);
+        // Run only requested frames; extra steps would conceal a missing repaint.
+        harness.run();
+    }
+    let resized = harness.get_by_label("Annotation canvas").rect();
+    assert_eq!(resized, settled, "idle resize must settle without pointer input");
+    assert!(resized.height() >= 44.0, "{resized:?}");
+}
+
+#[test]
+fn workspace_idle_resize_settles_annotation_actions() {
+    assert_workspace_resize_settles_without_input(loaded_work_harness(Rc::new(SpyApi::new())));
+}
+
+#[test]
+fn workspace_idle_resize_settles_review_actions() {
+    for revision in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+        }), true);
+        let mut harness = loaded_review_harness(api);
+        if revision { enter_test_review_revision(harness.state_mut()); }
+        assert_workspace_resize_settles_without_input(harness);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn workspace_idle_resize_settles_migration_actions() {
+    use crate::inspector_presets::{build, InspectorPreset};
+    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
+        let harness = Harness::builder().with_size(egui::vec2(320.0, 320.0))
+            .build_eframe(move |ctx| build(preset, &ctx.egui_ctx));
+        assert_workspace_resize_settles_without_input(harness);
+    }
+}

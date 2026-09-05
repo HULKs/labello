@@ -50,7 +50,8 @@ impl eframe::App for LabelloApp {
         }
         if self.work_view() {
             if let Some(action_height) = compact_action_height {
-                egui::Panel::bottom("compact_primary_actions")
+                let allocated_bottom = ui.available_rect_before_wrap().bottom();
+                let actions = egui::Panel::bottom("compact_primary_actions")
                     .min_size(action_height)
                     .frame(if Self::short_viewport(viewport) && self.manual_migration_active() && self.view == AppView::Annotate {
                         theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
@@ -62,6 +63,11 @@ impl eframe::App for LabelloApp {
                             ui.horizontal_wrapped(|ui| self.workspace_actions(ui, layout));
                         }
                     });
+                if actions.response.rect.bottom() < allocated_bottom - 0.5 {
+                    // A shrinking bottom panel starts at its cached taller size. Paint its
+                    // updated measurement next frame without waiting for another input.
+                    ui.ctx().request_repaint();
+                }
             } else {
                 // Preserve the parent UI's child sequence so later panel widget IDs remain stable.
                 egui::Panel::bottom("compact_primary_actions_placeholder")
