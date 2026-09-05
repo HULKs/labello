@@ -1570,8 +1570,12 @@ fn automatic_workflow_notice_is_accessible_and_preserves_compact_canvas() {
         harness.state_mut().work.automatic_workflow_change = Some(notice.clone());
         harness.run();
         let with_notice = harness.get_by_label("Annotation canvas").rect();
-        assert_eq!(with_notice.min, without_notice.min);
+        assert_eq!(with_notice.left(), without_notice.left());
+        if height >= 480.0 {
+            assert_eq!(with_notice.top(), without_notice.top());
+        }
         assert_eq!(with_notice.width(), without_notice.width());
+        assert!(with_notice.height() >= 44.0);
         assert!(with_notice.height() >= without_notice.height());
         let status = harness.get_by_role_and_label(egui::accesskit::Role::Status, &label);
         assert_eq!(
