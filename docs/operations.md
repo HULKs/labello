@@ -480,3 +480,27 @@ count against data use. Assignment claims finish independently so unused claims
 can be released, and already-started server workers finish within their configured
 bounds. Network loss retains the documented draft-recovery limitations and does
 not add offline annotation or conflict resolution.
+
+## Dataset Export
+
+Exports use private `.labello-server/exports` storage on Linux and require
+one server process per datasets root. Monitor free disk for retained archives
+plus each active job's copied originals, metadata, and archive being built.
+A conservative bound is retained jobs times `maxArchiveBytes`, plus active
+workers times `maxSourceBytes + maxMetadataBytes + maxArchiveBytes`.
+Limits bound allocations; they do not reserve disk space.
+
+Cleanup runs on export requests and every 60 seconds. Startup removes expired
+jobs and orphan reservations, marks unpublished jobs interrupted, and retains
+completed artifacts. Retry an interrupted, failed, or cancelled operation with
+a new preflight. Do not hand-edit job state or expose staged files as downloads.
+Graceful shutdown requests cancellation of active export workers; restart
+recovery reconciles any unfinished cleanup.
+
+Downloaded artifacts contain original images and annotation geometry. Keep
+artifacts and private captures out of logs, public web roots, and diagnostic
+attachments. Operational export failures use safe bounded categories and job
+IDs. Every API route checks current dataset administration access, including
+retained downloads. Revocation prevents new streams but does not terminate an
+already authorized stream. See [configuration](configuration.md#export-limits)
+and [the export contract](export.md).

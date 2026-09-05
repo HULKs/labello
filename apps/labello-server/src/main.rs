@@ -280,6 +280,25 @@ localAdminLogin = false
     }
 
     #[test]
+    fn export_limits_default_and_reject_invalid_configuration() {
+        let omitted: ServerConfig = toml::from_str(CONFIG).unwrap();
+        assert!(omitted.export.is_none());
+        let partial: ServerConfig =
+            toml::from_str(&format!("{CONFIG}\n[export]\nmaxImages = 12\n")).unwrap();
+        let limits = partial.export.unwrap();
+        assert_eq!(limits.max_images, 12);
+        assert_eq!(limits.max_concurrent_jobs, 1);
+        limits.validate().unwrap();
+        assert!(
+            toml::from_str::<ServerConfig>(&format!("{CONFIG}\n[export]\nunknownLimit = 1\n"))
+                .is_err()
+        );
+        let invalid: ServerConfig =
+            toml::from_str(&format!("{CONFIG}\n[export]\nmaxConcurrentJobs = 0\n")).unwrap();
+        assert!(invalid.export.unwrap().validate().is_err());
+    }
+
+    #[test]
     fn rejects_old_and_missing_config_fields() {
         let old = CONFIG
             .replace("browserOrigins", "allowedOrigins")

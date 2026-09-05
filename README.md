@@ -21,6 +21,8 @@ Labello currently supports:
 - filesystem image ingestion, duplicate detection, statistics, and snapshots;
 - atomic new-dataset import for explicit YOLO detection/pose and COCO
   instances/keypoints ground-truth profiles;
+- original-image detection and pose dataset export with explicit
+  [round-trip guarantees](docs/export.md);
 - guided box-to-skeleton migration with audited exclusions, replayed progress,
   assignment navigation, read-only browsing of resolved objects, and linked
   box companions for manually discovered objects;
@@ -290,6 +292,12 @@ published only after verification. YOLO paths must be portable and relative to
 the sealed source; absolute YAML paths, URLs, and `download` directives are not
 followed.
 
+Dataset administrators can use dataset export to select a detection or pose
+profile, preflight compatible tasks/classes, build a private archive, and
+download it after verification. Re-import requires local extraction and a new
+dataset; native workflow history and identities are not restored. See the
+[export contract](docs/export.md) for completeness rules and pose compatibility.
+
 The server stores each dataset below `datasetsRoot`:
 
 ```text
@@ -297,6 +305,7 @@ datasets/
   .labello-server/
     auth.json
     imports/
+    exports/<job-id>/
   <dataset-id>/
     labello.dataset.toml
     labello.schema.json
@@ -473,7 +482,7 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
   available despite the target design saying schema versions start at 1.
 - Snapshots are downloadable annotation/audit packages, not complete backups.
   They omit image bytes, authentication state, user keybindings, and private
-  import control state, and there is no native snapshot-restore operation.
+  import/export control state, and there is no native snapshot-restore operation.
 
 ### Production And Operational Boundaries
 
@@ -494,8 +503,9 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 - Import format support is tested under configured limits, but official
   COCO-scale operation remains a separate performance gate.
 - Import does not merge into existing datasets and does not support prediction
-  or prelabel import, segmentation, remote sources, archive sources, or
-  round-trip export.
+  or prelabel import, segmentation, remote sources, or archive sources.
+  [Detection and pose export](docs/export.md) supports explicit ground-truth
+  round trips into new datasets; it does not restore native identities or history.
 - Import publication, assignment locking, and in-memory caches assume one
   Labello server process per datasets root. Multi-process coordination is not
   supported, including on a shared network filesystem.

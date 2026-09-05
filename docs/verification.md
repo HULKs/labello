@@ -300,3 +300,56 @@ or ruleset for `main` that:
 The workflow file cannot activate repository-hosted branch protection by
 itself. The rule must be enabled in GitHub before this contract is considered
 fully enforced; record that repository-setting check in rollout evidence.
+
+## Export round-trip verification
+
+Export changes require storage capture, source mutation, cancellation,
+publication failure, retention/restart, and archive integrity checks. API
+checks exercise unauthenticated, non-admin, CSRF, revoked-role, safe-error,
+HEAD, and streamed GET paths. UI checks additionally exercise real browser
+preflight, start, download, reload/history, cancellation and retry, including
+the documented viewport and keyboard matrix.
+
+Generate both profiles through the production export service, extract them,
+and reimport through the production browser-folder protocol:
+
+```sh
+mkdir -p .worktrees/export-reader-artifacts
+LABELLO_EXPORT_ROUND_TRIP_ARTIFACTS="$PWD/.worktrees/export-reader-artifacts" \
+  cargo test --locked -p labello-storage export::round_trip
+```
+
+Use a new artifact directory for each run; the test refuses to overwrite
+profile directories. It checks hashes, distinct classes with equal names,
+object counts, normalized geometry at `1e-6`, Visible/Occluded/Not present
+states, keypoint names, empty coverage and train/val/test preservation. It
+also asserts the documented loss of native identity/history and materialized
+pose boxes. These fixtures are synthetic and contain no user data.
+
+The reader check uses CPython 3.12, a private virtual environment, pinned
+Ultralytics 8.4.125 and CPU Torch 2.8.0/Torchvision 0.23.0. Dependency setup
+requires network access; the actual reader script refuses socket connections,
+uses a local repository font, constructs no model, and checks that production
+artifacts remain unchanged. Install into the private environment only:
+
+```sh
+python3.12 -m venv .worktrees/export-reader-venv
+.worktrees/export-reader-venv/bin/python -m pip install \
+  --index-url https://download.pytorch.org/whl/cpu \
+  torch==2.8.0+cpu torchvision==0.23.0+cpu
+.worktrees/export-reader-venv/bin/python -m pip install \
+  -r crates/labello-storage/tests/export-reader-requirements.txt
+.worktrees/export-reader-venv/bin/python \
+  crates/labello-storage/tests/export_reader.py \
+  .worktrees/export-reader-artifacts \
+  --report .worktrees/export-reader-report.json
+```
+
+The dataset reader must report both production profiles, preserved image and
+object counts, zero network attempts, zero constructed models, and unchanged
+input artifacts. Empty-only validation/test fixtures can produce the reader's
+expected training warnings. This command validates dataset reading, not
+training or prediction. Keep the dependency freeze, exact interpreter and
+reader versions, command logs, archive hashes, and JSON report with acceptance
+evidence. The reader check supplements canonical verification; it does not
+replace it.

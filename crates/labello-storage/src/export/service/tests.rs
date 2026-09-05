@@ -55,6 +55,14 @@ async fn jobs_publish_only_verified_artifacts_and_completed_downloads_survive_re
     assert_eq!(completed.phase, ExportPhase::Succeeded);
     let (file, readback, _permit) = service.download(&dataset, &job.job_id).await.unwrap();
     assert_eq!(readback, completed);
+    let second_download = service.download(&dataset, &job.job_id).await.unwrap();
+    assert_eq!(
+        service.download(&dataset, &job.job_id).await.unwrap_err(),
+        ExportFailure::Busy
+    );
+    drop(second_download);
+    let retry_download = service.download(&dataset, &job.job_id).await.unwrap();
+    drop(retry_download);
     let zip = zip::ZipArchive::new(file).unwrap();
     assert!(zip.file_names().any(|name| name == "labello-export.json"));
     assert!(!service.job_dir(&job.job_id).unwrap().join("spool").exists());
@@ -263,4 +271,50 @@ async fn private_control_root_rejects_symlinks() {
         Err(ExportFailure::InvalidInput)
     ));
     assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 0);
+}
+
+#[tokio::test]
+async fn restart_discards_orphans_and_expired_jobs_before_enforcing_retention_capacity() {
+    let (source, repository, options) = fixture().await;
+    let service = ExportService::new(source.path(), ExportLimits::default())
+        .await
+        .unwrap();
+    let dataset = DatasetId::from("export");
+    let first = service
+        .preflight(&dataset, repository.clone(), options.clone())
+        .await
+        .unwrap();
+    let mut expired = settled(&service, &first.job_id).await;
+    let second = service
+        .preflight(&dataset, repository, options)
+        .await
+        .unwrap();
+    let retained = settled(&service, &second.job_id).await;
+    assert_eq!(retained.phase, ExportPhase::Ready);
+    expired.expires_at = now() - std::time::Duration::from_secs(1);
+    service.persist(&expired).await.unwrap();
+    let orphan = service.job_dir(&uuid::Uuid::new_v4().to_string()).unwrap();
+    create_private_directory(&orphan).unwrap();
+    let orphan_name = orphan.file_name().unwrap().to_owned();
+    drop(service);
+    let restarted = ExportService::new(
+        source.path(),
+        ExportLimits {
+            max_retained_jobs: 1,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(restarted.jobs(&dataset).await.unwrap().len(), 1);
+    assert_eq!(
+        restarted
+            .job(&dataset, &retained.job_id)
+            .await
+            .unwrap()
+            .failure,
+        Some(ExportFailure::Interrupted)
+    );
+    assert!(!restarted.inner.path.join(orphan_name).exists());
+    assert!(!restarted.job_dir(&expired.job_id).unwrap().exists());
 }

@@ -135,3 +135,21 @@ async fn capture_reads_fresh_index_and_refuses_bounds_cancel_and_symlinks() {
         );
     }
 }
+
+#[tokio::test]
+async fn identical_configuration_in_a_replaced_root_does_not_validate_the_old_capture() {
+    let (directory, repository, _) = fixture().await;
+    let limits = ExportLimits::default();
+    let captured = Source::open(repository.root(), &limits).unwrap();
+    let moved = directory.path().with_extension("export-old-root");
+    std::fs::rename(directory.path(), &moved).unwrap();
+    std::fs::create_dir(directory.path()).unwrap();
+    for name in ["labello.dataset.toml", "images-index.json"] {
+        std::fs::copy(moved.join(name), directory.path().join(name)).unwrap();
+    }
+    assert_eq!(
+        captured.verify_configuration(&limits),
+        Err(ExportFailure::SourceChanged)
+    );
+    std::fs::remove_dir_all(moved).unwrap();
+}

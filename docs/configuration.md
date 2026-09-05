@@ -459,3 +459,34 @@ space before temporary publication; the zero-byte lock file is not charged.
 The service rejects zero/out-of-range limits and unknown settings. Changing
 limits requires restart. Smaller cache limits trigger eviction on first access.
 See [operations](operations.md#derived-preview-cache) for disposal and recovery.
+
+## Export Limits
+
+Linux servers initialize dataset export with defaults when `[export]` is
+absent. Other platforms advertise export as unavailable. Initialization fails
+if secure private storage cannot be established or limits are invalid. The
+section uses camelCase fields and rejects unknown fields.
+
+```toml
+[export]
+maxImages = 10_000
+maxFiles = 30_010
+maxSourceBytes = 10_737_418_240
+maxFileBytes = 536_870_912
+maxDecodedImageBytes = 268_435_456
+maxArchiveBytes = 12_884_901_888
+maxMetadataBytes = 33_554_432
+maxConcurrentJobs = 1
+maxConcurrentDownloads = 2
+maxRetainedJobs = 8
+retentionSeconds = 86_400
+```
+
+All byte limits are bytes. Metadata accounting includes bounded event reads
+and generated metadata. Source bytes cannot exceed archive bytes; one file
+cannot exceed source bytes. Hard ceilings are 100,000 images, 300,010 files,
+1 TiB archive bytes, 1 GiB decoded bytes, 256 MiB metadata, four workers,
+eight concurrent downloads, 64 retained jobs, and seven days retention.
+Retained capacity must accommodate configured workers. Limits advertised by
+capabilities are the effective server values. See [export operations](operations.md#dataset-export)
+for disk planning and recovery.

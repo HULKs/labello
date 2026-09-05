@@ -131,8 +131,17 @@ impl ExportService {
         let directory = self.job_dir(&job_id)?;
         create_private_directory(&directory)?;
         let spool = directory.join("spool");
-        create_private_directory(&spool)?;
-        self.persist(&job).await?;
+        let setup = async {
+            create_private_directory(&spool)?;
+            self.persist(&job).await
+        }
+        .await;
+        if let Err(error) = setup {
+            tokio::fs::remove_dir_all(&directory)
+                .await
+                .map_err(|_| ExportFailure::Storage)?;
+            return Err(error);
+        }
         let cancel = Arc::new(AtomicBool::new(false));
         jobs.insert(
             job_id.clone(),
@@ -504,9 +513,6 @@ impl ExportService {
             .await
             .map_err(|_| ExportFailure::Storage)?
         {
-            if jobs.len() >= self.inner.limits.max_retained_jobs {
-                return Err(ExportFailure::Limit);
-            }
             let id = directory
                 .file_name()
                 .into_string()
@@ -556,6 +562,15 @@ impl ExportService {
             job.dataset_id
                 .validate_path_segment()
                 .map_err(|_| ExportFailure::InvalidInput)?;
+            if job.expires_at <= now() {
+                tokio::fs::remove_dir_all(&path)
+                    .await
+                    .map_err(|_| ExportFailure::Storage)?;
+                continue;
+            }
+            if jobs.len() >= self.inner.limits.max_retained_jobs {
+                return Err(ExportFailure::Limit);
+            }
             if job.phase.is_active() || job.phase == ExportPhase::Ready {
                 job.phase = ExportPhase::Failed;
                 job.failure = Some(ExportFailure::Interrupted);

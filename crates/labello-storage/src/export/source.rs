@@ -16,7 +16,7 @@ pub(super) struct Source {
     path: PathBuf,
     pub metadata: DatasetMetadata,
     pub configuration_digest: String,
-    index_digest: String,
+    pub index_digest: String,
 }
 
 impl Source {

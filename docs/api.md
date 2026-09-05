@@ -380,3 +380,34 @@ Saved browser quality preferences are ignored; preview failure never chooses
 original detail. Aborting superseded image transfers does not abort assignment
 claims: their replies must still be received so obsolete reservations can be released. Server workers already
 started retain their configured bounds through completion/cleanup.
+
+## Dataset Export Routes
+
+Every route requires a current authenticated dataset **DataAdmin**. POST
+requests retain the session CSRF requirement. Control JSON is limited to 1 MiB.
+Capabilities report availability and limits; unavailable operations return 409.
+Jobs are private to their dataset, and current role checks apply to retained
+jobs too. Transport DTOs live in `labello-client/src/export.rs`.
+
+| Route | Request and response |
+| --- | --- |
+| `GET /datasets/{dataset_id}/exports/capabilities` | `ExportCapabilities` |
+| `GET /datasets/{dataset_id}/exports` | Retained `ExportJob[]` |
+| `POST /datasets/{dataset_id}/exports` | `ExportOptions` → capturing `ExportJob` |
+| `GET /datasets/{dataset_id}/exports/{job_id}` | Current `ExportJob` |
+| `POST /datasets/{dataset_id}/exports/{job_id}/start` | Ready job → building job |
+| `POST /datasets/{dataset_id}/exports/{job_id}/cancel` | Cancellation state |
+| `GET /datasets/{dataset_id}/exports/{job_id}/download` | Verified streamed ZIP attachment |
+| `HEAD /datasets/{dataset_id}/exports/{job_id}/download` | Same authorization and integrity checks, without a body |
+
+Options include profile, task/class identities, required fallback split, and
+optional per-image split choices. Completed downloads send `application/zip`,
+a safe generated filename, content length, `private, no-store`, and `nosniff`.
+Download checks authorization again after checksum I/O. The browser client
+uses HEAD before returning the attachment URL and does not buffer the archive.
+
+Missing jobs return 404; busy workers, source changes, and invalid lifecycle
+operations return 409; limits return 413; incompatible selections and invalid
+source geometry return 422; storage and verification failures return a safe
+500 category. Error messages exclude source paths and geometry. Preflight
+blockers and omissions are recorded in the job summary; see [export](export.md).
