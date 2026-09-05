@@ -142,18 +142,34 @@ has been recorded.
   annotated dispositions, excluded objects, discovered skeletons and confirmation;
   excluded objects show disposition version without inventing an annotation version.
   Correction mode shows the base persisted version and whether input is unsaved.
+  Short compact decision revisions keep a visible Revising indication in the
+  existing identity line. The full accessible details explain that geometry is
+  unchanged; no redundant caption row consumes canvas space. If target context
+  is unavailable, retain the revision caption without showing stale target details.
   Decision revisions distinguish the current effective decision from a staged,
   uncommitted replacement. Loading, missing/stale targets and lost assignments
   clear the previous context; a missing image preview is labeled separately while
   valid authoritative target context remains available. Long values wrap with a
   complete accessible summary, and compact Inspector drawers scroll.
+  Workspace secondary actions use measured button atoms, including the current
+  font, icons and shortcuts, in the space left after preceding controls and badges.
+  Preserve each workflow's primary controls and secondary order. Show the longest
+  secondary prefix that fits with an overflow trigger for the remaining tail; omit
+  the trigger when everything fits. Required controls wrap and the panel reserves
+  their actual height. Migration Previous object leads its secondary action order;
+  short migration annotation bars remove spare vertical padding so confirmation
+  and the canvas remain visible. Moving a focused action into overflow transfers focus to
+  the trigger without dispatching it; opening the menu returns keyboard access to
+  that action. Long menu labels and shortcuts stack within a scrollable menu.
   Review bars use that same current target in every layout. Reserve space for the
   workflow/class identity, full annotation type and canonical phase before optional
   filename text and secondary controls. Only the identity line may truncate; type
   and phase wrap at their measured text width and the shell reserves the resulting
   height. At compact sizes, the summary opens Inspector details by touch or keyboard,
   a separate Workflow control stays reachable, and canvas controls occupy a second
-  row. Short viewports retain identity and phase. Loading or missing targets replace
+  row. Compact availability feedback shares the truncatable identity line; it
+  must not take width from the full type/phase line or add a context row.
+  Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
@@ -188,3 +204,7 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+Responsive workspace checks must also resize through the viewport matrix while
+running only requested frames. Compact action panels must settle without a later
+pointer or keyboard event; forced extra frames can conceal a cached-height gap.

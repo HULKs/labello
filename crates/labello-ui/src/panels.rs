@@ -50,6 +50,7 @@ impl AppBarAction {
 
 include!("panels/app_bar.rs");
 include!("panels/workspace_actions.rs");
+include!("panels/workspace_overflow.rs");
 include!("panels/task_selector.rs");
 include!("panels/inspector.rs");
 include!("panels/workspace.rs");

@@ -40,7 +40,7 @@ impl eframe::App for LabelloApp {
             .show(ui, |ui| self.app_bar(ui, layout));
         if self.work_view() {
             egui::Panel::top("workspace_context")
-                .exact_size(self.workspace_context_height(ui.ctx(), layout, viewport))
+                .min_size(self.workspace_context_height(ui.ctx(), layout, viewport))
                 .frame(
                     theme::top_bar_frame()
                         .fill(theme::PANEL)
@@ -50,9 +50,15 @@ impl eframe::App for LabelloApp {
         }
         if self.work_view() {
             if let Some(action_height) = compact_action_height {
-                egui::Panel::bottom("compact_primary_actions")
+                let allocation = ui.available_rect_before_wrap();
+                let actions_id = egui::Id::new("compact_primary_actions");
+                let previous_height = egui::containers::panel::PanelState::load(ui.ctx(), actions_id)
+                    .map(|state| state.size().y);
+                let actions = egui::Panel::bottom(actions_id)
                     .min_size(action_height)
-                    .frame(theme::top_bar_frame())
+                    .frame(if Self::short_viewport(viewport) && self.manual_migration_active() && self.view == AppView::Annotate {
+                        theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
+                    } else { theme::top_bar_frame() })
                     .show(ui, |ui| {
                         if layout == LayoutMode::Compact {
                             self.compact_workspace_actions(ui);
@@ -60,6 +66,16 @@ impl eframe::App for LabelloApp {
                             ui.horizontal_wrapped(|ui| self.workspace_actions(ui, layout));
                         }
                     });
+                let measured = actions.response.rect;
+                if (measured.bottom() - allocation.bottom()).abs() > 0.5
+                    && measured.height() > 0.5
+                    && measured.height() <= allocation.height() + 0.5
+                    && previous_height.is_none_or(|height| (height - measured.height()).abs() > 0.5)
+                {
+                    // Bottom panels start at their cached height. Settle a changed
+                    // measurement once; an unchanged clipped panel must not repaint forever.
+                    ui.ctx().request_repaint();
+                }
             } else {
                 // Preserve the parent UI's child sequence so later panel widget IDs remain stable.
                 egui::Panel::bottom("compact_primary_actions_placeholder")

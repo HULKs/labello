@@ -54,6 +54,9 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
+  stable command locations and overflow keyboard focus; workflow owners supply
+  action order, availability and command dispatch;
 - `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
   interaction and context-row height;
 - `review_context.rs`: immutable exact-target context shared by review presentation;
@@ -68,6 +71,11 @@ The canvas keeps its public state and entry points in `canvas.rs`. Its internal
 implementation is split only into rendering, painting, interaction,
 hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
 the canvas module so these boundaries do not weaken behavioral coverage.
+
+The shared workflow-state reducer retains every persisted annotation ID,
+including deleted versions. Undo/Redo rebases a restored annotation onto that
+latest authoritative version before saving; a failed save keeps the same draft
+available for retry. Visible annotations remain the active projection.
 
 ## Browser persistence
 
@@ -93,3 +101,21 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+Short review layout uses the shared review-context projection to keep revision
+mode in the existing context identity line. The central workspace omits its
+redundant caption only when valid compact revision details are present; missing
+or stale target context retains the caption fallback. This presentation does not
+change captured targets, staging, or commit policy.
+
+Compact review availability uses a reserved slot in the identity line. Only that
+truncatable line gives up text width; type/phase and canvas allocation remain
+stable while loading. The shared spinner description retains its existing
+progress-indicator name and tooltip across workspace placements.
+
+The shared shell measures the compact action panel against its allocated bottom edge.
+When its height changes after a resize, it requests the next repaint to settle
+growing or shrinking content without waiting for pointer input. It compares the
+existing panel cache with the new measurement, so unchanged clipped content at
+an unsupported tiny size cannot cause a repaint loop. This preserves dynamic
+wrapping and does not discard a pass or replay input commands.

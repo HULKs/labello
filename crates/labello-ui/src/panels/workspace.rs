@@ -15,7 +15,7 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
         }
-        if self.review_revision_active() {
+        if self.review_revision_active() && !self.review_revision_in_compact_context(ui.ctx()) {
             let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";
             let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
                 "Decision revision; geometry unchanged."
@@ -209,7 +209,7 @@ impl LabelloApp {
                 self.assignment_availability_spinner(ui);
             })
         } else {
-            ui.horizontal(|ui| {
+            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 add_summary(
                     ui,
                     if short {
@@ -248,7 +248,6 @@ impl LabelloApp {
                     ui.separator();
                     self.workspace_actions(ui, layout);
                 }
-                self.assignment_availability_spinner(ui);
             })
         };
         response.response.widget_info(|| {
@@ -265,21 +264,19 @@ impl LabelloApp {
         if !self.work.availability.loading || !self.work.availability.tasks.is_empty() {
             return;
         }
-        ui.with_layout(
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                let spinner = ui
-                    .spinner()
-                    .on_hover_text("Checking assignment availability…");
-                spinner.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::ProgressIndicator,
-                        true,
-                        "Loading workflow assignment availability",
-                    )
-                });
-            },
-        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            Self::describe_assignment_availability_spinner(ui.spinner());
+        });
+    }
+
+    fn describe_assignment_availability_spinner(response: egui::Response) {
+        response.on_hover_text("Checking assignment availability…").widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::ProgressIndicator,
+                true,
+                "Loading workflow assignment availability",
+            )
+        });
     }
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -397,4 +394,17 @@ impl LabelloApp {
         });
     }
 
+}
+
+fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {
+    if availability {
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
+            ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), contents);
+            let spinner = ui.spinner().on_hover_text("Checking assignment availability…");
+            spinner.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, "Loading workflow assignment availability"));
+        })
+    } else {
+        ui.horizontal_wrapped(contents)
+    }
 }

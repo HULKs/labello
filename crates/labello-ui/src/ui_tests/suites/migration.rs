@@ -1098,8 +1098,8 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             canvas.bottom() <= primary.top(),
             "width={width} canvas={canvas:?} primary={primary:?}"
         );
-        for label in ["Undo last keypoint", "More"] {
-            let action = object.get_by_label(label).rect();
+        for label in ["Undo last keypoint", "Skip"] {
+            let action = object.query_by_label_contains(label).or_else(|| object.query_by_label("More")).unwrap().rect();
             assert!(
                 canvas.bottom() <= action.top(),
                 "width={width} canvas={canvas:?} {label}={action:?}"

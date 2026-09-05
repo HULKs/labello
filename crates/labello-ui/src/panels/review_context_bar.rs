@@ -12,6 +12,11 @@ impl ReviewBarContent {
             } else {
                 format!("{} · {}", context.workflow_name, context.class_name)
             };
+            let identity = if context.revision_mode {
+                format!("Revising · {identity}")
+            } else {
+                identity
+            };
             let phase = if context.correction.is_some() {
                 "Correction mode".to_string()
             } else if matches!(
@@ -51,16 +56,22 @@ struct ReviewBarText {
     lines: Vec<std::sync::Arc<egui::Galley>>,
     width: f32,
     height: f32,
+    availability_loading: bool,
 }
 
 impl ReviewBarText {
-    fn measure(ctx: &egui::Context, content: &ReviewBarContent, width: f32) -> Self {
+    fn measure(ctx: &egui::Context, content: &ReviewBarContent, width: f32, availability_loading: bool) -> Self {
         let width = width.floor().max(44.0);
         let inner_width = (width - 12.0).max(1.0);
         let font = egui::TextStyle::Body.resolve(&ctx.global_style());
         let layout = |text: String, truncate: bool| {
+            let line_width = if truncate && availability_loading {
+                (inner_width - 24.0).max(1.0)
+            } else {
+                inner_width
+            };
             let mut job =
-                egui::text::LayoutJob::simple(text, font.clone(), theme::TEXT, inner_width);
+                egui::text::LayoutJob::simple(text, font.clone(), theme::TEXT, line_width);
             if truncate {
                 job.wrap.max_rows = 1;
                 job.wrap.break_anywhere = true;
@@ -78,24 +89,32 @@ impl ReviewBarText {
             lines,
             width,
             height,
+            availability_loading,
         }
     }
 }
 
 impl LabelloApp {
+    fn review_revision_in_compact_context(&self, ctx: &egui::Context) -> bool {
+        let viewport = ctx.content_rect().size();
+        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
+            && Self::short_viewport(viewport)
+            && self.review_context().is_some_and(|context| context.revision_mode)
+    }
+
     fn review_summary_width(&self, ctx: &egui::Context, layout: LayoutMode, available: f32) -> f32 {
         if layout == LayoutMode::Wide {
             available.min(340.0)
         } else {
             let spacing = ctx.global_style().spacing.item_spacing.x;
-            let availability =
-                if self.work.availability.loading && self.work.availability.tasks.is_empty() {
-                    18.0 + spacing
-                } else {
-                    0.0
-                };
-            available - 44.0 - spacing - availability
+            available - 44.0 - spacing
         }
+    }
+
+    fn review_inline_availability_loading(&self, layout: LayoutMode) -> bool {
+        layout != LayoutMode::Wide
+            && self.work.availability.loading
+            && self.work.availability.tasks.is_empty()
     }
 
     pub(crate) fn review_context_bar_height(
@@ -106,7 +125,7 @@ impl LabelloApp {
     ) -> f32 {
         let content = ReviewBarContent::from_app(self);
         let width = self.review_summary_width(ctx, layout, viewport_width - 28.0);
-        let text = ReviewBarText::measure(ctx, &content, width);
+        let text = ReviewBarText::measure(ctx, &content, width, self.review_inline_availability_loading(layout));
         text.height
             + 12.0
             + if layout == LayoutMode::Wide {
@@ -119,7 +138,7 @@ impl LabelloApp {
     fn review_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         let content = ReviewBarContent::from_app(self);
         let width = self.review_summary_width(ui.ctx(), layout, ui.available_width());
-        let text = ReviewBarText::measure(ui.ctx(), &content, width);
+        let text = ReviewBarText::measure(ui.ctx(), &content, width, self.review_inline_availability_loading(layout));
         let valid = content.type_and_phase.is_some();
         if !valid || self.work.drawer == Some(Drawer::Workflow) {
             self.work.review_details_focus_return = None;
@@ -130,12 +149,11 @@ impl LabelloApp {
                 ui.horizontal(|ui| {
                     self.review_details_button(ui, &content, &text);
                     self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
-                    self.assignment_availability_spinner(ui);
                 });
                 ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
             })
         } else {
-            ui.horizontal(|ui| {
+            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 self.review_details_button(ui, &content, &text);
                 ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                 if !self.manual_migration_active() {
@@ -143,15 +161,14 @@ impl LabelloApp {
                     self.workspace_actions(ui, layout);
                 }
                 if let Some(current) = self.work.current.as_ref()
-                    && ui.available_width() >= 80.0
+                    && ui.available_size_before_wrap().x >= 80.0
                 {
                     ui.add_sized(
-                        [ui.available_width().min(160.0), 44.0],
+                        [ui.available_size_before_wrap().x.min(160.0), 44.0],
                         egui::Label::new(&current.image.file_name).truncate(),
                     )
                     .on_hover_text(&current.image.file_name);
                 }
-                self.assignment_availability_spinner(ui);
             })
         };
         response.response.widget_info(|| {
@@ -189,6 +206,23 @@ impl LabelloApp {
             for line in &text.lines {
                 ui.painter().galley(pos, line.clone(), theme::TEXT);
                 pos.y += line.size().y;
+            }
+            if text.availability_loading {
+                let line_height = text.lines[0].size().y;
+                let side = 16.0_f32.min(line_height);
+                let spinner_rect = egui::Rect::from_min_size(
+                    egui::pos2(rect.right() - side, rect.top() + (line_height - side) / 2.0),
+                    egui::vec2(side, side),
+                );
+                // The identity line already reserves this slot; do not advance the row cursor.
+                let mut spinner_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt("review-context-availability")
+                        .max_rect(spinner_rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
+                let spinner = spinner_ui.add(egui::Spinner::new().size(side));
+                Self::describe_assignment_availability_spinner(spinner);
             }
         }
         let response = choice.response.on_hover_text(&content.accessible);
