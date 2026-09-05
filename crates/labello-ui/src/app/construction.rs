@@ -35,6 +35,7 @@ impl LabelloApp {
             section: SetupSection::default(),
         };
         let work = WorkState {
+            quality: Default::default(),
             classes,
             tasks,
             selected_task_id: Some(TaskId::from("bounding_box:person")),

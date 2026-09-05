@@ -2,6 +2,7 @@ pub mod admin;
 pub mod app;
 pub mod canvas;
 pub mod folder_upload;
+mod image_quality;
 mod import_flow;
 #[cfg(feature = "inspector-presets")]
 pub mod inspector_presets;

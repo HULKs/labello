@@ -215,6 +215,32 @@ impl PreviewCache {
         .map_err(|_| PreviewError::Encode)?
     }
 
+    /// Explicit full-detail display only; downloads retain their separate contract.
+    pub async fn original_detail(
+        &self,
+        repo: &DatasetRepository,
+        record: &ImageRecord,
+    ) -> Result<Vec<u8>, PreviewError> {
+        let permit = self
+            .inner
+            .workers
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| PreviewError::Busy)?;
+        let inner = self.inner.clone();
+        let root = repo.root().to_path_buf();
+        let record = record.clone();
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            let source = codec::source_bytes(&root, &record, &inner.config)?;
+            // Validate decoder headers and configured allocation/pixel bounds before transfer.
+            drop(codec::decoder(&source, &record, &inner.config)?);
+            Ok(source)
+        })
+        .await
+        .map_err(|_| PreviewError::Decode)?
+    }
+
     /// The legacy fallback shares the same source, pixel, allocation and worker limits.
     pub async fn rgba(
         &self,

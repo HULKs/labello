@@ -465,3 +465,20 @@ cache directory, adjust `previews.cacheRoot` if needed, and restart. Never remov
 an active cache lock or edit cache entries while the service runs. A second
 owner, unexpected files, or unsafe paths fail closed; fix the directory while
 stopped. Derived cache loss never requires restoring authoritative dataset data.
+
+### Data saver and original detail
+
+Data saver is an explicit per-browser, API-endpoint and account preference,
+defaulting off. It uses the versioned 1280-pixel quality-80 WebP cache profile;
+Standard remains the lossless 1600-pixel profile. Current and upcoming-image
+prefetch follow the selection. Data saver failure exposes Retry image and Load
+original detail; it never automatically transfers RGBA or originals.
+
+Original detail is an explicit, bounded source read for one image visit. Advancing
+returns to the selected preview profile. Switching quality preserves draft
+edits, normalized coordinates, selection and canvas transform. Superseded image
+transfers are cancelled where possible; bytes already transferred still count
+against data use. Assignment claims finish independently so unused claims can be
+released, and already-started server workers finish within their configured
+bounds. Network loss retains the documented draft-recovery limitations and does
+not add offline annotation or conflict resolution.

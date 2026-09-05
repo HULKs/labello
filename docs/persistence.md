@@ -228,3 +228,15 @@ uses least-recently-read order in a process and oldest publication time after
 restart. Unrecognized files are preserved and fail cache initialization.
 Cancelling a caller before work starts publishes nothing; after start its bounded
 worker retains permits and completes or cleans up atomic publication.
+
+### Browser image quality preference
+
+The `:data-saver` localStorage key under the existing normalized
+endpoint/account `StorageIdentity` prefix contains only `true` or `false`.
+Missing/invalid values select Standard; storage failures are surfaced. The
+preference is independent of dataset location and drafts. Signing out or changing
+endpoint clears application image references and rejects/cancels obsolete
+transfers without deleting another identity's saved preference. Original detail
+is a transient per-image visit override and never enters browser persistence.
+Derived previews and this preference do not authorize offline work or restore a
+server assignment.

@@ -8,6 +8,9 @@ use crate::{
 
 impl LabelloApp {
     pub(crate) fn workspace_canvas(&mut self, ui: &mut egui::Ui) {
+        if !Self::short_viewport(ui.ctx().content_rect().size()) {
+            self.image_quality_controls(ui);
+        }
         self.work
             .canvas
             .set_pan_drag_modifier(self.work.keybindings.pan_drag_modifier);

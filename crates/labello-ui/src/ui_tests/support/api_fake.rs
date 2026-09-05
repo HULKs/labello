@@ -199,6 +199,7 @@ pub(super) struct CallCounts {
     pub(super) get_image_state: usize,
     pub(super) get_image_preview: usize,
     pub(super) get_encoded_image_preview: usize,
+    pub(super) get_original_detail: usize,
     pub(super) append_event: usize,
     pub(super) annotation_batch: usize,
     pub(super) rebuild_image: usize,
@@ -238,6 +239,8 @@ pub(super) struct SpyState {
     pub(super) events: Vec<EventPayload>,
     pub(super) fail_next_preview: bool,
     pub(super) fail_encoded_previews: bool,
+    pub(super) fail_original_detail: bool,
+    pub(super) preview_profiles: Vec<labello_client::ImagePreviewProfile>,
     pub(super) fail_next_revalidation: bool,
     pub(super) no_assignment: bool,
     pub(super) availability_overrides: BTreeMap<TaskId, bool>,
@@ -359,6 +362,8 @@ impl SpyState {
             events: Vec::new(),
             fail_next_preview: false,
             fail_encoded_previews: false,
+            fail_original_detail: false,
+            preview_profiles: Vec::new(),
             fail_next_revalidation: false,
             no_assignment: false,
             availability_overrides: BTreeMap::new(),
@@ -1625,6 +1630,20 @@ impl ImageApi for SpyApi {
         }))
     }
 
+    fn get_original_detail<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId) -> ApiFuture<'a, ImageFile> {
+        let mut state = self.state.borrow_mut();
+        state.counts.get_original_detail += 1;
+        if state.fail_original_detail { return ready(Err(ClientError::Demo("Original detail unavailable".into()))); }
+        let record = match state.record(image_id) { Ok(record) => record, Err(error) => return ready(Err(error)) };
+        let bytes: &[u8] = match record.width {
+            640 => include_bytes!("../fixtures/original-640.webp"),
+            800 => include_bytes!("../fixtures/original-800.webp"),
+            1024 => include_bytes!("../fixtures/original-1024.webp"),
+            _ => return ready(Err(ClientError::Demo("Original detail fixture unavailable".into()))),
+        };
+        ready(Ok(ImageFile { image_id: image_id.clone(), media_type: "image/webp".into(), bytes: bytes.to_vec() }))
+    }
+
     fn get_image_preview<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,
@@ -1653,6 +1672,7 @@ impl ImageApi for SpyApi {
     ) -> ApiFuture<'a, labello_client::EncodedImagePreview> {
         let mut state = self.state.borrow_mut();
         state.counts.get_encoded_image_preview += 1;
+        state.preview_profiles.push(profile);
         if state.fail_next_preview || state.fail_encoded_previews {
             // Keep the failure for the standard fallback as well.
             return ready(Err(ClientError::Demo("preview failed".into())));

@@ -388,6 +388,10 @@ impl LabelloApp {
             ui.set_width(width);
             ui.set_max_height(max_height);
             let mut contents = |ui: &mut egui::Ui| {
+                if Self::short_viewport(ui.ctx().content_rect().size()) && self.work.assignment.is_some() {
+                    self.image_quality_controls(ui);
+                    ui.separator();
+                }
                 ui.heading("Keyboard shortcuts");
                 ui.label(
                     RichText::new("Choose an action, then press its new key combination.")

@@ -361,6 +361,7 @@ pub(crate) struct NavigationState {
 }
 
 pub struct WorkState {
+    pub(crate) quality: crate::image_quality::ImageQuality,
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,

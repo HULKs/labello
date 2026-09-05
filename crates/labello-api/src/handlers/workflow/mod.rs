@@ -321,6 +321,34 @@ pub(crate) async fn get_image_file(
     ))
 }
 
+pub(crate) async fn get_original_detail(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+) -> ApiResult<impl IntoResponse> {
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    ensure_any_dataset_role(&repo.load_dataset_config().await?, &actor)?;
+    let record = repo.load_image_record(&image_id).await?;
+    let bytes = state
+        .previews
+        .original_detail(&repo, &record)
+        .await
+        .map_err(preview_error)?;
+    revalidate_preview_access(&state, &headers, &repo, &record).await?;
+    let format = image::ImageFormat::from_path(&record.canonical_path)
+        .map_err(|_| preview_error(labello_storage::PreviewError::Source))?;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, format.to_mime_type().to_string()),
+            (header::CACHE_CONTROL, "private, no-store".to_string()),
+        ],
+        Bytes::from(bytes),
+    ))
+}
+
 pub(crate) async fn get_image_preview(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,

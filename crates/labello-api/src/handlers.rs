@@ -176,6 +176,10 @@ pub fn router(state: ApiState) -> Router {
             get(workflow::get_image_file),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/detail",
+            get(workflow::get_original_detail),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/encoded-preview",
             get(workflow::get_encoded_preview),
         )

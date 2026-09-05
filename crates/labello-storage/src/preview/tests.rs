@@ -481,3 +481,41 @@ async fn failed_publication_cleans_temporary_data_and_can_retry() {
     fixture.get(PreviewProfile::DataSaverV1).await.unwrap();
     assert_eq!(fixture.generations(), 2);
 }
+
+#[tokio::test]
+async fn original_detail_keeps_source_bytes_and_reuses_all_source_and_worker_bounds() {
+    let fixture = Fixture::new(19, 11, PreviewConfig::default());
+    let source = fs::read(fixture.repo.root().join("source.png")).unwrap();
+    assert_eq!(
+        fixture
+            .cache
+            .original_detail(&fixture.repo, &fixture.record)
+            .await
+            .unwrap(),
+        source
+    );
+    assert!(!fixture.cache.inner.root.exists());
+    for config in [
+        PreviewConfig {
+            max_source_bytes: 1,
+            ..Default::default()
+        },
+        PreviewConfig {
+            max_pixels: 1,
+            ..Default::default()
+        },
+        PreviewConfig {
+            max_decoded_bytes: 1,
+            ..Default::default()
+        },
+    ] {
+        let fixture = Fixture::new(19, 11, config);
+        assert!(
+            fixture
+                .cache
+                .original_detail(&fixture.repo, &fixture.record)
+                .await
+                .is_err()
+        );
+    }
+}

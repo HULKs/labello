@@ -9,6 +9,10 @@ impl crate::app::LabelloApp {
                     return;
                 }
             };
+        self.work.quality.data_saver = match load_data_saver(&identity) {
+            Ok(selected) => selected,
+            Err(error) => { self.storage_failure(error); false }
+        };
         let preference = match load_workspace_preference(&identity) {
             Ok(preference) => preference,
             Err(error) => {
@@ -38,6 +42,8 @@ impl crate::app::LabelloApp {
     }
 
     pub(crate) fn isolate_browser_workspace(&mut self) {
+        self.work.quality.cancel_all();
+        self.work.quality = Default::default();
         self.runtime.persistence.identity = None;
         self.runtime.persistence.preference = None;
         self.runtime.persistence.preference_encoded = None;

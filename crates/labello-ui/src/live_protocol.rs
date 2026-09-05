@@ -188,6 +188,11 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         succeeded: bool,
     },
+    RepresentationLoaded {
+        request: RequestIdentity,
+        operation_id: u64,
+        result: Box<Result<LoadedImage, String>>,
+    },
     ImportCapabilitiesLoaded {
         request: ImportRequestIdentity,
         result: Result<ImportCapabilities, UiRequestError>,
@@ -407,6 +412,13 @@ pub(crate) enum UiMessage {
 pub(crate) enum UiCommand {
     BuildInformation {
         request: RequestIdentity,
+    },
+    LoadRepresentation {
+        request: RequestIdentity,
+        operation_id: u64,
+        dataset_id: DatasetId,
+        assignment: Assignment,
+        representation: crate::image_quality::Representation,
     },
     ImportCapabilities {
         request: ImportRequestIdentity,
@@ -687,6 +699,7 @@ impl UiCommand {
             | Self::CommitImport { .. }
             | Self::CancelImport { .. } => panic!("import commands use import_request"),
             Self::BuildInformation { request }
+            | Self::LoadRepresentation { request, .. }
             | Self::AuthOptions { request }
             | Self::Session { request }
             | Self::LocalAdminLogin { request }
@@ -964,6 +977,7 @@ impl UiMessage {
             Self::ImportBrowserFilesSelected { .. } => None,
             Self::BuildInformationLoaded { request, .. }
             | Self::BuildInformationCopied { request, .. }
+            | Self::RepresentationLoaded { request, .. }
             | Self::AuthOptionsLoaded { request, .. }
             | Self::SessionLoaded { request, .. }
             | Self::LogoutFinished { request, .. }
@@ -1035,6 +1049,7 @@ pub(crate) struct LoadedAdmin {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LoadedImage {
+    pub representation: crate::image_quality::Representation,
     pub assignment: Assignment,
     pub queued: QueuedImage,
     pub annotations: Vec<labello_domain::AnnotationVersion>,

@@ -131,12 +131,33 @@ implementing activity statistics.
 
 ## Working Image Representations
 
-`live_workflow::load_working_preview` owns encoded working-image selection and
-bounded fallback for annotation, review, migration and prefetch. Standard v1
-(lossless WebP, max edge 1600, no upscale) is the default. One failed Standard
-encoded load/decode can fall back to the legacy 1600 RGBA capability. Data Saver
-v1 (lossy WebP quality 80, max edge 1280) is an explicit client capability whose
-errors never silently fetch RGBA or originals. The shared client decodes WebP
-under fixed bounds on native and WASM; `ImagePreview::rgba` always means decoded
-RGBA. Existing work/auth epochs own reply rejection and image-reference cleanup;
-representation choice never changes normalized geometry or authoritative state.
+`image_quality` owns the account-scoped manual Data saver choice, temporary
+original-detail state, representation requests and cancellation registry.
+`live_workflow::load_working_preview` owns the encoded Standard/Data Saver
+capability and exactly one bounded Standard RGBA fallback. Initial annotation,
+review, migration and prefetch use the selected profile; prefetch never requests
+original detail. The shared client decodes under the same bounds/convention on
+native and WASM; `ImagePreview::rgba` always means decoded RGBA.
+
+A representation reply can replace only the current assignment's texture and
+quality status. It cannot replace annotation/review/migration drafts, selection,
+save generations, undo history or canvas transform. Initial image recovery can
+apply a complete loaded assignment when no current work exists. Existing
+request/auth/workspace epochs plus exact assignment/image identity reject stale
+replies. Quality changes discard prepared representations, release reservations,
+cancel superseded transfer futures, and refill under the selected profile.
+Claim responses are allowed to finish so cancelled work can be released.
+
+The Data saver checkbox is persisted separately from workspace location, per
+normalized API endpoint and authenticated account. It does not follow viewport
+or network estimates. The original-detail override lasts one image visit and is
+never persisted. Context isolation cancels transfers and resets in-memory quality
+state; stored per-account preference remains available for the next login.
+
+Working views show quality selection, active/loading/failure status, explicit
+original detail and retry. Compact layouts group detail actions in Image quality;
+short viewports (height below 480 points) put quality controls in Settings. A
+44-point context-bar button opens them and displays the active quality, preserving
+canvas space. The command dispatcher schedules another frame while commands
+remain, including when it discards a superseded image request.
+No cached image implies an active assignment or offline annotation support.

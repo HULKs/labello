@@ -74,3 +74,24 @@ async fn streaming_body_rejects_declared_and_chunked_overflow() {
         server.await.unwrap();
     }
 }
+
+#[test]
+fn original_detail_decoder_preserves_pixels_and_rejects_mismatched_or_oversized_metadata() {
+    let file = crate::ImageFile {
+        image_id: "image".into(),
+        media_type: "image/webp".into(),
+        bytes: valid().webp,
+    };
+    assert_eq!(
+        file.decode_original_detail(1, 1).unwrap().rgba,
+        [18, 23, 34, 255]
+    );
+    for (width, height) in [(0, 1), (2, 1), (u32::MAX, 1), (8000, 8000)] {
+        assert!(file.decode_original_detail(width, height).is_err());
+    }
+    let mut invalid = file.clone();
+    invalid.media_type = "application/octet-stream".into();
+    assert!(invalid.decode_original_detail(1, 1).is_err());
+    invalid.media_type = "image/png".into();
+    assert!(invalid.decode_original_detail(1, 1).is_err());
+}

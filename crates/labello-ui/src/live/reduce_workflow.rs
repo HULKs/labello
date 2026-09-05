@@ -5,6 +5,7 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+            UiMessage::RepresentationLoaded { operation_id, result, .. } => self.apply_representation(ctx, operation_id, *result),
                 UiMessage::ImageLoaded {
                     request: _,
                     operation_id,

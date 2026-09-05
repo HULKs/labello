@@ -930,6 +930,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
     };
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
+        representation: Default::default(),
         assignment: next_assignment,
         queued: QueuedImage {
             image: image_record(next_image_id.as_str(), "prepared-migration.png", 640, 480),
@@ -1004,6 +1005,7 @@ fn migration_review_approval_promotes_cached_work_without_refetching_image_data(
     api.add_active_assignment(next_assignment.clone());
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
+        representation: Default::default(),
         assignment: next_assignment,
         queued: QueuedImage {
             image: image_record(

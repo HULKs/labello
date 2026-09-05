@@ -4,6 +4,46 @@ use std::io::Cursor;
 
 pub const MAX_ENCODED_PREVIEW_BYTES: usize = 16 * 1024 * 1024;
 
+pub const MAX_ORIGINAL_DETAIL_BYTES: usize = 64 * 1024 * 1024;
+
+impl crate::ImageFile {
+    pub fn decode_original_detail(
+        &self,
+        original_width: u32,
+        original_height: u32,
+    ) -> ClientResult<ImagePreview> {
+        if self.bytes.len() > MAX_ORIGINAL_DETAIL_BYTES
+            || original_width == 0
+            || original_height == 0
+            || u64::from(original_width) * u64::from(original_height) > 32_000_000
+        {
+            return Err(invalid_preview());
+        }
+        let format =
+            image::ImageFormat::from_mime_type(&self.media_type).ok_or_else(invalid_preview)?;
+        let mut reader = image::ImageReader::with_format(Cursor::new(&self.bytes), format);
+        let mut limits = image::Limits::default();
+        limits.max_alloc = Some(256 * 1024 * 1024);
+        reader.limits(limits);
+        let decoder = reader.into_decoder().map_err(|_| invalid_preview())?;
+        if decoder.dimensions() != (original_width, original_height)
+            || decoder.total_bytes() > 256 * 1024 * 1024
+        {
+            return Err(invalid_preview());
+        }
+        // Preserve the original image coordinate convention: no EXIF/ICC transform.
+        let rgba = image::DynamicImage::from_decoder(decoder)
+            .map_err(|_| invalid_preview())?
+            .to_rgba8();
+        Ok(ImagePreview {
+            image_id: self.image_id.clone(),
+            width: rgba.width(),
+            height: rgba.height(),
+            rgba: rgba.into_raw(),
+        })
+    }
+}
+
 pub(crate) fn invalid_preview() -> ClientError {
     ClientError::Api {
         status: 0,

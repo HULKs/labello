@@ -110,3 +110,25 @@ async fn encoded_and_legacy_preview_apply_identical_source_limits() {
         assert!(!String::from_utf8_lossy(&body).contains("bounded.png"));
     }
 }
+
+#[tokio::test]
+async fn original_detail_is_explicit_bounded_and_authorized() {
+    let temp=tempfile::tempdir().unwrap();
+    let state=ApiState::new(temp.path());
+    let app=router(state.clone());
+    create_dataset(&app).await;
+    let png=png_bytes(17,11);
+    let image_id=ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
+    upload_test_image(&app,"synthetic.png",&png).await;
+    let response=request_preview(&app,&image_id,Some("admin"),"detail").await;
+    assert_eq!(response.status(),StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE],"image/png");
+    assert_eq!(response.headers()[header::CACHE_CONTROL],"private, no-store");
+    assert_eq!(to_bytes(response.into_body(),64*1024*1024).await.unwrap(),png);
+    for user in [None,Some("intruder")] {
+        assert_eq!(request_preview(&app,&image_id,user,"detail").await.status(),StatusCode::UNAUTHORIZED);
+    }
+    let bounded=labello_storage::PreviewCache::new(temp.path().join("limit-cache"),labello_storage::PreviewConfig{max_pixels:1,..Default::default()}).unwrap();
+    let limited=router(state.with_preview_cache(bounded));
+    assert_eq!(request_preview(&limited,&image_id,Some("admin"),"detail").await.status(),StatusCode::PAYLOAD_TOO_LARGE);
+}

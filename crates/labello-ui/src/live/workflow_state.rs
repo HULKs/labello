@@ -155,7 +155,11 @@ impl LabelloApp {
         }
     }
 
-    fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
+    pub(crate) fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
+        if let Some(id) = self.work.quality.loading.take() { self.work.quality.cancel(id); self.runtime.active_requests.remove(&id); }
+        self.work.quality.current = loaded.representation;
+        self.work.quality.requested = loaded.representation;
+        self.work.quality.error = None;
         let image_id = loaded.queued.image.image_id.clone();
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);

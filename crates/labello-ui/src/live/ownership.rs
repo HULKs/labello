@@ -56,6 +56,7 @@ impl LabelloApp {
         self.runtime.active_requests.remove(&request_id);
         self.import.active_operations.remove(&request_id);
         match command {
+            UiCommand::LoadRepresentation { .. } => { self.work.quality.loading = None; self.work.quality.error = Some(error.to_string()); },
             UiCommand::ImportCapabilities { .. } => {
                 self.import.capabilities_loading = false;
                 self.import.capabilities_error = Some(error.to_string());
@@ -309,6 +310,9 @@ impl LabelloApp {
         self.runtime.active_requests.retain(|request_id| {
             Some(*request_id) == build_request
         });
+        self.work.quality.cancel_all();
+        self.work.quality.loading = None;
+        self.work.quality.error = None;
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
         self.loading.session = false;

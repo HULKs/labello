@@ -21,6 +21,13 @@ use crate::{
 
 impl LabelloApp {
     pub(crate) fn clear_current_image(&mut self) {
+        self.work.quality.cancel_all();
+        if let Some(id) = self.work.quality.loading.take() {
+            self.runtime.active_requests.remove(&id);
+        }
+        self.work.quality.error = None;
+        self.work.quality.current = self.work.quality.policy();
+        self.work.quality.requested = self.work.quality.policy();
         self.release_prepared_assignments();
         if let Some(request_id) = self.work.active_load_id {
             self.runtime.active_requests.remove(&request_id);
@@ -63,7 +70,66 @@ impl LabelloApp {
     }
 
     pub(crate) fn start_workflow_command(&self, api: Rc<dyn LabelloApi>, command: UiCommand) {
+        if matches!(
+            &command,
+            UiCommand::LoadRepresentation { .. } | UiCommand::PrefetchAssignment { .. }
+        ) && !self
+            .runtime
+            .active_requests
+            .contains(&command.request().request_id)
+        {
+            return;
+        }
+        let transfer = match &command {
+            UiCommand::ClaimAssignment { operation_id, .. }
+            | UiCommand::PrefetchAssignment { operation_id, .. }
+            | UiCommand::ReloadAssignment { operation_id, .. }
+            | UiCommand::ReopenAssignment { operation_id, .. } => Some(
+                self.work
+                    .quality
+                    .transfer(*operation_id, self.work.quality.policy()),
+            ),
+            UiCommand::LoadRepresentation {
+                operation_id,
+                representation,
+                ..
+            } => Some(self.work.quality.transfer(*operation_id, *representation)),
+            _ => None,
+        };
         match command {
+            UiCommand::LoadRepresentation {
+                request,
+                operation_id,
+                dataset_id,
+                assignment,
+                ..
+            } => {
+                let fetch_prelabels = self.work.current.is_none() && self.view == AppView::Annotate;
+                let prelabel_config_ids = if fetch_prelabels {
+                    self.selected_task()
+                        .map(|task| task.prelabel_config_ids.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                self.spawn_message(request.clone(), async move {
+                    let result = load_image(
+                        api,
+                        dataset_id,
+                        assignment,
+                        prelabel_config_ids,
+                        fetch_prelabels,
+                        transfer.expect("representation transfer"),
+                    )
+                    .await
+                    .map_err(|error| error.to_string());
+                    UiMessage::RepresentationLoaded {
+                        request,
+                        operation_id,
+                        result: Box::new(result),
+                    }
+                });
+            }
             UiCommand::ClaimAssignment {
                 request,
                 operation_id,
@@ -110,6 +176,7 @@ impl LabelloApp {
                     assignment.clone(),
                     prelabel_config_ids,
                     kind == AssignmentKind::Annotation,
+                    transfer.expect("image transfer"),
                 )
                 .await
                 .map(Some)
@@ -164,6 +231,7 @@ impl LabelloApp {
                     assignment.clone(),
                     prelabel_config_ids,
                     kind == AssignmentKind::Annotation,
+                    transfer.expect("image transfer"),
                 )
                 .await
                 .map(Some)
@@ -226,6 +294,7 @@ impl LabelloApp {
                     assignment.clone(),
                     prelabel_config_ids,
                     fetch_prelabels,
+                    transfer.expect("image transfer"),
                 )
                 .await
                 .map(Some)
@@ -268,6 +337,7 @@ impl LabelloApp {
                     assignment.clone(),
                     prelabel_config_ids,
                     true,
+                    transfer.expect("image transfer"),
                 )
                 .await
                 .map_err(UiRequestError::from);
@@ -960,15 +1030,37 @@ async fn load_image(
     assignment: Assignment,
     prelabel_config_ids: Vec<PrelabelConfigId>,
     fetch_prelabels: bool,
+    transfer: crate::image_quality::ImageTransfer,
+) -> labello_client::ClientResult<LoadedImage> {
+    let representation = transfer.representation;
+    transfer
+        .run(load_image_data(
+            api,
+            dataset_id,
+            assignment,
+            prelabel_config_ids,
+            fetch_prelabels,
+            representation,
+        ))
+        .await
+}
+
+async fn load_image_data(
+    api: Rc<dyn LabelloApi>,
+    dataset_id: labello_domain::DatasetId,
+    assignment: Assignment,
+    prelabel_config_ids: Vec<PrelabelConfigId>,
+    fetch_prelabels: bool,
+    representation: crate::image_quality::Representation,
 ) -> labello_client::ClientResult<LoadedImage> {
     let (image, state, preview) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
-        load_working_preview(
+        crate::image_quality::preview_for_representation(
             api.as_ref(),
             &dataset_id,
             &assignment.image_id,
-            labello_client::ImagePreviewProfile::StandardV1
+            representation
         ),
     )?;
     let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
@@ -992,6 +1084,7 @@ async fn load_image(
     }
     let annotations = state.active_annotations().cloned().collect();
     Ok(LoadedImage {
+        representation,
         assignment,
         queued: QueuedImage { image, prelabels },
         annotations,
