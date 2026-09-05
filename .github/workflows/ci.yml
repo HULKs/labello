@@ -47,8 +47,7 @@ jobs:
 
       - name: Install Rustfmt
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Check formatting
         run: ./scripts/verify.sh ci "$CI_BASE_SHA" format
@@ -70,8 +69,7 @@ jobs:
 
       - name: Install Clippy
         run: |
-          rustup toolchain install stable --profile minimal --component clippy --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -99,8 +97,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -134,8 +131,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -169,8 +165,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -198,8 +193,7 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -222,9 +216,7 @@ jobs:
 
       - name: Install Rust and WASM target
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup target add wasm32-unknown-unknown
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -247,9 +239,7 @@ jobs:
 
       - name: Install Rust and WASM target
         run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup target add wasm32-unknown-unknown
+          python3 scripts/rust-toolchain.py install
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2

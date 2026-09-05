@@ -36,10 +36,10 @@ jobs:
         env:
           BUILD_IMAGE: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}
         run: |
-          case "$BUILD_IMAGE" in
-            *@sha256:*) ;;
-            *) printf 'LABELLO_RELEASE_BUILD_IMAGE must use an immutable sha256 digest\n' >&2; exit 1 ;;
-          esac
+          if [[ ! "$BUILD_IMAGE" =~ ^[^[:space:]]+@sha256:[0-9a-f]{64}$ ]]; then
+            printf 'LABELLO_RELEASE_BUILD_IMAGE must use an immutable sha256 digest\n' >&2
+            exit 1
+          fi
 
       - name: Check out main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -96,8 +96,7 @@ jobs:
 
       - name: Verify pinned build tools
         run: |
-          rustc --version
-          rustup target list --installed | grep --fixed-strings --line-regexp wasm32-unknown-unknown
+          python3 scripts/rust-toolchain.py check
           trunk --version | grep --fixed-strings 'trunk 0.21.14'
 
       - name: Run canonical verification

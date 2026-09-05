@@ -95,7 +95,7 @@ profiles_for_path() {
         apps/egui-mcp-inspector/*|opencode.json)
             printf '%s\n' ui
             ;;
-        Cargo.toml|Cargo.lock|.gitignore|scripts/*|.github/workflows/*|deployment/*|tools/*)
+        Cargo.toml|Cargo.lock|rust-toolchain.toml|.gitignore|scripts/*|.github/workflows/*|deployment/*|tools/*)
             printf '%s\n' infrastructure browser
             ;;
         *)
@@ -156,6 +156,8 @@ classify_changes() {
 
 audit() {
     run bash -n scripts/verify.sh
+    run python3 scripts/rust-toolchain.py audit
+    run python3 scripts/test-rust-toolchain.py
     run git diff --check
 
     require_literal README.md './scripts/verify.sh changed origin/main'
@@ -210,10 +212,13 @@ audit() {
         require_literal docs/verification.md "$baseline_command"
     done <<'EOF'
 cargo fmt --all -- --check
+cargo fmt --manifest-path apps/egui-mcp-inspector/Cargo.toml --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo clippy --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features --exclude labello-ui
 cargo test --locked -p labello-ui --all-features
 cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 trunk build --release --locked
 EOF
@@ -258,15 +263,24 @@ docs_checks() {
     printf '%s\n' 'Documentation-only profile: complete the content, local-link, and anchor review recorded in the handoff.'
 }
 
+toolchain_check() {
+    run python3 scripts/rust-toolchain.py check
+}
+
 format_check() {
+    toolchain_check
     run cargo fmt --all -- --check
+    run cargo fmt --manifest-path apps/egui-mcp-inspector/Cargo.toml --all -- --check
 }
 
 clippy_check() {
+    toolchain_check
     run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+    run cargo clippy --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-targets --all-features -- -D warnings
 }
 
 workspace_tests() {
+    toolchain_check
     case "$test_runner" in
         cargo)
             run cargo test --locked --workspace --all-features --exclude labello-ui
@@ -282,6 +296,7 @@ workspace_tests() {
 }
 
 ui_tests() {
+    toolchain_check
     case "$test_runner" in
         cargo)
             run cargo test --locked -p labello-ui --all-features
@@ -297,15 +312,19 @@ ui_tests() {
 }
 
 doctests() {
+    toolchain_check
     # Nextest does not execute rustdoc test binaries on stable Rust.
     run cargo test --locked --workspace --all-features --doc
 }
 
 inspector_check() {
+    toolchain_check
     run cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+    run cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 }
 
 wasm_check() {
+    toolchain_check
     run cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 }
 
@@ -323,6 +342,7 @@ baseline() {
 }
 
 browser_build() {
+    toolchain_check
     (
         cd apps/labello-wasm
         # Trunk 0.21.14 parses NO_COLOR as a boolean and rejects the standard
