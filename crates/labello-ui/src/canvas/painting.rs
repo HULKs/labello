@@ -60,11 +60,14 @@ fn paint_canvas(
             }
             AnnotationGeometry::Skeleton(skeleton) => {
                 for keypoint in &skeleton.keypoints {
-                    if let Some(point) = keypoint.point {
-                        painter.circle_stroke(
+                    if keypoint.state != KeypointState::Absent && let Some(point) = keypoint.point {
+                        paint_keypoint(
+                            &painter,
                             normalized_to_screen(image_rect, pos2(point.x, point.y)),
+                            &keypoint.state,
+                            color,
                             6.0,
-                            Stroke::new(2.0, color),
+                            true,
                         );
                     }
                 }
@@ -107,17 +110,19 @@ fn paint_canvas(
                         keypoint_preview,
                     );
                     if let (Some(from), Some(to)) = (from, to) {
-                        painter.line_segment(
+                        paint_outlined_segment(
+                            &painter,
                             [
                                 normalized_to_screen(image_rect, pos2(from.x, from.y)),
                                 normalized_to_screen(image_rect, pos2(to.x, to.y)),
                             ],
-                            Stroke::new(if selected { 3.0 } else { 2.0 }, color),
+                            color,
+                            if selected { 3.0 } else { 2.0 },
                         );
                     }
                 }
                 for (keypoint_index, keypoint) in skeleton.keypoints.iter().enumerate() {
-                    if let Some(point) = keypoint.point {
+                    if keypoint.state != KeypointState::Absent && let Some(point) = keypoint.point {
                         let point = previewed_keypoint_point(
                             &annotation.annotation_id,
                             keypoint_index,
@@ -125,16 +130,11 @@ fn paint_canvas(
                             keypoint_preview,
                         );
                         let center = normalized_to_screen(image_rect, pos2(point.x, point.y));
-                        if selected {
-                            painter.circle_stroke(center, 7.0, Stroke::new(2.0, Color32::WHITE));
-                        }
-                        painter.circle_filled(center, if selected { 5.0 } else { 4.0 }, color);
+                        paint_keypoint(&painter, center, &keypoint.state, color, if selected { 5.0 } else { 4.0 }, false);
                         if selected && selected_keypoint == Some(keypoint_index) {
-                            painter.circle_stroke(
-                                center,
-                                10.0,
-                                Stroke::new(3.0, theme::FOCUS_RING),
-                            );
+                            for stroke in overlay_strokes(theme::FOCUS_RING, 2.0) {
+                                painter.circle_stroke(center, 14.0, stroke);
+                            }
                         }
                     }
                 }
@@ -165,6 +165,7 @@ fn skeleton_keypoint_point(
         .iter()
         .enumerate()
         .find(|(_, keypoint)| keypoint.name == keypoint_name)
+        .filter(|(_, keypoint)| keypoint.state != KeypointState::Absent)
         .and_then(|(keypoint_index, keypoint)| {
             keypoint.point.map(|point| {
                 previewed_keypoint_point(
@@ -237,6 +238,47 @@ fn rounded_corner_mask(viewport: Rect, color: Color32) -> Mesh {
     mesh
 }
 
+// The achromatic outlines retain a visible boundary even when the image
+// matches the class color. Black against white has 21:1 contrast.
+fn overlay_strokes(color: Color32, width: f32) -> [Stroke; 3] {
+    [Stroke::new(width + 4.0, Color32::WHITE), Stroke::new(width + 2.0, Color32::BLACK), Stroke::new(width, color)]
+}
+
+fn paint_outlined_segment(painter: &egui::Painter, points: [Pos2; 2], color: Color32, width: f32) {
+    for stroke in overlay_strokes(color, width) {
+        painter.line_segment(points, stroke);
+    }
+}
+
+fn paint_outlined_rect(painter: &egui::Painter, rect: Rect, radius: u8, color: Color32, width: f32) {
+    for stroke in overlay_strokes(color, width) {
+        painter.rect_stroke(rect, CornerRadius::same(radius), stroke, StrokeKind::Middle);
+    }
+}
+
+fn paint_keypoint(painter: &egui::Painter, center: Pos2, state: &KeypointState, color: Color32, radius: f32, suggestion: bool) {
+    match state {
+        KeypointState::Visible if !suggestion => {
+            painter.circle_filled(center, radius + 3.0, Color32::WHITE);
+            painter.circle_filled(center, radius + 2.0, Color32::BLACK);
+            painter.circle_filled(center, radius, color);
+        }
+        KeypointState::Visible => {
+            for stroke in overlay_strokes(color, 2.0) {
+                painter.circle_stroke(center, radius, stroke);
+            }
+        }
+        KeypointState::Hidden => {
+            let radius = radius + 3.0;
+            let points = [center + vec2(0.0, -radius), center + vec2(radius, 0.0), center + vec2(0.0, radius), center + vec2(-radius, 0.0)];
+            for stroke in overlay_strokes(color, 2.0) {
+                painter.add(egui::Shape::closed_line(points.to_vec(), stroke));
+            }
+        }
+        KeypointState::Absent => {}
+    }
+}
+
 fn paint_existing_box(
     painter: &egui::Painter,
     image_rect: Rect,
@@ -249,12 +291,7 @@ fn paint_existing_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 14),
     );
-    painter.rect_stroke(
-        rect,
-        CornerRadius::same(4),
-        Stroke::new(1.5, color),
-        StrokeKind::Inside,
-    );
+    paint_outlined_rect(painter, rect, 4, color, 1.5);
 }
 
 fn paint_context_box(
@@ -288,23 +325,13 @@ fn paint_selected_box(
         CornerRadius::same(5),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 28),
     );
-    painter.rect_stroke(
-        rect,
-        CornerRadius::same(5),
-        Stroke::new(3.0, color),
-        StrokeKind::Inside,
-    );
+    paint_outlined_rect(painter, rect, 5, color, 3.0);
 
     if editable {
         for (_, center) in resize_handles(rect) {
             let handle = Rect::from_center_size(center, Vec2::splat(HANDLE_SIZE));
             painter.rect_filled(handle, CornerRadius::same(2), Color32::WHITE);
-            painter.rect_stroke(
-                handle,
-                CornerRadius::same(2),
-                Stroke::new(1.5, theme::SELECTION),
-                StrokeKind::Inside,
-            );
+            paint_outlined_rect(painter, handle, 2, theme::SELECTION, 1.5);
         }
     }
 }
@@ -338,15 +365,17 @@ fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: 
         if offset >= length {
             break;
         }
-        let dash_end = (offset + 6.0).min(length);
+        let dash_end = (offset + 8.0).min(length);
         if !dash_end.is_finite() || dash_end <= offset {
             break;
         }
-        painter.line_segment(
+        paint_outlined_segment(
+            painter,
             [start + direction * offset, start + direction * dash_end],
-            Stroke::new(2.0, color),
+            color,
+            2.0,
         );
-        let next = offset + 10.0;
+        let next = offset + 18.0;
         if !next.is_finite() || next <= offset {
             break;
         }

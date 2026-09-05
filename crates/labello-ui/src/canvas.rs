@@ -5,8 +5,8 @@ use egui::{
     StrokeKind, Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
 use labello_domain::{
-    AnnotationGeometry, AnnotationId, AnnotationVersion, BoundingBox, NormalizedPoint,
-    PanDragModifier, PrelabelSuggestion,
+    AnnotationGeometry, AnnotationId, AnnotationVersion, BoundingBox, KeypointState,
+    NormalizedPoint, PanDragModifier, PrelabelSuggestion,
 };
 
 use crate::theme;
@@ -376,7 +376,10 @@ include!("canvas/viewport.rs");
 mod tests {
     use super::*;
     use egui::{Event, Modifiers, MouseWheelUnit, TouchDeviceId, TouchId, TouchPhase};
-    use egui_kittest::{Harness, kittest::Queryable};
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT, Queryable},
+    };
 
     #[test]
     fn loaded_image_paint_keeps_texture_without_grid_strokes() {
@@ -419,6 +422,200 @@ mod tests {
                 "an image without annotations must not acquire grid strokes",
             );
         }
+    }
+
+    #[test]
+    fn keypoint_states_use_distinct_shapes_for_annotations_and_suggestions() {
+        use labello_domain::{KeypointAnnotation, KeypointState, SkeletonGeometry};
+        for suggestion in [false, true] {
+            for state in [
+                KeypointState::Visible,
+                KeypointState::Hidden,
+                KeypointState::Absent,
+            ] {
+                let geometry = AnnotationGeometry::Skeleton(SkeletonGeometry {
+                    keypoints: vec![KeypointAnnotation {
+                        name: "synthetic-point".into(),
+                        state: state.clone(),
+                        // Even malformed Absent input must never gain a painted position.
+                        point: Some(NormalizedPoint { x: 0.5, y: 0.5 }),
+                    }],
+                });
+                let annotation = test_annotation(geometry.clone());
+                let prelabel = PrelabelSuggestion {
+                    suggestion_id: "synthetic-suggestion".into(),
+                    config_id: "synthetic-config".into(),
+                    task_id: annotation.task_id.clone(),
+                    class_id: annotation.class_id.clone(),
+                    confidence: 1.0,
+                    geometry,
+                };
+                let context = egui::Context::default();
+                let output = context.run_ui(egui::RawInput::default(), |ui| {
+                    let rect = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
+                    paint_canvas(
+                        ui,
+                        rect,
+                        rect,
+                        None,
+                        if suggestion {
+                            &[]
+                        } else {
+                            std::slice::from_ref(&annotation)
+                        },
+                        None,
+                        false,
+                        None,
+                        None,
+                        None,
+                        None,
+                        &[],
+                        if suggestion {
+                            std::slice::from_ref(&prelabel)
+                        } else {
+                            &[]
+                        },
+                        theme::ANNOTATION,
+                        &Default::default(),
+                    );
+                });
+                let circles = output
+                    .shapes
+                    .iter()
+                    .filter(|shape| matches!(shape.shape, egui::Shape::Circle(_)))
+                    .count();
+                let diamonds = output.shapes.iter().filter(|shape| matches!(&shape.shape, egui::Shape::Path(path) if path.closed && path.points.len() == 4)).count();
+                match state {
+                    KeypointState::Visible => assert!(circles > 0 && diamonds == 0),
+                    KeypointState::Hidden => assert!(
+                        diamonds > 0 && circles == 0,
+                        "occluded keypoints need a non-color diamond cue; suggestion={suggestion}"
+                    ),
+                    KeypointState::Absent => assert!(circles == 0 && diamonds == 0),
+                }
+                if state != KeypointState::Absent {
+                    for outline in [Color32::WHITE, Color32::BLACK] {
+                        assert!(
+                            output
+                                .shapes
+                                .iter()
+                                .any(|shape| shape_has_color(&shape.shape, outline))
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn shape_has_color(shape: &egui::Shape, color: Color32) -> bool {
+        match shape {
+            egui::Shape::Rect(rect) => rect.stroke.color == color || rect.fill == color,
+            egui::Shape::Circle(circle) => circle.stroke.color == color || circle.fill == color,
+            egui::Shape::LineSegment { stroke, .. } => stroke.color == color,
+            egui::Shape::Path(path) => path.stroke.color == egui::epaint::ColorMode::Solid(color),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn every_box_style_and_edge_retains_class_color_and_both_contrast_outlines() {
+        for family in 0..5 {
+            let context = egui::Context::default();
+            let class_color = Color32::from_rgb(37, 84, 153);
+            let output = context.run_ui(egui::RawInput::default(), |ui| {
+                let rect = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
+                let bounds = bbox(0.2, 0.2, 0.5, 0.5);
+                match family {
+                    0 => paint_existing_box(ui.painter(), rect, bounds, class_color),
+                    1 => paint_selected_box(ui.painter(), rect, bounds, true, class_color),
+                    2 => paint_context_box(ui.painter(), rect, bounds, class_color),
+                    3 => paint_draft_box(ui.painter(), rect, bounds),
+                    _ => paint_outlined_segment(
+                        ui.painter(),
+                        [pos2(50.0, 60.0), pos2(200.0, 180.0)],
+                        class_color,
+                        2.0,
+                    ),
+                }
+            });
+            for color in [
+                Color32::WHITE,
+                Color32::BLACK,
+                if family == 3 {
+                    theme::DRAFT
+                } else {
+                    class_color
+                },
+            ] {
+                assert!(
+                    output
+                        .shapes
+                        .iter()
+                        .any(|shape| shape_has_color(&shape.shape, color)),
+                    "missing {color:?} for overlay family {family}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn outline_colors_exceed_nontext_contrast_at_every_image_luminance() {
+        let strokes = overlay_strokes(theme::ANNOTATION, 2.0);
+        assert_eq!(strokes[0].color, Color32::WHITE);
+        assert_eq!(strokes[1].color, Color32::BLACK);
+        assert_eq!(strokes[2].color, theme::ANNOTATION);
+        assert!(strokes[0].width > strokes[1].width && strokes[1].width > strokes[2].width);
+        assert!(((1.0_f32 + 0.05) / 0.05 - 21.0).abs() < 0.00001);
+        for sample in 0..=1000 {
+            let luminance = sample as f32 / 1000.0;
+            let white_contrast = 1.05 / (luminance + 0.05);
+            let black_contrast = (luminance + 0.05) / 0.05;
+            assert!(white_contrast.max(black_contrast) >= 4.5);
+        }
+    }
+
+    #[test]
+    fn canvas_accessibility_describes_projected_keypoint_states_without_coordinates() {
+        let annotation = test_annotation(AnnotationGeometry::Skeleton(
+            labello_domain::SkeletonGeometry {
+                keypoints: [
+                    KeypointState::Visible,
+                    KeypointState::Hidden,
+                    KeypointState::Absent,
+                ]
+                .into_iter()
+                .enumerate()
+                .map(|(index, state)| labello_domain::KeypointAnnotation {
+                    name: format!("point-{index}"),
+                    point: (state != KeypointState::Absent)
+                        .then_some(NormalizedPoint { x: 0.5, y: 0.5 }),
+                    state,
+                })
+                .collect(),
+            },
+        ));
+        let mut harness = correction_canvas_harness(annotation, false);
+        harness.run();
+        assert_eq!(
+            harness
+                .get_by_label("Annotation canvas")
+                .accesskit_node()
+                .description()
+                .as_deref(),
+            Some(
+                "Object 1: point-0: visible, circle; point-1: occluded, hollow diamond; point-2: not present, no marker"
+            )
+        );
+        harness.state_mut().annotations.clear();
+        harness.run();
+        assert!(
+            harness
+                .get_by_label("Annotation canvas")
+                .accesskit_node()
+                .description()
+                .unwrap_or_default()
+                .is_empty()
+        );
     }
 
     struct InteractiveTestState {
@@ -813,6 +1010,17 @@ mod tests {
                 Some((&other_annotation_id, 0, preview)),
             ),
             Some(original)
+        );
+        let mut absent = skeleton;
+        absent.keypoints[0].state = KeypointState::Absent;
+        assert_eq!(
+            skeleton_keypoint_point(
+                &annotation_id,
+                &absent,
+                "nose",
+                Some((&annotation_id, 0, preview))
+            ),
+            None
         );
     }
 

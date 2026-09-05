@@ -174,6 +174,9 @@ pub(crate) fn show_canvas_colored(
         Sense::click_and_drag(),
     );
     response.widget_info(|| WidgetInfo::labeled(WidgetType::Other, true, "Annotation canvas"));
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_description(canvas_state_description(annotations, prelabels));
+    });
     if !valid_rect(interaction_rect) {
         state.cancel_drag();
         paint_canvas(
@@ -290,4 +293,30 @@ pub(crate) fn show_canvas_colored(
     );
     state.clamp_to_viewport(interaction_rect, fitted_image);
     action
+}
+
+fn canvas_state_description(annotations: &[AnnotationVersion], prelabels: &[PrelabelSuggestion]) -> String {
+    let mut descriptions = Vec::new();
+    for (index, annotation) in annotations.iter().filter(|annotation| !annotation.deleted).enumerate() {
+        if let AnnotationGeometry::Skeleton(skeleton) = &annotation.geometry {
+            descriptions.push(format!("Object {}: {}", index + 1, skeleton_state_description(skeleton)));
+        }
+    }
+    for (index, suggestion) in prelabels.iter().enumerate() {
+        if let AnnotationGeometry::Skeleton(skeleton) = &suggestion.geometry {
+            descriptions.push(format!("Suggestion {}: {}", index + 1, skeleton_state_description(skeleton)));
+        }
+    }
+    descriptions.join(". ")
+}
+
+fn skeleton_state_description(skeleton: &labello_domain::SkeletonGeometry) -> String {
+    skeleton.keypoints.iter().map(|keypoint| {
+        let state = match keypoint.state {
+            KeypointState::Visible => "visible, circle",
+            KeypointState::Hidden => "occluded, hollow diamond",
+            KeypointState::Absent => "not present, no marker",
+        };
+        format!("{}: {state}", keypoint.name)
+    }).collect::<Vec<_>>().join("; ")
 }
