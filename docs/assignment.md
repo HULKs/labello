@@ -9,6 +9,68 @@ Labello assigns work per enabled task. Availability and prepared queue results
 are advisory; the storage claim transaction repeats the same eligibility checks
 before creating an assignment.
 
+## Migration companions
+
+An active manual-migration annotation assignment authorizes a compound
+skeleton/box mutation only for that migration's configured guide task and class.
+The same image lock guards both objects. A competing active guide-task
+assignment rejects the mutation; it is not implicitly cancelled or stolen.
+The box task enters `NeedsCorrection`, clears its previous final outcome and
+retains prior review records as history. Normal box-task claims, corrections,
+review policy and completion projections then apply.
+
+The frozen imported migration target count does not grow when a companion is
+created. Migration review visits canonical dispositions, discovered skeletons
+in stable annotation-ID order, and then full-image confirmation. Each discovery
+decision binds the current exact skeleton version. A box review cannot approve
+its skeleton, and migration approval cannot approve its box.
+
+
+## Previous review and decision revisions
+
+Review offers Previous and the configured Previous image shortcut, Arrow Left by
+default, for the immediately previous skipped or completed review in the same
+dataset and task. The client clears that reference when the dataset, task,
+account, or endpoint changes. It is not a history browser. The server validates
+the exact previous assignment and creates a new assignment ID and lease. A
+retry of the same opening returns that fresh active assignment.
+
+A skipped normal review resumes its original submission round and preserves
+valid object decisions. A completed review opens a decision-only revision.
+Opening or cancelling that revision leaves the previous effective decisions,
+outcome, and completion counts unchanged. The reviewer stages object decisions
+locally, then explicitly commits the full-image decision. Approval requires all
+captured targets to be approved. A staged rejection prevents approval.
+
+Commit atomically supersedes the reviewer's captured decisions, appends their
+replacements, recomputes the task outcome and counts, and completes the fresh
+assignment. Historical reviews remain in the event log. Each reviewer counts
+at most once in the current submission round. An identical commit retry returns
+the recorded result without adding reviews; a different retry is a conflict.
+
+The original submission identity, task configuration, annotation versions,
+migration dispositions, dependencies, and confirmation must remain current.
+Later assignment attempts invalidate reopening even if their lease has expired.
+Later relevant events are ordered by event sequence, including when timestamps
+are equal. Another active lease also prevents reopening. The revision lease
+excludes competing task mutations and is checked again at commit. Configuration
+publication is serialized with revision validation and commit.
+
+A reviewer's original geometry correction remains authoritative. Its immediate
+previous revision uses the corrected current geometry and cannot create, undo,
+or edit geometry. Skipped normal reviews retain ordinary correction support.
+Migration revisions require the original valid confirmation. A rejected
+migration whose rejection invalidated confirmation cannot be reopened as a
+decision-only revision; it needs the normal migration correction workflow.
+Historical assignments created before captured review contexts were introduced
+remain replayable but cannot be reopened through Previous.
+
+Switching from current review work uses a confirmation that preserves its
+correction or staged decisions when cancelled. The previous assignment is
+validated before releasing current work. Skipping or leaving a revision discards
+its local staged decisions only after confirmation; server decisions remain
+unchanged. Staged decisions are not persisted for browser reload recovery.
+
 ## Completion balance
 
 Dataset configuration may contain an assignment-balance window. The window has

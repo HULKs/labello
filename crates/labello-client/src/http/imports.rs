@@ -290,6 +290,22 @@ impl ImportApi for HttpLabelloApi {
         )
     }
 
+    fn reconcile_migration_companion<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        request: crate::ReconcileMigrationCompanionRequest,
+        idempotency_key: &'a str,
+    ) -> crate::ApiFuture<'a, crate::ManualMigrationCommandResult> {
+        self.migration_json(
+            dataset_id,
+            image_id,
+            "skeletons/reconcile",
+            request,
+            idempotency_key,
+        )
+    }
+
     fn exclude_migration_target<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

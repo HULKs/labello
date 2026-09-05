@@ -13,7 +13,7 @@ impl LabelloApp {
         };
         let screen = ctx.content_rect();
         let layout = LayoutMode::for_width(screen.width());
-        let shell_height = 56.0 + self.workspace_context_height(layout, screen.size());
+        let shell_height = 56.0 + self.workspace_context_height(ctx, layout, screen.size());
         let action_height = if layout == LayoutMode::Wide {
             0.0
         } else {
@@ -123,16 +123,20 @@ impl LabelloApp {
         let destination = self.transition_label(&pending);
         let discards_migration_draft =
             self.manual_migration_active() && self.migration_has_unsaved_input();
+        let discards_review =
+            self.review_revision_active() && !self.work.staged_review_decisions.is_empty();
         let discards_edits = matches!(
             pending,
             PendingTransition::NextAssignment | PendingTransition::PreviousAssignment(_)
         ) && self.view == AppView::Annotate
             && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || discards_migration_draft);
-        if pending == PendingTransition::NextAssignment && !discards_edits {
+        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review {
             return;
         }
-        let modal_title = if discards_migration_draft {
+        let modal_title = if discards_review {
+            "Discard staged review decisions?"
+        } else if discards_migration_draft {
             "Unsaved migration draft"
         } else if discards_edits {
             "Unsaved annotation changes"
@@ -142,9 +146,17 @@ impl LabelloApp {
         let response =
             theme::modal(ctx, egui::Id::new("assignment-transition-modal")).show(ctx, |ui| {
                 ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(240.0, 560.0));
+                let action_rows = if self.view == AppView::Annotate { 3.0 } else { 2.0 };
+                let action_height = action_rows * (ui.spacing().interact_size.y + ui.spacing().item_spacing.y);
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 64.0 - action_height).max(48.0))
+                    .show(ui, |ui| {
                 ui.heading(modal_title);
                 ui.label(format!("Current workflow: {current}"));
                 ui.label(format!("Pending destination: {destination}"));
+                if discards_review {
+                    ui.label("Leaving discards staged replacement decisions. The previous effective outcome remains unchanged.");
+                }
                 if discards_edits {
                     theme::inline_message(ui, theme::Intent::Warning, if discards_migration_draft {
                         "Continuing will discard migration keypoints or exclusion input that has not been saved."
@@ -152,6 +164,7 @@ impl LabelloApp {
                         "Skipping now will discard annotation changes that have not been saved."
                     });
                 }
+                });
                 ui.add_space(8.0);
                 ui.horizontal_wrapped(|ui| {
                     if self.view == AppView::Annotate
@@ -165,10 +178,12 @@ impl LabelloApp {
                     {
                         self.submit_pending_transition();
                     }
-                    if theme::danger_button(
+                    let release = theme::danger_button(
                         ui,
                         !self.loading.saving,
-                        egui::Button::new(if discards_edits {
+                        egui::Button::new(if discards_review {
+                            "Discard revision and switch"
+                        } else if discards_edits {
                             if discards_migration_draft {
                                 "Discard draft and switch"
                             } else {
@@ -177,14 +192,12 @@ impl LabelloApp {
                         } else {
                             "Release and switch"
                         }),
-                    )
-                    .clicked()
-                    {
+                    );
+                    if release.clicked() {
                         self.release_pending_transition();
                     }
-                    if theme::quiet_button(ui, !self.loading.saving, egui::Button::new("Cancel"))
-                        .clicked()
-                    {
+                    let cancel = theme::quiet_button(ui, !self.loading.saving, egui::Button::new("Cancel"));
+                    if cancel.clicked() {
                         self.cancel_pending_transition();
                     }
                 });
@@ -201,6 +214,39 @@ impl LabelloApp {
         }
     }
 
+    fn migration_companion_reconciliation_modal(&mut self, ctx: &egui::Context) {
+        let mut dismissed = false;
+        let response = theme::modal(ctx, egui::Id::new("migration-companion-reconciliation-modal"))
+            .show(ctx, |ui| {
+                ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(240.0, 560.0));
+                let height = (ctx.content_rect().height() - 64.0).max(100.0);
+                if ctx.content_rect().height() < 480.0 {
+                    ui.set_height(height);
+                }
+                egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
+                    ui.heading("Reconcile companion box?");
+                    ui.label("Create or regenerate the box from the saved skeleton. This replaces the current box geometry and reopens its correction and review workflow. Earlier versions and reviews remain in history. Your unsaved skeleton draft is retained.");
+                    ui.horizontal_wrapped(|ui| {
+                        let regenerate = theme::danger_button(ui, !self.work.migration.busy,
+                            egui::Button::new("Regenerate companion box"));
+                        if regenerate.has_focus() { regenerate.scroll_to_me(Some(egui::Align::Center)); }
+                        if regenerate.clicked()
+                            && let Some(annotation_id) = self.work.migration.pending_companion_reconciliation.take()
+                        { self.work.migration.companion_focus_return = None; self.request_reconcile_migration_companion(annotation_id); }
+                        let cancel = theme::quiet_button(ui, true, egui::Button::new("Cancel"));
+                        if cancel.has_focus() { cancel.scroll_to_me(Some(egui::Align::Center)); }
+                        if cancel.clicked() { dismissed = true; }
+                    });
+                });
+            });
+        response.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Reconcile companion box")
+        });
+        if dismissed || response.should_close() {
+            self.work.migration.pending_companion_reconciliation = None;
+            ctx.request_repaint();
+        }
+    }
     fn migration_revisit_discard_modal(&mut self, ctx: &egui::Context) {
         let response =
             theme::modal(ctx, egui::Id::new("migration-revisit-discard-modal")).show(ctx, |ui| {

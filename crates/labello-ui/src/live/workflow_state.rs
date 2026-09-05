@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn apply_loaded_dataset(&mut self, loaded: LoadedDataset) {
-        self.clear_previous_annotation_assignment();
+        self.clear_previous_assignment();
         self.clear_current_image();
         self.sync_work_config(loaded.metadata);
         self.work.keybindings = loaded.keybindings;
@@ -156,18 +156,30 @@ impl LabelloApp {
     }
 
     fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
+        let retained_discovery = if std::mem::take(&mut self.work.migration.reloading_discovery_draft) {
+            let same_assignment = self.work.assignment.as_ref().is_some_and(|assignment|
+                assignment.assignment_id == loaded.assignment.assignment_id
+                    && assignment.image_id == loaded.assignment.image_id
+                    && assignment.task_id == loaded.assignment.task_id);
+            let same_skeleton = self.work.migration.editing_missing_annotation_id.as_ref().is_some_and(|id|
+                self.work.current_state.as_ref().and_then(|state| state.current_annotation(id))
+                    .zip(loaded.state.current_annotation(id)).is_some_and(|(old, new)| old.version == new.version && !new.deleted));
+            let same_cursor = loaded.state.migration_cursor(&loaded.assignment.task_id,
+                self.work.migration.active_pass_id.as_ref()).ok() == Some(labello_domain::MigrationCursor::FullImage);
+            if !same_assignment || !same_skeleton || !same_cursor {
+                self.work.migration.error = Some("The assignment or saved skeleton changed. Your draft is retained; cancel editing before loading the changed work.".into());
+                return;
+            }
+            Some(self.work.migration.clone())
+        } else { None };
         let image_id = loaded.queued.image.image_id.clone();
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);
         self.work.current = Some(loaded.queued);
         self.work.current_state = Some(loaded.state.clone());
         self.work.annotations = loaded.annotations;
-        self.work.persisted_annotations = self
-            .work
-            .annotations
-            .iter()
-            .map(|annotation| annotation.annotation_id.clone())
-            .collect();
+        // Deleted annotations retain their version identity for a later Undo/Redo save.
+        self.work.persisted_annotations = loaded.state.annotations.keys().cloned().collect();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
         self.work.selected_prelabel = None;
@@ -177,6 +189,8 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         self.work.review_index = 0;
         self.work.review_rejected = false;
+        self.work.staged_review_decisions.clear();
+        self.work.review_revision_commit = None;
         self.work.correction_draft = None;
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
@@ -192,7 +206,7 @@ impl LabelloApp {
                 egui::TextureOptions::LINEAR,
             )
         });
-        if self.view == AppView::Review {
+        if self.view == AppView::Review && !self.review_revision_active() {
             self.work.review_index = self
                 .work
                 .selected_task_id
@@ -211,7 +225,14 @@ impl LabelloApp {
         if let Some(state) = self.work.current_state.clone() {
             self.renew_assignment_from_state(&state);
         }
-        self.request_work_draft_load();
+        if let Some(mut retained) = retained_discovery {
+            retained.error = None;
+            retained.busy = false;
+            retained.progress = None;
+            self.work.migration = retained;
+        } else {
+            self.request_work_draft_load();
+        }
         self.request_prefetch();
     }
 
@@ -228,7 +249,7 @@ impl LabelloApp {
             return;
         }
         if let Some(crate::app::PendingTransition::PreviousAssignment(assignment)) = transition {
-            self.work.previous_annotation_assignment = Some(assignment.clone());
+            self.work.previous_assignment = Some(assignment.clone());
             self.clear_current_image();
             self.request_reopen_assignment(assignment);
             return;
@@ -278,12 +299,7 @@ impl LabelloApp {
     pub(crate) fn apply_state(&mut self, state: labello_domain::ImageState) {
         self.renew_assignment_from_state(&state);
         self.work.annotations = state.active_annotations().cloned().collect();
-        self.work.persisted_annotations = self
-            .work
-            .annotations
-            .iter()
-            .map(|annotation| annotation.annotation_id.clone())
-            .collect();
+        self.work.persisted_annotations = state.annotations.keys().cloned().collect();
         self.work.current_state = Some(state);
         self.work.modified_annotations.clear();
     }

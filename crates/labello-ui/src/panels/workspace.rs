@@ -15,12 +15,23 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
         }
+        if self.review_revision_active() {
+            let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";
+            let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
+                "Decision revision; geometry unchanged."
+            } else { explanation };
+            ui.label(caption).on_hover_text(explanation);
+        }
         self.workspace_canvas(ui);
     }
 
     pub(crate) fn overlays(&mut self, ctx: &egui::Context, layout: LayoutMode) {
         if self.runtime.persistence.recovery.is_some() {
             self.draft_recovery_modal(ctx);
+            return;
+        }
+        if self.work.migration.pending_companion_reconciliation.is_some() {
+            self.migration_companion_reconciliation_modal(ctx);
             return;
         }
         if self.work.migration.pending_revisit_target.is_some() {
@@ -94,6 +105,12 @@ impl LabelloApp {
                                     format!("Close {title}"),
                                 )
                             });
+                            if drawer == Drawer::Inspector
+                                && let Some(invoker) = self.work.review_details_focus_return
+                                && ui.ctx().memory(|memory| memory.focused()).is_none_or(|focused| focused == invoker)
+                            {
+                                button.request_focus();
+                            }
                             close = button.clicked();
                         });
                     });
@@ -116,26 +133,16 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        if self.view == AppView::Review {
+            self.review_context_bar(ui, layout);
+            return;
+        }
         let current = self.work.current.clone();
         let workflow = self.selected_workflow().map(|workflow| workflow.label());
         let view = self.view;
         let loading_image = self.loading.image;
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
-        let review_phase = if view == AppView::Review && current.is_some() {
-            if self.work.correction_draft.is_some() {
-                Some("Correction mode".to_string())
-            } else {
-                let (phase, value, _) = self.review_phase();
-                Some(if phase == "Final check" {
-                    phase.to_string()
-                } else {
-                    format!("Object {value}")
-                })
-            }
-        } else {
-            None
-        };
         let add_summary = |ui: &mut egui::Ui, filename_width: f32| {
             if let Some(current) = current.as_ref() {
                 if filename_width > 0.0 {
@@ -179,12 +186,10 @@ impl LabelloApp {
                 ui.horizontal(|ui| {
                     ui.set_min_height(44.0);
                     add_summary(ui, 50.0);
-                    if current.is_some() {
-                        if let Some(phase) = review_phase.as_ref() {
-                            theme::bounded_badge(ui, phase, theme::Intent::Info, 110.0);
-                        } else if let Some(workflow) = workflow.as_ref() {
-                            theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
-                        }
+                    if current.is_some()
+                        && let Some(workflow) = workflow.as_ref()
+                    {
+                        theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
                     }
                     if show_panel_buttons {
                         self.context_panel_buttons(ui);
@@ -204,7 +209,7 @@ impl LabelloApp {
                 self.assignment_availability_spinner(ui);
             })
         } else {
-            ui.horizontal(|ui| {
+            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 add_summary(
                     ui,
                     if short {
@@ -233,18 +238,6 @@ impl LabelloApp {
                         },
                     );
                 }
-                if let Some(phase) = review_phase.as_ref() {
-                    theme::bounded_badge(
-                        ui,
-                        phase,
-                        theme::Intent::Info,
-                        if layout == LayoutMode::Wide {
-                            120.0
-                        } else {
-                            100.0
-                        },
-                    );
-                }
                 if current.is_some() {
                     self.canvas_controls(ui, layout);
                 }
@@ -255,7 +248,6 @@ impl LabelloApp {
                     ui.separator();
                     self.workspace_actions(ui, layout);
                 }
-                self.assignment_availability_spinner(ui);
             })
         };
         response.response.widget_info(|| {
@@ -404,4 +396,17 @@ impl LabelloApp {
         });
     }
 
+}
+
+fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {
+    if availability {
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
+            ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), contents);
+            let spinner = ui.spinner().on_hover_text("Checking assignment availability…");
+            spinner.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, "Loading workflow assignment availability"));
+        })
+    } else {
+        ui.horizontal_wrapped(contents)
+    }
 }

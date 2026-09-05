@@ -40,6 +40,17 @@ impl DatasetRepository {
     ) -> StorageResult<(Vec<EventLogEntry>, ImageState)> {
         // 1. Load the replay-validated cache base from the authoritative event log.
         let mut next_state = self.load_image_state(image_id).await?;
+        let previous_state = next_state.clone();
+        if payloads
+            .iter()
+            .any(|payload| matches!(payload, EventPayload::ReviewAssignmentOpened { .. }))
+        {
+            write_json_atomic(
+                &self.schema_path(),
+                &labello_domain::labello_schema_bundle(),
+            )
+            .await?;
+        }
         let previous_completion = self.completion_observation(&next_state);
         let timestamp = labello_domain::now();
         // 2. Let assignment/migration policy finish the complete event batch.
@@ -62,6 +73,11 @@ impl DatasetRepository {
             next_state.apply_event(&event)?;
             events.push(event);
         }
+        super::revision::finalize_review_transaction(
+            &previous_state,
+            &mut next_state,
+            &mut events,
+        )?;
         // 4. Atomically publish events.jsonl, the authoritative state transition.
         self.append_events_atomic(image_id, &events).await?;
         // 5. Observe the authoritative transition synchronously. There must be no

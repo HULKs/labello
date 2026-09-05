@@ -217,3 +217,54 @@ fn rebound_shortcut_keeps_selection_action_name_and_complete_description() {
         2
     );
 }
+
+#[test]
+fn measured_workspace_shortcuts_keep_contrast_inline_and_in_wrapped_menus() {
+    use crate::panels::{WorkspaceAction, WorkspaceCommand, workspace_secondary_actions};
+    for menu in [false, true] {
+        for enabled in [false, true] {
+            let shortcut = "Ctrl+Alt+Shift+ArrowDown";
+            let label = "Previous assignment";
+            let mut harness = Harness::builder()
+                .with_size(Vec2::new(if menu { 320.0 } else { 1100.0 }, 400.0))
+                .build_ui(move |ui| {
+                    if !apply_fallback(ui.ctx()) {
+                        return;
+                    }
+                    Frame::new().fill(PANEL).inner_margin(16).show(ui, |ui| {
+                        ui.set_width(if menu { 120.0 } else { 1000.0 });
+                        ui.horizontal_wrapped(|ui| {
+                            let action = WorkspaceAction {
+                                command: WorkspaceCommand::User(
+                                    labello_domain::UserAction::PreviousImage,
+                                ),
+                                label: label.into(),
+                                shortcut: shortcut.into(),
+                                enabled,
+                                help: "Return to the previous assignment.",
+                            };
+                            assert!(
+                                workspace_secondary_actions(ui, &[action], "More actions")
+                                    .is_none()
+                            );
+                        });
+                    });
+                });
+            harness.run_steps(4);
+            if menu {
+                harness.get_by_label("More actions").click();
+                harness.run_steps(4);
+            }
+            let action = harness.get_by_label_contains(label);
+            assert_eq!(action.accesskit_node().is_disabled(), !enabled);
+            assert_eq!(harness.query_all_by_label_contains(label).count(), 1);
+            let ratio = painted_text_contrast(&harness, shortcut, PANEL);
+            assert!(ratio >= 4.5, "menu={menu}, enabled={enabled}: {ratio:.2}");
+            let main = painted_text_contrast(&harness, label, PANEL);
+            assert!(
+                main >= 4.5,
+                "main menu={menu}, enabled={enabled}: {main:.2}"
+            );
+        }
+    }
+}

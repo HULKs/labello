@@ -9,6 +9,9 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
+        if self.view != AppView::Review {
+            self.work.review_details_focus_return = None;
+        }
         self.retry_prefetch_if_due(ui.ctx());
         self.sync_review_selection();
         self.work.canvas.require_pan_mode(
@@ -37,7 +40,7 @@ impl eframe::App for LabelloApp {
             .show(ui, |ui| self.app_bar(ui, layout));
         if self.work_view() {
             egui::Panel::top("workspace_context")
-                .exact_size(self.workspace_context_height(layout, viewport))
+                .min_size(self.workspace_context_height(ui.ctx(), layout, viewport))
                 .frame(
                     theme::top_bar_frame()
                         .fill(theme::PANEL)
@@ -49,7 +52,9 @@ impl eframe::App for LabelloApp {
             if let Some(action_height) = compact_action_height {
                 egui::Panel::bottom("compact_primary_actions")
                     .min_size(action_height)
-                    .frame(theme::top_bar_frame())
+                    .frame(if Self::short_viewport(viewport) && self.manual_migration_active() && self.view == AppView::Annotate {
+                        theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
+                    } else { theme::top_bar_frame() })
                     .show(ui, |ui| {
                         if layout == LayoutMode::Compact {
                             self.compact_workspace_actions(ui);

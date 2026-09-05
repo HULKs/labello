@@ -232,6 +232,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::delete_migration_skeleton),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/migration/skeletons/reconcile",
+            post(workflow::reconcile_migration_companion),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/migration/exclude",
             post(workflow::exclude_migration_target),
         )
@@ -270,6 +274,10 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/datasets/{dataset_id}/images/{image_id}/reviews",
             post(workflow::record_review),
+        )
+        .route(
+            "/datasets/{dataset_id}/images/{image_id}/review-revisions",
+            post(workflow::commit_review_revision),
         )
         .route(
             "/datasets/{dataset_id}/images/{image_id}/corrections",

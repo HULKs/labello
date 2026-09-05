@@ -144,7 +144,7 @@ blocked by the enforced window.
 | `POST /datasets/{dataset_id}/images/{image_id}/assignments/revalidate` | Owner of exact active assignment | `AssignmentActionRequest` → `AssignmentRevalidation?` |
 | `POST /datasets/{dataset_id}/assignments/release` | Assigned actor | `AssignmentActionRequest` → `Assignment` |
 | `POST /datasets/{dataset_id}/assignments/complete` | Assigned annotator | `AssignmentActionRequest` → `Assignment` |
-| `POST /datasets/{dataset_id}/assignments/reopen` | Owner of exact prior annotation assignment | `AssignmentActionRequest` → `Assignment` |
+| `POST /datasets/{dataset_id}/assignments/reopen` | Owner of exact prior annotation or eligible review assignment | `AssignmentActionRequest` → `Assignment` |
 | `GET /datasets/{dataset_id}/images/{image_id}` | Any role | No input → `ImageState` |
 | `GET /datasets/{dataset_id}/images/{image_id}/record` | Any role | No input → `ImageRecord` |
 | `GET /datasets/{dataset_id}/images/{image_id}/file` | Any role | No input → original image bytes and stored media type |
@@ -154,6 +154,7 @@ blocked by the enforced window.
 | `POST /datasets/{dataset_id}/images/{image_id}/admin/events` | Data admin | `AppendEventRequest` with permitted repair payload → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/rebuild` | Any role | No body → replayed `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/reviews` | Assigned reviewer | `AssignmentActionRequest` query plus `ReviewRecord` → `ImageState` |
+| `POST /datasets/{dataset_id}/images/{image_id}/review-revisions` | Owner of active decision-revision lease; reviewer role | `AssignmentActionRequest` query plus `ReviewRevisionCommit` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/corrections` | Assigned reviewer | `AssignmentActionRequest` query plus `CorrectionRequest` → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/adjudications` | Assigned adjudicator | `AssignmentActionRequest` query plus `AdjudicationRecord` → `EventLogEntry` |
 | `GET /datasets/{dataset_id}/offline-bundle` | Annotator | `OfflineBundleRequest` query → `OfflineBundle` |
@@ -168,6 +169,23 @@ completion-balance decision. The complete count, denominator, disabled-peer,
 zero-count, and exact-boundary contract is maintained in
 [Assignment](assignment.md#completion-balance).
 
+Review reopening and replacement follow the strict
+[previous-review contract](assignment.md#previous-review-and-decision-revisions).
+`ReviewRevisionCommit` contains `reviews`, from 1 to 10001 `ReviewRecord` values.
+Each record must belong to the caller, have a unique ID and captured exact target,
+and contain at most 2000 bytes of comment. The final record is the task or
+migration-confirmation decision. Approval must include every captured target
+without a rejected object. Foreign actors or missing reviewer authority return
+401. Invalid syntax or assignment-kind input returns 400; changed context,
+expired ownership, malformed replacement targets, and conflicting retries return
+409. Neither ordinary reviews nor correction endpoints can mutate a task held
+by an exclusive decision-revision lease.
+
+`ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
+`ReviewRevisionCommitted` are server-owned events. Raw event, annotation batch,
+admin repair, and offline sync ingress cannot publish them. Clients submit
+commands to the dedicated endpoints and never choose superseded review IDs.
+
 ## Manual Migration Routes
 
 Every route requires a valid session, exact owned assignment, the role shown,
@@ -181,6 +199,7 @@ other than comma or semicolon. Responses are
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons` | Annotator | `AddMigrationSkeletonRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/edit` | Annotator | `EditMigrationSkeletonRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/delete` | Annotator | `DeleteMigrationSkeletonRequest` |
+| `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/reconcile` | Annotator | `ReconcileMigrationCompanionRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/exclude` | Annotator | `ExcludeMigrationTargetRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/reopen` | Annotator | `ReopenMigrationTargetRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/revisit` | Annotator | `RevisitMigrationTargetRequest` |
@@ -200,6 +219,37 @@ HTTP 400 with the safe invalid-assignment message
 `manual migration skeleton requires at least one positioned keypoint`.
 Idempotent replay is checked first, so an identical retry of a successfully
 recorded historical all-absent command still replays without appending events.
+
+Each newly discovered skeleton is saved with one ordinary bounding box in the
+configured guide task, in the same per-image event transaction. The box bounds
+include positioned visible and hidden keypoints and span at least one original
+image pixel per axis. The server chooses its task, class and stable identity;
+clients cannot supply another guide task. The guide task enters `needs_correction`
+with its terminal outcome cleared. Existing history and review records remain.
+
+Still-derived companions follow skeleton edits and deletion. An independent box
+edit or review, active guide-task assignment, stale version, or changed guide
+configuration rejects the whole operation. Explicit reconciliation requires the
+same active migration annotation assignment and full-image cursor. Its request
+contains `assignmentId`, `passId`, `taskId`, `annotationId`, `expectedVersion`,
+and nullable `expectedBoxVersion`. A missing box uses null; regenerating an
+existing box requires its exact current version. Reconciliation creates or
+regenerates one box from the saved skeleton and returns the ordinary migration
+command result. Identical command retries do not append or duplicate objects.
+
+Historical reconciliation requires an active group-less native skeleton with a
+recorded full-image discovery creation event. Ordinary skeletons without that
+provenance, coordinate-less skeletons, inconsistent links and competing work
+remain unresolved with an actionable conflict. Each committed link is a durable
+unit of progress: after interruption, inspect current links and reconcile the
+remaining objects. Reads never perform reconciliation.
+
+Migration review visits canonical dispositions, then every active discovered
+skeleton in annotation-ID order, then the full-image confirmation. A discovered
+review target is `{ "targetType": "discovered", "annotationId": "…", "version": 1 }`;
+it binds the exact current skeleton version. A rejected discovery must receive
+a new version or be removed before submission. Companion boxes retain the
+ordinary guide-task review flow and are never approved by migration review.
 
 ## Dataset Import Routes
 
