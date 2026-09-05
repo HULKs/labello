@@ -116,7 +116,12 @@ impl eframe::App for LabelloApp {
         let central_frame = if self.work_view() {
             theme::central_frame()
                 .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin::same(theme::SPACE_2 as i8))
+                .inner_margin(if self.workflow_change_needs_inline_slot(ui.ctx()) {
+                    // Reserve notice space without consuming the short review canvas.
+                    egui::Margin::symmetric(theme::SPACE_2 as i8, 0)
+                } else {
+                    egui::Margin::same(theme::SPACE_2 as i8)
+                })
         } else {
             theme::central_frame()
         };

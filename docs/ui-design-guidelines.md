@@ -178,8 +178,10 @@ and new task/class names. The new identity is emphasized, and the notice has a
 and the polite AccessKit status retain complete names. The card floats inside
 the workspace without reducing its canvas layout. On short compact screens it
 uses the existing identity row when that row presents the notice. Otherwise the
-workspace retains the floating notice, including in short review layouts. Only
-a notice actually presented in the current render pass suppresses that fallback. It is
+workspace reserves an inline notice above the canvas and reclaims its vertical
+canvas inset to keep a usable image area. The notice must not overlap the canvas,
+and a 320×320 review workspace retains at least 44px of canvas height. Only a
+notice actually presented in the current render pass suppresses that fallback. It is
 nonmodal and leaves ordinary work available after the new identity has been
 presented. Dismissing
 it retains the current workflow identity in the context bar and selector.
