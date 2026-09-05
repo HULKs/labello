@@ -142,7 +142,8 @@ A short manual-migration annotation view places failed-activity Retry in the
 existing measured secondary actions. The bottom summary retains unavailable or
 stale text and exposes the Retry location through its full accessible help.
 This keeps the retry target at 44 points without taking another full canvas row;
-other views retain the direct summary Retry control.
+Compact short Review follows the same rule below; other views retain the direct
+summary Retry control.
 
 The same short migration/activity combination removes only the canvas's vertical
 outer inset, retaining its horizontal inset. This preserves at least 44 points
@@ -158,3 +159,9 @@ transfer. Compact revision buttons retain explicit Stage yes/no or Commit yes/no
 labels. Correction mode keeps its own actions, and migration review uses the same
 bounded retry placement. This changes neither review decisions nor assignment
 ownership.
+
+Short review layout uses the shared review-context projection to keep revision
+mode in the existing context identity line. The central workspace omits its
+redundant caption only when valid compact revision details are present; missing
+or stale target context retains the caption fallback. This presentation does not
+change captured targets, staging, or commit policy.
