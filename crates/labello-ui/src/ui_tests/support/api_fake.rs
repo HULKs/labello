@@ -2185,3 +2185,9 @@ impl UserApi for SpyApi {
         ready(Ok(user.clone()))
     }
 }
+
+impl labello_client::BuildInformationApi for SpyApi {
+    fn build_information(&self) -> ApiFuture<'_, labello_client::BuildIdentity> {
+        Box::pin(async { Ok(labello_client::BuildIdentity::default()) })
+    }
+}

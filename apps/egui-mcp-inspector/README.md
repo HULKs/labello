@@ -195,7 +195,8 @@ not establish subagent-host MCP isolation or parallel live-server behavior.
 The default is the annotation preset. Use `-- --preset <name>` with Cargo or
 `--preset <name>` with the local headless launcher for another frozen state.
 
-Available presets are `annotation`, `setup`, `review`, `review-correction`,
+Available presets are `annotation`, `setup`, `about`, `build-mismatch`,
+`build-unavailable`, `review`, `review-correction`,
 `adjudication`, `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
 `statistics-failure`, `assignment-failure`, `image-failure`, `import-source`,
@@ -232,3 +233,11 @@ browser-only or unsupported in the inspector.
 Use the headless launch recipe with `--live` when no graphical display is
 available. Preset or native live-mode evidence must be accompanied by the
 Chromium checks required by the [verification contract](../../docs/verification.md).
+
+The build-information presets use synthetic release identities. `about` shows
+matching identities, `build-unavailable` shows the local unavailable state, and
+`build-mismatch` adds the warning to an annotation workspace. Native inspection
+proves shared layout and named semantics. Actual artifact binding, visible-tab
+refresh and browser clipboard success/rejection require Chromium. Without a
+clipboard adapter, the native About screen offers selectable manual-copy text
+and reports that automatic copying is unavailable.

@@ -293,3 +293,22 @@ The implementation remains `In progress` until exact-head CI and independent
 review pass. A local transaction test does not prove the real guest's mounts,
 systemd user manager, Caddy TLS, GitHub environment rules, or runner-group
 restriction.
+
+## Product build identity
+
+Release publication compiles `LABELLO_RELEASE_TAG` and `LABELLO_SOURCE_COMMIT`
+into both the server API and the executing browser WASM. The versioned-payload
+step rebuilds the locked release browser with these values before inventory,
+checksums, packaging and attestation. `release.json` remains release metadata for
+artifact verification; the running UI does not fetch it as its own identity.
+An already-open browser from release A therefore keeps reporting A after release
+B is deployed, while a server refresh can report B.
+
+The public read-only `/build-information` route exposes the bounded compiled
+identity independently of `/deployment/readiness`. Readiness and admission
+semantics are unchanged. Missing build metadata is explicit development or
+incomplete identity, never a release inferred from the shared Cargo version.
+Setup > About shows both identities and offers plain-text copying. A quiet
+lower-right warning appears only when both complete release identities differ.
+Server refreshes happen at startup, About opening, retry and visible-tab focus;
+failure clears the previously displayed server identity and mismatch.

@@ -4,7 +4,8 @@ impl LabelloApp {
             && (!self.auth.checked || self.auth.account.is_none())
             && !matches!(
                 command,
-                UiCommand::AuthOptions { .. }
+                UiCommand::BuildInformation { .. }
+                    | UiCommand::AuthOptions { .. }
                     | UiCommand::Session { .. }
                     | UiCommand::LocalAdminLogin { .. }
                     | UiCommand::GithubLogin { .. }
@@ -84,6 +85,11 @@ impl LabelloApp {
             UiCommand::Migration { .. } => {
                 self.work.migration.busy = false;
                 self.work.migration.error = Some(error.to_string());
+            }
+            UiCommand::BuildInformation { .. } => {
+                self.builds.loading = false;
+                self.builds.checked = true;
+                self.builds.server = None;
             }
             UiCommand::AuthOptions { .. } => {
                 self.loading.session = false;
@@ -195,7 +201,7 @@ impl LabelloApp {
         self.runtime.error = Some(error.to_string());
     }
 
-    fn request_identity(
+    pub(crate) fn request_identity(
         &mut self,
         dataset_id: Option<labello_domain::DatasetId>,
     ) -> RequestIdentity {
@@ -293,6 +299,11 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
+        if self.builds.loading {
+            self.builds.loading = false;
+            self.builds.checked = false;
+        }
+        self.builds.copying = false;
         self.runtime.commands.clear();
         self.runtime.active_requests.clear();
         self.auth.active_session_request_id = None;

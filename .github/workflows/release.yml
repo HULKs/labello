@@ -109,6 +109,12 @@ jobs:
           LABELLO_RELEASE_TAG="$VERSION" LABELLO_SOURCE_COMMIT="$SOURCE_COMMIT" \
             cargo build --locked --release -p labello-server -p labello-deploy
 
+          (
+            cd apps/labello-wasm
+            LABELLO_RELEASE_TAG="$VERSION" LABELLO_SOURCE_COMMIT="$SOURCE_COMMIT" \
+              trunk build --release --locked
+          )
+
           release_dir="$RUNNER_TEMP/release-assets"
           candidate="$RUNNER_TEMP/candidate"
           mkdir -p "$release_dir" "$candidate/server" "$candidate/browser"

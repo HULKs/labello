@@ -19,6 +19,11 @@ impl LabelloApp {
 
     pub(crate) fn execute_transition(&mut self, transition: PendingTransition) {
         match transition {
+            PendingTransition::About => {
+                self.execute_transition(PendingTransition::View(AppView::Setup));
+                self.setup.section = SetupSection::About;
+                self.request_build_information();
+            }
             PendingTransition::NextAssignment => {
                 if self.runtime.api.is_some() {
                     self.clear_current_image();
@@ -67,6 +72,7 @@ impl LabelloApp {
 
     fn transition_is_current(&self, transition: &PendingTransition) -> bool {
         match transition {
+            PendingTransition::About => self.view == AppView::Setup && self.setup.section == SetupSection::About,
             PendingTransition::NextAssignment => false,
             PendingTransition::PreviousAssignment(_) => false,
             PendingTransition::Workflow(task_id) => {

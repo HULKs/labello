@@ -98,3 +98,26 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+## Build information
+
+`build_information.rs` owns public artifact identity state, comparison, About
+rendering, clipboard feedback and the workspace status control. Server identity
+uses the closed client `BuildInformationApi` capability and existing typed
+`UiCommand`/`UiMessage` request ownership. Startup, About, explicit retry and the
+browser focus notifier coalesce while loading. Refresh clears the old result;
+endpoint changes invalidate old responses. Auth/workspace invalidation resets
+an interrupted refresh so it can be retried without accepting an obsolete
+response. This metadata does not require a signed-in account or dataset.
+
+The WASM bootstrap injects its own compiled identity and supplies the clipboard
+promise and visible-focus adapters. It never treats mutable `release.json` as
+the executing artifact. The shared UI announces copying only after success,
+reports rejection or unavailable adapters and retains selectable plain text.
+
+The lower-right mismatch control is rendered in a separate bottom status panel.
+It has no workflow side effects while rendering. Activation uses `open_view`
+and `PendingTransition::About`, retaining Admin, assignment and unsaved-draft
+protections; cancelling leaves work intact. The panel reserves no height without
+a mismatch and leaves room for future activity content to its left without
+implementing activity statistics.

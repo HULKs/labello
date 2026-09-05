@@ -127,6 +127,7 @@ pub(crate) enum PendingTransition {
     PreviousAssignment(Assignment),
     Workflow(TaskId),
     View(AppView),
+    About,
 }
 
 pub(crate) struct RuntimeState {
@@ -462,6 +463,7 @@ impl WorkflowChoice {
 
 pub struct LabelloApp {
     pub(crate) config: AppConfig,
+    pub(crate) builds: crate::build_information::BuildInformationState,
     pub(crate) runtime: RuntimeState,
     pub(crate) loading: LoadingState,
     pub(crate) setup: SetupState,

@@ -3,6 +3,8 @@ use wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+mod build_information;
 #[cfg(any(target_arch = "wasm32", test))]
 mod config;
 #[cfg(target_arch = "wasm32")]
@@ -56,6 +58,7 @@ async fn run() -> Result<(), JsValue> {
             Box::new(move |creation_context| {
                 labello_ui::theme::apply(&creation_context.egui_ctx);
                 let mut app = labello_ui::LabelloApp::live_http(config.clone());
+                build_information::install(&mut app, &creation_context.egui_ctx);
                 app.set_import_chunk_uploader(std::rc::Rc::new(|request| {
                     Box::pin(raw_import::upload_chunk(request))
                 }));

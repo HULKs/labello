@@ -19,6 +19,9 @@ impl eframe::App for LabelloApp {
         self.sync_manual_migration();
         self.start_next_persistence_command();
         self.start_setup_load();
+        if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {
+            self.request_build_information();
+        }
         self.refresh_stats_if_due();
         self.refresh_assignment_availability_if_due();
         self.refresh_ingest_if_due();
@@ -45,6 +48,7 @@ impl eframe::App for LabelloApp {
                 )
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }
+        self.build_warning_bar(ui);
         if self.work_view() {
             if let Some(action_height) = compact_action_height {
                 egui::Panel::bottom("compact_primary_actions")

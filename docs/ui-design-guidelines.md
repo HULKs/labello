@@ -178,3 +178,23 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+### Build information and mismatch
+
+Setup > About is reachable before and after sign-in. It separates Web app and
+Server identities, shows release tags with twelve-character source commits,
+and gives each row a complete accessible label and full-value tooltip. Missing
+release metadata is explicitly development; missing commits are unavailable.
+Selectable plain text includes complete values for manual copying. Server
+loading, unavailable and retry states are local to About. Clipboard feedback is
+an accessible polite status and success requires the platform copy operation to
+succeed.
+
+Routine identity values stay in About. Only two complete differing release
+identities produce the persistent lower-right bottom-bar warning, `Web app and
+server builds differ`. Use the existing amber warning intent, a small warning
+icon and quiet button interaction/focus states, without a filled alert banner.
+The accessible action name also says it opens About. Keep its 44-point target
+and lower-right position in wide, medium, compact and short layouts; nearby
+future activity content must condense or reflow. Existing assignment transition
+confirmation and cancellation apply to this navigation.

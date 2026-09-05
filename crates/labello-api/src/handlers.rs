@@ -119,6 +119,7 @@ pub fn router(state: ApiState) -> Router {
     let app = Router::new()
         .route("/health", get(health))
         .route("/deployment/readiness", get(deployment::readiness))
+        .route("/build-information", get(deployment::build_information))
         .route("/me", get(me))
         .route("/logout", post(logout))
         .route("/auth/options", get(auth_options))
