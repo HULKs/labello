@@ -100,7 +100,8 @@ async fn source(root: &Path) -> (DatasetRepository, Vec<AnnotationVersion>) {
     let a = ["nose", "tail", "ear"];
     let b = ["tip", "base", "joint"];
     dataset.tasks = vec![
-        task("boxes", &["class-a", "class-b"], None),
+        task("boxes-a", &["class-a"], None),
+        task("boxes-b", &["class-b"], None),
         task("pose-a", &["class-a"], Some(&a)),
         task("pose-b", &["class-b"], Some(&b)),
     ];
@@ -124,11 +125,11 @@ async fn source(root: &Path) -> (DatasetRepository, Vec<AnnotationVersion>) {
         height: 0.4,
     });
     let annotations = vec![
-        annotation("box-a", "boxes", "class-a", box_a, Some("paired-a")),
-        annotation("box-b", "boxes", "class-b", box_b, None),
+        annotation("box-a", "boxes-a", "class-a", box_a, Some("paired-a")),
+        annotation("box-b", "boxes-b", "class-b", box_b, None),
         annotation(
             "box-absent",
-            "boxes",
+            "boxes-a",
             "class-a",
             absent_box,
             Some("paired-absent"),
@@ -448,7 +449,7 @@ async fn both_profiles_round_trip_through_production_import_with_explicit_losses
         ),
     ] {
         let classes = if name == "detect" {
-            vec![("boxes", "class-a"), ("boxes", "class-b")]
+            vec![("boxes-a", "class-a"), ("boxes-b", "class-b")]
         } else {
             vec![("pose-a", "class-a"), ("pose-b", "class-b")]
         };

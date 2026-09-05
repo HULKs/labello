@@ -111,7 +111,7 @@ fn completed_import_still_requires_complete_or_verified_empty_coverage() {
                 annotations: vec![],
                 task_initializations: vec![ImportTaskInitialization {
                     task_id: task.task_id.clone(),
-                    coverage: coverage.clone(),
+                    coverage,
                     initial_state: terminal.clone(),
                 }],
                 migration_target_sets: vec![],

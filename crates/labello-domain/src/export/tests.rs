@@ -13,7 +13,9 @@ fn options(profile: ExportProfile) -> ExportOptions {
     }
 }
 
-fn skeleton(points: &[(&str, Option<(f32, f32)>, KeypointState)]) -> SkeletonGeometry {
+type KeypointFixture<'a> = (&'a str, Option<(f32, f32)>, KeypointState);
+
+fn skeleton(points: &[KeypointFixture<'_>]) -> SkeletonGeometry {
     SkeletonGeometry {
         keypoints: points
             .iter()
