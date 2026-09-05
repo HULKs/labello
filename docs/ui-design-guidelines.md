@@ -147,7 +147,8 @@ has been recorded.
   and Fit visible; keep Pan mode active during approval decisions and return
   primary drag to object editing during reviewer correction; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
-  labels.
+  labels. Show source images without a grid overlay in annotation, review, and
+  migration canvases.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.

@@ -31,7 +31,6 @@ pub const ANNOTATION: Color32 = ACCENT_HOVER;
 pub const SELECTION: Color32 = WARNING;
 pub const DRAFT: Color32 = INFO;
 pub const PRELABEL: Color32 = Color32::from_rgb(192, 132, 252);
-pub const CANVAS_GRID: Color32 = Color32::from_rgba_unmultiplied_const(255, 255, 255, 18);
 
 pub const SPACE_1: f32 = 4.0;
 pub const SPACE_2: f32 = 8.0;

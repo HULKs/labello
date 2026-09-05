@@ -32,18 +32,6 @@ fn paint_canvas(
             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
             Color32::WHITE,
         );
-        for i in 1..4 {
-            let x = image_rect.left() + image_rect.width() * i as f32 / 4.0;
-            let y = image_rect.top() + image_rect.height() * i as f32 / 4.0;
-            painter.line_segment(
-                [pos2(x, image_rect.top()), pos2(x, image_rect.bottom())],
-                Stroke::new(1.0, theme::CANVAS_GRID),
-            );
-            painter.line_segment(
-                [pos2(image_rect.left(), y), pos2(image_rect.right(), y)],
-                Stroke::new(1.0, theme::CANVAS_GRID),
-            );
-        }
     } else {
         painter.text(
             viewport.center(),
