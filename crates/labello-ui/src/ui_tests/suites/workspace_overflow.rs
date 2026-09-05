@@ -380,6 +380,7 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
 }
 
 fn assert_workspace_resize_settles_without_input(mut harness: Harness<'_, LabelloApp>) {
+    let phase = harness.state().review_context().map(|context| context.phase);
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.run_steps(6);
     let settled = harness.get_by_label("Annotation canvas").rect();
@@ -390,8 +391,23 @@ fn assert_workspace_resize_settles_without_input(mut harness: Harness<'_, Labell
         // Run only requested frames; extra steps would conceal a missing repaint.
         harness.run();
     }
+    for size in [egui::vec2(320.0, 568.0), egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0), egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0), egui::vec2(320.0, 320.0)] {
+        harness.set_size(size);
+        harness.run();
+    }
     let resized = harness.get_by_label("Annotation canvas").rect();
+    let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0));
+    for button in harness.query_all_by_role(egui::accesskit::Role::Button) {
+        let rect = button.rect();
+        if rect.top() >= resized.bottom() - 0.5 {
+            assert!(viewport.contains_rect(rect), "footer action clipped after resize: {rect:?}");
+            assert!(rect.height() >= 44.0, "footer action too short: {rect:?}");
+        }
+    }
     assert_eq!(resized, settled, "idle resize must settle without pointer input");
+    assert_eq!(harness.state().review_context().map(|context| context.phase), phase);
     assert!(resized.height() >= 44.0, "{resized:?}");
 }
 
@@ -417,9 +433,69 @@ fn workspace_idle_resize_settles_review_actions() {
 #[test]
 fn workspace_idle_resize_settles_migration_actions() {
     use crate::inspector_presets::{build, InspectorPreset};
-    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
-        let harness = Harness::builder().with_size(egui::vec2(320.0, 320.0))
-            .build_eframe(move |ctx| build(preset, &ctx.egui_ctx));
+    for (preset, review_index) in [
+        (InspectorPreset::MigrationObject, None),
+        (InspectorPreset::MigrationFullImage, None),
+        (InspectorPreset::MigrationReview, Some(0)),
+        (InspectorPreset::MigrationReview, Some(2)),
+    ] {
+        let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0))
+            .build_eframe(move |ctx| {
+                let mut app = build(preset, &ctx.egui_ctx);
+                if let Some(index) = review_index {
+                    let task_id = app.work.selected_task_id.clone().unwrap();
+                    let state = app.work.current_state.as_mut().unwrap();
+                    let target_set_hash = state.migration_target_sets[&task_id].target_set_hash.clone();
+                    let state_hash = state.current_migration_state_hash(&task_id).unwrap();
+                    state.migration_confirmations.insert(task_id.clone(), labello_domain::MigrationConfirmation {
+                        confirmation_hash: labello_domain::migration_confirmation_hash(&target_set_hash, &state_hash).unwrap(),
+                        task_id, target_set_hash, state_hash,
+                        actor_user_id: UserId::from("annotator"), timestamp: now(),
+                    });
+                    app.work.migration.review_index = index;
+                }
+                app
+            });
+        if let Some(index) = review_index {
+            // Initial assignment synchronization chooses the canonical first target.
+            // Now exercise the explicit object/final positions in the stable scope.
+            if index == 2 {
+                let task = harness.state().selected_task().unwrap().clone();
+                let user = harness.state().config.user_id.clone();
+                let state = harness.state_mut().work.current_state.as_mut().unwrap();
+                for (position, target) in state.review_object_targets(&task).unwrap().into_iter().enumerate() {
+                    let timestamp = now();
+                    state.apply_event(&EventLogEntry::new(
+                        state.current_sequence + 1, state.image_id.clone(), user.clone(),
+                        DatasetRole::Reviewer, timestamp, EventPayload::ReviewRecorded {
+                            review: labello_domain::ReviewRecord {
+                                review_id: labello_domain::ReviewId::from(format!("resize-review-{position}")),
+                                target, reviewer_user_id: user.clone(),
+                                decision: labello_domain::ReviewDecision::Approved, timestamp, comment: None,
+                            },
+                        },
+                    )).unwrap();
+                }
+            }
+            harness.state_mut().work.migration.review_index = index;
+            let context = harness.state().review_context().expect("valid migration review context");
+            assert_eq!(matches!(context.phase, crate::review_context::ReviewContextPhase::FullImage { .. }), index == 2);
+        }
         assert_workspace_resize_settles_without_input(harness);
     }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn workspace_idle_resize_does_not_repaint_forever_when_actions_cannot_fit() {
+    let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0))
+        .build_eframe(|ctx| crate::inspector_presets::build(
+            crate::inspector_presets::InspectorPreset::MigrationFullImage, &ctx.egui_ctx));
+    harness.run_steps(4);
+    harness.set_size(egui::vec2(160.0, 120.0));
+    harness.run();
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.run();
+    let confirm = harness.get_by_label_contains("Confirm & finish").rect();
+    assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0)).contains_rect(confirm));
 }

@@ -67,8 +67,11 @@ impl eframe::App for LabelloApp {
                     .show(ui, |ui| self.activity_summary(ui));
             }
             if let Some(action_height) = compact_action_height {
-                let allocated_bottom = ui.available_rect_before_wrap().bottom();
-                let actions = egui::Panel::bottom("compact_primary_actions")
+                let allocation = ui.available_rect_before_wrap();
+                let actions_id = egui::Id::new("compact_primary_actions");
+                let previous_height = egui::containers::panel::PanelState::load(ui.ctx(), actions_id)
+                    .map(|state| state.size().y);
+                let actions = egui::Panel::bottom(actions_id)
                     .min_size(action_height)
                     .frame(
                         if Self::short_viewport(viewport)
@@ -88,9 +91,14 @@ impl eframe::App for LabelloApp {
                             ui.horizontal_wrapped(|ui| self.workspace_actions(ui, layout));
                         }
                     });
-                if actions.response.rect.bottom() < allocated_bottom - 0.5 {
-                    // A shrinking bottom panel starts at its cached taller size. Paint its
-                    // updated measurement next frame without waiting for another input.
+                let measured = actions.response.rect;
+                if (measured.bottom() - allocation.bottom()).abs() > 0.5
+                    && measured.height() > 0.5
+                    && measured.height() <= allocation.height() + 0.5
+                    && previous_height.is_none_or(|height| (height - measured.height()).abs() > 0.5)
+                {
+                    // Bottom panels start at their cached height. Settle a changed
+                    // measurement once; an unchanged clipped panel must not repaint forever.
                     ui.ctx().request_repaint();
                 }
             } else {
