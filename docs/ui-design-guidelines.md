@@ -147,6 +147,16 @@ has been recorded.
   clear the previous context; a missing image preview is labeled separately while
   valid authoritative target context remains available. Long values wrap with a
   complete accessible summary, and compact Inspector drawers scroll.
+  Workspace secondary actions use measured button atoms, including the current
+  font, icons and shortcuts, in the space left after preceding controls and badges.
+  Preserve each workflow's primary controls and secondary order. Show the longest
+  secondary prefix that fits with an overflow trigger for the remaining tail; omit
+  the trigger when everything fits. Required controls wrap and the panel reserves
+  their actual height. Migration Previous object leads its secondary action order;
+  short migration annotation bars remove spare vertical padding so confirmation
+  and the canvas remain visible. Moving a focused action into overflow transfers focus to
+  the trigger without dispatching it; opening the menu returns keyboard access to
+  that action. Long menu labels and shortcuts stack within a scrollable menu.
   Review bars use that same current target in every layout. Reserve space for the
   workflow/class identity, full annotation type and canonical phase before optional
   filename text and secondary controls. Only the identity line may truncate; type

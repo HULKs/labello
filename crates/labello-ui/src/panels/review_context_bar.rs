@@ -135,7 +135,7 @@ impl LabelloApp {
                 ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
             })
         } else {
-            ui.horizontal(|ui| {
+            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 self.review_details_button(ui, &content, &text);
                 ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                 if !self.manual_migration_active() {
@@ -143,15 +143,14 @@ impl LabelloApp {
                     self.workspace_actions(ui, layout);
                 }
                 if let Some(current) = self.work.current.as_ref()
-                    && ui.available_width() >= 80.0
+                    && ui.available_size_before_wrap().x >= 80.0
                 {
                     ui.add_sized(
-                        [ui.available_width().min(160.0), 44.0],
+                        [ui.available_size_before_wrap().x.min(160.0), 44.0],
                         egui::Label::new(&current.image.file_name).truncate(),
                     )
                     .on_hover_text(&current.image.file_name);
                 }
-                self.assignment_availability_spinner(ui);
             })
         };
         response.response.widget_info(|| {

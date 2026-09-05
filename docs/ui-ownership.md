@@ -54,6 +54,9 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
+  stable command locations and overflow keyboard focus; workflow owners supply
+  action order, availability and command dispatch;
 - `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
   interaction and context-row height;
 - `review_context.rs`: immutable exact-target context shared by review presentation;
@@ -68,6 +71,11 @@ The canvas keeps its public state and entry points in `canvas.rs`. Its internal
 implementation is split only into rendering, painting, interaction,
 hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
 the canvas module so these boundaries do not weaken behavioral coverage.
+
+The shared workflow-state reducer retains every persisted annotation ID,
+including deleted versions. Undo/Redo rebases a restored annotation onto that
+latest authoritative version before saving; a failed save keeps the same draft
+available for retry. Visible annotations remain the active projection.
 
 ## Browser persistence
 

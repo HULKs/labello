@@ -1206,26 +1206,6 @@ impl LabelloApp {
             {
                 self.begin_revisit_migration_target(group_id);
             }
-            self.migration_object_navigation_button(ui);
-            if !compact
-                && ui
-                    .add(
-                        egui::Button::new(if self.inspection_next_returns_to_current() {
-                            "Return current"
-                        } else {
-                            "Next object"
-                        })
-                        .shortcut_text(
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::SelectNextObject,
-                            ),
-                        ),
-                    )
-                    .clicked()
-            {
-                self.inspect_migration_object(1);
-            }
         } else {
             let adding_missing_object = self.work.migration.adding_missing_object;
             if !adding_missing_object
@@ -1296,13 +1276,57 @@ impl LabelloApp {
                     self.remove_last_migration_keypoint();
                 }
             }
-            self.migration_object_navigation_button(ui);
         }
-        if compact {
-            self.migration_more_actions(ui);
-        } else {
-            self.migration_assignment_buttons(ui);
+        let mut actions = Vec::new();
+        if self.can_edit_previous_migration_object() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::SelectPreviousObject,
+                "Previous object",
+                true,
+                "Return to the previous object.",
+            ));
         }
+        if self.work.migration.inspected_group_id.is_some() {
+            actions.push(crate::panels::WorkspaceAction {
+                command: crate::panels::WorkspaceCommand::NextMigrationObject,
+                label: if self.inspection_next_returns_to_current() {
+                    "Return to current object"
+                } else {
+                    "Next object"
+                }
+                .into(),
+                shortcut: self
+                    .shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
+                enabled: true,
+                help: "Inspect the next object or return to the current object.",
+            });
+        }
+        let ready = self.work.assignment.is_some()
+            && self.runtime.api.is_some()
+            && !self.loading.saving
+            && !self.loading.image
+            && !self.work.migration.busy
+            && self.work.pending_transition.is_none();
+        if self.work.previous_assignment.is_some() {
+            actions.push(self.workspace_secondary_action(
+                ui.ctx(),
+                labello_domain::UserAction::PreviousImage,
+                "Previous assignment",
+                ready,
+                "Return to the previous assignment.",
+            ));
+        }
+        actions.push(self.workspace_secondary_action(
+            ui.ctx(),
+            labello_domain::UserAction::SkipAssignment,
+            "Skip",
+            ready,
+            "Release this assignment and claim another.",
+        ));
+        self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
+            ui, &actions, "More",
+        ));
     }
 
     fn migration_companion_status(&self, ui: &mut egui::Ui, annotation_id: &AnnotationId) {
@@ -1548,41 +1572,6 @@ impl LabelloApp {
         ui.separator();
         ui.label(RichText::new("Assignment").strong());
         self.migration_assignment_buttons(ui);
-    }
-
-    fn migration_more_actions(&mut self, ui: &mut egui::Ui) {
-        ui.menu_button("More", |ui| {
-            if self.work.migration.inspected_group_id.is_some()
-                && ui
-                    .button(if self.inspection_next_returns_to_current() {
-                        "Return to current object"
-                    } else {
-                        "Next object"
-                    })
-                    .clicked()
-            {
-                self.inspect_migration_object(1);
-                ui.close();
-            }
-            let ready = self.work.assignment.is_some()
-                && self.runtime.api.is_some()
-                && !self.loading.saving
-                && !self.loading.image
-                && !self.work.migration.busy
-                && self.work.pending_transition.is_none();
-            if self.work.previous_assignment.is_some()
-                && ui
-                    .add_enabled(ready, egui::Button::new("Previous assignment"))
-                    .clicked()
-            {
-                self.trigger_user_action(labello_domain::UserAction::PreviousImage);
-                ui.close();
-            }
-            if ui.add_enabled(ready, egui::Button::new("Skip")).clicked() {
-                self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
-                ui.close();
-            }
-        });
     }
 
     fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool) {
