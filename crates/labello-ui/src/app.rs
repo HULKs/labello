@@ -384,6 +384,7 @@ pub struct WorkState {
     pub(crate) show_tutorial: bool,
     pub(crate) pending_transition: Option<PendingTransition>,
     pub(crate) drawer: Option<Drawer>,
+    pub(crate) review_details_focus_return: Option<egui::Id>,
     pub(crate) workflow_panel_collapsed: bool,
     pub(crate) inspector_panel_collapsed: bool,
     pub(crate) show_settings: bool,

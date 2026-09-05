@@ -53,6 +53,7 @@ include!("panels/workspace_actions.rs");
 include!("panels/task_selector.rs");
 include!("panels/inspector.rs");
 include!("panels/workspace.rs");
+include!("panels/review_context_bar.rs");
 include!("panels/overlays.rs");
 include!("panels/prelabels.rs");
 
