@@ -73,7 +73,8 @@ impl DatasetRepository {
         context: AssignmentContext<'_>,
         pass_id: Option<&MigrationPassId>,
     ) -> StorageResult<ManualMigrationCommandResult> {
-        let (metadata, _image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, _image) =
+            self.load_migration_inputs(context.image_id).await?;
         let role = migration_role(&context.kind)?;
         require_role(
             &metadata.role_assignments,
@@ -118,10 +119,22 @@ impl DatasetRepository {
     async fn load_migration_inputs(
         &self,
         image_id: &ImageId,
-    ) -> StorageResult<(DatasetMetadata, ImageRecord)> {
+    ) -> StorageResult<(
+        tokio::sync::RwLockReadGuard<'_, ()>,
+        DatasetMetadata,
+        ImageRecord,
+    )> {
+        // Complete artifact publication before configuration -> image locking.
+        // Callers retain this guard through authorization and the whole append.
+        self.ensure_artifact_migration().await?;
+        let config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset_config().await?;
         let image = self.load_image_record(image_id).await?;
-        Ok((metadata, image))
+        #[cfg(test)]
+        if let Some(notify) = self.migration_config_captured.lock().as_ref() {
+            notify.notify_one();
+        }
+        Ok((config_guard, metadata, image))
     }
 
     #[allow(
@@ -138,7 +151,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, image_dimensions) =
             migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
@@ -344,7 +357,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide, image_dimensions) =
             migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
@@ -505,7 +518,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide, image_dimensions) =
             migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
@@ -688,7 +701,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -827,7 +840,7 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         validate_note(reason, note.as_deref())?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -977,7 +990,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1045,7 +1058,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1175,7 +1188,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1285,7 +1298,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1366,7 +1379,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1486,7 +1499,7 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         validate_comment(comment.as_deref())?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
         if context.kind != AssignmentKind::Review {
             return Err(StorageError::InvalidAssignment(
@@ -1752,7 +1765,7 @@ impl DatasetRepository {
         expected_sequence: u64,
         payload: EventPayload,
     ) -> StorageResult<EventLogEntry> {
-        let metadata = self.load_dataset().await?;
+        let (_config_guard, metadata, _image) = self.load_migration_inputs(image_id).await?;
         require_role(
             &metadata.role_assignments,
             &metadata.dataset_id,
