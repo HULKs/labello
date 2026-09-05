@@ -16,6 +16,7 @@ pub(crate) struct BuildInformationState {
     pub server: Option<BuildIdentity>,
     pub checked: bool,
     pub loading: bool,
+    pub pending_request_id: Option<u64>,
     pub clipboard: Option<BuildClipboardWriter>,
     pub copying: bool,
     pub copy_feedback: Option<&'static str>,
@@ -56,13 +57,20 @@ impl LabelloApp {
         }
         self.builds.loading = true;
         let request = self.request_identity(None);
+        self.builds.pending_request_id = Some(request.request_id);
         self.queue_command(UiCommand::BuildInformation { request });
     }
 
     pub(crate) fn reduce_build_message(&mut self, message: UiMessage) -> Option<UiMessage> {
         match message {
             UiMessage::BuildRefreshRequested => self.request_build_information(),
-            UiMessage::BuildInformationLoaded { result, .. } => {
+            UiMessage::BuildInformationLoaded { request, result } => {
+                if self.builds.pending_request_id != Some(request.request_id)
+                    || !self.runtime.active_requests.remove(&request.request_id)
+                {
+                    return None;
+                }
+                self.builds.pending_request_id = None;
                 self.builds.loading = false;
                 self.builds.checked = true;
                 self.builds.server = result.ok().filter(BuildIdentity::is_valid);

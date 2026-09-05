@@ -87,6 +87,7 @@ impl LabelloApp {
                 self.work.migration.error = Some(error.to_string());
             }
             UiCommand::BuildInformation { .. } => {
+                self.builds.pending_request_id = None;
                 self.builds.loading = false;
                 self.builds.checked = true;
                 self.builds.server = None;
@@ -299,13 +300,15 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
-        if self.builds.loading {
-            self.builds.loading = false;
-            self.builds.checked = false;
-        }
         self.builds.copying = false;
-        self.runtime.commands.clear();
-        self.runtime.active_requests.clear();
+        let build_request = self.builds.pending_request_id;
+        self.runtime.commands.retain(|command| {
+            matches!(command, UiCommand::BuildInformation { request }
+                if Some(request.request_id) == build_request)
+        });
+        self.runtime.active_requests.retain(|request_id| {
+            Some(*request_id) == build_request
+        });
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
         self.loading.session = false;

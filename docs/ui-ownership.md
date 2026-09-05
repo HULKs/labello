@@ -106,9 +106,11 @@ rendering, clipboard feedback and the workspace status control. Server identity
 uses the closed client `BuildInformationApi` capability and existing typed
 `UiCommand`/`UiMessage` request ownership. Startup, About, explicit retry and the
 browser focus notifier coalesce while loading. Refresh clears the old result;
-endpoint changes invalidate old responses. Auth/workspace invalidation resets
-an interrupted refresh so it can be retried without accepting an obsolete
-response. This metadata does not require a signed-in account or dataset.
+endpoint changes invalidate old responses. A pending public request survives
+session discovery, authentication changes, and workspace transitions because
+its identity belongs to the endpoint. Its request ID admits exactly one
+completion; endpoint replacement clears that owner and rejects the old result.
+This metadata does not require a signed-in account or dataset.
 
 The WASM bootstrap injects its own compiled identity and supplies the clipboard
 promise and visible-focus adapters. It never treats mutable `release.json` as

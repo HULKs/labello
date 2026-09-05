@@ -38,6 +38,8 @@ fn build_information_refresh_coalesces_and_rejects_obsolete_endpoint_responses()
     let old = app.runtime.commands.back().unwrap().request().clone();
     app.config.api_base_url = "http://other.example.test".into();
     app.rebuild_http_api();
+    app.request_build_information();
+    let current = app.runtime.commands.back().unwrap().request().clone();
     app.runtime
         .tx
         .send(UiMessage::BuildInformationLoaded {
@@ -47,8 +49,8 @@ fn build_information_refresh_coalesces_and_rejects_obsolete_endpoint_responses()
         .unwrap();
     app.process_messages(&egui::Context::default());
     assert!(app.builds.server.is_none());
-    app.request_build_information();
-    let current = app.runtime.commands.back().unwrap().request().clone();
+    assert!(app.builds.loading);
+    assert_eq!(app.builds.pending_request_id, Some(current.request_id));
     app.runtime
         .tx
         .send(UiMessage::BuildInformationLoaded {
@@ -336,4 +338,79 @@ fn build_information_long_values_wrap_and_keep_complete_accessible_identity() {
     assert!(row.rect().left() >= 0.0 && row.rect().right() <= 320.0);
     assert!(row.rect().height() > 20.0, "long values should wrap");
     assert!(harness.state().build_information_text().contains(&commit));
+}
+
+#[test]
+fn build_information_stays_coalesced_across_session_and_workspace_epochs() {
+    for dispatched in [false, true] {
+        let mut app = base_live_app(Rc::new(SpyApi::new()));
+        app.request_build_information();
+        let request = app.runtime.commands.back().unwrap().request().clone();
+        if dispatched {
+            // Hold the transport response while normal startup/session ownership changes.
+            app.runtime.commands.pop_front();
+        }
+        app.request_session();
+        app.begin_workspace_epoch();
+        app.request_build_information();
+        assert!(app.builds.loading);
+        let build_requests = app
+            .runtime
+            .commands
+            .iter()
+            .filter_map(|command| match command {
+                UiCommand::BuildInformation { request } => Some(request.request_id),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            build_requests,
+            if dispatched {
+                vec![]
+            } else {
+                vec![request.request_id]
+            }
+        );
+        app.runtime
+            .tx
+            .send(UiMessage::BuildInformationLoaded {
+                request: request.clone(),
+                result: Ok(release_build("v1.2.3", 'a')),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.builds.server, Some(release_build("v1.2.3", 'a')));
+        assert!(!app.builds.loading);
+        // A duplicate completion cannot replace the accepted response.
+        app.runtime
+            .tx
+            .send(UiMessage::BuildInformationLoaded {
+                request,
+                result: Ok(release_build("v9.0.0", 'b')),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.builds.server, Some(release_build("v1.2.3", 'a')));
+    }
+}
+
+#[test]
+fn build_information_dispatch_failure_ends_the_endpoint_request_after_auth_changes() {
+    let mut app = base_live_app(Rc::new(SpyApi::new()));
+    app.request_build_information();
+    let request = app.runtime.commands.pop_front().unwrap().request().clone();
+    app.begin_auth_epoch();
+    app.runtime
+        .tx
+        .send(UiMessage::RequestFailed {
+            request,
+            error: "dispatch unavailable".into(),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(!app.builds.loading);
+    assert!(app.builds.server.is_none());
+    app.request_build_information();
+    assert!(app.builds.loading);
+    assert_eq!(app.runtime.commands.len(), 1);
 }
