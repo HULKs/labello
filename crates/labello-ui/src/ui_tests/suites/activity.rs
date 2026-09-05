@@ -364,9 +364,7 @@ fn activity_retry_uses_short_migration_overflow_without_obscuring_canvas() {
         );
         assert!(
             harness
-                .query_by_label_contains(
-                    "Retry activity is available in the workspace More actions"
-                )
+                .query_by_label_contains("Use Retry activity in the workspace actions or More menu")
                 .is_some()
         );
         assert!(harness.query_by_label("Retry").is_none());
@@ -381,6 +379,133 @@ fn activity_retry_uses_short_migration_overflow_without_obscuring_canvas() {
         harness.key_press(egui::Key::Enter);
         harness.run_steps(3);
         assert_ne!(harness.state().datasets.activity.last_attempt, before);
+        assert_eq!(harness.state().work.assignment, assignment);
+    }
+}
+
+#[test]
+fn activity_retry_preserves_short_review_canvas_and_primary_decisions() {
+    for (revision, final_phase) in [(false, false), (true, false), (true, true)] {
+        for previous in [false, true] {
+            for stale in [false, true] {
+                let api = Rc::new(SpyApi::new());
+                seed_review_annotation(
+                    &api,
+                    AnnotationGeometry::BoundingBox(BoundingBox {
+                        x: 0.2,
+                        y: 0.2,
+                        width: 0.3,
+                        height: 0.3,
+                    }),
+                    true,
+                );
+                let mut harness = loaded_review_harness(api.clone());
+                harness.set_size(egui::vec2(320.0, 320.0));
+                if revision {
+                    enter_test_review_revision(harness.state_mut());
+                }
+                if final_phase {
+                    harness.state_mut().work.review_index = harness.state().work.annotations.len();
+                    harness.state_mut().sync_review_selection();
+                }
+                if previous {
+                    let mut assignment = harness.state().work.assignment.clone().unwrap();
+                    assignment.assignment_id =
+                        labello_domain::AssignmentId::from("previous-review");
+                    assignment.status = labello_domain::AssignmentStatus::Completed;
+                    harness.state_mut().work.previous_assignment = Some(assignment);
+                }
+                harness.run_steps(6);
+                let healthy_canvas = harness.get_by_label("Annotation canvas").rect();
+                if previous {
+                    harness.get_by_label("Previous").focus();
+                    harness.run_steps(2);
+                }
+                let assignment = harness.state().work.assignment.clone();
+                let epoch = harness.state().workspace_epoch;
+                let activity = &mut harness.state_mut().datasets.activity;
+                if !stale {
+                    activity.value = None;
+                }
+                activity.pending_request = None;
+                activity.error = Some("unavailable".into());
+                activity.last_attempt = Some(Instant::now());
+                harness.run_steps(6);
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                assert!(
+                    canvas.height() >= healthy_canvas.height(),
+                    "revision={revision}, final_phase={final_phase}, previous={previous}, stale={stale}: healthy={healthy_canvas:?}, error={canvas:?}"
+                );
+                assert!(harness.query_by_label("Retry").is_none());
+                let primary = if final_phase {
+                    "Commit yes"
+                } else if revision {
+                    "Stage yes"
+                } else {
+                    "Accept"
+                };
+                assert!(harness.get_by_label(primary).rect().height() >= 44.0);
+                if previous {
+                    assert!(harness.get_by_label("More").is_focused());
+                }
+                harness.get_by_label("More").click();
+                harness.run_steps(3);
+                if previous {
+                    assert!(harness.get_by_label_contains("Previous").is_focused());
+                }
+                let retry = harness.get_by_label("Retry activity");
+                assert!(retry.rect().height() >= 44.0);
+                retry.focus();
+                harness.run_steps(2);
+                let before = api.counts().current_user_activity;
+                harness.key_press(egui::Key::Enter);
+                step_until(&mut harness, 12, |_| {
+                    api.counts().current_user_activity > before
+                });
+                assert_eq!(harness.state().work.assignment, assignment);
+                assert_eq!(harness.state().workspace_epoch, epoch);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn activity_retry_stays_reachable_in_short_correction_and_migration_review() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [
+        InspectorPreset::ReviewCorrection,
+        InspectorPreset::MigrationReview,
+    ] {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(320.0, 320.0))
+            .build_eframe(|ctx| {
+                let mut app = inspector_presets::build(preset, &ctx.egui_ctx);
+                app.runtime.api = Some(Rc::new(SpyApi::new()));
+                app.datasets.activity.identity = Some((
+                    app.config.api_base_url.clone(),
+                    app.config.user_id.clone(),
+                    app.config.dataset_id.clone(),
+                ));
+                app.datasets.activity.value = Some(activity_value(&app, labello_domain::now(), 4));
+                app.datasets.activity.last_attempt = Some(Instant::now());
+                app
+            });
+        harness.run_steps(4);
+        let healthy = harness.get_by_label("Annotation canvas").rect();
+        let assignment = harness.state().work.assignment.clone();
+        harness.state_mut().datasets.activity.error = Some("unavailable".into());
+        harness.run_steps(4);
+        let error = harness.get_by_label("Annotation canvas").rect();
+        assert!(
+            error.height() >= healthy.height(),
+            "{preset:?}: {healthy:?} -> {error:?}"
+        );
+        if harness.query_by_label("Retry activity").is_none() {
+            harness.get_by_label("More").click();
+            harness.run_steps(3);
+        }
+        assert!(harness.get_by_label("Retry activity").rect().height() >= 44.0);
         assert_eq!(harness.state().work.assignment, assignment);
     }
 }

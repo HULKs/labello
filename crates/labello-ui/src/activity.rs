@@ -193,9 +193,11 @@ impl LabelloApp {
     pub(crate) fn activity_retry_in_workspace(&self, ctx: &egui::Context) -> bool {
         self.activity_available()
             && self.datasets.activity.error.is_some()
-            && self.view == crate::app::AppView::Annotate
-            && self.manual_migration_active()
             && Self::short_viewport(ctx.content_rect().size())
+            && ((self.view == crate::app::AppView::Annotate && self.manual_migration_active())
+                || (self.view == crate::app::AppView::Review
+                    && crate::app::LayoutMode::for_width(ctx.content_rect().width())
+                        == crate::app::LayoutMode::Compact))
     }
 
     pub(crate) fn activity_summary(&mut self, ui: &mut egui::Ui) {
@@ -224,7 +226,7 @@ impl LabelloApp {
             "Loading activity today in UTC.".into()
         };
         if retry_in_workspace {
-            full.push_str(" Retry activity is available in the workspace More actions.");
+            full.push_str(" Use Retry activity in the workspace actions or More menu.");
         }
         ui.spacing_mut().interact_size.y = 0.0;
         ui.horizontal(|ui| {

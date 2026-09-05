@@ -333,6 +333,8 @@ impl LabelloApp {
             } else {
                 ("Commit approval".to_string(), "Commit rejection".to_string())
             }
+        } else if revision && fill_width && shortcut_only {
+            ("Stage yes".to_string(), "Stage no".to_string())
         } else if revision && !shortcut_only {
             ("Stage approval".to_string(), "Stage rejection".to_string())
         } else if shortcut_only {

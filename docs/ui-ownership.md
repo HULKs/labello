@@ -148,3 +148,13 @@ The same short migration/activity combination removes only the canvas's vertical
 outer inset, retaining its horizontal inset. This preserves at least 44 points
 of canvas height at 320×320 with loaded counts or an activity failure, alongside
 44-point confirmation and Retry controls.
+
+At compact short Review sizes, activity failures keep the summary at its normal
+line height. The primary review decisions reserve the actual measured width of
+an ellipsis More trigger; Retry activity and Previous navigation use the shared
+secondary-action owner. The trigger has a named More action and a 44px target.
+Moving a focused Previous control into its menu uses the existing overflow focus
+transfer. Compact revision buttons retain explicit Stage yes/no or Commit yes/no
+labels. Correction mode keeps its own actions, and migration review uses the same
+bounded retry placement. This changes neither review decisions nor assignment
+ownership.

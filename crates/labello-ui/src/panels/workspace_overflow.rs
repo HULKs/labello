@@ -33,6 +33,22 @@ struct WorkspaceOverflowFocus {
     trigger: Option<egui::Id>,
 }
 
+pub(crate) fn remember_workspace_action_response(
+    ui: &egui::Ui,
+    command: WorkspaceCommand,
+    response: &egui::Response,
+) {
+    let owner = egui::Id::new("workspace-secondary-actions");
+    ui.ctx().data_mut(|data| {
+        let mut focus = data
+            .get_temp::<WorkspaceOverflowFocus>(owner)
+            .unwrap_or_default();
+        focus.inline.retain(|(existing, _)| *existing != command);
+        focus.inline.push((command, response.id));
+        data.insert_temp(owner, focus);
+    });
+}
+
 // Measure the same atoms, font, frame and target as the rendered button, without
 // allocating an interactive widget or estimating text from character counts.
 pub(crate) fn workspace_button_size(ui: &egui::Ui, button: &egui::Button<'_>) -> egui::Vec2 {
@@ -171,6 +187,11 @@ pub(crate) fn workspace_secondary_actions(
                 ui.add(more_button)
             })
             .inner;
+        if more_label == "⋯" {
+            response.clone().on_hover_text("More actions");
+            response
+                .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "More"));
+        }
         focus.trigger = Some(response.id);
         if moved.is_some() {
             response.request_focus();

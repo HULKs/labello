@@ -1128,7 +1128,13 @@ impl LabelloApp {
             target,
             labello_client::MigrationReviewTarget::Confirmation { .. }
         );
-        let (approve, reject) = if revision && final_phase {
+        let (approve, reject) = if revision && compact && shortcut_only {
+            if final_phase {
+                ("Commit yes".to_string(), "Commit no".to_string())
+            } else {
+                ("Stage yes".to_string(), "Stage no".to_string())
+            }
+        } else if revision && final_phase {
             (
                 "Commit approval".to_string(),
                 "Commit rejection".to_string(),
