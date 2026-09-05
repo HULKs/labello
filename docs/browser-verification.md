@@ -94,6 +94,10 @@ alone does not faithfully exercise that path.
 | Real 200% browser zoom and submission | 1440×1000 browser viewport, effective 720×500 layout | Extension verifies `chrome.tabs.getZoom()` equals 2 |
 
 The six sizes are 320×568, 390×844, 600×800, 1288×820, 1440×1000 and 320×320.
+The DPR 3 case starts and signs in at its required 390×844 size. An exploratory
+1288×820 DPR 3 bootstrap intermittently missed the initial login interaction;
+that wider DPR 3 case is outside this matrix and remains unverified. The gate
+does not retry failed workflows or reuse authenticated state across cases.
 Matrix runs check actual canvas backing dimensions and painted content, open
 settings by keyboard, exercise scrolling at short sizes, and dismiss with
 Escape. Pixel density is not browser zoom. The zoom workflow uses a local

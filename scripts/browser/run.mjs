@@ -98,8 +98,8 @@ async function main() {
         });
         page = await browser.newPage({
           viewport: {
-            width: dpr === 3 ? 1288 : 1440,
-            height: workflow === display ? 820 : 1000,
+            width: dpr === 3 ? 390 : 1440,
+            height: dpr === 3 ? 844 : workflow === display ? 820 : 1000,
           },
           deviceScaleFactor: dpr,
         });

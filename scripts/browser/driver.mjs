@@ -135,7 +135,12 @@ export async function start(page, environment) {
     "auth.discovery",
   );
   await frames(page, 15);
-  await click(page, page.viewportSize().width / 2 - 255, 334);
+  const compact = page.viewportSize().width < 600;
+  await click(
+    page,
+    compact ? 100 : page.viewportSize().width / 2 - 255,
+    compact ? 452 : 334,
+  );
   await until(() => {
     monitor.check();
     return observation.counters.auth === 1;
@@ -147,10 +152,16 @@ export async function start(page, environment) {
 }
 
 export async function enter(page, observation, review = false) {
+  ensure(
+    page.viewportSize().width >= 600 || !review,
+    "driver.compact_review_entry",
+  );
   await click(
     page,
-    page.viewportSize().width / 2 - (review ? 216 : 195),
-    review ? 520 : 290,
+    page.viewportSize().width < 600
+      ? 100
+      : page.viewportSize().width / 2 - (review ? 216 : 195),
+    page.viewportSize().width < 600 ? 420 : review ? 520 : 290,
   );
   await until(
     () =>
