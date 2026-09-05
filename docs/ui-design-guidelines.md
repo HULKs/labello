@@ -169,3 +169,15 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+## Availability fallback feedback
+
+Automatic workflow selection shows a persistent outlined notice with the old
+and new task/class names. The new identity is emphasized, and the notice has a
+44px dismiss action. Long visible names truncate within the card while tooltips
+and the polite AccessKit status retain complete names. The card floats inside
+the workspace without reducing its canvas layout. On short compact screens it
+uses the existing identity row, leaving the small canvas unobscured. It is
+nonmodal and leaves ordinary work available after the new identity has been
+presented. Dismissing
+it retains the current workflow identity in the context bar and selector.

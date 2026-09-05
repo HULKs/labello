@@ -578,11 +578,16 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     app.process_messages(&egui::Context::default());
 
     assert!(app.work.availability.resolved);
-    assert!(!app.work.availability.load_after_resolution);
     assert_eq!(
         app.work.selected_task_id.as_ref(),
         Some(&TaskId::from("bounding_box:vehicle"))
     );
+    assert!(
+        app.runtime.commands.is_empty(),
+        "fallback must be presented before claim"
+    );
+    assert!(!app.loading.image);
+    render_workflow_notice(&mut app);
     let UiCommand::ClaimAssignment { task_id, .. } = app.runtime.commands.pop_back().unwrap()
     else {
         panic!("expected assignment claim after availability");
@@ -593,6 +598,8 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
         AppView::Adjudicate,
     ));
 
+    assert!(app.runtime.commands.is_empty());
+    render_workflow_notice(&mut app);
     assert!(app.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment {
@@ -662,6 +669,8 @@ fn fresh_cached_availability_survives_reload_without_another_check() {
             .iter()
             .all(|command| !matches!(command, UiCommand::AssignmentAvailability { .. }))
     );
+    assert!(!reloaded.loading.image);
+    render_workflow_notice(&mut reloaded);
     assert!(reloaded.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment { task_id, .. }
@@ -2680,4 +2689,160 @@ fn history_covers_bbox_edits_deletion_and_keypoint_creation() {
     assert!(harness.state().work.annotations.is_empty());
     harness.state_mut().redo();
     assert_eq!(harness.state().work.annotations.len(), 1);
+}
+
+#[test]
+fn automatic_workflow_change_stays_visible_after_assignment_and_queue_load() {
+    let api = Rc::new(SpyApi::new());
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = loaded_work_harness(api);
+    step_until(&mut harness, 16, |app| !app.work.queue.is_loading());
+    assert_eq!(
+        harness.state().work.selected_task_id,
+        Some(TaskId::from("bounding_box:vehicle"))
+    );
+    let notice =
+        "Workflow changed automatically. From Person boxes (Person) to Vehicle boxes (Vehicle).";
+    let change = harness
+        .state()
+        .work
+        .automatic_workflow_change
+        .as_ref()
+        .expect("notice state retained");
+    assert_eq!(
+        format!(
+            "Workflow changed automatically. From {} to {}.",
+            change.previous, change.current
+        ),
+        notice
+    );
+    assert!(
+        harness.query_by_label(notice).is_some(),
+        "automatic changes need persistent old/new task and class feedback"
+    );
+    harness.state_mut().runtime.notice = Some("Unrelated update".to_string());
+    harness.step();
+    assert!(harness.query_by_label(notice).is_some());
+    click(&mut harness, "Dismiss workflow change");
+    assert!(harness.state().work.automatic_workflow_change.is_none());
+    harness.step();
+    assert!(harness.query_by_label(notice).is_none());
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+            .is_some()
+    );
+}
+
+fn render_workflow_notice(app: &mut LabelloApp) {
+    let ctx = egui::Context::default();
+    for _ in 0..3 {
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1500.0, 780.0),
+                )),
+                ..Default::default()
+            },
+            |ui| app.central(ui, LayoutMode::Wide),
+        );
+    }
+}
+
+#[test]
+fn automatic_workflow_change_scope_and_committed_selection_are_explicit() {
+    let api = Rc::new(SpyApi::new());
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    assert!(app.work.automatic_workflow_change.is_some());
+    app.request_transition(crate::app::PendingTransition::Workflow(TaskId::from(
+        "bounding_box:person",
+    )));
+    assert!(app.work.pending_transition.is_some());
+    app.cancel_pending_transition();
+    assert!(
+        app.work.automatic_workflow_change.is_some(),
+        "cancel preserves committed identity feedback"
+    );
+    app.clear_current_image();
+    assert!(
+        app.work.automatic_workflow_change.is_some(),
+        "image cleanup does not dismiss workflow feedback"
+    );
+    app.request_next_image();
+    assert!(
+        app.work.automatic_workflow_change.is_some(),
+        "retry does not dismiss workflow feedback"
+    );
+    let retained = app.work.automatic_workflow_change.clone().unwrap();
+    app.select_workflow(&TaskId::from("bounding_box:person"));
+    assert!(app.work.automatic_workflow_change.is_none());
+    app.work.automatic_workflow_change = Some(retained.clone());
+    app.begin_auth_epoch();
+    assert!(app.work.automatic_workflow_change.is_none());
+    app.work.automatic_workflow_change = Some(retained.clone());
+    app.config.dataset_id = DatasetId::from("another");
+    app.clear_workflow_change_outside_scope();
+    assert!(app.work.automatic_workflow_change.is_none());
+    app.config.dataset_id = retained.dataset_id.clone();
+    app.work.automatic_workflow_change = Some(retained);
+    app.execute_transition(crate::app::PendingTransition::View(AppView::Setup));
+    assert!(app.work.automatic_workflow_change.is_none());
+}
+
+#[test]
+fn later_automatic_workflow_change_replaces_the_actual_previous_identity() {
+    let api = Rc::new(SpyApi::new());
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    app.clear_current_image();
+    app.work.availability.tasks = BTreeMap::from([
+        (TaskId::from("bounding_box:person"), true),
+        (TaskId::from("bounding_box:vehicle"), false),
+    ]);
+    app.request_next_image();
+    let notice = app.work.automatic_workflow_change.as_ref().unwrap();
+    assert_eq!(notice.previous, "Vehicle boxes (Vehicle)");
+    assert_eq!(notice.current, "Person boxes (Person)");
+    assert!(!notice.presented);
+    assert!(!app.loading.image);
+}
+
+#[test]
+fn stale_availability_cannot_create_a_workflow_change_notice() {
+    let api = Rc::new(SpyApi::new());
+    let mut app = base_live_app(api.clone());
+    app.sync_work_config(api.metadata());
+    app.view = AppView::Annotate;
+    app.request_next_image();
+    let UiCommand::AssignmentAvailability { request, .. } =
+        app.runtime.commands.pop_back().unwrap()
+    else {
+        panic!("expected initial availability request");
+    };
+    app.begin_auth_epoch();
+    app.runtime
+        .tx
+        .send(UiMessage::AssignmentAvailabilityLoaded {
+            request,
+            result: Ok(labello_client::AssignmentAvailability {
+                kind: AssignmentKind::Annotation,
+                tasks: BTreeMap::from([
+                    (TaskId::from("bounding_box:person"), false),
+                    (TaskId::from("bounding_box:vehicle"), true),
+                ]),
+                related: Vec::new(),
+            }),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(app.work.automatic_workflow_change.is_none());
+    assert_eq!(
+        app.work.selected_task_id,
+        Some(TaskId::from("bounding_box:person"))
+    );
+    assert!(!app.loading.image);
 }

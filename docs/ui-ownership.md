@@ -86,3 +86,17 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+## Automatic workflow changes
+
+The work state owns availability-fallback feedback separately from transient
+runtime notices. It snapshots the previous and new task/class names only when
+an accepted availability result changes the committed workflow. The shared
+workspace presents this nonmodal, dismissible status before claiming the next
+assignment. It does not require acknowledgement to continue work.
+
+Image loading, prefetch, retry and unrelated status updates preserve the notice.
+A later fallback replaces it with that transition's identities. Dismissal,
+committed explicit workflow selection, authentication changes, dataset changes
+and leaving the work view clear it. Existing request epochs reject stale
+availability results before they can change selection or feedback.

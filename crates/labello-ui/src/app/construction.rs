@@ -38,6 +38,7 @@ impl LabelloApp {
             classes,
             tasks,
             selected_task_id: Some(TaskId::from("bounding_box:person")),
+            automatic_workflow_change: None,
             tool: Tool::BoundingBox,
             assignment: None,
             previous_annotation_assignment: None,

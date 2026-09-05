@@ -348,10 +348,20 @@ pub(crate) struct NavigationState {
     pub(crate) restore_drawer_trigger_focus: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct AutomaticWorkflowChange {
+    pub(crate) previous: String,
+    pub(crate) current: String,
+    pub(crate) dataset_id: DatasetId,
+    pub(crate) view: AppView,
+    pub(crate) presented: bool,
+}
+
 pub struct WorkState {
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,
+    pub(crate) automatic_workflow_change: Option<AutomaticWorkflowChange>,
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
     pub(crate) previous_annotation_assignment: Option<Assignment>,
