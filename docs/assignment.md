@@ -13,7 +13,10 @@ before creating an assignment.
 
 An active manual-migration annotation assignment authorizes a compound
 skeleton/box mutation only for that migration's configured guide task and class.
-The same image lock guards both objects. A competing active guide-task
+Dataset configuration and role publication is serialized with migration commands,
+including add, edit, delete, explicit reconciliation and administrator repair.
+A command holds a configuration read guard from metadata capture through commit,
+then the same image lock guards both objects. A competing active guide-task
 assignment rejects the mutation; it is not implicitly cancelled or stolen.
 The box task enters `NeedsCorrection`, clears its previous final outcome and
 retains prior review records as history. Normal box-task claims, corrections,
