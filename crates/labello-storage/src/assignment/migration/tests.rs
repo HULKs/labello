@@ -3608,3 +3608,5 @@ async fn discovered_skeleton_review_precedes_confirmation_and_rejection_requires
         .await
         .unwrap();
 }
+
+mod config_races;
