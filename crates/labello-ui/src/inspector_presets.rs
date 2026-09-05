@@ -30,6 +30,14 @@ pub enum InspectorPreset {
     ReviewCorrection,
     Adjudication,
     Admin,
+    ExportSelection,
+    ExportLoading,
+    ExportReady,
+    ExportBlocked,
+    ExportRunning,
+    ExportFailure,
+    ExportSuccess,
+    ExportRequestFailure,
     Statistics,
     DialogSettings,
     DialogTransition,
@@ -68,7 +76,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 44] = [
+    pub const ALL: [Self; 52] = [
         Self::Annotation,
         Self::Setup,
         Self::About,
@@ -78,6 +86,14 @@ impl InspectorPreset {
         Self::ReviewCorrection,
         Self::Adjudication,
         Self::Admin,
+        Self::ExportSelection,
+        Self::ExportLoading,
+        Self::ExportReady,
+        Self::ExportBlocked,
+        Self::ExportRunning,
+        Self::ExportFailure,
+        Self::ExportSuccess,
+        Self::ExportRequestFailure,
         Self::Statistics,
         Self::DialogSettings,
         Self::DialogTransition,
@@ -126,6 +142,15 @@ impl InspectorPreset {
             Self::ReviewCorrection => "review-correction",
             Self::Adjudication => "adjudication",
             Self::Admin => "admin",
+            Self::ExportSelection => "export-selection",
+            Self::ExportLoading => "export-loading",
+            Self::ExportReady => "export-ready",
+            Self::ExportBlocked => "export-blocked",
+            Self::ExportRunning => "export-running",
+            Self::ExportFailure => "export-failure",
+            Self::ExportSuccess => "export-success",
+            Self::ExportRequestFailure => "export-request-failure",
+
             Self::Statistics => "statistics",
             Self::DialogSettings => "dialog-settings",
             Self::DialogTransition => "dialog-transition",
@@ -221,6 +246,15 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         }
         InspectorPreset::Adjudication => work_preset(AssignmentKind::Adjudication, ctx),
         InspectorPreset::Admin => admin_preset(),
+        InspectorPreset::ExportSelection => export_preset(preset),
+        InspectorPreset::ExportLoading => export_preset(preset),
+        InspectorPreset::ExportReady => export_preset(preset),
+        InspectorPreset::ExportBlocked => export_preset(preset),
+        InspectorPreset::ExportRunning => export_preset(preset),
+        InspectorPreset::ExportFailure => export_preset(preset),
+        InspectorPreset::ExportSuccess => export_preset(preset),
+        InspectorPreset::ExportRequestFailure => export_preset(preset),
+
         InspectorPreset::Statistics => statistics_preset(),
         InspectorPreset::DialogSettings => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
@@ -1391,6 +1425,95 @@ fn clear_image(app: &mut LabelloApp) {
 
 fn timestamp() -> labello_domain::Timestamp {
     "2026-07-24T12:00:00Z".parse().unwrap()
+}
+
+fn export_preset(preset: InspectorPreset) -> LabelloApp {
+    use labello_client::{
+        ExportBlocker, ExportCapabilities, ExportFailure, ExportJob, ExportPhase, ExportSummary,
+    };
+    use labello_domain::{
+        ExportClassSelection, ExportOptions, ExportPolicyError, ExportProfile, ExportSplit,
+    };
+    let mut app = admin_preset();
+    app.admin.section = crate::app::AdminSection::Export;
+    let state = &mut app.admin.export;
+    state.loaded = preset != InspectorPreset::ExportLoading;
+    state.capabilities = Some(ExportCapabilities {
+        available: true,
+        limits: Default::default(),
+    });
+    if preset == InspectorPreset::ExportLoading {
+        state.pending = Some((1, crate::export_flow::ExportAction::Load));
+        return app;
+    }
+    if preset == InspectorPreset::ExportSelection {
+        return app;
+    }
+    let metadata = app.datasets.admin_baseline.as_ref().unwrap();
+    let task = metadata
+        .tasks
+        .iter()
+        .find(|task| task.annotation_type == AnnotationType::BoundingBox)
+        .unwrap();
+    let class = metadata
+        .label_classes
+        .iter()
+        .find(|class| task.allows_class(&class.class_id))
+        .unwrap();
+    let options = ExportOptions {
+        profile: ExportProfile::UltralyticsYoloDetectV1,
+        classes: BTreeSet::from([ExportClassSelection {
+            task_id: task.task_id.clone(),
+            class_id: class.class_id.clone(),
+        }]),
+        fallback_split: ExportSplit::Train,
+        split_choices: Default::default(),
+    };
+    let mut summary = ExportSummary {
+        classes: options.class_mapping(metadata).unwrap(),
+        included_images: 24,
+        empty_images: 2,
+        objects: 31,
+        source_bytes: 16 * 1024 * 1024,
+        omitted_images: 3,
+        omission_counts: [(labello_domain::ExportOmissionReason::Unfinished, 3)].into(),
+        ..Default::default()
+    };
+    let phase = match preset {
+        InspectorPreset::ExportBlocked => {
+            summary.blocking_images = 1;
+            summary.blockers = vec![ExportBlocker {
+                image_id: labello_domain::ImageId::from("synthetic-image-split-conflict"),
+                reason: ExportFailure::Policy(ExportPolicyError::SplitConflict),
+            }];
+            ExportPhase::Blocked
+        }
+        InspectorPreset::ExportRunning => ExportPhase::Building,
+        InspectorPreset::ExportFailure => ExportPhase::Failed,
+        InspectorPreset::ExportSuccess => ExportPhase::Succeeded,
+        _ => ExportPhase::Ready,
+    };
+    let at = timestamp();
+    state.options = options.clone();
+    state.selected = Some("synthetic-export-job".into());
+    state.jobs = vec![ExportJob {
+        job_id: "synthetic-export-job".into(),
+        dataset_id: metadata.dataset_id.clone(),
+        options,
+        phase,
+        summary: Some(summary),
+        failure: (phase == ExportPhase::Failed).then_some(ExportFailure::Interrupted),
+        created_at: at,
+        updated_at: at,
+        expires_at: at + chrono::Duration::hours(24),
+        archive_bytes: (phase == ExportPhase::Succeeded).then_some(17 * 1024 * 1024),
+        archive_blake3: None,
+    }];
+    if preset == InspectorPreset::ExportRequestFailure {
+        state.error = Some("Export status is temporarily unavailable".into());
+        state.retry = Some(crate::export_flow::ExportAction::Load);
+    }
+    app
 }
 
 #[cfg(test)]

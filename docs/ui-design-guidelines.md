@@ -177,7 +177,7 @@ has been recorded.
   tooltip. Show it only when the existing Admin access check allows the view;
   keep a labeled Admin action in the collapsed drawer.
   Organize by Overview, People, Images, Schema, Automation, and
-  Backups; preserve staged edits between destinations; use wide rows and compact
+  Backups, and Export; preserve staged edits between destinations; use wide rows and compact
   cards; retain validation and role protections.
 - **Statistics:** use a bar-chart icon in the app bar's right-side utility group,
   with a 44-point target, an `Open statistics` accessible name, and a tooltip.

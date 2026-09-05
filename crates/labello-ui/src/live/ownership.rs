@@ -128,9 +128,7 @@ impl LabelloApp {
                 .unwrap_or_else(|| command.request().request_id);
             self.runtime.active_requests.insert(request_id);
             if let Some(activity) = command.import_activity() {
-                self.import
-                    .active_operations
-                    .insert(request_id, activity);
+                self.import.active_operations.insert(request_id, activity);
             }
             self.runtime.commands.push_back(command);
             true
@@ -159,6 +157,10 @@ impl LabelloApp {
         self.runtime.active_requests.remove(&request_id);
         self.import.active_operations.remove(&request_id);
         match command {
+            UiCommand::Export { .. } => {
+                self.admin.export.request_failed(error.to_owned());
+                return;
+            }
             UiCommand::ImportCapabilities { .. } => {
                 self.import.capabilities_loading = false;
                 self.import.capabilities_error = Some(error.to_string());
@@ -360,9 +362,7 @@ impl LabelloApp {
             && request.import_epoch == self.import_epoch
             && owner_matches;
         let active = self.runtime.active_requests.remove(&request.request_id);
-        self.import
-            .active_operations
-            .remove(&request.request_id);
+        self.import.active_operations.remove(&request.request_id);
         current && active
     }
 
@@ -423,6 +423,7 @@ impl LabelloApp {
         self.loading.admin = false;
         self.loading.roles_user = None;
         self.admin.pending_role_saves.clear();
+        self.admin.export = Default::default();
         self.loading.image = false;
         self.loading.saving = false;
         self.loading.ingesting = false;
@@ -463,5 +464,4 @@ impl LabelloApp {
         self.invalidate_async_ownership();
         self.reset_assignment_availability_for_workspace();
     }
-
 }
