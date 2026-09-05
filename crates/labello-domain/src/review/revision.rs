@@ -33,10 +33,12 @@ pub struct ReviewAssignmentContext {
 
 /// One immutable replacement transaction. Its ID is the fresh assignment ID;
 /// exact retries submit the identical records, including their review IDs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewRevisionCommit {
     pub reviews: Vec<ReviewRecord>,
+    #[serde(default)]
+    pub missing_objects: Vec<crate::MissingObjectLocation>,
 }
 
 impl ImageState {

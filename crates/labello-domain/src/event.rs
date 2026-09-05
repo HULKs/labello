@@ -42,6 +42,7 @@ pub enum EventType {
     ReviewAssignmentOpened,
     ReviewAssignmentFinished,
     ReviewRevisionCommitted,
+    MissingObjectEvidenceRecorded,
     ReviewerCorrectionRecorded,
     AdjudicationRecorded,
     AssignmentUpdated,
@@ -68,6 +69,7 @@ impl std::fmt::Display for EventType {
             Self::ReviewAssignmentOpened => "review_assignment_opened",
             Self::ReviewAssignmentFinished => "review_assignment_finished",
             Self::ReviewRevisionCommitted => "review_revision_committed",
+            Self::MissingObjectEvidenceRecorded => "missing_object_evidence_recorded",
             Self::ReviewerCorrectionRecorded => "reviewer_correction_recorded",
             Self::AdjudicationRecorded => "adjudication_recorded",
             Self::AssignmentUpdated => "assignment_updated",
@@ -106,6 +108,10 @@ pub enum EventPayload {
     },
     ReviewRecorded {
         review: ReviewRecord,
+    },
+    MissingObjectEvidenceRecorded {
+        evidence: Box<crate::MissingObjectEvidence>,
+        submission: Box<crate::MissingObjectRejection>,
     },
     ReviewAssignmentOpened {
         context: Box<crate::ReviewAssignmentContext>,
@@ -191,6 +197,7 @@ impl EventPayload {
             Self::ReviewAssignmentOpened { .. } => EventType::ReviewAssignmentOpened,
             Self::ReviewAssignmentFinished { .. } => EventType::ReviewAssignmentFinished,
             Self::ReviewRevisionCommitted { .. } => EventType::ReviewRevisionCommitted,
+            Self::MissingObjectEvidenceRecorded { .. } => EventType::MissingObjectEvidenceRecorded,
             Self::ReviewerCorrectionRecorded { .. } => EventType::ReviewerCorrectionRecorded,
             Self::AdjudicationRecorded { .. } => EventType::AdjudicationRecorded,
             Self::AssignmentUpdated { .. } => EventType::AssignmentUpdated,

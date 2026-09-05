@@ -422,6 +422,17 @@ impl AnnotationApi for HttpLabelloApi {
 }
 
 impl ReviewApi for HttpLabelloApi {
+    fn reject_missing_objects<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        assignment: AssignmentActionRequest,
+        submission: labello_domain::MissingObjectRejection,
+    ) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/images/{}/missing-object-rejections", assignment.image_id))?.query(&assignment), &submission).await
+        })
+    }
+
     fn commit_review_revision<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

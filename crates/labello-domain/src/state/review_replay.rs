@@ -165,6 +165,22 @@ impl ImageState {
         {
             return Err(invalid());
         }
+        if !replacement.missing_objects.is_empty() {
+            if final_review.decision != ReviewDecision::Rejected
+                || !matches!(final_review.target, ReviewTarget::Task { .. })
+                || context.task.manual_box_guide_migration.is_some()
+                || context.targets.iter().any(|target| {
+                    !replacement
+                        .reviews
+                        .iter()
+                        .any(|review| &review.target == target)
+                })
+            {
+                return Err(invalid());
+            }
+            crate::validate_missing_object_locations(&replacement.missing_objects, &context.task)
+                .map_err(|_| invalid())?;
+        }
         for id in superseded {
             if self.superseded_review_ids.contains(id)
                 || !self

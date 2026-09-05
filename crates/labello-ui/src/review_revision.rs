@@ -95,6 +95,7 @@ impl LabelloApp {
                 return false;
             }
             self.work.review_revision_commit = Some(labello_domain::ReviewRevisionCommit {
+                missing_objects: self.work.missing_objects.locations.clone(),
                 reviews: self.work.staged_review_decisions.clone(),
             });
         }
@@ -117,6 +118,7 @@ impl LabelloApp {
             assignment,
             review,
             revision: Some(replacement),
+            missing_objects: None,
             phase: ReviewPhase::FullImage,
         })
     }

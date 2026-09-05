@@ -149,6 +149,7 @@ impl Serialize for EventLogEntry {
             && matches!(
                 self.payload,
                 EventPayload::ReviewAssignmentOpened { .. }
+                    | EventPayload::MissingObjectEvidenceRecorded { .. }
                     | EventPayload::ReviewAssignmentFinished { .. }
                     | EventPayload::ReviewRevisionCommitted { .. }
             )
