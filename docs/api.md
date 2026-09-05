@@ -164,6 +164,7 @@ blocked by the enforced window.
 | `POST /datasets/{dataset_id}/images/{image_id}/admin/events` | Data admin | `AppendEventRequest` with permitted repair payload → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/rebuild` | Any role | No body → replayed `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/reviews` | Assigned reviewer | `AssignmentActionRequest` query plus `ReviewRecord` → `ImageState` |
+| `POST /datasets/{dataset_id}/images/{image_id}/missing-object-rejections` | Owner of active ordinary final-review assignment; reviewer role | `AssignmentActionRequest` query plus `MissingObjectRejection` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/review-revisions` | Owner of active decision-revision lease; reviewer role | `AssignmentActionRequest` query plus `ReviewRevisionCommit` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/corrections` | Assigned reviewer | `AssignmentActionRequest` query plus `CorrectionRequest` → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/adjudications` | Assigned adjudicator | `AssignmentActionRequest` query plus `AdjudicationRecord` → `EventLogEntry` |
@@ -192,9 +193,27 @@ expired ownership, malformed replacement targets, and conflicting retries return
 by an exclusive decision-revision lease.
 
 `ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
-`ReviewRevisionCommitted` are server-owned events. Raw event, annotation batch,
+`ReviewRevisionCommitted`, and `MissingObjectEvidenceRecorded` are server-owned events. Raw event, annotation batch,
 admin repair, and offline sync ingress cannot publish them. Clients submit
 commands to the dedicated endpoints and never choose superseded review IDs.
+
+Missing-object rejection accepts `review`, the captured `round`, and 1–64
+`locations`. Each location has a nonzero `markerId` unique within that request,
+a `classId` from the assigned task, and a finite normalized `position` within
+`[0, 1]` on each axis. This command requires an ordinary rejected Task target,
+the current submission round, all exact object targets already reviewed by the
+caller, and an active lease. It rejects correction, migration, foreign targets,
+and changed task configuration. Invalid locations return 400; stale phase,
+round, ownership, or conflicting retries return 409. The assignment ID identifies
+the immutable request for exact retries. Current reviewer authority is still
+required on retry.
+
+`ReviewRevisionCommit` also accepts optional `missingObjects`, defaulting to an
+empty list. Nonempty locations require an ordinary final rejection and a full
+replacement target set. The transaction publishes decisions, evidence, task
+state, and assignment completion together. Repeating the same commit is safe;
+changing locations on a retry is a conflict. `ImageState` exposes evidence and
+history; markers do not create annotation versions or IDs.
 
 ## Manual Migration Routes
 

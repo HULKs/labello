@@ -41,10 +41,13 @@ impl DatasetRepository {
         // 1. Load the replay-validated cache base from the authoritative event log.
         let mut next_state = self.load_image_state(image_id).await?;
         let previous_state = next_state.clone();
-        if payloads
-            .iter()
-            .any(|payload| matches!(payload, EventPayload::ReviewAssignmentOpened { .. }))
-        {
+        if payloads.iter().any(|payload| {
+            matches!(
+                payload,
+                EventPayload::ReviewAssignmentOpened { .. }
+                    | EventPayload::MissingObjectEvidenceRecorded { .. }
+            )
+        }) {
             write_json_atomic(
                 &self.schema_path(),
                 &labello_domain::labello_schema_bundle(),
@@ -61,7 +64,10 @@ impl DatasetRepository {
         );
         // 3. Validate the entire planned batch against a cloned next state.
         let mut events = Vec::with_capacity(payloads.len());
-        for payload in payloads {
+        for mut payload in payloads {
+            if let EventPayload::MissingObjectEvidenceRecorded { evidence, .. } = &mut payload {
+                evidence.timestamp = timestamp;
+            }
             let event = EventLogEntry::new(
                 next_state.current_sequence + 1,
                 image_id.clone(),

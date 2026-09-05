@@ -62,6 +62,7 @@ impl EventLogEntry {
             EventPayload::ReviewAssignmentOpened { assignment, .. }
             | EventPayload::ReviewRevisionCommitted { assignment, .. } => Some(&assignment.task_id),
             EventPayload::ReviewAssignmentFinished { task_id, .. } => Some(task_id),
+            EventPayload::MissingObjectEvidenceRecorded { evidence, .. } => Some(&evidence.task_id),
             EventPayload::AdjudicationRecorded { adjudication } => Some(&adjudication.task_id),
             EventPayload::ReviewerCorrectionRecorded { correction, .. } => {
                 Some(&correction.task_id)

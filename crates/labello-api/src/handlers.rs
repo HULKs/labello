@@ -256,6 +256,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::record_review),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/missing-object-rejections",
+            post(workflow::reject_missing_objects),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/review-revisions",
             post(workflow::commit_review_revision),
         )

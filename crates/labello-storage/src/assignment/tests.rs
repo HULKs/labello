@@ -2055,6 +2055,7 @@ fn revision_replacements(
     decision: ReviewDecision,
 ) -> labello_domain::ReviewRevisionCommit {
     labello_domain::ReviewRevisionCommit {
+        missing_objects: Vec::new(),
         reviews: state.review_assignment_contexts[&assignment.assignment_id]
             .targets
             .iter()

@@ -654,6 +654,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn open_dataset(&mut self, dataset_id: labello_domain::DatasetId, view: AppView) {
+        if self.has_missing_object_draft() {
+            self.request_transition(PendingTransition::Dataset(dataset_id, view));
+            return;
+        }
         if self.view == AppView::Admin && self.admin_changes_dirty() {
             self.runtime.error =
                 Some("Save or discard staged Admin changes before switching datasets.".to_string());

@@ -54,6 +54,7 @@ impl LabelloApp {
             AppView::Adjudicate => self.adjudication_actions(ui, show_primary_actions),
             AppView::Setup | AppView::Admin | AppView::Stats => {}
         }
+        self.missing_object_panel(ui);
     }
 
     fn annotation_object_actions(&mut self, ui: &mut egui::Ui) {
@@ -314,6 +315,7 @@ impl LabelloApp {
                 "Reject object & finish".to_string(),
             )
         };
+        let reject = if self.has_missing_object_draft() { format!("{reject} ({})", self.work.missing_objects.locations.len()) } else { reject };
         let button_width = fill_width
             .then(|| ((ui.available_size_before_wrap().x - ui.spacing().item_spacing.x) / 2.0).floor().max(44.0));
         let approve_button = egui::Button::new(&approve).min_size(egui::vec2(
@@ -324,7 +326,7 @@ impl LabelloApp {
             button_width.unwrap_or_default(),
             if fill_width { 44.0 } else { 0.0 },
         ));
-        let can_approve = ready && !(revision && self.work.review_rejected);
+        let can_approve = ready && !(revision && self.work.review_rejected) && !self.has_missing_object_draft();
         if theme::primary_button(ui, can_approve, approve_button)
             .on_hover_text(format!(
                 "Accept review object ({})",
@@ -334,7 +336,7 @@ impl LabelloApp {
         {
             self.request_review(ReviewDecision::Approved);
         }
-        if theme::danger_button(ui, ready, reject_button)
+        if theme::danger_button(ui, ready && (!self.has_missing_object_draft() || self.missing_objects_final_phase()), reject_button)
             .on_hover_text(format!(
                 "Reject review object ({})",
                 shortcut_button_label(&reject_shortcut, "Reject")

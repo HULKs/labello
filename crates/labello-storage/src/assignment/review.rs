@@ -16,6 +16,33 @@ impl DatasetRepository {
         assignment_context: AssignmentContext<'_>,
         review: ReviewRecord,
     ) -> StorageResult<labello_domain::ImageState> {
+        self.record_review_submission(user_id, assignment_context, review, None)
+            .await
+    }
+
+    pub async fn reject_missing_objects_for_assignment(
+        &self,
+        user_id: &UserId,
+        assignment_context: AssignmentContext<'_>,
+        submission: labello_domain::MissingObjectRejection,
+    ) -> StorageResult<labello_domain::ImageState> {
+        self.record_review_submission(
+            user_id,
+            assignment_context,
+            submission.review.clone(),
+            Some(submission),
+        )
+        .await
+    }
+
+    async fn record_review_submission(
+        &self,
+        user_id: &UserId,
+        assignment_context: AssignmentContext<'_>,
+        review: ReviewRecord,
+        missing_objects: Option<labello_domain::MissingObjectRejection>,
+    ) -> StorageResult<labello_domain::ImageState> {
+        let _config_guard = self.review_config_lock.read().await;
         let AssignmentContext {
             assignment_id,
             image_id,
@@ -56,6 +83,64 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        if let Some(submission) = &missing_objects {
+            if let Some(committed) = state.missing_object_submissions.get(assignment_id) {
+                let owned = state.assignments.iter().any(|assignment| {
+                    assignment.assignment_id == *assignment_id
+                        && assignment.assigned_to == *user_id
+                        && assignment.task_id == *task_id
+                        && assignment.image_id == *image_id
+                });
+                if !owned {
+                    return Err(StorageError::Unauthorized(
+                        "missing-object rejection belongs to another assignment owner".into(),
+                    ));
+                }
+                return if committed == submission {
+                    Ok(state)
+                } else {
+                    Err(StorageError::AssignmentConflict(
+                        "missing-object rejection retry differs from the committed request".into(),
+                    ))
+                };
+            }
+            let context = state
+                .review_assignment_contexts
+                .get(assignment_id)
+                .ok_or_else(|| {
+                    StorageError::AssignmentConflict("review context is missing".into())
+                })?;
+            if context.decision_revision
+                || context.task != *task
+                || context.round != submission.round
+                || context.target_fingerprint != state.review_target_fingerprint(task)
+                || state
+                    .reviews
+                    .iter()
+                    .any(|old| old.review_id == review.review_id)
+                || state.review_object_targets(task)?.iter().any(|target| {
+                    state
+                        .effective_review_for_target(task_id, target, user_id)
+                        .is_none()
+                })
+            {
+                return Err(StorageError::AssignmentConflict(
+                    "missing-object evidence requires the current final review".into(),
+                ));
+            }
+            state
+                .missing_object_evidence_for_submission(
+                    &metadata.dataset_id,
+                    assignment_id,
+                    submission,
+                    labello_domain::now(),
+                )
+                .map_err(|_| {
+                    StorageError::AssignmentConflict(
+                        "missing-object evidence does not match this review".into(),
+                    )
+                })?;
+        }
         super::revision::reject_revision_mutation(&state, task_id)?;
         let now = labello_domain::now();
         let mut assignment = exact_active_assignment(
@@ -201,6 +286,18 @@ impl DatasetRepository {
             renew_assignment(&mut assignment, now);
         }
         payloads.push(EventPayload::AssignmentUpdated { assignment });
+        if let Some(submission) = missing_objects {
+            let evidence = state.missing_object_evidence_for_submission(
+                &metadata.dataset_id,
+                assignment_id,
+                &submission,
+                now,
+            )?;
+            payloads.push(EventPayload::MissingObjectEvidenceRecorded {
+                evidence: Box::new(evidence),
+                submission: Box::new(submission),
+            });
+        }
         let (_, state) = self
             .append_payloads_with_state_unlocked(
                 image_id,

@@ -2,7 +2,7 @@ use eframe::egui::{self, RichText};
 
 use crate::{
     app::{AppView, LabelloApp, Tool},
-    canvas::{CanvasAction, CanvasInteraction, show_canvas_styled},
+    canvas::{CanvasAction, CanvasInteraction, MissingObjectOverlay, show_canvas_with_evidence},
     theme,
 };
 
@@ -80,7 +80,13 @@ impl LabelloApp {
                 })
                 .and_then(|class| parse_class_color(&class.color))
                 .unwrap_or(theme::ANNOTATION);
-            let action = show_canvas_styled(
+            let locations = self.missing_object_canvas_locations();
+            let missing_editable = self.missing_objects_editable();
+            if let Some(point) = self.take_missing_object_focus() {
+                self.work.canvas.focus_missing_object(point);
+            }
+            let mut missing_action = None;
+            let action = show_canvas_with_evidence(
                 ui,
                 &mut self.work.canvas,
                 texture.as_ref(),
@@ -92,7 +98,19 @@ impl LabelloApp {
                 &skeleton_edges,
                 &prelabels,
                 annotation_color,
+                &std::collections::BTreeMap::new(),
+                None,
+                Some(MissingObjectOverlay {
+                    locations: &locations,
+                    selected: self.work.missing_objects.selected,
+                    editable: missing_editable,
+                    placing: self.work.missing_objects.placing,
+                }),
+                &mut missing_action,
             );
+            if let Some(action) = missing_action {
+                self.apply_missing_object_action(action);
+            }
             if annotator_editable {
                 match action {
                     Some(CanvasAction::CreateBoundingBox(bbox)) => self.create_bbox(bbox),

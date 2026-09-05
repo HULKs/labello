@@ -1188,6 +1188,56 @@ pub(crate) async fn record_review(
     Ok(Json(image_state))
 }
 
+pub(crate) async fn reject_missing_objects(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    Query(assignment): Query<AssignmentActionRequest>,
+    headers: HeaderMap,
+    Json(submission): Json<labello_domain::MissingObjectRejection>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    image_id.validate_path_segment()?;
+    validate_assignment_request(&assignment, &image_id, AssignmentKind::Review)?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset().await?;
+    ensure_dataset_role(&metadata, &actor, DatasetRole::Reviewer)?;
+    submission.review.review_id.validate_path_segment()?;
+    submission.round.event_id.validate_path_segment()?;
+    if submission.review.reviewer_user_id != actor.user_id {
+        return Err(ApiError::Unauthorized(
+            "cannot reject reviews for another user".into(),
+        ));
+    }
+    if submission
+        .review
+        .comment
+        .as_ref()
+        .is_some_and(|comment| comment.len() > 2_000)
+    {
+        return Err(ApiError::BadRequest(
+            "review comment exceeds 2000 bytes".into(),
+        ));
+    }
+    let task = metadata
+        .task(&assignment.task_id)
+        .ok_or_else(|| ApiError::BadRequest("review task is missing".into()))?;
+    labello_domain::validate_missing_object_locations(&submission.locations, task)
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    Ok(Json(
+        repo.reject_missing_objects_for_assignment(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &assignment.task_id,
+                kind: AssignmentKind::Review,
+            },
+            submission,
+        )
+        .await?,
+    ))
+}
+
 pub(crate) async fn commit_review_revision(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,

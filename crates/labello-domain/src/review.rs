@@ -83,6 +83,12 @@ pub struct AdjudicationRecord {
     pub timestamp: Timestamp,
 }
 
+mod missing_objects;
+pub use missing_objects::{
+    MAX_MISSING_OBJECT_LOCATIONS, MissingObjectEvidence, MissingObjectLocation,
+    MissingObjectRejection, validate_missing_object_locations,
+};
+
 mod policy;
 mod revision;
 

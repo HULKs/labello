@@ -335,3 +335,29 @@ publication racing review-context capture or revision commit. Per-image locks
 still guard event validation, exclusive revision ownership, and publication.
 A live revision excludes relevant annotation, review, migration, and assignment
 mutations, including mutation paths used by offline synchronization.
+
+## Missing-object review evidence
+
+`MissingObjectEvidenceRecorded` is a server-owned version-3 event appended in
+the same atomic transaction as a final rejection and assignment completion,
+before its `ReviewAssignmentFinished` boundary. Ordinary review retains its
+`ReviewRecorded` event; decision revisions retain `ReviewRevisionCommitted`.
+The evidence event contains the immutable request for retry comparison and the
+server-derived dataset, image, task, assignment, review, reviewer, annotation
+type, authoritative event timestamp, submission round, and normalized locations.
+Marker IDs are local to one review and never reserve annotation identity.
+
+Replay checks the exact completed review assignment, final rejection, round,
+target set, actor, location validation, and terminal boundary before adding
+`missingObjectEvidence` and `missingObjectSubmissions` to derived state. A
+revision's evidence must equal its committed `missingObjects`. Existing records
+have no evidence by default. Version 2 cannot encode the new event. Snapshots,
+schemas, and offline bundle state preserve evidence; raw and offline mutation
+paths cannot author it.
+
+Active guidance comes from the latest effective rejected Task review in the
+current authoritative submission round. Correction does not clear it; a true
+resubmission does. An empty later rejection has no active locations. Superseded
+rejections remain in history, and an effective replacement approval removes
+that review's active guidance. Creating an annotation near a marker neither
+resolves nor deletes evidence. Evidence does not count as an additional completed review.

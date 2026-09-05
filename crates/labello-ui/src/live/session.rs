@@ -65,6 +65,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_logout(&mut self) {
+        if self.has_missing_object_draft() {
+            self.request_transition(crate::app::PendingTransition::Logout);
+            return;
+        }
         if self.loading.logout || self.runtime.api.is_none() {
             return;
         }

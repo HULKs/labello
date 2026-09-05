@@ -37,6 +37,8 @@ pub enum DomainError {
 
     #[error("invalid review revision: {0}")]
     InvalidReviewRevision(String),
+    #[error("invalid missing-object evidence: {0}")]
+    InvalidMissingObjectEvidence(String),
 
     #[error("invalid import initialization: {0}")]
     InvalidImport(String),
