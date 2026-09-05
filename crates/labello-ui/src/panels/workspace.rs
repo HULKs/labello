@@ -264,21 +264,19 @@ impl LabelloApp {
         if !self.work.availability.loading || !self.work.availability.tasks.is_empty() {
             return;
         }
-        ui.with_layout(
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                let spinner = ui
-                    .spinner()
-                    .on_hover_text("Checking assignment availability…");
-                spinner.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::ProgressIndicator,
-                        true,
-                        "Loading workflow assignment availability",
-                    )
-                });
-            },
-        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            Self::describe_assignment_availability_spinner(ui.spinner());
+        });
+    }
+
+    fn describe_assignment_availability_spinner(response: egui::Response) {
+        response.on_hover_text("Checking assignment availability…").widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::ProgressIndicator,
+                true,
+                "Loading workflow assignment availability",
+            )
+        });
     }
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {

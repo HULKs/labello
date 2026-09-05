@@ -340,3 +340,41 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     assert!(harness.state().review_context().is_none());
     assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_some());
 }
+
+#[test]
+fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation() {
+    for revision in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+        }), true);
+        let mut harness = loaded_review_harness(api);
+        harness.set_size(egui::vec2(320.0, 320.0));
+        harness.run_steps(4);
+        if revision { enter_test_review_revision(harness.state_mut()); }
+        harness.run_steps(4);
+        let before = harness.get_by_label("Annotation canvas").rect();
+        let bar = harness.get_by_label("Workspace context bar").rect();
+        let assignment = harness.state().work.assignment.as_ref().unwrap().assignment_id.clone();
+        harness.state_mut().work.availability.loading = true;
+        harness.state_mut().work.availability.tasks.clear();
+        harness.run_steps(4);
+        let after = harness.get_by_label("Annotation canvas").rect();
+        assert_eq!(after, before, "availability must not displace required review context: revision={revision}");
+        assert_eq!(harness.get_by_label("Workspace context bar").rect(), bar);
+        assert!(after.height() >= 44.0);
+        assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+        let details = harness.get_by_label_contains("Review details: Workflow:").rect();
+        let spinner = harness.get_by_label("Loading workflow assignment availability").rect();
+        assert!(details.contains_rect(spinner), "loading feedback shares the identity line: {spinner:?} in {details:?}");
+        assert!(spinner.bottom() <= details.top() + details.height() / 2.0);
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment);
+        harness.get_by_label_contains("Review details: Workflow:").focus();
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(4);
+        assert_eq!(harness.state().work.drawer, Some(Drawer::Inspector));
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(4);
+        assert!(harness.state().work.drawer.is_none());
+    }
+}
