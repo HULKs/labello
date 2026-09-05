@@ -144,7 +144,7 @@ fn snapshot_load_history_advances_only_after_a_successful_catalog_request() {
         app.loading.snapshots = true;
         app.runtime
             .tx
-            .send(UiMessage::SnapshotsLoaded { request, result })
+            .send(UiMessage::SnapshotsLoaded { request, result: result.map_err(Into::into) })
             .unwrap();
         app.process_messages(&egui::Context::default());
         if request_id == 1 {
@@ -405,7 +405,7 @@ fn assignment_availability_ingest_completion_waits_and_failure_does_not_loop() {
         .tx
         .send(UiMessage::IngestJobLoaded {
             request: failed_request,
-            result: Err("ingest failed".to_string()),
+            result: Err("ingest failed".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());
@@ -511,7 +511,7 @@ fn deliver_assignment_availability_error(app: &mut LabelloApp, request: RequestI
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
             request,
-            result: Err("availability failed".to_string()),
+            result: Err("availability failed".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());
@@ -897,7 +897,7 @@ fn failed_shortcut_save_keeps_the_draft_and_shows_the_error_in_settings() {
         .tx
         .send(UiMessage::KeybindingsSaved {
             request,
-            result: Err("settings unavailable".to_string()),
+            result: Err("settings unavailable".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());
@@ -1202,7 +1202,7 @@ fn stale_blocking_claim_releases_its_assignment() {
             request,
             operation_id,
             assignment: Some(assignment),
-            result: Box::new(Err("stale load".to_string())),
+            result: Box::new(Err("stale load".to_string().into())),
         })
         .unwrap();
 
@@ -1484,7 +1484,7 @@ fn dataset_states_distinguish_loading_and_stale_refresh_failure() {
     harness.step();
     assert!(
         harness
-            .query_by_label("Checking dataset access...")
+            .query_by_label("Checking your session...")
             .is_some()
     );
     assert!(
@@ -1537,7 +1537,7 @@ fn dataset_states_distinguish_loading_and_stale_refresh_failure() {
         .tx
         .send(UiMessage::DatasetList {
             request,
-            result: Err("dataset service unavailable".to_string()),
+            result: Err("dataset service unavailable".to_string().into()),
         })
         .unwrap();
     harness

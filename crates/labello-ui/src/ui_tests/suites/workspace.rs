@@ -880,7 +880,7 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
             request,
-            result: Err("availability failed".to_string()),
+            result: Err("availability failed".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());

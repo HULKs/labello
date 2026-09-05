@@ -8,13 +8,13 @@ impl LabelloApp {
             UiCommand::AuthOptions { request } => self.spawn_message(request.clone(), async move {
                 UiMessage::AuthOptionsLoaded {
                     request,
-                    result: api.auth_options().await.map_err(|error| error.to_string()),
+                    result: api.auth_options().await.map_err(UiRequestError::from),
                 }
             }),
             UiCommand::Session { request } => self.spawn_message(request.clone(), async move {
                 UiMessage::SessionLoaded {
                     request,
-                    result: api.me().await.map_err(|error| error.to_string()),
+                    result: api.me().await.map_err(UiRequestError::from),
                 }
             }),
             UiCommand::LocalAdminLogin { request } => {
@@ -24,14 +24,14 @@ impl LabelloApp {
                         result: api
                             .local_admin_login()
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     }
                 })
             }
             UiCommand::Logout { request } => self.spawn_message(request.clone(), async move {
                 UiMessage::LogoutFinished {
                     request,
-                    result: api.logout().await.map_err(|error| error.to_string()),
+                    result: api.logout().await.map_err(UiRequestError::from),
                 }
             }),
             UiCommand::GithubLogin { request, return_to } => {
@@ -41,7 +41,7 @@ impl LabelloApp {
                         result: api
                             .github_login_url(OAuthLoginRequest { return_to })
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     }
                 })
             }

@@ -14,7 +14,7 @@ impl LabelloApp {
                             self.import.capabilities = Some(capabilities);
                             self.import.capabilities_error = None;
                         }
-                        Err(error) => self.import.capabilities_error = Some(error),
+                        Err(error) => self.import.capabilities_error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportJobLoaded { result, .. } => {
@@ -58,7 +58,7 @@ impl LabelloApp {
                                 self.request_import_diagnostics(true);
                             }
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 #[cfg(target_arch = "wasm32")]
@@ -66,7 +66,7 @@ impl LabelloApp {
                     self.sync_import_busy();
                     match result {
                         Ok(files) => self.register_selected_import_files(files),
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportFilesRegistered { result, .. } => {
@@ -126,7 +126,7 @@ impl LabelloApp {
                                 }
                             }
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportSourceBrowsed { request, result } => {
@@ -149,7 +149,7 @@ impl LabelloApp {
                             }
                             self.import.source_picker.error = None;
                         }
-                        Err(error) => self.import.source_picker.error = Some(error),
+                        Err(error) => self.import.source_picker.error = Some(error.to_string()),
                     }
                     self.import.source_picker.pending_append = false;
                 }
@@ -198,7 +198,7 @@ impl LabelloApp {
                         Err(error) => {
                             self.import.yolo_splits.clear();
                             self.import.yolo_inspected_descriptor_file_id = None;
-                            self.import.yolo_inspection_error = Some(error);
+                            self.import.yolo_inspection_error = Some(error.to_string());
                         }
                     }
                     if self.import.yolo_inspection_retry_after_current {
@@ -260,7 +260,7 @@ impl LabelloApp {
                                 self.request_yolo_descriptor_inspection_after_upload();
                             }
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportSealed { result, .. } => {
@@ -275,7 +275,7 @@ impl LabelloApp {
                             }
                             self.request_preflight_import(false);
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportPlanUpdated { result, .. } => {
@@ -308,7 +308,7 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.import.pending_plan_request = None;
-                            self.import.error = Some(error);
+                            self.import.error = Some(error.to_string());
                         }
                     }
                 }
@@ -319,7 +319,7 @@ impl LabelloApp {
                             self.import.diagnostics.extend(page.diagnostics);
                             self.import.diagnostics_cursor = page.next_cursor;
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::ImportCommitted { result, .. } => {
@@ -343,7 +343,7 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.import.screen = crate::import_flow::ImportScreen::Failure;
-                            self.import.error = Some(error);
+                            self.import.error = Some(error.to_string());
                         }
                     }
                 }
@@ -358,7 +358,7 @@ impl LabelloApp {
                             self.import.screen = crate::import_flow::ImportScreen::Failure;
                             self.runtime.notice = Some("Import cancelled".to_string());
                         }
-                        Err(error) => self.import.error = Some(error),
+                        Err(error) => self.import.error = Some(error.to_string()),
                     }
                 }
             message => return Some(message),

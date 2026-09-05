@@ -110,7 +110,7 @@ pub(super) fn click_application_menu_item(harness: &mut Harness<'static, Labello
 pub(super) fn select_setup_section(harness: &mut Harness<'static, LabelloApp>, label: &str) {
     harness.state_mut().setup.section = match label {
         "Datasets" => SetupSection::Datasets,
-        "Connection" => SetupSection::Connection,
+        "Connection" => SetupSection::AdvancedConnection,
         "Create" => SetupSection::Create,
         "Import" => SetupSection::Import,
         _ => panic!("unknown setup section {label:?}"),

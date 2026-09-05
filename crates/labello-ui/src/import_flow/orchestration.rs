@@ -14,7 +14,19 @@ impl LabelloApp {
         self.queue_command(UiCommand::ImportCapabilities { request });
     }
 
+    pub(crate) fn suspend_import_for_auth(&mut self) {
+        self.begin_import_epoch();
+        self.import.capabilities_loading = false;
+        self.import.source_picker.loading = false;
+        self.import.source_picker.pending_request_id = None;
+        self.import.yolo_inspection_loading = false;
+        self.import.pending_yolo_inspection_request_id = None;
+    }
+
     pub(crate) fn refresh_import_if_due(&mut self) {
+        if self.auth.recovery.is_some() && (!self.auth.checked || self.auth.account.is_none()) {
+            return;
+        }
         let should_poll = self.import.open
             && !self
                 .import

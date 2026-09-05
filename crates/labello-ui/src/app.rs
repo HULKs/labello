@@ -29,6 +29,7 @@ use crate::{
 pub(crate) use crate::live_protocol::{
     FolderUploadProgress, ImportActivity, ImportRequestIdentity, LoadedAdmin, LoadedDataset,
     LoadedImage, MigrationAction, RequestIdentity, ReviewPhase, UiCommand, UiMessage,
+    UiRequestError,
 };
 
 pub const IMAGE_QUEUE_SIZE: usize = 2;
@@ -230,7 +231,9 @@ pub(crate) enum AdminSection {
 pub(crate) enum SetupSection {
     #[default]
     Datasets,
-    Connection,
+    Login,
+    AdvancedConnection,
+    About,
     Create,
     Import,
 }
@@ -293,11 +296,19 @@ pub(crate) struct SetupState {
     pub section: SetupSection,
 }
 
+pub(crate) struct SessionRecovery {
+    pub user_id: UserId,
+    pub view: AppView,
+}
+
 pub(crate) struct AuthState {
     pub account: Option<UserAccount>,
     pub can_create_datasets: bool,
     pub options: AuthOptions,
     pub options_checked: bool,
+    pub options_error: Option<String>,
+    pub session_error: Option<String>,
+    pub recovery: Option<SessionRecovery>,
     pub checked: bool,
     pub session_request_id: u64,
     pub active_session_request_id: Option<u64>,

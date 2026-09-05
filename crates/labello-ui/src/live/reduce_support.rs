@@ -24,7 +24,7 @@ impl LabelloApp {
                             self.datasets.last_stats_completion = Some(Instant::now());
                             self.datasets.stats_error = None;
                         }
-                        Err(error) => self.datasets.stats_error = Some(error),
+                        Err(error) => self.datasets.stats_error = Some(error.to_string()),
                     }
                 }
                 UiMessage::AssignmentAvailabilityLoaded { result, .. } => {
@@ -79,7 +79,7 @@ impl LabelloApp {
                             self.work.availability.tasks.clear();
                             self.work.availability.resolved = false;
                             self.work.availability.checked_at = None;
-                            self.work.availability.error = Some(error);
+                            self.work.availability.error = Some(error.to_string());
                         }
                     }
                 }
@@ -99,14 +99,14 @@ impl LabelloApp {
                             self.runtime.error = None;
                         }
                         Err(error) => {
-                            self.work.shortcut_settings.error = Some(error.clone());
-                            self.runtime.error = Some(error);
+                            self.work.shortcut_settings.error = Some(error.to_string());
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
                 UiMessage::RequestFailed { error, .. } => {
                     self.invalidate_async_ownership();
-                    self.runtime.error = Some(error);
+                    self.runtime.error = Some(error.to_string());
                 }
                 UiMessage::FolderUploadProgress { request, progress } => {
                     if !self.request_is_current(&request, true) {
@@ -132,8 +132,8 @@ impl LabelloApp {
                             self.request_dataset_list();
                         }
                         Err(error) => {
-                            self.admin.upload_error = Some(error.clone());
-                            self.runtime.error = Some(error);
+                            self.admin.upload_error = Some(error.to_string());
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }

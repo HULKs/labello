@@ -129,8 +129,10 @@ has been recorded.
 
 ## Screen Patterns
 
-- **Setup:** feature one valid next dataset action, list all datasets separately,
-  and keep connection and creation secondary after sign-in.
+- **Login and setup:** keep sign-in focused and hide methods until session
+  discovery completes. Provide About without authentication and put endpoint
+  editing in Advanced connection. After sign-in, feature one valid next dataset
+  action, list all datasets separately, and keep creation secondary.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
   and Fit visible; keep Pan mode active during approval decisions and return
   primary drag to object editing during reviewer correction; place review phase

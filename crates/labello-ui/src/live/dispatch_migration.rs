@@ -63,7 +63,7 @@ impl LabelloApp {
                             .await
                     }
                 }
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::MigrationFinished {
                     request,
                     result: Box::new(result),

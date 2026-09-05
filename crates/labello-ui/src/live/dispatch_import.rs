@@ -11,7 +11,7 @@ impl LabelloApp {
                     result: api
                         .import_capabilities()
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::CreateImport {
@@ -24,7 +24,7 @@ impl LabelloApp {
                     result: Box::new(
                         api.create_import(body, &idempotency_key)
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     ),
                 }
             }),
@@ -34,7 +34,7 @@ impl LabelloApp {
                     result: Box::new(
                         api.get_import(&import_id)
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     ),
                 }
             }),
@@ -49,7 +49,7 @@ impl LabelloApp {
                     result: api
                         .register_import_files(&import_id, body, &idempotency_key)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::BrowseImportRoot {
@@ -62,7 +62,7 @@ impl LabelloApp {
                     result: api
                         .browse_server_import_root(&root_id, body)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::BrowseImportSource {
@@ -75,7 +75,7 @@ impl LabelloApp {
                     result: api
                         .browse_import_source(&import_id, body)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::InspectYoloDescriptor {
@@ -90,7 +90,7 @@ impl LabelloApp {
                     result: api
                         .inspect_yolo_descriptor(&import_id, body)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::SealImport {
@@ -104,7 +104,7 @@ impl LabelloApp {
                     result: api
                         .seal_import(&import_id, body, &idempotency_key)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::PreflightImport {
@@ -118,7 +118,7 @@ impl LabelloApp {
                     result: Box::new(
                         api.preflight_import(&import_id, body, &idempotency_key)
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     ),
                 }
             }),
@@ -133,7 +133,7 @@ impl LabelloApp {
                     result: Box::new(
                         api.update_import_plan(&import_id, body, &idempotency_key)
                             .await
-                            .map_err(|error| error.to_string()),
+                            .map_err(UiRequestError::from),
                     ),
                 }
             }),
@@ -147,7 +147,7 @@ impl LabelloApp {
                     result: api
                         .import_diagnostics(&import_id, query)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::CommitImport {
@@ -161,7 +161,7 @@ impl LabelloApp {
                     result: api
                         .commit_import(&import_id, body, &idempotency_key)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::CancelImport {
@@ -180,7 +180,7 @@ impl LabelloApp {
                             &idempotency_key,
                         )
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             command => return Some(command),

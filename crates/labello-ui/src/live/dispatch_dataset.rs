@@ -8,7 +8,7 @@ impl LabelloApp {
             UiCommand::DatasetList { request } => self.spawn_message(request.clone(), async move {
                 UiMessage::DatasetList {
                     request,
-                    result: api.list_datasets().await.map_err(|error| error.to_string()),
+                    result: api.list_datasets().await.map_err(UiRequestError::from),
                 }
             }),
             UiCommand::CreateDataset {
@@ -26,7 +26,7 @@ impl LabelloApp {
                             admin_user_id,
                         })
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                     ),
                 }
             }),
@@ -44,7 +44,7 @@ impl LabelloApp {
                     })
                 }
                 .await
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::DatasetLoaded {
                     request,
                     result: Box::new(result),
@@ -60,7 +60,7 @@ impl LabelloApp {
                     Ok::<_, labello_client::ClientError>(LoadedAdmin { metadata, users })
                 }
                 .await
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::AdminLoaded {
                     request,
                     result: Box::new(result),
@@ -75,7 +75,7 @@ impl LabelloApp {
                         result: Box::new(
                             api.update_dataset_config(&dataset_id, update)
                                 .await
-                                .map_err(|error| error.to_string()),
+                                .map_err(UiRequestError::from),
                         ),
                     }
                 });
@@ -91,7 +91,7 @@ impl LabelloApp {
                     result: api
                         .set_dataset_roles(&dataset_id, SetDatasetRolesRequest { user_id, roles })
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::LoadImages {
@@ -104,7 +104,7 @@ impl LabelloApp {
                     result: api
                         .list_images(&dataset_id, query)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::LoadSnapshots {
@@ -116,7 +116,7 @@ impl LabelloApp {
                     result: api
                         .list_snapshots(&dataset_id)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::CreateSnapshot {
@@ -128,7 +128,7 @@ impl LabelloApp {
                     result: api
                         .create_snapshot(&dataset_id)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::DownloadSnapshot {
@@ -142,7 +142,7 @@ impl LabelloApp {
                     result: api
                         .get_snapshot_file(&dataset_id, &snapshot_id, &path)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::Ingest {
@@ -154,7 +154,7 @@ impl LabelloApp {
                     result: api
                         .start_ingest_job(&dataset_id)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             UiCommand::PollIngest {
@@ -167,7 +167,7 @@ impl LabelloApp {
                     result: api
                         .get_ingest_job(&dataset_id, &job_id)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             command => return Some(command),

@@ -1,5 +1,9 @@
 impl LabelloApp {
     pub(crate) fn app_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        if self.view == AppView::Setup && (!self.auth.checked || self.auth.account.is_none()) {
+            ui.heading("Labello");
+            return;
+        }
         let dataset_name = self
             .datasets
             .metadata

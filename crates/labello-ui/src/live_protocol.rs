@@ -147,15 +147,45 @@ impl ImportActivity {
     }
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct UiRequestError {
+    pub message: String,
+    pub unauthorized: bool,
+}
+
+impl From<labello_client::ClientError> for UiRequestError {
+    fn from(error: labello_client::ClientError) -> Self {
+        Self {
+            unauthorized: matches!(error, labello_client::ClientError::Api { status: 401, .. }),
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<String> for UiRequestError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            unauthorized: false,
+        }
+    }
+}
+
+impl std::fmt::Display for UiRequestError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.message.fmt(formatter)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum UiMessage {
     ImportCapabilitiesLoaded {
         request: ImportRequestIdentity,
-        result: Result<ImportCapabilities, String>,
+        result: Result<ImportCapabilities, UiRequestError>,
     },
     ImportJobLoaded {
         request: ImportRequestIdentity,
-        result: Box<Result<ImportJob, String>>,
+        result: Box<Result<ImportJob, UiRequestError>>,
     },
     #[cfg(target_arch = "wasm32")]
     ImportBrowserFilesSelected {
@@ -164,16 +194,16 @@ pub(crate) enum UiMessage {
     },
     ImportFilesRegistered {
         request: ImportRequestIdentity,
-        result: Result<labello_client::RegisterImportFilesResult, String>,
+        result: Result<labello_client::RegisterImportFilesResult, UiRequestError>,
     },
     ImportSourceBrowsed {
         request: ImportRequestIdentity,
-        result: Result<labello_client::ImportBrowsePage, String>,
+        result: Result<labello_client::ImportBrowsePage, UiRequestError>,
     },
     YoloDescriptorInspected {
         request: ImportRequestIdentity,
         descriptor_file_id: String,
-        result: Result<labello_client::YoloDescriptorInspection, String>,
+        result: Result<labello_client::YoloDescriptorInspection, UiRequestError>,
     },
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     ImportChunkUploaded {
@@ -183,110 +213,110 @@ pub(crate) enum UiMessage {
     },
     ImportSealed {
         request: ImportRequestIdentity,
-        result: Result<labello_client::SealImportResult, String>,
+        result: Result<labello_client::SealImportResult, UiRequestError>,
     },
     ImportPlanUpdated {
         request: ImportRequestIdentity,
-        result: Box<Result<ImportPlan, String>>,
+        result: Box<Result<ImportPlan, UiRequestError>>,
     },
     ImportDiagnosticsLoaded {
         request: ImportRequestIdentity,
-        result: Result<labello_client::ImportDiagnosticsPage, String>,
+        result: Result<labello_client::ImportDiagnosticsPage, UiRequestError>,
     },
     ImportCommitted {
         request: ImportRequestIdentity,
-        result: Result<CommitImportResult, String>,
+        result: Result<CommitImportResult, UiRequestError>,
     },
     ImportCancelled {
         request: ImportRequestIdentity,
-        result: Result<CancelImportResult, String>,
+        result: Result<CancelImportResult, UiRequestError>,
     },
     MigrationFinished {
         request: RequestIdentity,
-        result: Box<Result<labello_client::ManualMigrationCommandResult, String>>,
+        result: Box<Result<labello_client::ManualMigrationCommandResult, UiRequestError>>,
     },
     AuthOptionsLoaded {
         request: RequestIdentity,
-        result: Result<AuthOptions, String>,
+        result: Result<AuthOptions, UiRequestError>,
     },
     SessionLoaded {
         request: RequestIdentity,
-        result: Result<SessionInfo, String>,
+        result: Result<SessionInfo, UiRequestError>,
     },
     LogoutFinished {
         request: RequestIdentity,
-        result: Result<(), String>,
+        result: Result<(), UiRequestError>,
     },
     GithubLoginUrl {
         request: RequestIdentity,
-        result: Result<String, String>,
+        result: Result<String, UiRequestError>,
     },
     DatasetList {
         request: RequestIdentity,
-        result: Result<Vec<DatasetSummary>, String>,
+        result: Result<Vec<DatasetSummary>, UiRequestError>,
     },
     DatasetCreated {
         request: RequestIdentity,
-        result: Box<Result<DatasetMetadata, String>>,
+        result: Box<Result<DatasetMetadata, UiRequestError>>,
     },
     DatasetLoaded {
         request: RequestIdentity,
-        result: Box<Result<LoadedDataset, String>>,
+        result: Box<Result<LoadedDataset, UiRequestError>>,
     },
     AdminLoaded {
         request: RequestIdentity,
-        result: Box<Result<LoadedAdmin, String>>,
+        result: Box<Result<LoadedAdmin, UiRequestError>>,
     },
     AdminSaved {
         request: RequestIdentity,
-        result: Box<Result<DatasetMetadata, String>>,
+        result: Box<Result<DatasetMetadata, UiRequestError>>,
     },
     DatasetRolesSaved {
         request: RequestIdentity,
-        result: Result<DatasetUser, String>,
+        result: Result<DatasetUser, UiRequestError>,
     },
     ImagesLoaded {
         request: RequestIdentity,
-        result: Result<ImageExplorerPage, String>,
+        result: Result<ImageExplorerPage, UiRequestError>,
     },
     SnapshotsLoaded {
         request: RequestIdentity,
-        result: Result<Vec<DatasetSnapshot>, String>,
+        result: Result<Vec<DatasetSnapshot>, UiRequestError>,
     },
     SnapshotCreated {
         request: RequestIdentity,
-        result: Result<DatasetSnapshot, String>,
+        result: Result<DatasetSnapshot, UiRequestError>,
     },
     SnapshotDownloaded {
         request: RequestIdentity,
-        result: Result<SnapshotFile, String>,
+        result: Result<SnapshotFile, UiRequestError>,
     },
     ImageLoaded {
         request: RequestIdentity,
         operation_id: u64,
         assignment: Option<Assignment>,
-        result: Box<Result<Option<LoadedImage>, String>>,
+        result: Box<Result<Option<LoadedImage>, UiRequestError>>,
     },
     PreviousAssignmentLoaded {
         request: RequestIdentity,
         operation_id: u64,
         assignment: Option<Assignment>,
-        result: Box<Result<LoadedImage, String>>,
+        result: Box<Result<LoadedImage, UiRequestError>>,
     },
     PrefetchLoaded {
         request: RequestIdentity,
         operation_id: u64,
-        result: Box<Result<Option<LoadedImage>, String>>,
+        result: Box<Result<Option<LoadedImage>, UiRequestError>>,
     },
     PreparedReviewRevalidated {
         request: RequestIdentity,
         operation_id: u64,
         cached: Box<LoadedImage>,
-        result: Box<Result<Option<labello_client::AssignmentRevalidation>, String>>,
+        result: Box<Result<Option<labello_client::AssignmentRevalidation>, UiRequestError>>,
     },
     ReservationReleased {
         request: RequestIdentity,
-        result: Result<(), String>,
+        result: Result<(), UiRequestError>,
     },
     SaveFinished {
         request: RequestIdentity,
@@ -294,13 +324,13 @@ pub(crate) enum UiMessage {
         assignment_id: AssignmentId,
         edit_generation: u64,
         completed: bool,
-        result: Box<Result<ImageState, String>>,
+        result: Box<Result<ImageState, UiRequestError>>,
     },
     ReleaseFinished {
         request: RequestIdentity,
         operation_id: u64,
         assignment_id: AssignmentId,
-        result: Result<(), String>,
+        result: Result<(), UiRequestError>,
     },
     ReviewFinished {
         request: RequestIdentity,
@@ -308,36 +338,36 @@ pub(crate) enum UiMessage {
         assignment_id: AssignmentId,
         phase: ReviewPhase,
         decision: labello_domain::ReviewDecision,
-        result: Box<Result<ImageState, String>>,
+        result: Box<Result<ImageState, UiRequestError>>,
     },
     CorrectionFinished {
         request: RequestIdentity,
         operation_id: u64,
         assignment_id: AssignmentId,
-        result: Result<(), String>,
+        result: Result<(), UiRequestError>,
     },
     AdjudicationFinished {
         request: RequestIdentity,
         operation_id: u64,
         assignment_id: AssignmentId,
-        result: Result<(), String>,
+        result: Result<(), UiRequestError>,
     },
     PersistenceFinished(Box<crate::persistence::PersistenceCompletion>),
     IngestJobLoaded {
         request: RequestIdentity,
-        result: Result<IngestJob, String>,
+        result: Result<IngestJob, UiRequestError>,
     },
     StatsLoaded {
         request: RequestIdentity,
-        result: Result<DatasetStats, String>,
+        result: Result<DatasetStats, UiRequestError>,
     },
     AssignmentAvailabilityLoaded {
         request: RequestIdentity,
-        result: Result<AssignmentAvailability, String>,
+        result: Result<AssignmentAvailability, UiRequestError>,
     },
     KeybindingsSaved {
         request: RequestIdentity,
-        result: Result<KeybindingSet, String>,
+        result: Result<KeybindingSet, UiRequestError>,
     },
     #[allow(
         dead_code,
@@ -719,6 +749,191 @@ impl UiCommand {
 }
 
 impl UiMessage {
+    pub(crate) fn requires_session_check(&self) -> bool {
+        match self {
+            Self::ImportCapabilitiesLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportJobLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            #[cfg(target_arch = "wasm32")]
+            Self::ImportBrowserFilesSelected { .. } => false,
+            Self::ImportFilesRegistered { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportSourceBrowsed { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::YoloDescriptorInspected { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportChunkUploaded { result, .. } => result.is_err(),
+            Self::ImportSealed { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportPlanUpdated { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportDiagnosticsLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportCommitted { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImportCancelled { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::MigrationFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::DatasetList { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::DatasetCreated { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::DatasetLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::AdminLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::AdminSaved { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::DatasetRolesSaved { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImagesLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::SnapshotsLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::SnapshotCreated { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::SnapshotDownloaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ImageLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::PreviousAssignmentLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::PrefetchLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::PreparedReviewRevalidated { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ReservationReleased { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::SaveFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ReleaseFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::ReviewFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::CorrectionFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::AdjudicationFinished { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::IngestJobLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::StatsLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::AssignmentAvailabilityLoaded { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::KeybindingsSaved { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::FolderUploadFinished { result, .. } => result.is_err(),
+            _ => false,
+        }
+    }
+
     pub(crate) fn request(&self) -> Option<&RequestIdentity> {
         match self {
             Self::ImportCapabilitiesLoaded { .. }

@@ -89,7 +89,7 @@ fn yolo_descriptor_inspection_checks_every_usable_split_by_default() {
         .send(UiMessage::YoloDescriptorInspected {
             request: failed_request,
             descriptor_file_id: "dataset.yaml".to_string(),
-            result: Err("The YAML is malformed.".to_string()),
+            result: Err("The YAML is malformed.".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());
@@ -197,7 +197,7 @@ fn import_capability_is_bootstrap_admin_gated_and_stale_epochs_are_ignored() {
         .tx
         .send(UiMessage::ImportCapabilitiesLoaded {
             request,
-            result: Err("stale import response".to_string()),
+            result: Err("stale import response".to_string().into()),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());

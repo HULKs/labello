@@ -1,5 +1,19 @@
 impl LabelloApp {
     pub(crate) fn queue_command(&mut self, command: UiCommand) -> bool {
+        if self.auth.recovery.is_some()
+            && (!self.auth.checked || self.auth.account.is_none())
+            && !matches!(
+                command,
+                UiCommand::AuthOptions { .. }
+                    | UiCommand::Session { .. }
+                    | UiCommand::LocalAdminLogin { .. }
+                    | UiCommand::GithubLogin { .. }
+                    | UiCommand::Logout { .. }
+            )
+        {
+            self.rollback_command(&command, "Sign in before continuing.");
+            return false;
+        }
         if self.runtime.commands.len() < 64 {
             if command.invalidates_assignment_availability() {
                 self.invalidate_assignment_availability(command.request().dataset_id.as_ref());

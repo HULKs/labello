@@ -63,7 +63,7 @@ impl LabelloApp {
                             }
                             self.runtime.persistence.expected_assignment = None;
                             self.work.assignment = assignment;
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                             self.request_assignment_availability();
                         }
                     }
@@ -133,7 +133,7 @@ impl LabelloApp {
                         Err(error) => {
                             self.release_reservation(dataset_id, cached.assignment);
                             self.clear_current_image();
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                             self.request_assignment_availability();
                         }
                     }
@@ -167,7 +167,7 @@ impl LabelloApp {
                             self.request_assignment_availability();
                         }
                         Err(error) => {
-                            let normalized_error = error.to_ascii_lowercase();
+                            let normalized_error = error.message.to_ascii_lowercase();
                             let expired = normalized_error.contains("lease")
                                 && normalized_error.contains("expired");
                             if expired {
@@ -175,7 +175,7 @@ impl LabelloApp {
                             } else if let Some(assignment) = assignment {
                                 self.work.previous_annotation_assignment = Some(assignment);
                             }
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                             if expired && self.work.assignment.is_none() {
                                 self.request_next_image();
                             }
@@ -326,7 +326,7 @@ impl LabelloApp {
                                     false,
                                 );
                             }
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -362,7 +362,7 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.work.pending_transition = None;
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -440,7 +440,7 @@ impl LabelloApp {
                                     .expect("review mutations are dataset-scoped"),
                                 false,
                             );
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -482,7 +482,7 @@ impl LabelloApp {
                                     .expect("correction mutations are dataset-scoped"),
                                 false,
                             );
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -519,11 +519,11 @@ impl LabelloApp {
                                     .expect("adjudication mutations are dataset-scoped"),
                                 false,
                             );
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
-                UiMessage::IngestJobLoaded { result, .. } => self.handle_ingest_job(result),
+                UiMessage::IngestJobLoaded { result, .. } => self.handle_ingest_job(result.map_err(|error| error.to_string())),
             message => return Some(message),
         }
         None

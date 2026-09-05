@@ -13,7 +13,9 @@ impl SetupSection {
     fn label(self) -> &'static str {
         match self {
             Self::Datasets => "Datasets",
-            Self::Connection => "Connection",
+            Self::Login => "Sign in",
+            Self::AdvancedConnection => "Advanced connection",
+            Self::About => "About",
             Self::Create => "Create",
             Self::Import => "Import",
         }
@@ -22,23 +24,41 @@ impl SetupSection {
 
 impl LabelloApp {
     pub(crate) fn setup_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        let signed_in = self.auth.account.is_some();
+        if !self.auth.checked || self.auth.account.is_none() {
+            if !matches!(
+                self.setup.section,
+                SetupSection::AdvancedConnection | SetupSection::About
+            ) {
+                self.setup.section = SetupSection::Login;
+            }
+            ui.horizontal_wrapped(|ui| {
+                for section in [
+                    SetupSection::Login,
+                    SetupSection::About,
+                    SetupSection::AdvancedConnection,
+                ] {
+                    if login_action_clicked(theme::quiet_button(
+                        ui,
+                        true,
+                        egui::Button::new(section.label())
+                            .selected(self.setup.section == section)
+                            .min_size(egui::vec2(44.0, 44.0)),
+                    )) {
+                        self.setup.section = section;
+                    }
+                }
+            });
+            ui.add_space(theme::SPACE_4);
+            self.setup_section(ui);
+            return;
+        }
         let sections = self.setup_sections();
         if !sections.contains(&self.setup.section) {
             self.setup.section = sections[0];
         }
         ui.vertical_centered(|ui| {
-            let (title, subtitle) = if signed_in {
-                (
-                    "Choose where to work",
-                    "Continue with a recommended dataset or choose where to work.",
-                )
-            } else {
-                (
-                    "Welcome to Labello",
-                    "Sign in, then open a dataset available to your account.",
-                )
-            };
+            let title = "Choose where to work";
+            let subtitle = "Continue with a recommended dataset or choose where to work.";
             ui.heading(RichText::new(title).size(theme::PAGE_TITLE_SIZE));
             ui.label(RichText::new(subtitle).color(theme::TEXT_MUTED));
         });
@@ -65,9 +85,17 @@ impl LabelloApp {
 
     fn setup_sections(&self) -> Vec<SetupSection> {
         if self.auth.account.is_none() {
-            return vec![SetupSection::Connection];
+            return vec![
+                SetupSection::Login,
+                SetupSection::About,
+                SetupSection::AdvancedConnection,
+            ];
         }
-        let mut sections = vec![SetupSection::Datasets, SetupSection::Connection];
+        let mut sections = vec![
+            SetupSection::Datasets,
+            SetupSection::About,
+            SetupSection::AdvancedConnection,
+        ];
         if self.auth.can_create_datasets {
             sections.extend([SetupSection::Create, SetupSection::Import]);
         }
@@ -124,7 +152,12 @@ impl LabelloApp {
     fn setup_section(&mut self, ui: &mut egui::Ui) {
         match self.setup.section {
             SetupSection::Datasets => self.datasets_section(ui),
-            SetupSection::Connection => self.connection_section(ui),
+            SetupSection::AdvancedConnection => self.connection_section(ui),
+            SetupSection::Login => self.login_section(ui),
+            SetupSection::About => {
+                ui.heading("About Labello");
+                ui.label("Labello is an image annotation application for bounding boxes and skeleton keypoints.");
+            }
             SetupSection::Create if self.auth.can_create_datasets => {
                 ui.heading("Create a dataset");
                 ui.label(
@@ -147,7 +180,8 @@ impl LabelloApp {
     fn connection_section(&mut self, ui: &mut egui::Ui) {
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.heading("Connection");
+            ui.heading("Connection settings");
+            ui.label("The deployed application supplies the API endpoint. Change it here only when connecting to another server.");
             let response =
                 theme::labeled_text_field(ui, "API URL", &mut self.setup.api_base_url_draft, 24.0)
                     .on_hover_text("Backend API base URL, for example http://127.0.0.1:8080.");
@@ -165,44 +199,90 @@ impl LabelloApp {
                 self.auth.options_checked = false;
                 self.auth.checked = false;
             }
-            if self.loading.session {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label("Checking your session...");
-                });
-            } else if let Some(account) = &self.auth.account {
-                ui.label(RichText::new(&account.display_name).strong());
-                if let Some(login) = &account.github_login {
-                    ui.small(format!("GitHub: @{login}"));
-                }
-                ui.small(format!("User ID: {}", account.user_id));
-            } else {
-                ui.horizontal_wrapped(|ui| {
-                    if self.auth.options.local_admin_login
-                        && theme::quiet_button(
-                            ui,
-                            true,
-                            egui::Button::new("Continue as local admin"),
-                        )
-                        .clicked()
-                    {
-                        self.request_local_admin_login();
-                    }
-                    if self.auth.options.github_oauth
-                        && theme::primary_button(ui, true, egui::Button::new("Sign in with GitHub"))
-                            .clicked()
-                    {
-                        self.request_github_login();
-                    }
-                });
-                if self.auth.options_checked
-                    && !self.auth.options.local_admin_login
-                    && !self.auth.options.github_oauth
-                {
-                    ui.label("No interactive sign-in method is enabled on this server.");
-                }
+            if self.runtime.api.is_none()
+                && let Some(error) = &self.runtime.error
+            {
+                ui.label(error);
             }
         });
+    }
+
+    fn login_section(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Sign in to Labello");
+        ui.label("Sign in to choose a dataset available to your account.");
+        ui.add_space(theme::SPACE_4);
+        if self.auth.recovery.is_some() {
+            ui.label(
+                "Sign in again to continue. Your draft stays with the account that created it.",
+            );
+        }
+        if self.runtime.api.is_none() {
+            ui.label("Connection unavailable. Check the advanced connection settings.");
+        } else if !self.auth.options_checked {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Loading sign-in options...");
+            });
+        } else if let Some(error) = self.auth.options_error.clone() {
+            ui.label("Could not load sign-in options.");
+            ui.label(error);
+            if login_action_clicked(theme::primary_button(
+                ui,
+                true,
+                egui::Button::new("Retry sign-in options"),
+            )) {
+                self.request_auth_options();
+            }
+        } else if !self.auth.checked || self.loading.session {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Checking your session...");
+            });
+        } else if let Some(error) = self.auth.session_error.clone() {
+            ui.label("Could not check your session.");
+            ui.label(error);
+            if login_action_clicked(theme::primary_button(
+                ui,
+                true,
+                egui::Button::new("Retry session check"),
+            )) {
+                self.request_session();
+            }
+        } else {
+            if let Some(error) = &self.runtime.error {
+                ui.label(error);
+            }
+            if self.auth.options.github_oauth
+                && login_action_clicked(theme::primary_button(
+                    ui,
+                    true,
+                    egui::Button::new("Sign in with GitHub").min_size(egui::vec2(180.0, 44.0)),
+                ))
+            {
+                self.request_github_login();
+            }
+            if self.auth.options.local_admin_login {
+                ui.add_space(theme::SPACE_2);
+                ui.label("Local development");
+                if login_action_clicked(theme::quiet_button(
+                    ui,
+                    true,
+                    egui::Button::new("Continue as local admin").min_size(egui::vec2(180.0, 44.0)),
+                )) {
+                    self.request_local_admin_login();
+                }
+            }
+            if !self.auth.options.local_admin_login && !self.auth.options.github_oauth {
+                ui.label("No interactive sign-in method is enabled on this server.");
+                if login_action_clicked(theme::quiet_button(
+                    ui,
+                    true,
+                    egui::Button::new("Retry sign-in options"),
+                )) {
+                    self.request_auth_options();
+                }
+            }
+        }
     }
 
     fn datasets_section(&mut self, ui: &mut egui::Ui) {
@@ -578,5 +658,12 @@ fn dataset_action(ui: &mut egui::Ui, enabled: bool, label: &str, dataset_name: &
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, accessible_label.clone())
     });
+    response.clicked()
+}
+
+fn login_action_clicked(response: egui::Response) -> bool {
+    if response.gained_focus() {
+        response.scroll_to_me(Some(egui::Align::Center));
+    }
     response.clicked()
 }

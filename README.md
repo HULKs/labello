@@ -68,6 +68,18 @@ Open <http://127.0.0.1:8081> and select `Continue as local admin`. The default
 loopback-only server configuration enables this session login for the `admin`
 bootstrap user, which can create the first dataset.
 
+The dedicated login page checks the session before showing the authentication
+methods enabled by the server. It shows separate loading, failure/retry, and
+no-enabled-method states. `About` is available before and after sign-in.
+Endpoint editing lives under `Advanced connection`; deployment configuration
+remains the normal source of the API URL.
+
+If a request indicates lost authentication, the UI rechecks the session before
+allowing more work. Sign-in recovery retains drafts for their original account;
+returning as another account cannot apply those drafts. Changing the endpoint
+immediately clears account and dataset state and rejects pending responses from
+the previous endpoint.
+
 The client selects its API URL from the `api` query parameter, then from the
 public `labello.client.json` file deployed beside the browser application, and
 finally from port `8080` on the same hostname used to open the UI. The tracked
@@ -383,6 +395,10 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
 ## Current Limitations
 
 ### Product And Workflow Gaps
+
+- Session recovery retains account-scoped drafts but does not enable offline
+  work. Browser recovery remains a best-effort local cache; reloading or an OAuth
+  round trip relies on the existing persisted draft and assignment checks.
 
 - Offline bundle and synchronization APIs exist, but the browser UI cannot
   download an offline workspace, author against it without a network
