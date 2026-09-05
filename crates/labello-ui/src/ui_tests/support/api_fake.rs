@@ -793,6 +793,16 @@ impl ImportApi for SpyApi {
         }))
     }
 
+    fn reconcile_migration_companion<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _image_id: &'a ImageId,
+        _request: labello_client::ReconcileMigrationCompanionRequest,
+        _idempotency_key: &'a str,
+    ) -> ApiFuture<'a, labello_client::ManualMigrationCommandResult> {
+        ready(Err(labello_client::ClientError::Demo("companion reconciliation unavailable in this fixture".into())))
+    }
+
     fn exclude_migration_target<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

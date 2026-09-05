@@ -34,6 +34,9 @@ impl LabelloApp {
                         )
                         .await
                     }
+                    crate::app::MigrationAction::ReconcileCompanion(body) => {
+                        api.reconcile_migration_companion(&dataset_id, &image_id, body, &idempotency_key).await
+                    }
                     crate::app::MigrationAction::Exclude(body) => {
                         api.exclude_migration_target(&dataset_id, &image_id, body, &idempotency_key)
                             .await

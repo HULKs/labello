@@ -55,7 +55,7 @@ or external integrations.
 | `images/` | Authoritative image bytes addressed by the image index | Include in full backups; omitted from Labello snapshots |
 | `annotations/<image-id>/events.jsonl` | Authoritative append-only audit and workflow history | Replay in sequence; never truncate, reorder, merge, or edit by hand |
 | `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, or on a supported older schema |
-| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration; do not treat it as annotation authority |
+| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link events; do not treat it as annotation authority |
 | `users/<user-id>/keybindings.toml` | Authoritative keyboard and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
 | `.labello/imports/<import-id>/manifest.json` | Authoritative committed import provenance | Must match the dataset and directory import ID |
 | `.labello/imports/<import-id>/source-objects.jsonl` | Authoritative committed source-object audit record | Preserve with its manifest and event history |
@@ -238,3 +238,33 @@ saved `false` nor an invalid value can select a larger preview. Workspace and
 draft persistence formats are unchanged. Signing out or changing endpoint clears
 image references and rejects/cancels obsolete transfers. Derived previews do not
 authorize offline work or restore a server assignment.
+
+## Discovered Migration Companions
+
+Schema version 3 represents a discovered skeleton/box relationship with
+`migration_companion_linked` events. The replayed `migrationCompanions` map is
+keyed by the stable skeleton annotation ID and records both task IDs, class ID,
+box ID, skeleton version and derived box version. The box revision source is
+`migration_skeleton` with the exact source annotation ID and version. Neither
+annotation receives an imported object group, and the frozen canonical target
+set is never extended or reassigned.
+
+Creation, automatic edits, withdrawal and explicit reconciliation use the
+existing lock/reload/validate/simulate/append/replay transaction. A pair is
+published in one event append; a failure does not publish a partial pair.
+Deterministic command and companion IDs make retries durable across restart.
+A linked box that is independently edited or reviewed cannot be overwritten by
+an automatic skeleton update. Explicit reconciliation checks both current
+versions and records a new box version and link event. Prior versions, deleted
+versions and review history remain replayable. Each repaired object's link is
+the durable progress record; unresolved objects remain unchanged and can be
+retried independently after their conflict is resolved.
+
+Companion edits invalidate migration confirmation and terminal task state.
+Confirmation digests bind current discovered skeleton and companion versions.
+Histories without companions retain their existing digest encoding. Legacy
+version-2 and version-3 events remain readable; version-2 wire output rejects
+new companion provenance instead of silently discarding it. Old state caches
+without the additive map decode with an empty map and rebuild from events.
+Snapshot states, event logs, generated schemas and offline bundles retain these
+links. Offline mutations cannot forge companion events or derivation provenance.

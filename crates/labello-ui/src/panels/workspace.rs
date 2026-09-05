@@ -23,6 +23,10 @@ impl LabelloApp {
             self.draft_recovery_modal(ctx);
             return;
         }
+        if self.work.migration.pending_companion_reconciliation.is_some() {
+            self.migration_companion_reconciliation_modal(ctx);
+            return;
+        }
         if self.work.migration.pending_revisit_target.is_some() {
             self.migration_revisit_discard_modal(ctx);
             return;

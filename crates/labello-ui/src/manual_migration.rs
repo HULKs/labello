@@ -48,6 +48,10 @@ impl MigrationPrimaryAction {
 #[derive(Clone, Debug)]
 pub(crate) struct ManualMigrationState {
     pub cursor: Option<MigrationCursor>,
+    pub pending_companion_reconciliation: Option<AnnotationId>,
+    pub companion_focus_return: Option<egui::Id>,
+    pub preserving_companion_draft: bool,
+    pub reloading_discovery_draft: bool,
     pub inspected_group_id: Option<ObjectGroupId>,
     pub pending_revisit_target: Option<ObjectGroupId>,
     pub pending_activate_target: Option<ObjectGroupId>,
@@ -72,6 +76,10 @@ impl Default for ManualMigrationState {
     fn default() -> Self {
         Self {
             cursor: None,
+            pending_companion_reconciliation: None,
+            companion_focus_return: None,
+            preserving_companion_draft: false,
+            reloading_discovery_draft: false,
             inspected_group_id: None,
             pending_revisit_target: None,
             pending_activate_target: None,
@@ -192,7 +200,10 @@ impl LabelloApp {
                 .current_annotation(&target.guide_annotation_id)
                 .cloned()
         });
-        self.work.canvas.set_review_focus(guide.as_ref());
+        let discovery_focus = self.current_migration_discovery_focus();
+        self.work
+            .canvas
+            .set_review_focus(discovery_focus.as_ref().or(guide.as_ref()));
         let task_id = task.task_id.clone();
         let mut annotations = Vec::new();
         let mut annotation_styles = std::collections::BTreeMap::new();
@@ -846,6 +857,7 @@ impl LabelloApp {
     ) {
         ui.separator();
         ui.label(RichText::new("Full-image confirmation").strong());
+        self.migration_companion_reconciliation_actions(ui);
         if self.work.migration.adding_missing_object {
             self.migration_missing_object_actions(ui, show_primary_action);
             return;
@@ -1073,6 +1085,29 @@ impl LabelloApp {
                     );
                 }
             }
+        } else if let Some((_, target @ labello_client::MigrationReviewTarget::Discovered { .. })) =
+            self.current_migration_review_target()
+        {
+            let index = self.work.migration.review_index - targets.len();
+            ui.label(format!(
+                "Added object {} of {}",
+                index + 1,
+                self.discovered_migration_skeletons().len()
+            ));
+            ui.label(
+                "Review this saved skeleton. Its companion box has a separate bounding-box review.",
+            );
+            if let labello_client::MigrationReviewTarget::Discovered {
+                annotation_id,
+                version,
+            } = &target
+            {
+                ui.small(format!("Skeleton version {version}"));
+                self.migration_companion_status(ui, annotation_id);
+            }
+            if show_primary_actions {
+                self.migration_review_buttons(ui, task_id, target, false, false);
+            }
         } else if let Some(confirmation) = confirmation {
             theme::compact_metric(ui, "Review target", "Full-image confirmation");
             egui::CollapsingHeader::new("Resolved objects")
@@ -1272,6 +1307,112 @@ impl LabelloApp {
             self.migration_more_actions(ui);
         } else {
             self.migration_assignment_buttons(ui);
+        }
+    }
+
+    fn migration_companion_status(&self, ui: &mut egui::Ui, annotation_id: &AnnotationId) {
+        let Some(state) = self.work.current_state.as_ref() else {
+            return;
+        };
+        ui.small(format!("Object ID: {annotation_id}"));
+        match state.migration_companions.get(annotation_id) {
+            Some(link) if state.migration_companion_is_derived(annotation_id) => {
+                ui.small(format!(
+                    "Box derived from saved skeleton version {}",
+                    link.skeleton_version
+                ));
+            }
+            Some(_) => {
+                ui.small("Companion independently edited or reviewed. Reconcile before changing this skeleton.");
+            }
+            None => {
+                ui.small("Companion missing. Reconcile this historical discovery explicitly.");
+            }
+        }
+    }
+
+    fn migration_companion_reconciliation_actions(&mut self, ui: &mut egui::Ui) {
+        let discoveries = self.discovered_migration_skeletons();
+        if discoveries.is_empty() {
+            return;
+        }
+        let linked = discoveries
+            .iter()
+            .filter(|skeleton| {
+                self.work.current_state.as_ref().is_some_and(|state| {
+                    state
+                        .migration_companions
+                        .contains_key(&skeleton.annotation_id)
+                })
+            })
+            .count();
+        egui::CollapsingHeader::new(format!(
+            "Companion boxes: {linked} of {} paired",
+            discoveries.len()
+        ))
+        .id_salt("migration-companion-progress")
+        .show(ui, |ui| {
+            for (index, skeleton) in discoveries.iter().enumerate() {
+                ui.label(format!("Added object {}", index + 1));
+                self.migration_companion_status(ui, &skeleton.annotation_id);
+                let derived = self.work.current_state.as_ref().is_some_and(|state| {
+                    state.migration_companion_is_derived(&skeleton.annotation_id)
+                });
+                if !derived {
+                    let response = ui.add_enabled(
+                        !self.work.migration.busy,
+                        egui::Button::new(format!("Reconcile box for added object {}", index + 1)),
+                    );
+                    if self
+                        .work
+                        .migration
+                        .pending_companion_reconciliation
+                        .is_none()
+                        && self.work.migration.companion_focus_return == Some(response.id)
+                    {
+                        response.request_focus();
+                        self.work.migration.companion_focus_return = None;
+                    }
+                    if response.clicked() {
+                        self.work.migration.pending_companion_reconciliation =
+                            Some(skeleton.annotation_id.clone());
+                        self.work.migration.companion_focus_return = Some(response.id);
+                    }
+                }
+            }
+        });
+    }
+
+    pub(crate) fn request_reconcile_migration_companion(&mut self, annotation_id: AnnotationId) {
+        let Some(assignment) = self.work.assignment.as_ref() else {
+            return;
+        };
+        let Some(task_id) = self.work.selected_task_id.clone() else {
+            return;
+        };
+        let Some(state) = self.work.current_state.as_ref() else {
+            return;
+        };
+        let Some(skeleton) = state.current_annotation(&annotation_id) else {
+            return;
+        };
+        let expected_box_version = state
+            .migration_companions
+            .get(&annotation_id)
+            .and_then(|link| state.current_annotation(&link.box_annotation_id))
+            .map(|box_annotation| box_annotation.version);
+        let request = labello_client::ReconcileMigrationCompanionRequest {
+            assignment_id: assignment.assignment_id.clone(),
+            pass_id: self.work.migration.active_pass_id.clone(),
+            task_id,
+            annotation_id,
+            expected_version: skeleton.version,
+            expected_box_version,
+        };
+        self.work.migration.preserving_companion_draft = true;
+        self.queue_migration_action(MigrationAction::ReconcileCompanion(request));
+        if !self.work.migration.busy {
+            self.work.migration.preserving_companion_draft = false;
         }
     }
 
@@ -1586,6 +1727,20 @@ impl LabelloApp {
                 },
             ));
         }
+        if let Some(skeleton) = state.migration_discovered_skeletons(&task_id).get(
+            self.work
+                .migration
+                .review_index
+                .saturating_sub(targets.len()),
+        ) {
+            return Some((
+                task_id,
+                labello_client::MigrationReviewTarget::Discovered {
+                    annotation_id: skeleton.annotation_id.clone(),
+                    version: skeleton.version,
+                },
+            ));
+        }
         let confirmation = state.migration_confirmations.get(&task_id)?;
         Some((
             task_id,
@@ -1718,36 +1873,17 @@ impl LabelloApp {
         let Some(task_id) = self.work.selected_task_id.as_ref() else {
             return Vec::new();
         };
-        let mut skeletons = self
-            .work
+        self.work
             .current_state
             .as_ref()
             .map(|state| {
                 state
-                    .active_annotations()
-                    .filter(|annotation| {
-                        annotation.task_id == *task_id
-                            && annotation.object_group_id.is_none()
-                            && annotation.annotation_type == AnnotationType::Skeleton
-                            && matches!(
-                                &annotation.origin,
-                                AnnotationOrigin::Native { legacy_v2: false }
-                            )
-                            && matches!(
-                                &annotation.revision_source,
-                                RevisionSource::Human {
-                                    action: labello_domain::HumanRevisionKind::Authored
-                                        | labello_domain::HumanRevisionKind::Edited
-                                        | labello_domain::HumanRevisionKind::AcceptedUnchanged
-                                }
-                            )
-                    })
+                    .migration_discovered_skeletons(task_id)
+                    .into_iter()
                     .cloned()
-                    .collect::<Vec<_>>()
+                    .collect()
             })
-            .unwrap_or_default();
-        skeletons.sort_by(|left, right| left.annotation_id.cmp(&right.annotation_id));
-        skeletons
+            .unwrap_or_default()
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
@@ -1759,7 +1895,7 @@ impl LabelloApp {
         };
         let mut targets = set.targets.iter().collect::<Vec<_>>();
         targets.sort_by_key(|target| target.sequence_index);
-        targets
+        let canonical = targets
             .iter()
             .position(|target| {
                 let Some(disposition) = state
@@ -1771,6 +1907,10 @@ impl LabelloApp {
                 };
                 !state.reviews.iter().any(|review| {
                     review.reviewer_user_id == self.config.user_id
+                        && state
+                            .task_states
+                            .get(task_id)
+                            .is_none_or(|task| review.timestamp >= task.updated_at)
                         && review.decision == labello_domain::ReviewDecision::Approved
                         && match (&review.target, &disposition.status) {
                             (
@@ -1802,7 +1942,17 @@ impl LabelloApp {
                         }
                 })
             })
-            .unwrap_or(targets.len())
+            .unwrap_or(targets.len());
+        if canonical < targets.len() {
+            return canonical;
+        }
+        targets.len() + state.migration_discovered_skeletons(task_id).iter().position(|skeleton| {
+            !state.reviews.iter().any(|review| review.reviewer_user_id == self.config.user_id
+                && state.task_states.get(task_id).is_none_or(|task| review.timestamp >= task.updated_at)
+                && review.decision == labello_domain::ReviewDecision::Approved
+                && matches!(&review.target, labello_domain::ReviewTarget::AnnotationVersion { annotation_id, version }
+                    if annotation_id == &skeleton.annotation_id && *version == skeleton.version))
+        }).unwrap_or(state.migration_discovered_skeletons(task_id).len())
     }
 
     fn migration_targets(&self) -> Vec<labello_domain::MigrationTarget> {
@@ -2118,7 +2268,39 @@ impl LabelloApp {
         }
     }
 
+    fn current_migration_discovery_focus(&self) -> Option<AnnotationVersion> {
+        let state = self.work.current_state.as_ref()?;
+        let current = self.work.current.as_ref()?;
+        let discovery_id = if self.view == AppView::Review {
+            match self.current_migration_review_target() {
+                Some((
+                    _,
+                    labello_client::MigrationReviewTarget::Discovered { annotation_id, .. },
+                )) => Some(annotation_id),
+                _ => None,
+            }
+        } else {
+            self.work.migration.editing_missing_annotation_id.clone()
+        };
+        discovery_id.as_ref().and_then(|id| {
+            let bounds = state.migration_discovery_focus(
+                id,
+                labello_domain::ImageDimensions {
+                    width: current.image.width,
+                    height: current.image.height,
+                },
+            )?;
+            let mut focus = state.current_annotation(id)?.clone();
+            focus.geometry = AnnotationGeometry::BoundingBox(bounds);
+            focus.annotation_type = AnnotationType::BoundingBox;
+            Some(focus)
+        })
+    }
+
     pub(crate) fn current_migration_guide(&self) -> Option<AnnotationVersion> {
+        if let Some(focus) = self.current_migration_discovery_focus() {
+            return Some(focus);
+        }
         let (_, target) = self.migration_active_target()?;
         self.work
             .current_state

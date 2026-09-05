@@ -69,7 +69,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
-- `manual_migration.rs`: migration-specific workflow;
+- `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
+  companion status and explicit reconciliation with retained drafts;
 - `workspace_canvas.rs`: the adapter between app state and the reusable canvas.
 
 The canvas keeps its public state and entry points in `canvas.rs`. Its internal

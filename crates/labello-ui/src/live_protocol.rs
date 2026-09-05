@@ -26,6 +26,7 @@ pub(crate) enum MigrationAction {
     AddSkeleton(labello_client::AddMigrationSkeletonRequest),
     EditSkeleton(labello_client::EditMigrationSkeletonRequest),
     DeleteSkeleton(labello_client::DeleteMigrationSkeletonRequest),
+    ReconcileCompanion(labello_client::ReconcileMigrationCompanionRequest),
     Exclude(labello_client::ExcludeMigrationTargetRequest),
     Reopen(labello_client::ReopenMigrationTargetRequest),
     Revisit(labello_client::RevisitMigrationTargetRequest),

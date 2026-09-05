@@ -224,6 +224,16 @@ pub(crate) fn transform_annotation(
         object.insert("objectGroupId".to_string(), serde_json::Value::Null);
         object.insert("revisionSource".to_string(), source);
     } else {
+        if object
+            .get("revisionSource")
+            .and_then(|source| source.get("source"))
+            .and_then(serde_json::Value::as_str)
+            == Some("migration_skeleton")
+        {
+            return Err(
+                "migration companion provenance cannot be encoded as a version-2 annotation",
+            );
+        }
         object.remove("origin");
         object.remove("objectGroupId");
         let mut source = object
