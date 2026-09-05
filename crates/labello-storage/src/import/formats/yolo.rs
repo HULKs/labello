@@ -365,14 +365,27 @@ fn parse_yolo(
                             .iter()
                             .all(|point| point.state == KeypointState::Absent)
                     }) {
-                        let key = coverage_key(&source_key, &class_index.to_string());
-                        ir.zero_keypoint_coverage.insert(key.clone());
-                        ir.equivalence_facts
-                            .entry(key)
-                            .or_default()
-                            .insert("zero_keypoints".to_string());
-                        skeleton = None;
-                        diagnostics.add(
+                        if request.policies.yolo_zero_keypoints
+                            == super::types::YoloZeroKeypointPolicy::PreserveAbsent
+                        {
+                            diagnostics.add(
+                                "yolo_absent_pose_preserved",
+                                DiagnosticSeverity::Warning,
+                                "all-zero pose rows are retained as objects whose keypoints are explicitly absent; confirm this source meaning",
+                                false,
+                                true,
+                                true,
+                                Some(example_line(&label_path, line_index)),
+                            );
+                        } else {
+                            let key = coverage_key(&source_key, &class_index.to_string());
+                            ir.zero_keypoint_coverage.insert(key.clone());
+                            ir.equivalence_facts
+                                .entry(key)
+                                .or_default()
+                                .insert("zero_keypoints".to_string());
+                            skeleton = None;
+                            diagnostics.add(
                                 "yolo_zero_keypoints",
                                 DiagnosticSeverity::Warning,
                                 "zero-keypoint object keeps its box but makes skeleton coverage incomplete",
@@ -381,6 +394,7 @@ fn parse_yolo(
                                 true,
                                 Some(example_line(&label_path, line_index)),
                             );
+                        }
                     }
                     row_objects.insert(duplicate_key, ir.objects.len());
                     ir.objects.push(IrObject {
@@ -492,7 +506,6 @@ pub(super) fn inspect_yolo_descriptor(
         .collect();
     Ok(YoloDescriptorInspection { splits })
 }
-
 
 fn parse_yolo_names(
     names: Option<&Value>,

@@ -560,6 +560,14 @@ fn convert_plan_update(
     };
     current.geometry_mappings = geometry_mappings;
     current.policies = storage::CompatibilityPolicies {
+        yolo_zero_keypoints: match request.compatibility.yolo_zero_keypoints {
+            client::YoloZeroKeypointPolicy::Incomplete => {
+                storage::YoloZeroKeypointPolicy::Incomplete
+            }
+            client::YoloZeroKeypointPolicy::PreserveAbsent => {
+                storage::YoloZeroKeypointPolicy::PreserveAbsent
+            }
+        },
         yolo_missing_labels: match request.compatibility.yolo_missing_labels {
             client::YoloMissingLabelPolicy::Block => storage::YoloMissingLabelPolicy::Block,
             client::YoloMissingLabelPolicy::Incomplete => {

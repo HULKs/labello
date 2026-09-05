@@ -202,6 +202,7 @@ fn map_failure(failure: ExportFailure) -> ApiError {
         ExportFailure::Policy(_)
         | ExportFailure::InvalidInput
         | ExportFailure::AmbiguousObjects
+        | ExportFailure::UnmappedObjects
         | ExportFailure::UnsupportedImage => ApiError::Unprocessable(message),
         ExportFailure::Cancelled | ExportFailure::Interrupted => ApiError::Conflict(message),
         ExportFailure::Storage | ExportFailure::Verification => ApiError::Internal(message),

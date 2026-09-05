@@ -99,6 +99,11 @@ pub(super) fn labels(
             derived_box: row.derived_box,
         });
     }
+    // A newline encodes zero rows while remaining transferable by the existing
+    // browser importer, whose upload protocol requires a nonempty final chunk.
+    if text.is_empty() {
+        text.push('\n');
+    }
     Ok((text.into_bytes(), traces))
 }
 

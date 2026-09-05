@@ -11,6 +11,9 @@ mod types;
 pub use service::ExportService;
 pub use types::*;
 
+#[cfg(test)]
+mod round_trip;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
@@ -32,6 +35,8 @@ pub enum ExportFailure {
     InvalidInput,
     #[error("selected objects collapse to duplicate labels in the target reader")]
     AmbiguousObjects,
+    #[error("selected mappings omit known objects from an included task")]
+    UnmappedObjects,
     #[error("an original image is incompatible with the selected export profile")]
     UnsupportedImage,
     #[error("export source changed during capture")]

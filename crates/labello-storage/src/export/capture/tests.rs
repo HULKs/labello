@@ -316,7 +316,7 @@ async fn split_conflicts_and_unmapped_known_objects_block_the_entire_artifact() 
     .unwrap();
     assert_eq!(
         capture.summary.blockers[0].reason,
-        ExportFailure::AmbiguousObjects
+        ExportFailure::UnmappedObjects
     );
     assert!(!capture.summary.can_start());
 }
