@@ -75,7 +75,10 @@ pub(super) fn validate_payload(
         | EventPayload::ReviewerCorrectionRecorded { .. }
         | EventPayload::AdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. } => {}
-        EventPayload::ImportInitialized { .. }
+        EventPayload::ReviewAssignmentOpened { .. }
+        | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewRevisionCommitted { .. }
+        | EventPayload::ImportInitialized { .. }
         | EventPayload::ImportedTaskReopened { .. }
         | EventPayload::ImportCoverageIncluded { .. }
         | EventPayload::MigrationDispositionChanged { .. }
@@ -252,7 +255,10 @@ pub(super) fn required_role_for_payload(
         EventPayload::AssignmentUpdated { .. } => Err(ApiError::BadRequest(
             "assignment events are created by assignment endpoints only".to_string(),
         )),
-        EventPayload::ImportInitialized { .. }
+        EventPayload::ReviewAssignmentOpened { .. }
+        | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewRevisionCommitted { .. }
+        | EventPayload::ImportInitialized { .. }
         | EventPayload::ImportedTaskReopened { .. }
         | EventPayload::ImportCoverageIncluded { .. }
         | EventPayload::MigrationDispositionChanged { .. }
@@ -307,6 +313,9 @@ pub(super) fn validate_annotation_assignment_payload(
         | EventPayload::ReviewerCorrectionRecorded { .. }
         | EventPayload::AdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. }
+        | EventPayload::ReviewAssignmentOpened { .. }
+        | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::ImportInitialized { .. }
         | EventPayload::ImportedTaskReopened { .. }
         | EventPayload::ImportCoverageIncluded { .. }
@@ -378,7 +387,10 @@ pub(super) fn validate_admin_repair_payload(
         | EventPayload::AssignmentUpdated { .. } => Err(ApiError::BadRequest(
             "assignment and reviewer correction state is managed by workflow endpoints".to_string(),
         )),
-        EventPayload::ImportInitialized { .. }
+        EventPayload::ReviewAssignmentOpened { .. }
+        | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewRevisionCommitted { .. }
+        | EventPayload::ImportInitialized { .. }
         | EventPayload::ImportedTaskReopened { .. }
         | EventPayload::ImportCoverageIncluded { .. }
         | EventPayload::MigrationDispositionChanged { .. }
@@ -394,6 +406,6 @@ pub(super) fn validate_admin_repair_payload(
 
 fn server_owned_payload_error() -> ApiError {
     ApiError::BadRequest(
-        "import and migration events are created by dedicated server endpoints only".to_string(),
+        "server-owned workflow events are created by dedicated server endpoints only".to_string(),
     )
 }

@@ -15,6 +15,13 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
         }
+        if self.review_revision_active() {
+            let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";
+            let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
+                "Decision revision; geometry unchanged."
+            } else { explanation };
+            ui.label(caption).on_hover_text(explanation);
+        }
         self.workspace_canvas(ui);
     }
 

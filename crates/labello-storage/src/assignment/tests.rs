@@ -830,7 +830,7 @@ async fn cancelled_assignment_reopens_as_a_fresh_replayable_attempt() {
     .unwrap();
 
     let reopened = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &users[0],
             &original.assignment_id,
             &original.image_id,
@@ -840,7 +840,7 @@ async fn cancelled_assignment_reopens_as_a_fresh_replayable_attempt() {
         .await
         .unwrap();
     let retry = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &users[0],
             &original.assignment_id,
             &original.image_id,
@@ -883,7 +883,7 @@ async fn submitted_assignment_reopens_to_its_previous_annotation_state() {
     .unwrap();
 
     let reopened = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &users[0],
             &original.assignment_id,
             &original.image_id,
@@ -949,7 +949,7 @@ async fn reopen_preserves_needs_correction_and_rejects_downstream_review_work() 
     .await
     .unwrap();
     let reopened = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &users[0],
             &correction.assignment_id,
             &image_id,
@@ -977,7 +977,7 @@ async fn reopen_preserves_needs_correction_and_rejects_downstream_review_work() 
         .unwrap()
         .unwrap();
     let error = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &users[0],
             &reopened.assignment_id,
             &image_id,
@@ -1018,7 +1018,7 @@ async fn concurrent_reopen_retries_share_one_renewed_successor() {
     let (left, right) = tokio::join!(
         async move {
             left_repo
-                .reopen_annotation_assignment(
+                .reopen_assignment(
                     &left_user,
                     &left_assignment.assignment_id,
                     &left_assignment.image_id,
@@ -1030,7 +1030,7 @@ async fn concurrent_reopen_retries_share_one_renewed_successor() {
         },
         async move {
             right_repo
-                .reopen_annotation_assignment(
+                .reopen_assignment(
                     &right_user,
                     &right_assignment.assignment_id,
                     &right_assignment.image_id,
@@ -2018,6 +2018,373 @@ async fn claim_review(
 }
 
 #[tokio::test]
+async fn skipped_review_reopens_with_fresh_identity_and_preserves_round() {
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    repo.release_assignment(
+        &reviewers[0],
+        &original.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let before = repo.load_image_state(&image_id).await.unwrap();
+    let reopened = repo
+        .reopen_assignment(
+            &reviewers[0],
+            &original.assignment_id,
+            &image_id,
+            &task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap();
+    assert_ne!(reopened.assignment_id, original.assignment_id);
+    assert_eq!(reopened.status, AssignmentStatus::Active);
+    let after = repo.rebuild_image_state(&image_id).await.unwrap();
+    assert_eq!(after.task_states, before.task_states);
+    assert_eq!(after.reviews, before.reviews);
+}
+
+fn revision_replacements(
+    state: &labello_domain::ImageState,
+    assignment: &Assignment,
+    decision: ReviewDecision,
+) -> labello_domain::ReviewRevisionCommit {
+    labello_domain::ReviewRevisionCommit {
+        reviews: state.review_assignment_contexts[&assignment.assignment_id]
+            .targets
+            .iter()
+            .map(|target| ReviewRecord {
+                review_id: ReviewId::generate(),
+                target: target.clone(),
+                reviewer_user_id: assignment.assigned_to.clone(),
+                decision: if matches!(
+                    target,
+                    ReviewTarget::Task { .. } | ReviewTarget::MigrationConfirmation { .. }
+                ) {
+                    decision.clone()
+                } else {
+                    ReviewDecision::Approved
+                },
+                timestamp: now(),
+                comment: None,
+            })
+            .collect(),
+    }
+}
+
+fn review_context(assignment: &Assignment) -> AssignmentContext<'_> {
+    AssignmentContext {
+        assignment_id: &assignment.assignment_id,
+        image_id: &assignment.image_id,
+        task_id: &assignment.task_id,
+        kind: AssignmentKind::Review,
+    }
+}
+
+async fn finalize_test_review(
+    repo: &DatasetRepository,
+    assignment: &Assignment,
+    decision: ReviewDecision,
+) -> labello_domain::ImageState {
+    repo.record_review_for_assignment(
+        &assignment.assigned_to,
+        review_context(assignment),
+        ReviewRecord {
+            review_id: ReviewId::generate(),
+            target: ReviewTarget::Task {
+                task_id: assignment.task_id.clone(),
+            },
+            reviewer_user_id: assignment.assigned_to.clone(),
+            decision,
+            timestamp: now(),
+            comment: None,
+        },
+    )
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn review_revision_reversals_are_atomic_idempotent_and_count_each_reviewer_once() {
+    let (temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata.tasks[0].review.required_reviews = 2;
+    repo.save_dataset(&metadata).await.unwrap();
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    let before = finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    assert_eq!(before.task_states[&task_id].status, TaskStatus::Submitted);
+    let original_events = repo.load_events(&image_id).await.unwrap();
+    let original_stats = repo.dataset_stats().await.unwrap();
+    let revision = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let retry = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    assert_eq!(revision, retry);
+    let opened = repo.load_image_state(&image_id).await.unwrap();
+    assert_eq!(opened.task_states, before.task_states);
+    assert_eq!(opened.reviews, before.reviews);
+    assert_eq!(repo.dataset_stats().await.unwrap(), original_stats);
+    assert!(
+        repo.assign_next_image(&reviewers[1], &task_id, AssignmentKind::Review)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    repo.release_assignment(
+        &reviewers[0],
+        &revision.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let cancelled = repo.load_image_state(&image_id).await.unwrap();
+    assert_eq!(cancelled.task_states, before.task_states);
+    assert_eq!(cancelled.reviews, before.reviews);
+    assert_eq!(repo.dataset_stats().await.unwrap(), original_stats);
+    let revision = repo
+        .reopen_review_assignment(&reviewers[0], &revision.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let state = repo.load_image_state(&image_id).await.unwrap();
+    let replacement = revision_replacements(&state, &revision, ReviewDecision::Rejected);
+    let (first, duplicate) = tokio::join!(
+        repo.commit_review_revision(
+            &reviewers[0],
+            review_context(&revision),
+            replacement.clone()
+        ),
+        repo.commit_review_revision(
+            &reviewers[0],
+            review_context(&revision),
+            replacement.clone()
+        ),
+    );
+    let rejected = first.unwrap();
+    assert_eq!(rejected, duplicate.unwrap());
+    assert_eq!(
+        rejected.task_states[&task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    assert_eq!(rejected.annotations, before.annotations);
+    let rejected_stats = repo.dataset_stats().await.unwrap();
+    assert_eq!(rejected_stats.rejected_tasks, 1);
+    assert_eq!(rejected_stats.approved_tasks, 0);
+    assert!(
+        rejected
+            .superseded_review_ids
+            .contains(&before.reviews[0].review_id)
+    );
+    let mut altered_retry = replacement;
+    altered_retry.reviews.last_mut().unwrap().decision = ReviewDecision::Approved;
+    assert!(
+        repo.commit_review_revision(&reviewers[0], review_context(&revision), altered_retry)
+            .await
+            .is_err()
+    );
+    let reopened_repo = DatasetRepository::new(temp.path());
+    let revision = reopened_repo
+        .reopen_review_assignment(&reviewers[0], &revision.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let state = reopened_repo.load_image_state(&image_id).await.unwrap();
+    let replacement = revision_replacements(&state, &revision, ReviewDecision::Approved);
+    let approved = reopened_repo
+        .commit_review_revision(&reviewers[0], review_context(&revision), replacement)
+        .await
+        .unwrap();
+    assert_eq!(approved.task_states[&task_id].status, TaskStatus::Submitted);
+    let approved_stats = reopened_repo.dataset_stats().await.unwrap();
+    assert_eq!(approved_stats.rejected_tasks, 0);
+    assert_eq!(approved_stats.approved_tasks, 1);
+    assert_eq!(
+        task_approval_count(
+            &reopened_repo
+                .current_task_reviews(&image_id, &task_id)
+                .await
+                .unwrap(),
+            &task_id
+        ),
+        1
+    );
+    let second = claim_review(&reopened_repo, &image_id, &task_id, &reviewers[1]).await;
+    let completed = finalize_test_review(&reopened_repo, &second, ReviewDecision::Approved).await;
+    assert_eq!(
+        completed.task_states[&task_id].status,
+        TaskStatus::Completed
+    );
+    assert_eq!(
+        task_approval_count(
+            &reopened_repo
+                .current_task_reviews(&image_id, &task_id)
+                .await
+                .unwrap(),
+            &task_id
+        ),
+        2
+    );
+    assert!(
+        reopened_repo
+            .reopen_review_assignment(&reviewers[0], &revision.assignment_id, &image_id, &task_id)
+            .await
+            .is_err()
+    );
+    let events = reopened_repo.load_events(&image_id).await.unwrap();
+    assert_eq!(&events[..original_events.len()], original_events.as_slice());
+    for boundary in 0..=events.len() {
+        labello_domain::rebuild_state(image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(
+        reopened_repo.rebuild_image_state(&image_id).await.unwrap(),
+        completed
+    );
+}
+
+#[tokio::test]
+async fn review_revision_rejects_later_work_even_with_equal_event_timestamps() {
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    let mut state = repo.load_image_state(&image_id).await.unwrap();
+    let events = repo.load_events(&image_id).await.unwrap();
+    let terminal_timestamp = events.last().unwrap().timestamp;
+    let event = EventLogEntry::new(
+        0,
+        image_id.clone(),
+        reviewers[1].clone(),
+        DatasetRole::Reviewer,
+        terminal_timestamp,
+        EventPayload::ReviewRecorded {
+            review: ReviewRecord {
+                review_id: ReviewId::generate(),
+                target: ReviewTarget::AnnotationVersion {
+                    annotation_id: AnnotationId::from("ann_1"),
+                    version: 1,
+                },
+                reviewer_user_id: reviewers[1].clone(),
+                decision: ReviewDecision::Approved,
+                timestamp: terminal_timestamp,
+                comment: None,
+            },
+        },
+    );
+    repo.append_resequenced_events(&image_id, &mut state, &[event])
+        .await
+        .unwrap();
+    let before = state.clone();
+    assert!(
+        repo.reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
+}
+
+#[tokio::test]
+async fn review_revision_rejects_expired_later_attempt_and_changed_configuration() {
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata.tasks[0].review.required_reviews = 2;
+    repo.save_dataset(&metadata).await.unwrap();
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    let later = claim_review(&repo, &image_id, &task_id, &reviewers[1]).await;
+    expire_assignment(&repo, &later, &reviewers[1]).await;
+    assert!(
+        repo.reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+            .await
+            .is_err()
+    );
+
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &original, ReviewDecision::Rejected).await;
+    let revision = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let before = repo.load_image_state(&image_id).await.unwrap();
+    let replacement = revision_replacements(&before, &revision, ReviewDecision::Approved);
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata.tasks[0].review.required_reviews = 2;
+    repo.save_dataset(&metadata).await.unwrap();
+    assert!(
+        repo.commit_review_revision(&reviewers[0], review_context(&revision), replacement)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
+}
+
+#[tokio::test]
+async fn review_revision_replay_rejects_incomplete_targets_and_supersession_and_upgrades_cache() {
+    let (temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    let before = finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    let revision = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let events = repo.load_events(&image_id).await.unwrap();
+    let opening = events.last().unwrap().clone();
+    let mut missing_target = opening.clone();
+    let EventPayload::ReviewAssignmentOpened { context, .. } = &mut missing_target.payload else {
+        panic!("opening");
+    };
+    context.targets.remove(0);
+    let mut projected = before.clone();
+    assert!(projected.apply_event(&missing_target).is_err());
+    assert_eq!(projected, before);
+    let mut missing_supersession = opening.clone();
+    let EventPayload::ReviewAssignmentOpened { context, .. } = &mut missing_supersession.payload
+    else {
+        panic!("opening");
+    };
+    context.superseded_review_ids.clear();
+    assert!(projected.apply_event(&missing_supersession).is_err());
+    let encoded = serde_json::to_vec(&opening).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<EventLogEntry>(&encoded).unwrap(),
+        opening
+    );
+    let mut legacy = opening;
+    legacy.schema_version = labello_domain::LEGACY_SCHEMA_VERSION;
+    assert!(legacy.validate_shape().is_err());
+    assert!(serde_json::to_vec(&legacy).is_err());
+    let expected = repo.load_image_state(&image_id).await.unwrap();
+    let mut old_cache = serde_json::to_value(&expected).unwrap();
+    old_cache
+        .as_object_mut()
+        .unwrap()
+        .remove("reviewProjectionVersion");
+    old_cache.as_object_mut().unwrap().remove("reviewRounds");
+    crate::fsjson::write_json_atomic(&repo.state_path(&image_id), &old_cache)
+        .await
+        .unwrap();
+    let restarted = DatasetRepository::new(temp.path());
+    assert_eq!(
+        restarted.load_image_state(&image_id).await.unwrap(),
+        expected
+    );
+    assert!(expected.review_assignment_contexts[&revision.assignment_id].decision_revision);
+}
+
+#[tokio::test]
 async fn image_scoped_revalidation_refreshes_state_and_rejects_completed_review_work() {
     let (_temp, repo, image_id, task_id, _annotator, reviewers) =
         correction_repo(AnnotationType::BoundingBox, false).await;
@@ -2909,4 +3276,158 @@ async fn expire_assignment(repo: &DatasetRepository, assignment: &Assignment, us
     )
     .await
     .unwrap();
+}
+
+#[tokio::test]
+async fn review_revision_of_corrected_geometry_preserves_audit_snapshot_and_offline_state() {
+    let (_temp, repo, image_id, task_id, annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, true).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    let geometry = AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.3,
+        y: 0.2,
+        width: 0.25,
+        height: 0.3,
+    });
+    correct(
+        &repo,
+        &image_id,
+        &task_id,
+        &reviewers[0],
+        &original,
+        &CorrectionId::from("revision_original_correction"),
+        1,
+        geometry.clone(),
+    )
+    .await
+    .unwrap();
+    let corrected = repo.load_image_state(&image_id).await.unwrap();
+    assert_eq!(
+        corrected.task_states[&task_id].status,
+        TaskStatus::Completed
+    );
+    let revision = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let opened = repo.load_image_state(&image_id).await.unwrap();
+    assert_eq!(opened.annotations, corrected.annotations);
+    assert!(
+        opened.review_assignment_contexts[&revision.assignment_id]
+            .targets
+            .contains(&ReviewTarget::AnnotationVersion {
+                annotation_id: AnnotationId::from("ann_1"),
+                version: 2
+            })
+    );
+    assert!(
+        correct(
+            &repo,
+            &image_id,
+            &task_id,
+            &reviewers[0],
+            &revision,
+            &CorrectionId::from("revision_forbidden_correction"),
+            2,
+            geometry
+        )
+        .await
+        .is_err()
+    );
+    let replacement = revision_replacements(&opened, &revision, ReviewDecision::Approved);
+    let committed = repo
+        .commit_review_revision(&reviewers[0], review_context(&revision), replacement)
+        .await
+        .unwrap();
+    assert_eq!(
+        committed.task_states[&task_id].status,
+        TaskStatus::Completed
+    );
+    assert_eq!(committed.annotations, corrected.annotations);
+    assert_eq!(
+        committed.reviewer_corrections,
+        corrected.reviewer_corrections
+    );
+    assert_eq!(
+        repo.rebuild_image_state(&image_id).await.unwrap(),
+        committed
+    );
+    let bundle = repo
+        .create_offline_bundle(&annotator, 10, false)
+        .await
+        .unwrap();
+    let roundtrip: labello_domain::OfflineBundle =
+        serde_json::from_slice(&serde_json::to_vec(&bundle).unwrap()).unwrap();
+    assert_eq!(roundtrip.images[0].state, committed);
+    let snapshot = repo.create_snapshot().await.unwrap();
+    let file = snapshot
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("/state.json"))
+        .unwrap();
+    let saved: labello_domain::ImageState = serde_json::from_slice(
+        &tokio::fs::read(
+            repo.snapshots_dir()
+                .join(&snapshot.snapshot_id)
+                .join(&file.path),
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved, committed);
+}
+
+#[tokio::test]
+async fn review_revision_expired_lease_cannot_commit_and_config_publication_waits_for_validation() {
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    let mut revision = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let opened = repo.load_image_state(&image_id).await.unwrap();
+    let replacement = revision_replacements(&opened, &revision, ReviewDecision::Rejected);
+    revision.expires_at = Some(now() - std::time::Duration::from_secs(1));
+    repo.append_payload(
+        &image_id,
+        &Actor {
+            user_id: reviewers[0].clone(),
+            role: DatasetRole::Reviewer,
+        },
+        EventPayload::AssignmentUpdated {
+            assignment: revision.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let expired = repo.load_image_state(&image_id).await.unwrap();
+    assert!(
+        repo.commit_review_revision(&reviewers[0], review_context(&revision), replacement)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), expired);
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata.tasks[0].review.required_reviews = 2;
+    let read_guard = repo.review_config_lock.read().await;
+    let write = repo.save_dataset(&metadata);
+    tokio::pin!(write);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(20), &mut write)
+            .await
+            .is_err()
+    );
+    assert_ne!(
+        repo.load_dataset_config().await.unwrap().tasks[0],
+        metadata.tasks[0]
+    );
+    drop(read_guard);
+    write.await.unwrap();
+    assert_eq!(
+        repo.load_dataset_config().await.unwrap().tasks[0],
+        metadata.tasks[0]
+    );
 }

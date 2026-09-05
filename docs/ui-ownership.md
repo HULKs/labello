@@ -70,6 +70,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `review_revision.rs`: local staged replacement decisions and stable commit retries;
+  effective decisions come from the domain review projection, not raw history;
 - `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
   companion status and explicit reconciliation with retained drafts;
 - `workspace_canvas.rs`: the adapter between app state and the reusable canvas.

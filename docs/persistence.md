@@ -54,8 +54,8 @@ or external integrations.
 | `images-index.json` | Authoritative image identity, hash, path, and metadata index | Valid supported schema required; image-directory contents alone do not reproduce stable identities |
 | `images/` | Authoritative image bytes addressed by the image index | Include in full backups; omitted from Labello snapshots |
 | `annotations/<image-id>/events.jsonl` | Authoritative append-only audit and workflow history | Replay in sequence; never truncate, reorder, merge, or edit by hand |
-| `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, or on a supported older schema |
-| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link events; do not treat it as annotation authority |
+| `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, on a supported older schema, or with an older review projection generation |
+| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link or captured review-assignment events; do not treat it as annotation authority |
 | `users/<user-id>/keybindings.toml` | Authoritative keyboard and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
 | `.labello/imports/<import-id>/manifest.json` | Authoritative committed import provenance | Must match the dataset and directory import ID |
 | `.labello/imports/<import-id>/source-objects.jsonl` | Authoritative committed source-object audit record | Preserve with its manifest and event history |
@@ -136,7 +136,8 @@ that backup, not changing `schemaVersion` fields manually.
 ### State Cache
 
 Loading an image compares `state.json` with the image ID, supported schema, and
-last event sequence. Missing or stale state is replayed from `events.jsonl` and
+last event sequence. The current review projection generation must also match,
+so a same-sequence cache from before review-round tracking is rebuilt. Missing or stale state is replayed from `events.jsonl` and
 written back when appropriate. A malformed authoritative event prevents replay
 and requires backup restore or maintainer-led forensic repair.
 
@@ -303,3 +304,34 @@ recorded; later annotation edits do not make those historical passes new work.
 The ordinary current-resolution, dependency, assignment-ownership and confirmation
 digest checks still apply. A stale current guide or incomplete latest pass cannot
 be bypassed by an older completed pass. No event shape or persisted schema changes.
+## Review rounds and decision revisions
+
+Review rounds bind to the authoritative submission event ID and sequence.
+Ordinary submission, imported submitted initialization, and imported-task reopen
+use the same round owner. A replacement decision that returns a task to
+`Submitted` does not create a submission round. Historical review rows remain
+immutable; effective projections filter by round and explicit superseded IDs.
+
+Version 3 adds `ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
+`ReviewRevisionCommitted`. Opening captures the current task definition, exact
+targets and fingerprint, round, source assignment, and complete supersession
+set. Finishing records the terminal transaction boundary by event sequence,
+without treating equal timestamps as one transaction. Commit stores replacement
+records, explicit superseded IDs, task state, and completed fresh assignment in
+one replayable event. Replay validates the captured targets and supersession
+set and simulates replacements before mutating state.
+
+These events use the existing atomic event-log append transaction. A process
+stop after event publication recovers the same outcome by replay. Derived state
+stores the round mapping, contexts, terminal boundaries, and committed requests
+for exact retries. Missing fields in older version-3 caches trigger rebuilding;
+old version-2 and version-3 event histories remain readable. New review events
+cannot be encoded as version 2. Snapshots, generated schemas, and offline bundle
+states include the new data; offline clients cannot author these server events.
+The persisted schema remains version 3.
+
+A process-local dataset configuration read/write lock prevents configuration
+publication racing review-context capture or revision commit. Per-image locks
+still guard event validation, exclusive revision ownership, and publication.
+A live revision excludes relevant annotation, review, migration, and assignment
+mutations, including mutation paths used by offline synchronization.

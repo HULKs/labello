@@ -100,6 +100,7 @@ impl UserAction {
             | Self::ToggleWorkflowPanel
             | Self::ToggleInspectorPanel
             | Self::OpenSettings
+            | Self::PreviousImage
             | Self::SkipAssignment => ActionContext::WorkWorkspace,
             Self::TogglePanMode
             | Self::ZoomIn
@@ -111,7 +112,6 @@ impl UserAction {
             }
             Self::RetryImageLoad => ActionContext::AnnotateNoImage,
             Self::NextImage
-            | Self::PreviousImage
             | Self::UndoEdit
             | Self::RedoEdit
             | Self::SaveAnnotations

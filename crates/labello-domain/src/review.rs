@@ -84,5 +84,11 @@ pub struct AdjudicationRecord {
 }
 
 mod policy;
+mod revision;
 
-pub use policy::{current_task_reviews, has_task_review_by_user, task_approval_count};
+pub(crate) use policy::submitted_review_tasks;
+pub use policy::{
+    current_migration_reviews, current_round_reviews, current_task_reviews,
+    has_task_review_by_user, task_approval_count,
+};
+pub use revision::{ReviewAssignmentContext, ReviewRevisionCommit, ReviewRound};

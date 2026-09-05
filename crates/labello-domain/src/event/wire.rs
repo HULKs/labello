@@ -145,6 +145,18 @@ impl Serialize for EventLogEntry {
     where
         S: Serializer,
     {
+        if self.schema_version == crate::LEGACY_SCHEMA_VERSION
+            && matches!(
+                self.payload,
+                EventPayload::ReviewAssignmentOpened { .. }
+                    | EventPayload::ReviewAssignmentFinished { .. }
+                    | EventPayload::ReviewRevisionCommitted { .. }
+            )
+        {
+            return Err(serde::ser::Error::custom(
+                "review revisions require schema version 3",
+            ));
+        }
         let mut value = serde_json::to_value(EventLogEntryWire::from(self))
             .map_err(serde::ser::Error::custom)?;
         if self.schema_version == crate::LEGACY_SCHEMA_VERSION {

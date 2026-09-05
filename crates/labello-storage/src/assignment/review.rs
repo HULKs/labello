@@ -56,6 +56,7 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        super::revision::reject_revision_mutation(&state, task_id)?;
         let now = labello_domain::now();
         let mut assignment = exact_active_assignment(
             &state.assignments,
@@ -256,6 +257,7 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        super::revision::reject_revision_mutation(&state, task_id)?;
 
         if let Some(existing) = self.load_events(image_id).await?.into_iter().find(|event| {
             matches!(

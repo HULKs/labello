@@ -146,6 +146,17 @@ pub trait AnnotationApi {
 }
 
 pub trait ReviewApi {
+    fn commit_review_revision<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _assignment: AssignmentActionRequest,
+        _replacement: labello_domain::ReviewRevisionCommit,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async {
+            Err(ClientError::Demo("review revision is not supported by this client".into()))
+        })
+    }
+
     fn record_review<'a>(
         &'a self,
         dataset_id: &'a DatasetId,
