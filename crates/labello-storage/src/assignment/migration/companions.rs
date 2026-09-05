@@ -19,7 +19,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide, dimensions) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
