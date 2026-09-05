@@ -76,6 +76,8 @@ def audit():
     require("python3" in image and "rustup component add clippy rustfmt" in image
             and "rustup target add wasm32-unknown-unknown" in image,
             "release image must include audit and compiler prerequisites")
+    require(not re.search(r"RUSTUP_TOOLCHAIN|rustup (?:default|override|toolchain)", image),
+            "release image must not override its pinned base compiler")
     verify = (ROOT / "scripts/verify.sh").read_text()
     for function in ("format_check", "clippy_check", "workspace_tests", "ui_tests",
                      "doctests", "inspector_check", "wasm_check", "browser_build"):

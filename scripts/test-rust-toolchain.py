@@ -57,6 +57,7 @@ class DriftTests(unittest.TestCase):
             (".github/workflows/release.yml", 'python3 scripts/rust-toolchain.py check', 'rustc --version'),
             (".github/workflows/release.yml", '@sha256:[0-9a-f]{64}$', '@sha256:.*$'),
             ("deployment/release/Containerfile", f'rust:{version}-bookworm', 'rust:1.97.0-bookworm'),
+            ("deployment/release/Containerfile", 'RUN apt-get', 'ENV RUSTUP_TOOLCHAIN=stable\nRUN apt-get'),
             ("scripts/verify.sh", 'wasm_check() {\n    toolchain_check', 'wasm_check() {'),
         ]
         for name, old, new in changes:
