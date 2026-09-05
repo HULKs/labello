@@ -504,3 +504,34 @@ fn export_keeps_identical_display_names_distinguishable_by_task_and_class() {
         Some(egui::accesskit::Toggled::True)
     );
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn export_pose_import_policy_stays_within_the_visible_compact_page() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [egui::vec2(390.0, 844.0), egui::vec2(320.0, 320.0)] {
+        let mut harness = Harness::builder().with_size(size).build_eframe(|ctx| {
+            let mut app = inspector_presets::build(InspectorPreset::ImportReady, &ctx.egui_ctx);
+            app.import.profile = labello_client::ImportProfile::UltralyticsYoloPoseV1;
+            app.import.job.as_mut().unwrap().profile =
+                labello_client::ImportProfile::UltralyticsYoloPoseV1;
+            app.import.yolo_zero_keypoints = labello_client::YoloZeroKeypointPolicy::PreserveAbsent;
+            app
+        });
+        harness.run_steps(3);
+        for label in [
+            "YOLO poses with no placed keypoints",
+            "Preserve only when all-zero keypoint entries explicitly mean that the object exists and every point is absent. This does not infer labels for an unlabelled source.",
+            "All-zero YOLO keypoints will preserve the object with every point absent. Choose this only when the source explicitly uses zeros for absent points; diagnostic acknowledgement is required when encountered.",
+        ] {
+            let node = harness.get_by_label(label);
+            node.scroll_to_me();
+            harness.run_steps(3);
+            let rect = harness.get_by_label(label).rect();
+            assert!(
+                rect.left() >= 0.0 && rect.right() <= size.x,
+                "{size:?}: {label}: {rect:?}"
+            );
+        }
+    }
+}

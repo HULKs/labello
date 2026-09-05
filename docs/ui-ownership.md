@@ -242,3 +242,5 @@ existing object. The plan request and recovery preserve this choice, changing
 it invalidates an accepted plan, and encountered preservation diagnostics still
 require acknowledgement before commit. This choice does not infer labels for
 an unlabelled source.
+
+The explicit all-zero YOLO pose policy section bounds its selector, help, and acknowledgement warning to the visible content width. Earlier import mapping fields may expand their parent layout; that expansion must not push this choice or its warning beyond the viewport.

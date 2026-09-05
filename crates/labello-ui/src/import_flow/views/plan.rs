@@ -605,38 +605,50 @@ impl LabelloApp {
                 ImportMappingField::Compatibility(ImportCompatibilityField::YoloDuplicateRows),
             );
             if self.import.profile == ImportProfile::UltralyticsYoloPoseV1 {
-                let label = ui.label("YOLO poses with no placed keypoints");
-                egui::ComboBox::from_id_salt("yolo-zero-keypoint-policy")
-                    .width(ui.available_width().min(360.0))
-                    .selected_text(match self.import.yolo_zero_keypoints {
-                        labello_client::YoloZeroKeypointPolicy::Incomplete => {
-                            "Leave coverage incomplete"
-                        }
-                        labello_client::YoloZeroKeypointPolicy::PreserveAbsent => {
-                            "Preserve object; all points absent"
-                        }
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.import.yolo_zero_keypoints,
-                            labello_client::YoloZeroKeypointPolicy::Incomplete,
-                            "Leave coverage incomplete",
-                        );
-                        ui.selectable_value(
-                            &mut self.import.yolo_zero_keypoints,
-                            labello_client::YoloZeroKeypointPolicy::PreserveAbsent,
-                            "Preserve object; all points absent",
-                        );
-                    })
-                    .response
-                    .labelled_by(label.id);
-                ui.small("Preserve only when all-zero keypoint entries explicitly mean that the object exists and every point is absent. This does not infer labels for an unlabelled source.");
-                show_mapping_issues(
-                    ui,
-                    &validation,
-                    None,
-                    ImportMappingField::Compatibility(ImportCompatibilityField::YoloZeroKeypoints),
-                );
+                // Earlier mapping fields can expand the parent UI. Keep this policy and
+                // its acknowledgement explanation inside the visible content boundary.
+                let mut rect = ui.available_rect_before_wrap();
+                rect.max.x = rect
+                    .max
+                    .x
+                    .min(ui.clip_rect().right())
+                    .min(ui.ctx().content_rect().right())
+                    - theme::SPACE_3;
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    let label = ui.label("YOLO poses with no placed keypoints");
+                    egui::ComboBox::from_id_salt("yolo-zero-keypoint-policy")
+                        .width(ui.available_width().min(360.0))
+                        .wrap()
+                        .selected_text(match self.import.yolo_zero_keypoints {
+                            labello_client::YoloZeroKeypointPolicy::Incomplete => {
+                                "Leave coverage incomplete"
+                            }
+                            labello_client::YoloZeroKeypointPolicy::PreserveAbsent => {
+                                "Preserve object; all points absent"
+                            }
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.import.yolo_zero_keypoints,
+                                labello_client::YoloZeroKeypointPolicy::Incomplete,
+                                "Leave coverage incomplete",
+                            );
+                            ui.selectable_value(
+                                &mut self.import.yolo_zero_keypoints,
+                                labello_client::YoloZeroKeypointPolicy::PreserveAbsent,
+                                "Preserve object; all points absent",
+                            );
+                        })
+                        .response
+                        .labelled_by(label.id);
+                    ui.small("Preserve only when all-zero keypoint entries explicitly mean that the object exists and every point is absent. This does not infer labels for an unlabelled source.");
+                    show_mapping_issues(
+                        ui,
+                        &validation,
+                        None,
+                        ImportMappingField::Compatibility(ImportCompatibilityField::YoloZeroKeypoints),
+                    );
+                });
                 egui::ComboBox::from_label("Missing keypoint names")
                     .selected_text(format!("{:?}", self.import.missing_keypoint_names))
                     .show_ui(ui, |ui| {
