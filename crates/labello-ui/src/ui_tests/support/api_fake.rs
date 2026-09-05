@@ -204,6 +204,7 @@ pub(super) struct CallCounts {
     pub(super) record_review: usize,
     pub(super) record_correction: usize,
     pub(super) record_adjudication: usize,
+    pub(super) current_user_activity: usize,
     pub(super) dataset_stats: usize,
     pub(super) get_keybindings: usize,
     pub(super) save_keybindings: usize,
@@ -2038,6 +2039,16 @@ impl OfflineApi for SpyApi {
 }
 
 impl StatsApi for SpyApi {
+    fn current_user_activity<'a>(&'a self, dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_client::CurrentUserActivity> {
+        self.state.borrow_mut().counts.current_user_activity += 1;
+        let sampled_at = labello_domain::now();
+        ready(Ok(labello_client::CurrentUserActivity {
+            dataset_id: dataset_id.clone(), user_id: UserId::from("admin"),
+            window: labello_domain::UtcActivityWindow::containing(sampled_at), sampled_at,
+            counts: Default::default(),
+        }))
+    }
+
     fn dataset_stats<'a>(&'a self, _dataset_id: &'a DatasetId) -> ApiFuture<'a, DatasetStats> {
         let mut state = self.state.borrow_mut();
         state.counts.dataset_stats += 1;

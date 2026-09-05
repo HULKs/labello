@@ -72,3 +72,5 @@ include!("suites/migration.rs");
 include!("suites/persistence.rs");
 include!("suites/accessibility.rs");
 include!("suites/responsive.rs");
+
+include!("suites/activity.rs");

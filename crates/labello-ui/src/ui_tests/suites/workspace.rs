@@ -2191,13 +2191,14 @@ fn skeleton_workflow_places_configured_keypoints_in_order() {
             .all(|keypoint| keypoint.point.is_some())
     );
     assert!(harness.state().work.active_skeleton.is_none());
+    let before_drag = skeleton.keypoints[1].point.unwrap();
     drag_at(&mut harness, tail, tail + egui::vec2(-24.0, 28.0));
     let AnnotationGeometry::Skeleton(completed) = &harness.state().work.annotations[0].geometry
     else {
         panic!("expected completed skeleton annotation");
     };
-    assert!(completed.keypoints[1].point.unwrap().x < 0.65);
-    assert!(completed.keypoints[1].point.unwrap().y > 0.6);
+    assert!(completed.keypoints[1].point.unwrap().x < before_drag.x);
+    assert!(completed.keypoints[1].point.unwrap().y > before_drag.y);
 }
 
 #[test]

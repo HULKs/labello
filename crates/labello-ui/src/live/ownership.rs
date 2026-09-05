@@ -119,6 +119,11 @@ impl LabelloApp {
                 self.loading.ingest_job_id = None;
             }
             UiCommand::PollIngest { .. } => self.loading.ingest_polling = false,
+            UiCommand::CurrentUserActivity { .. } => {
+                self.datasets.activity.pending_request = None;
+                self.datasets.activity.error = Some(error.to_string());
+                return;
+            }
             UiCommand::Stats { .. } => {
                 self.loading.stats = false;
                 self.datasets.active_stats_request = None;
@@ -181,7 +186,7 @@ impl LabelloApp {
         self.runtime.error = Some(error.to_string());
     }
 
-    fn request_identity(
+    pub(crate) fn request_identity(
         &mut self,
         dataset_id: Option<labello_domain::DatasetId>,
     ) -> RequestIdentity {
@@ -283,6 +288,7 @@ impl LabelloApp {
         self.runtime.active_requests.clear();
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
+        self.datasets.activity = Default::default();
         self.loading.session = false;
         self.loading.logout = false;
         self.loading.datasets = false;

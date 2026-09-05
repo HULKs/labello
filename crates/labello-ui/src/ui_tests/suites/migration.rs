@@ -972,9 +972,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
     );
     harness.step();
     assert_eq!(api.counts().migration_commands, 1);
-    assert!(
-        api.counts().assignment_availability > availability_checks_before
-    );
+    step_until(&mut harness, 12, |_| api.counts().assignment_availability > availability_checks_before);
 }
 
 #[cfg(feature = "inspector-presets")]

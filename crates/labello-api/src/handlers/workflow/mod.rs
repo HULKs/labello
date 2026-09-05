@@ -1289,6 +1289,37 @@ pub(crate) async fn offline_sync(
     Ok(Json(result))
 }
 
+pub(crate) async fn current_user_activity(
+    State(state): State<ApiState>,
+    Path(dataset_id): Path<DatasetId>,
+    headers: HeaderMap,
+) -> ApiResult<impl IntoResponse> {
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_any_dataset_role(&metadata, &actor)?;
+    // A cold scan can cross midnight. Retry once for the new server day instead
+    // of returning an old window with a sample timestamp from the next day.
+    for _ in 0..2 {
+        let window = labello_domain::UtcActivityWindow::containing(labello_domain::now());
+        let counts = repo.daily_activity(&actor.user_id, window).await?;
+        let sampled_at = labello_domain::now();
+        if window.contains(sampled_at) {
+            return Ok((
+                [(axum::http::header::CACHE_CONTROL, "no-store")],
+                Json(labello_client::CurrentUserActivity {
+                    dataset_id,
+                    user_id: actor.user_id,
+                    window,
+                    sampled_at,
+                    counts,
+                }),
+            ));
+        }
+    }
+    Err(ApiError::Conflict("Activity window changed; retry.".into()))
+}
+
 pub(crate) async fn stats(
     State(state): State<ApiState>,
     Path(dataset_id): Path<DatasetId>,

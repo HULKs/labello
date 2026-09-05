@@ -89,3 +89,34 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+
+## Current-user activity
+
+`datasets.activity` owns the current endpoint/account/dataset identity, UTC
+window, loaded counts, request, refresh deadline and local failure state.
+`activity` schedules and renders the work-view bottom summary. Requests use
+ordinary read identities and never begin a workspace epoch or invalidate
+assignment-owned work. Successful annotation, migration and final-review
+completions request a refresh; completion during an existing request schedules
+one follow-up. The active work view polls no more often than every 30 seconds;
+explicit completion, retry and browser visibility-return hints may refresh
+sooner and coalesce while pending. The thin WASM adapter only forwards document
+visibility changes.
+
+The server sample time plus monotonic elapsed time drives UTC rollover. The
+request round trip supplies a conservative transit bound: a reply that may have
+crossed midnight is rejected, and existing values can expire by that bound early
+rather than carry yesterday into today. An
+expired window is cleared before rendering and refreshed; stale endpoint,
+account, dataset or older-day replies cannot replace current counts. Initial
+loading, zero, initial error with Retry, refresh and stale-on-failure states are
+distinct. Loaded values remain during same-day refresh and failures. Counts are
+never optimistically incremented and do not authorize workflow actions.
+
+The shell allocates the actual summary row below primary assignment actions.
+Visible wording condenses using measured text width; full counter names and
+"today in UTC" remain in tooltip and AccessKit text. Retry uses a 44-point
+control. This row leaves lower-right build-warning ownership with the existing
+shell warning layer and requires combined layout verification when that feature
+is present.

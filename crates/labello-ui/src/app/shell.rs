@@ -20,6 +20,7 @@ impl eframe::App for LabelloApp {
         self.start_next_persistence_command();
         self.start_setup_load();
         self.refresh_stats_if_due();
+        self.refresh_activity_if_due(ui.ctx());
         self.refresh_assignment_availability_if_due();
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();
@@ -30,7 +31,14 @@ impl eframe::App for LabelloApp {
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
         let compact_action_height = (self.work_view()
             && (layout != LayoutMode::Wide || self.manual_migration_active()))
-        .then(|| self.workspace_actions_height(layout, viewport));
+        .then(|| {
+            let height = self.workspace_actions_height(layout, viewport);
+            if Self::short_viewport(viewport) && self.activity_available() {
+                height - 2.0 * theme::SPACE_2
+            } else {
+                height
+            }
+        });
         egui::Panel::top("app_bar")
             .exact_size(56.0)
             .frame(theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 6)))
@@ -46,10 +54,19 @@ impl eframe::App for LabelloApp {
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }
         if self.work_view() {
+            if self.activity_available() {
+                egui::Panel::bottom("current_user_activity")
+                    .frame(egui::Frame::new().fill(theme::APP_BG).inner_margin(egui::Margin::symmetric(14, 0)))
+                    .show(ui, |ui| self.activity_summary(ui));
+            }
             if let Some(action_height) = compact_action_height {
                 egui::Panel::bottom("compact_primary_actions")
                     .min_size(action_height)
-                    .frame(theme::top_bar_frame())
+                    .frame(if Self::short_viewport(viewport) && self.activity_available() {
+                        theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
+                    } else {
+                        theme::top_bar_frame()
+                    })
                     .show(ui, |ui| {
                         if layout == LayoutMode::Compact {
                             self.compact_workspace_actions(ui);

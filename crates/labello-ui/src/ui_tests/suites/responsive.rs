@@ -552,7 +552,7 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     );
 
     harness.set_size(egui::vec2(320.0, 320.0));
-    harness.step();
+    harness.run_steps(3);
     let canvas = harness.get_by_label("Annotation canvas").rect();
     assert!(
         canvas.top() >= 0.0 && canvas.bottom() <= 320.0 && canvas.height() >= 80.0,

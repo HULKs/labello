@@ -297,6 +297,10 @@ pub fn router(state: ApiState) -> Router {
         )
         .route("/datasets/{dataset_id}/stats", get(workflow::stats))
         .route(
+            "/datasets/{dataset_id}/stats/me",
+            get(workflow::current_user_activity),
+        )
+        .route(
             "/datasets/{dataset_id}/keybindings",
             get(workflow::get_keybindings).put(workflow::put_keybindings),
         )
