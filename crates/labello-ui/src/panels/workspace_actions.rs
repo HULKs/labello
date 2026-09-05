@@ -81,12 +81,11 @@ impl LabelloApp {
                     && ui
                         .add_enabled(
                             ready,
-                            egui::Button::new("Previous assignment").shortcut_text(
+                            egui::Button::new("Previous assignment").shortcut_text(crate::theme::button_shortcut(
                                 self.shortcut_text(
                                     ui.ctx(),
                                     labello_domain::UserAction::PreviousImage,
-                                ),
-                            ),
+                                ))),
                         )
                         .clicked()
                 {
@@ -96,9 +95,8 @@ impl LabelloApp {
                 if ui
                     .add_enabled(
                         ready && !self.work.undo_stack.is_empty(),
-                        egui::Button::new("Undo").shortcut_text(
-                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
-                        ),
+                        egui::Button::new("Undo").shortcut_text(crate::theme::button_shortcut(
+                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit))),
                     )
                     .clicked()
                 {
@@ -108,9 +106,8 @@ impl LabelloApp {
                 if ui
                     .add_enabled(
                         ready && !self.work.redo_stack.is_empty(),
-                        egui::Button::new("Redo").shortcut_text(
-                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::RedoEdit),
-                        ),
+                        egui::Button::new("Redo").shortcut_text(crate::theme::button_shortcut(
+                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::RedoEdit))),
                     )
                     .clicked()
                 {
@@ -172,12 +169,11 @@ impl LabelloApp {
                                     && !self.loading.saving
                                     && !self.loading.image
                                     && self.work.pending_transition.is_none(),
-                                egui::Button::new("Previous assignment").shortcut_text(
+                                egui::Button::new("Previous assignment").shortcut_text(crate::theme::button_shortcut(
                                     self.shortcut_text(
                                         ui.ctx(),
                                         labello_domain::UserAction::PreviousImage,
-                                    ),
-                                ),
+                                    ))),
                             )
                             .clicked()
                         {
@@ -187,12 +183,11 @@ impl LabelloApp {
                         if ui
                             .add_enabled(
                                 ready && !self.work.undo_stack.is_empty(),
-                                egui::Button::new("Undo").shortcut_text(
+                                egui::Button::new("Undo").shortcut_text(crate::theme::button_shortcut(
                                     self.shortcut_text(
                                         ui.ctx(),
                                         labello_domain::UserAction::UndoEdit,
-                                    ),
-                                ),
+                                    ))),
                             )
                             .clicked()
                         {
@@ -202,12 +197,11 @@ impl LabelloApp {
                         if ui
                             .add_enabled(
                                 ready && !self.work.redo_stack.is_empty(),
-                                egui::Button::new("Redo").shortcut_text(
+                                egui::Button::new("Redo").shortcut_text(crate::theme::button_shortcut(
                                     self.shortcut_text(
                                         ui.ctx(),
                                         labello_domain::UserAction::RedoEdit,
-                                    ),
-                                ),
+                                    ))),
                             )
                             .clicked()
                         {
@@ -221,10 +215,10 @@ impl LabelloApp {
                                         self.work.save_status,
                                         SaveStatus::Dirty | SaveStatus::Retry
                                     ),
-                                egui::Button::new("Save").shortcut_text(self.shortcut_text(
+                                egui::Button::new("Save").shortcut_text(crate::theme::button_shortcut(self.shortcut_text(
                                     ui.ctx(),
                                     labello_domain::UserAction::SaveAnnotations,
-                                )),
+                                ))),
                             )
                             .clicked()
                         {
@@ -235,10 +229,10 @@ impl LabelloApp {
                     if ui
                         .add_enabled(
                             ready,
-                            egui::Button::new("Skip").shortcut_text(self.shortcut_text(
+                            egui::Button::new("Skip").shortcut_text(crate::theme::button_shortcut(self.shortcut_text(
                                 ui.ctx(),
                                 labello_domain::UserAction::SkipAssignment,
-                            )),
+                            ))),
                         )
                         .clicked()
                     {

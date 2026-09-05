@@ -24,6 +24,13 @@ and history.
 - Use primary, standard secondary, quiet, and danger actions. A region normally
   has one primary action. Preserve native hover, press, focus, open, selected,
   and disabled states instead of applying direct fills.
+- Embedded button shortcuts use `theme::button_shortcut` so their foreground
+  follows the button's visual state. Semantic helpers and selected placement
+  buttons use the shared button renderer, which scopes weak-text styling and
+  disabled opacity to that button and restores the surrounding style. Disabled
+  buttons retain disabled semantics and a faded appearance with enough text
+  contrast; supporting text keeps the normal weak-text token. Danger button
+  labels use the readable text foreground, with danger conveyed by fill/stroke.
 - Use standard `egui` controls. Add a shared helper only for a repeated
   Labello-specific pattern. Add no theme, icon set, widget library, table
   dependency, or screenshot framework without a concrete unmet need.

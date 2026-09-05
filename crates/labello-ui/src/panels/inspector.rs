@@ -153,9 +153,8 @@ impl LabelloApp {
             && theme::danger_button(
                 ui,
                 true,
-                egui::Button::new("Delete selected annotation").shortcut_text(
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::DeleteAnnotation),
-                ),
+                egui::Button::new("Delete selected annotation").shortcut_text(crate::theme::button_shortcut(
+                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::DeleteAnnotation))),
             )
             .clicked()
         {
@@ -207,10 +206,10 @@ impl LabelloApp {
                                     egui::Button::new(format!(
                                         "Mark {name} as not present"
                                     ))
-                                    .shortcut_text(self.shortcut_text(
+                                    .shortcut_text(crate::theme::button_shortcut(self.shortcut_text(
                                         ui.ctx(),
                                         labello_domain::UserAction::MarkKeypointAbsent,
-                                    )),
+                                    ))),
                                 )
                                 .on_hover_text(
                                     "Record this optional keypoint without a position.",

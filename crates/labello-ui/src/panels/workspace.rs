@@ -367,7 +367,7 @@ impl LabelloApp {
                         .min_size(egui::vec2(44.0, 44.0))
                 } else {
                     egui::Button::new("Refocus")
-                        .shortcut_text(&refocus_shortcut)
+                        .shortcut_text(crate::theme::button_shortcut(&refocus_shortcut))
                         .min_size(egui::vec2(0.0, 44.0))
                 };
                 let response = theme::quiet_button(ui, can_refocus, button)
