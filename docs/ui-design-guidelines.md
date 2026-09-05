@@ -137,7 +137,9 @@ has been recorded.
   when both are enabled, keep local development secondary to GitHub. Collapse
   excess top spacing on short screens and scroll keyboard-focused actions into view.
   After sign-in, feature one valid next dataset
-  action, list all datasets separately, and keep creation secondary.
+  action, list all datasets separately, and keep creation secondary. Use a home
+  glyph for the setup navigation action while retaining its destination-based
+  accessible name and tooltip.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
   and Fit visible; keep Pan mode active during approval decisions and return
   primary drag to object editing during reviewer correction; place review phase
