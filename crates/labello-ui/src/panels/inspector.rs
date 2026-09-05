@@ -27,6 +27,9 @@ impl LabelloApp {
 
     pub(crate) fn right_panel(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
         ui.heading(RichText::new("Inspector").color(theme::TEXT));
+        if self.view == AppView::Review && !self.review_context_section(ui) {
+            return;
+        }
         if self.manual_migration_active() {
             // Migration commands live in the persistent workspace action bar so
             // collapsing this optional panel never hides the current action.
@@ -41,7 +44,9 @@ impl LabelloApp {
                 !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
             })
             .count();
-        theme::compact_metric(ui, "Active annotations", active_count.to_string());
+        if self.view != AppView::Review {
+            theme::compact_metric(ui, "Active annotations", active_count.to_string());
+        }
         if self.view == AppView::Annotate {
             self.annotation_object_actions(ui);
         }
@@ -225,6 +230,38 @@ impl LabelloApp {
         }
     }
 
+    fn review_context_section(&self, ui: &mut egui::Ui) -> bool {
+        let Some(context) = self.review_context() else {
+            theme::inline_message(
+                ui,
+                theme::Intent::Info,
+                if self.loading.image {
+                    "Loading review target…"
+                } else if self.work.assignment.is_none() {
+                    "No active review assignment"
+                } else {
+                    "Review target unavailable"
+                },
+            );
+            return false;
+        };
+        let summary = context.accessible_summary();
+        let response = ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.label(RichText::new("Active review target").strong());
+            for line in context.details() {
+                ui.add(egui::Label::new(line).wrap());
+            }
+            if context.preview_unavailable {
+                theme::inline_message(ui, theme::Intent::Warning, "Image preview unavailable. Review target context is retained.");
+            }
+        });
+        response.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Other, true, format!("Active review context: {summary}"))
+        });
+        true
+    }
+
     fn review_phase(&self) -> (&'static str, String, &'static str) {
         let total = self
             .work
@@ -255,8 +292,7 @@ impl LabelloApp {
             self.correction_actions(ui, ready);
             return;
         }
-        let (phase, value, explanation) = self.review_phase();
-        theme::compact_metric(ui, phase, value);
+        let (_, _, explanation) = self.review_phase();
         ui.label(explanation);
         if self.can_correct_review_object() {
             ui.add_space(8.0);

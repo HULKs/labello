@@ -136,6 +136,17 @@ has been recorded.
   primary drag to object editing during reviewer correction; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels.
+- **Review context:** the Inspector identifies the workflow, class, geometry type,
+  canonical object position and persisted target version. Final checks say
+  "Final check / Full image" and omit object-only fields. Migration distinguishes
+  annotated dispositions, excluded objects, discovered skeletons and confirmation;
+  excluded objects show disposition version without inventing an annotation version.
+  Correction mode shows the base persisted version and whether input is unsaved.
+  Decision revisions distinguish the current effective decision from a staged,
+  uncommitted replacement. Loading, missing/stale targets and lost assignments
+  clear the previous context; a missing image preview is labeled separately while
+  valid authoritative target context remains available. Long values wrap with a
+  complete accessible summary, and compact Inspector drawers scroll.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.
