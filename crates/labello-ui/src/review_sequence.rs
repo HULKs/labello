@@ -8,15 +8,16 @@ pub(crate) fn reviewed_object_prefix(state: &ImageState, task_id: &TaskId, user:
     annotations
         .iter()
         .take_while(|annotation| {
-            state.reviews.iter().any(|review| {
-                review.reviewer_user_id == *user
-                    && matches!(
-                        &review.target,
-                        ReviewTarget::AnnotationVersion { annotation_id, version }
-                            if annotation_id == &annotation.annotation_id
-                                && *version == annotation.version
-                    )
-            })
+            state
+                .effective_review_for_target(
+                    task_id,
+                    &ReviewTarget::AnnotationVersion {
+                        annotation_id: annotation.annotation_id.clone(),
+                        version: annotation.version,
+                    },
+                    user,
+                )
+                .is_some()
         })
         .count()
 }

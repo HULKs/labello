@@ -1,8 +1,18 @@
 impl LabelloApp {
+    fn previous_review_action(&mut self, ui: &mut egui::Ui) {
+        if self.view == AppView::Review && self.work.previous_assignment.is_some()
+            && ui.add_enabled(!self.loading.saving && !self.loading.image && self.work.pending_transition.is_none(),
+                egui::Button::new("Previous")).on_hover_text("Return to the immediately previous skipped or completed review.").clicked()
+        {
+            self.trigger_user_action(labello_domain::UserAction::PreviousImage);
+        }
+    }
+
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         if !self.work_view() {
             return;
         }
+        self.previous_review_action(ui);
         if self.manual_migration_active() {
             if self.view == AppView::Review && layout != LayoutMode::Wide {
                 self.responsive_migration_review_actions(ui);
@@ -16,7 +26,7 @@ impl LabelloApp {
             && !self.loading.image
             && self.work.pending_transition.is_none();
         if self.view == AppView::Annotate {
-            let show_previous = self.work.previous_annotation_assignment.is_some()
+            let show_previous = self.work.previous_assignment.is_some()
                 && !matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
             if show_previous {
                 if ui
@@ -76,7 +86,7 @@ impl LabelloApp {
         }
         if self.view == AppView::Annotate {
             ui.menu_button("More actions", |ui| {
-                if self.work.previous_annotation_assignment.is_some()
+                if self.work.previous_assignment.is_some()
                     && matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                     && ui
                         .add_enabled(
@@ -124,7 +134,10 @@ impl LabelloApp {
     pub(crate) fn compact_workspace_actions(&mut self, ui: &mut egui::Ui) {
         if self.manual_migration_active() {
             if self.view == AppView::Review {
-                self.responsive_migration_review_actions(ui);
+                ui.horizontal_wrapped(|ui| {
+                    self.previous_review_action(ui);
+                    self.responsive_migration_review_actions(ui);
+                });
                 return;
             }
             ui.horizontal_wrapped(|ui| {
@@ -133,15 +146,11 @@ impl LabelloApp {
             return;
         }
         if self.view == AppView::Review && self.work.correction_draft.is_none() {
-            let review_layout = self.compact_review_row_layout(ui);
-            let add_contents = |ui: &mut egui::Ui| {
+            ui.horizontal_wrapped(|ui| {
+                self.previous_review_action(ui);
+                let review_layout = self.compact_review_row_layout(ui);
                 self.review_decision_buttons(ui, review_layout.shortcut_decisions, true);
-            };
-            if review_layout.allow_wrap {
-                ui.horizontal_wrapped(add_contents);
-            } else {
-                ui.horizontal(add_contents);
-            }
+            });
             return;
         }
         let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
@@ -149,6 +158,7 @@ impl LabelloApp {
             && !self.loading.image
             && self.work.pending_transition.is_none();
         let add_contents = |ui: &mut egui::Ui| {
+            self.previous_review_action(ui);
             if self.view == AppView::Annotate
                 && theme::primary_button(ui, ready, egui::Button::new("Submit & next")).clicked()
             {
@@ -167,7 +177,7 @@ impl LabelloApp {
                     if self.view == AppView::Annotate {
                         if ui
                             .add_enabled(
-                                self.work.previous_annotation_assignment.is_some()
+                                self.work.previous_assignment.is_some()
                                     && self.runtime.api.is_some()
                                     && !self.loading.saving
                                     && !self.loading.image
@@ -387,7 +397,7 @@ fn panel_label_button_width(ui: &egui::Ui, label: &str) -> f32 {
 }
 
 fn review_row_fits(ui: &egui::Ui, decisions: &[f32; 2]) -> bool {
-    decisions.iter().sum::<f32>() + ui.spacing().item_spacing.x <= ui.available_width() + 0.5
+    decisions.iter().sum::<f32>() + ui.spacing().item_spacing.x <= ui.available_size_before_wrap().x + 0.5
 }
 
 fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {

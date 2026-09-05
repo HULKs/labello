@@ -49,6 +49,8 @@ impl LabelloApp {
         self.work.edit_generation = 0;
         self.work.review_index = 0;
         self.work.review_rejected = false;
+        self.work.staged_review_decisions.clear();
+        self.work.review_revision_commit = None;
         self.work.correction_draft = None;
         self.work.migration = Default::default();
         self.work.canvas.fit_view();
@@ -283,12 +285,13 @@ impl LabelloApp {
                         }
                     }
                 };
+                let fetch_prelabels = assignment.kind == AssignmentKind::Annotation;
                 let result = load_image(
                     api,
                     dataset_id,
                     assignment.clone(),
                     prelabel_config_ids,
-                    true,
+                    fetch_prelabels,
                     transfer.expect("image transfer"),
                 )
                 .await
@@ -357,14 +360,23 @@ impl LabelloApp {
                 dataset_id,
                 assignment,
                 review,
+                revision,
                 phase,
             } => self.spawn_message(request.clone(), async move {
                 let assignment_id = assignment.assignment_id.clone();
                 let decision = review.decision.clone();
-                let result = api
-                    .record_assigned_review(&dataset_id, assignment_action(&assignment), review)
+                let result = if let Some(replacement) = revision {
+                    api.commit_review_revision(
+                        &dataset_id,
+                        assignment_action(&assignment),
+                        replacement,
+                    )
                     .await
-                    .map_err(UiRequestError::from);
+                } else {
+                    api.record_assigned_review(&dataset_id, assignment_action(&assignment), review)
+                        .await
+                }
+                .map_err(UiRequestError::from);
                 UiMessage::ReviewFinished {
                     request,
                     operation_id,
@@ -626,8 +638,8 @@ impl LabelloApp {
         }
     }
 
-    pub(crate) fn clear_previous_annotation_assignment(&mut self) {
-        let Some(previous) = self.work.previous_annotation_assignment.take() else {
+    pub(crate) fn clear_previous_assignment(&mut self) {
+        let Some(previous) = self.work.previous_assignment.take() else {
             return;
         };
         if previous.status == labello_domain::AssignmentStatus::Active
@@ -641,9 +653,9 @@ impl LabelloApp {
         }
     }
 
-    pub(crate) fn remember_previous_annotation_assignment(&mut self, assignment: Assignment) {
-        self.clear_previous_annotation_assignment();
-        self.work.previous_annotation_assignment = Some(assignment);
+    pub(crate) fn remember_previous_assignment(&mut self, assignment: Assignment) {
+        self.clear_previous_assignment();
+        self.work.previous_assignment = Some(assignment);
     }
 
     pub(crate) fn retry_prefetch_if_due(&mut self, ctx: &egui::Context) {
@@ -840,7 +852,7 @@ impl LabelloApp {
         );
     }
 
-    fn queue_review(
+    pub(crate) fn queue_review(
         &mut self,
         assignment: Assignment,
         target: ReviewTarget,
@@ -849,6 +861,9 @@ impl LabelloApp {
     ) -> bool {
         if self.loading.saving || self.runtime.api.is_none() {
             return false;
+        }
+        if self.review_revision_active() {
+            return self.stage_revision_review(assignment, target, decision, phase);
         }
         let operation_id = self.begin_operation();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
@@ -866,6 +881,7 @@ impl LabelloApp {
                 comment: None,
             },
             phase,
+            revision: None,
         })
     }
 
@@ -915,7 +931,7 @@ impl LabelloApp {
         operation_id
     }
 
-    fn begin_operation(&mut self) -> u64 {
+    pub(crate) fn begin_operation(&mut self) -> u64 {
         let operation_id = self.next_operation();
         self.work.active_operation_id = Some(operation_id);
         self.loading.saving = true;

@@ -149,6 +149,7 @@ impl LabelloApp {
                     }
                     self.work.active_load_id = None;
                     self.loading.image = false;
+                    self.work.pending_transition = None;
                     match *result {
                         Ok(loaded) => {
                             let displaced = self.work.assignment.clone();
@@ -159,7 +160,7 @@ impl LabelloApp {
                             {
                                 self.release_reservation(self.config.dataset_id.clone(), displaced);
                             }
-                            self.work.previous_annotation_assignment = None;
+                            self.work.previous_assignment = None;
                             self.runtime.error = None;
                             self.runtime.notice =
                                 Some("Returned to previous assignment".to_string());
@@ -171,9 +172,9 @@ impl LabelloApp {
                             let expired = normalized_error.contains("lease")
                                 && normalized_error.contains("expired");
                             if expired {
-                                self.clear_previous_annotation_assignment();
+                                self.clear_previous_assignment();
                             } else if let Some(assignment) = assignment {
-                                self.work.previous_annotation_assignment = Some(assignment);
+                                self.work.previous_assignment = Some(assignment);
                             }
                             self.runtime.error = Some(error.to_string());
                             if expired && self.work.assignment.is_none() {
@@ -285,7 +286,7 @@ impl LabelloApp {
                                     })
                                 {
                                     assignment.status = labello_domain::AssignmentStatus::Completed;
-                                    self.remember_previous_annotation_assignment(assignment);
+                                    self.remember_previous_assignment(assignment);
                                 }
                                 let load_after_resolution = matches!(
                                     self.work.pending_transition.as_ref(),
@@ -350,10 +351,10 @@ impl LabelloApp {
                                 .map(|assignment| assignment.image_id.clone());
                             if let Some(assignment) = self.work.assignment.clone() {
                                 self.clear_current_work_draft(&assignment);
-                                if assignment.kind == labello_domain::AssignmentKind::Annotation {
+                                if matches!(assignment.kind, labello_domain::AssignmentKind::Annotation | labello_domain::AssignmentKind::Review) {
                                     let mut assignment = assignment;
                                     assignment.status = labello_domain::AssignmentStatus::Cancelled;
-                                    self.remember_previous_annotation_assignment(assignment);
+                                    self.remember_previous_assignment(assignment);
                                 }
                             }
                             self.runtime.error = None;
@@ -399,8 +400,8 @@ impl LabelloApp {
                                     )
                                 })
                                 .unwrap_or(0);
-                            if let Some(assignment) = completed_assignment {
-                                self.clear_current_work_draft(&assignment);
+                            if let Some(assignment) = completed_assignment.as_ref() {
+                                self.clear_current_work_draft(assignment);
                             }
                             match phase {
                                 crate::app::ReviewPhase::Object
@@ -416,6 +417,10 @@ impl LabelloApp {
                                     );
                                 }
                                 crate::app::ReviewPhase::FullImage => {
+                                    if let Some(mut assignment) = completed_assignment {
+                                        assignment.status = labello_domain::AssignmentStatus::Completed;
+                                        self.remember_previous_assignment(assignment);
+                                    }
                                     self.request_stats();
                                     if !self.promote_prepared_assignment(ctx, None) {
                                         self.clear_current_image();
@@ -459,6 +464,9 @@ impl LabelloApp {
                         Ok(()) => {
                             if let Some(assignment) = self.work.assignment.clone() {
                                 self.clear_current_work_draft(&assignment);
+                                let mut assignment = assignment;
+                                assignment.status = labello_domain::AssignmentStatus::Completed;
+                                self.remember_previous_assignment(assignment);
                             }
                             self.runtime.error = None;
                             self.request_stats();

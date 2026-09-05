@@ -35,6 +35,9 @@ pub enum DomainError {
     #[error("reviewer correction {0} is internally inconsistent")]
     InvalidReviewerCorrection(String),
 
+    #[error("invalid review revision: {0}")]
+    InvalidReviewRevision(String),
+
     #[error("invalid import initialization: {0}")]
     InvalidImport(String),
 

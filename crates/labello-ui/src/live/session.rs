@@ -38,7 +38,7 @@ impl LabelloApp {
         self.work.shortcut_settings = Default::default();
         self.work.keybindings =
             labello_domain::KeybindingSet::defaults_for(self.config.user_id.clone());
-        self.work.previous_annotation_assignment = None;
+        self.work.previous_assignment = None;
         self.clear_current_image();
         self.isolate_browser_workspace();
         self.runtime.storage_error = None;
@@ -73,7 +73,7 @@ impl LabelloApp {
                 Some("Save or discard staged Admin changes before signing out.".to_string());
             return;
         }
-        self.clear_previous_annotation_assignment();
+        self.clear_previous_assignment();
         self.begin_auth_epoch();
         self.loading.logout = true;
         let request = self.request_identity(None);

@@ -290,7 +290,16 @@ impl LabelloApp {
             ui.ctx(),
             labello_domain::UserAction::RejectReviewObject,
         );
-        let (approve, reject) = if shortcut_only {
+        let revision = self.review_revision_active();
+        let (approve, reject) = if revision && self.current_review_annotation().is_none() {
+            if fill_width {
+                ("Commit yes".to_string(), "Commit no".to_string())
+            } else {
+                ("Commit approval".to_string(), "Commit rejection".to_string())
+            }
+        } else if revision && !shortcut_only {
+            ("Stage approval".to_string(), "Stage rejection".to_string())
+        } else if shortcut_only {
             (
                 shortcut_button_label(&approve_shortcut, "Accept"),
                 shortcut_button_label(&reject_shortcut, "Reject"),
@@ -306,7 +315,7 @@ impl LabelloApp {
             )
         };
         let button_width = fill_width
-            .then(|| ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(44.0));
+            .then(|| ((ui.available_size_before_wrap().x - ui.spacing().item_spacing.x) / 2.0).floor().max(44.0));
         let approve_button = egui::Button::new(&approve).min_size(egui::vec2(
             button_width.unwrap_or_default(),
             if fill_width { 44.0 } else { 0.0 },
@@ -315,7 +324,8 @@ impl LabelloApp {
             button_width.unwrap_or_default(),
             if fill_width { 44.0 } else { 0.0 },
         ));
-        if theme::primary_button(ui, ready, approve_button)
+        let can_approve = ready && !(revision && self.work.review_rejected);
+        if theme::primary_button(ui, can_approve, approve_button)
             .on_hover_text(format!(
                 "Accept review object ({})",
                 shortcut_button_label(&approve_shortcut, "Accept")
