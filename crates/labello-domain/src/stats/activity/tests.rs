@@ -307,9 +307,12 @@ fn daily_activity_review_revisions_use_commit_day_and_deduplicate_without_retrac
                     updated_at: commit_at,
                 },
                 superseded_review_ids: vec![review.review_id.clone()],
-                replacement: crate::ReviewRevisionCommit {
-                    reviews: vec![final_review],
-                },
+                // Decode the persisted shape so later serde-default fields retain
+                // compatibility with this parent revision's event fixture.
+                replacement: serde_json::from_value(serde_json::json!({
+                    "reviews": [final_review],
+                }))
+                .unwrap(),
                 task_state: TaskState::new(TaskId::from("boxes"), commit_at),
             },
         )
