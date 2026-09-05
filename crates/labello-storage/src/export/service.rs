@@ -32,6 +32,14 @@ struct Inner {
     jobs: Mutex<BTreeMap<String, Entry>>,
     workers: Arc<Semaphore>,
     downloads: Arc<Semaphore>,
+    #[cfg(test)]
+    publication_pause: std::sync::Mutex<Option<Arc<PublicationPause>>>,
+}
+
+#[cfg(test)]
+struct PublicationPause {
+    reached: tokio::sync::Notify,
+    resume: std::sync::Barrier,
 }
 
 struct Entry {
@@ -52,6 +60,8 @@ impl ExportService {
                 downloads: Arc::new(Semaphore::new(limits.max_concurrent_downloads)),
                 limits,
                 jobs: Mutex::new(BTreeMap::new()),
+                #[cfg(test)]
+                publication_pause: std::sync::Mutex::new(None),
             }),
         };
         service.recover().await?;
@@ -406,7 +416,32 @@ impl ExportService {
             cancel,
         )?;
         let artifact = hash_file(&mut output, self.inner.limits.max_archive_bytes, cancel)?;
+        // Serialize managed configuration and index writers only for the final
+        // source check and atomic archive publication. Slow archive work never
+        // holds the job map, so polling and cancellation remain available.
+        let _configuration = capture.repository.review_config_lock.blocking_read();
+        let _index = capture.repository.images_index_cache.blocking_read();
         capture.verify_source(&self.inner.limits, cancel)?;
+        #[cfg(test)]
+        if let Some(pause) = self.inner.publication_pause.lock().unwrap().clone() {
+            pause.reached.notify_one();
+            pause.resume.wait();
+        }
+        if cancel.load(Ordering::Acquire) {
+            return Err(ExportFailure::Cancelled);
+        }
+        // This no-replace link is the publication cut. No awaited job lock may
+        // separate final source verification from it. Succeeded exposes the
+        // verified artifact later; cancellation or restart before then removes it.
+        std::fs::hard_link(
+            directory.join("building.zip"),
+            directory.join("dataset.zip"),
+        )
+        .map_err(|_| ExportFailure::Storage)?;
+        std::fs::remove_file(directory.join("building.zip")).map_err(|_| ExportFailure::Storage)?;
+        File::open(&directory)
+            .and_then(|file| file.sync_all())
+            .map_err(|_| ExportFailure::Storage)?;
         Ok(artifact)
     }
 
@@ -424,35 +459,9 @@ impl ExportService {
                 job.phase = ExportPhase::Cancelled;
             }
             Ok((bytes, digest)) => {
-                let directory = self.job_dir(job_id)?;
-                // The destination is private and absent. A no-replace hard link atomically
-                // publishes the already synced artifact; only the final status exposes it.
-                let publication = async {
-                    tokio::fs::hard_link(
-                        directory.join("building.zip"),
-                        directory.join("dataset.zip"),
-                    )
-                    .await
-                    .map_err(|_| ExportFailure::Storage)?;
-                    tokio::fs::remove_file(directory.join("building.zip"))
-                        .await
-                        .map_err(|_| ExportFailure::Storage)?;
-                    File::open(&directory)
-                        .and_then(|file| file.sync_all())
-                        .map_err(|_| ExportFailure::Storage)
-                }
-                .await;
-                match publication {
-                    Ok(()) => {
-                        job.phase = ExportPhase::Succeeded;
-                        job.archive_bytes = Some(bytes);
-                        job.archive_blake3 = Some(digest);
-                    }
-                    Err(failure) => {
-                        job.phase = ExportPhase::Failed;
-                        job.failure = Some(failure);
-                    }
-                }
+                job.phase = ExportPhase::Succeeded;
+                job.archive_bytes = Some(bytes);
+                job.archive_blake3 = Some(digest);
             }
             Err(failure) => {
                 job.phase = ExportPhase::Failed;

@@ -375,7 +375,11 @@ events are appended.
 
 Private mode-0700 job directories contain `job.json`, staged payloads, and
 an unpublished archive. A verified archive is linked without replacement as
-`dataset.zip`, synced, and then recorded as succeeded. Only succeeded jobs
+`dataset.zip`, synced, and then recorded as succeeded. The blocking worker
+holds the shared configuration and image-index read guards from its final
+source verification through the no-replace link and directory sync. It does
+not wait for the job map between verification and publication. Cancellation
+before durable success removes even an already linked archive. Only succeeded jobs
 are downloadable; each download verifies size and BLAKE3. A crash before the
 durable succeeded status makes the job interrupted on restart and removes
 its payload. Completed archives survive restart until retention expiry.

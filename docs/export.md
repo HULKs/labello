@@ -93,13 +93,21 @@ Preflight reloads configuration and the image index from disk. Each image's
 state and event sequence are captured together under the existing image lock.
 Image copying and archive construction happen after releasing that lock.
 Later event edits do not change the capture. Configuration, index, root
-identity, or original-image changes before publication abort the job.
+identity, or original-image changes detected at the final source check abort
+publication. The atomic no-replace archive link defines the publication cut.
+The blocking worker retains configuration and index read guards from that check
+through the link and directory sync, preventing managed writers from publishing
+between them. It does not wait for the job map between verification and the link.
+External filesystem writers cannot participate in these process-local guards;
+their changes are checked immediately before the link. Later source changes do
+not alter the published immutable capture.
 
 The normal lifecycle is `capturing -> ready -> building -> succeeded`.
 Preflight can instead become `blocked` or `failed`. Cancellation requests
 transition active work through `cancelling` and remove private payloads after
 the worker releases them. Retry creates a new preflight and a new capture.
-Only succeeded jobs are downloadable.
+Only succeeded jobs are downloadable. Cancellation or restart after the archive
+link but before durable success removes that still-unavailable artifact.
 
 The writer bounds source, metadata, file counts, decoded memory, and archive
 bytes. It verifies ZIP entry paths, sizes, CRCs, and hashes before atomic

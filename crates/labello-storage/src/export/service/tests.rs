@@ -318,3 +318,5 @@ async fn restart_discards_orphans_and_expired_jobs_before_enforcing_retention_ca
     assert!(!restarted.inner.path.join(orphan_name).exists());
     assert!(!restarted.job_dir(&expired.job_id).unwrap().exists());
 }
+
+mod publication;
