@@ -1,4 +1,58 @@
 pub trait DatasetApi {
+    fn export_capabilities<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+    ) -> ApiFuture<'a, crate::ExportCapabilities> {
+        Box::pin(async {
+            Ok(crate::ExportCapabilities {
+                available: false,
+                limits: crate::ExportLimits::default(),
+            })
+        })
+    }
+    fn preflight_export<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _options: labello_domain::ExportOptions,
+    ) -> ApiFuture<'a, crate::ExportJob> {
+        export_unavailable()
+    }
+    fn list_exports<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+    ) -> ApiFuture<'a, Vec<crate::ExportJob>> {
+        export_unavailable()
+    }
+    fn get_export<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _job_id: &'a str,
+    ) -> ApiFuture<'a, crate::ExportJob> {
+        export_unavailable()
+    }
+    fn start_export<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _job_id: &'a str,
+    ) -> ApiFuture<'a, crate::ExportJob> {
+        export_unavailable()
+    }
+    fn cancel_export<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _job_id: &'a str,
+    ) -> ApiFuture<'a, crate::ExportJob> {
+        export_unavailable()
+    }
+    /// Verify download authorization without buffering the archive; browsers then navigate
+    /// to the attachment URL with their existing session cookies.
+    fn export_download_url<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _job_id: &'a str,
+    ) -> ApiFuture<'a, String> {
+        export_unavailable()
+    }
     fn list_datasets<'a>(&'a self) -> ApiFuture<'a, Vec<DatasetSummary>>;
     fn create_dataset<'a>(
         &'a self,
@@ -48,6 +102,14 @@ pub trait DatasetApi {
             ))
         })
     }
+}
+
+fn export_unavailable<'a, T: 'a>() -> ApiFuture<'a, T> {
+    Box::pin(async {
+        Err(ClientError::Demo(
+            "dataset export is not available in this client".into(),
+        ))
+    })
 }
 
 pub trait ImportApi {
