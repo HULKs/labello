@@ -61,11 +61,11 @@ fn labels_are_stably_ordered_and_preserve_detect_coordinates() {
     assert!((values[1] - values[3] / 2.0 - f64::from(bbox().y)).abs() < 1e-9);
     assert_eq!(trace[0].annotation_id, a.annotation_id);
     assert_eq!(trace[0].row, 1);
-    assert!(
+    assert_eq!(
         labels(ExportProfile::UltralyticsYoloDetectV1, &mut [])
             .unwrap()
-            .0
-            .is_empty()
+            .0,
+        b"\n"
     );
     rows[1].class_index = rows[0].class_index;
     assert_eq!(

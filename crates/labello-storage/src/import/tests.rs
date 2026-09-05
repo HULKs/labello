@@ -2286,6 +2286,89 @@ async fn zero_keypoint_yolo_objects_do_not_emit_skeleton_annotations() {
     );
 }
 
+#[test]
+fn legacy_compatibility_policies_keep_zero_keypoints_incomplete() {
+    let mut value = serde_json::to_value(CompatibilityPolicies::default()).unwrap();
+    value.as_object_mut().unwrap().remove("yoloZeroKeypoints");
+    let policies: CompatibilityPolicies = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        policies.yolo_zero_keypoints,
+        YoloZeroKeypointPolicy::Incomplete
+    );
+}
+
+#[tokio::test]
+async fn preserving_absent_yolo_poses_requires_acknowledgement() {
+    let mut files = yolo_pose_files();
+    files.insert(
+        "labels/train/a.txt",
+        b"0 0.5 0.5 0.5 0.5 0 0 0 0 0 0\n".to_vec(),
+    );
+    let temp = tempfile::tempdir().unwrap();
+    let service = service(temp.path()).await;
+    let (owner, job) = browser_job(
+        &service,
+        ImportProfile::UltralyticsYoloPoseV1,
+        "absent-yolo-pose",
+        files,
+    )
+    .await;
+    let mut request = request(ImportProfile::UltralyticsYoloPoseV1);
+    request.policies.yolo_zero_keypoints = YoloZeroKeypointPolicy::PreserveAbsent;
+    let plan = service
+        .preflight(&job.import_id, &owner, request)
+        .await
+        .unwrap();
+    assert!(!plan.committable());
+    assert_eq!(plan.coverage.skeletons.complete, 1);
+    assert_eq!(plan.coverage.skeletons.incomplete, 0);
+    assert_eq!(plan.totals.output_annotations, 2);
+    assert!(
+        service
+            .commit(&job.import_id, &owner, &plan.plan_hash)
+            .await
+            .is_err()
+    );
+    let mut request = plan.request;
+    request
+        .acknowledged_warning_codes
+        .push("yolo_absent_pose_preserved".into());
+    let plan = service
+        .preflight(&job.import_id, &owner, request)
+        .await
+        .unwrap();
+    assert!(plan.committable());
+    let result = service
+        .commit(&job.import_id, &owner, &plan.plan_hash)
+        .await
+        .unwrap();
+    let repository = DatasetRepository::new(result.dataset_path);
+    let image = repository
+        .load_images_index()
+        .await
+        .unwrap()
+        .images_by_hash
+        .into_values()
+        .next()
+        .unwrap();
+    let state = repository.load_image_state(&image.image_id).await.unwrap();
+    assert_eq!(state.active_annotations().count(), 2);
+    let skeleton = state
+        .active_annotations()
+        .find(|annotation| annotation.annotation_type == AnnotationType::Skeleton)
+        .unwrap();
+    let labello_domain::AnnotationGeometry::Skeleton(geometry) = &skeleton.geometry else {
+        panic!("expected skeleton");
+    };
+    assert!(
+        geometry
+            .keypoints
+            .iter()
+            .all(|point| point.state == labello_domain::KeypointState::Absent
+                && point.point.is_none())
+    );
+}
+
 #[tokio::test]
 async fn yolo_split_overlap_processes_shared_image_once() {
     let files = BTreeMap::from([
@@ -2479,6 +2562,12 @@ async fn preflight_cancellation_and_worker_limits_are_enforced() {
 
 #[tokio::test]
 async fn preflight_reseals_a_verified_legacy_parser_source_without_recopying() {
+    for version in ["labello-storage-import-v1", "labello-storage-import-v2"] {
+        reseal_legacy_parser_source(version).await;
+    }
+}
+
+async fn reseal_legacy_parser_source(version: &str) {
     let temp = tempfile::tempdir().unwrap();
     let service = service(temp.path()).await;
     let (owner, mut job) = browser_job(
@@ -2493,10 +2582,9 @@ async fn preflight_reseals_a_verified_legacy_parser_source_without_recopying() {
     let mut ordered = index.files.values().collect::<Vec<_>>();
     ordered.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     let legacy_fingerprint =
-        source::source_fingerprint(&ordered, job.profile.id(), "labello-storage-import-v1")
-            .unwrap();
+        source::source_fingerprint(&ordered, job.profile.id(), version).unwrap();
     index.source_fingerprint = Some(legacy_fingerprint.clone());
-    index.parser_version = None;
+    index.parser_version = (version != "labello-storage-import-v1").then(|| version.to_owned());
     source::save_source_index(&job_dir, &index).await.unwrap();
     job.source_fingerprint = Some(legacy_fingerprint.clone());
     service.save_job(&job).await.unwrap();

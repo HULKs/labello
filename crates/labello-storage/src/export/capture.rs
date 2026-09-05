@@ -251,7 +251,7 @@ pub(super) async fn prepare(
                 let class = mapping
                     .iter()
                     .find(|class| class.selection == selection)
-                    .ok_or(ExportFailure::AmbiguousObjects)?;
+                    .ok_or(ExportFailure::UnmappedObjects)?;
                 annotation
                     .validate_for_task(
                         source
@@ -374,7 +374,7 @@ pub(super) async fn prepare(
             &format!("{}.txt", split.as_str()),
             split_lists
                 .get(&split)
-                .map_or("", String::as_str)
+                .map_or("\n", String::as_str)
                 .as_bytes(),
             &limits,
         )?;
