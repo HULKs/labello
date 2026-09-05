@@ -49,10 +49,6 @@ impl LabelloApp {
                         api.revisit_migration_target(&dataset_id, &image_id, body, &idempotency_key)
                             .await
                     }
-                    crate::app::MigrationAction::StartPass(body) => {
-                        api.start_migration_pass(&dataset_id, &image_id, body, &idempotency_key)
-                            .await
-                    }
                     crate::app::MigrationAction::Keep(body) => {
                         api.keep_migration_target(&dataset_id, &image_id, body, &idempotency_key)
                             .await

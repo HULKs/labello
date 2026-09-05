@@ -87,4 +87,6 @@ save/exclusion clears only its own marker; the next cursor resolves remaining
 pending/dependent work, then full-image confirmation. Guide/disposition versions
 and assignment ownership are revalidated before mutation. A changed selected guide
 replaces its selection with the applicable correction dependency and stale writes
-are rejected. Existing global correction-pass records retain their pass semantics.
+are rejected. Existing global correction-pass records retain their audit history. The latest
+pass for the current assignment owns outstanding decisions and the completion
+gate; earlier passes do not reopen when later edits change an annotation.

@@ -175,3 +175,9 @@ correction work when a dependency changed. The UI does not force confirmation.
 On return, keyboard focus goes to the overview entry, or the full-image primary
 control when the compact inspector is closed. Additional discovered objects keep
 their separate direct-edit and companion reconciliation workflow.
+
+The browser and shared UI do not start global correction passes. Existing passes
+remain readable. Reloading an assignment resumes its latest persisted pass at the
+first outstanding object. The normal keep, edit and exclude controls record exact
+current decisions until full-image confirmation is available. Resolved overview
+entries then use the same direct revisit path as assignments without a pass.

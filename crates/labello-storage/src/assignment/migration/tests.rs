@@ -3860,3 +3860,225 @@ async fn direct_revisit_finishes_selected_object_before_a_new_earlier_dependency
         rebuild_state(fixture.image_id.clone(), &events[..end]).unwrap();
     }
 }
+#[tokio::test]
+async fn latest_historical_pass_recovers_after_restart_without_reopening_older_passes() {
+    let fixture = fixture(ReviewWorkflow::None, 2).await;
+    let assignment = claim_annotator(&fixture).await;
+    let state = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let saved = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expectation(&state, &fixture.task_id, &fixture.targets[0]),
+            skeleton(0.3),
+            "legacy-initial-save",
+        )
+        .await
+        .unwrap();
+    let resolved = fixture
+        .repository
+        .exclude_migration_target(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &expectation(&saved.image_state, &fixture.task_id, &fixture.targets[1]),
+            MigrationExclusionReason::NoValidSkeleton,
+            None,
+            "legacy-initial-exclude",
+        )
+        .await
+        .unwrap();
+    let target_hash = resolved.image_state.migration_target_sets[&fixture.task_id]
+        .target_set_hash
+        .clone();
+    let original_hash = resolved
+        .image_state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let original_confirmation = migration_confirmation_hash(&target_hash, &original_hash).unwrap();
+    let first = fixture
+        .repository
+        .start_migration_pass(
+            &fixture.annotator,
+            context(&assignment),
+            &target_hash,
+            &original_hash,
+            "legacy-first-pass",
+        )
+        .await
+        .unwrap();
+    let first_id = first.active_pass.unwrap().pass_id;
+    let mut state = first.image_state;
+    for (index, target) in fixture.targets.iter().enumerate() {
+        state = fixture
+            .repository
+            .keep_migration_target(
+                &fixture.annotator,
+                context(&assignment),
+                &first_id,
+                &expectation(&state, &fixture.task_id, target),
+                &format!("legacy-first-keep-{index}"),
+            )
+            .await
+            .unwrap()
+            .image_state;
+    }
+    let original_pass = state.migration_passes[&first_id].clone();
+    let second = fixture
+        .repository
+        .start_migration_pass(
+            &fixture.annotator,
+            context(&assignment),
+            &target_hash,
+            &original_hash,
+            "legacy-second-pass",
+        )
+        .await
+        .unwrap();
+    let latest_id = second.active_pass.unwrap().pass_id;
+    let edited = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            Some(&latest_id),
+            &expectation(&second.image_state, &fixture.task_id, &fixture.targets[0]),
+            skeleton(0.6),
+            "legacy-second-edit",
+        )
+        .await
+        .unwrap();
+    assert!(
+        matches!(edited.cursor, MigrationCursor::Object { ref object_group_id, .. }
+        if object_group_id == &fixture.targets[1].object_group_id)
+    );
+    assert_ne!(
+        edited
+            .image_state
+            .migration_cursor(&fixture.task_id, Some(&first_id))
+            .unwrap(),
+        MigrationCursor::FullImage
+    );
+
+    let restarted = DatasetRepository::new(fixture._temp.path());
+    assert_eq!(
+        restarted
+            .rebuild_image_state(&fixture.image_id)
+            .await
+            .unwrap(),
+        edited.image_state
+    );
+    let loaded = restarted
+        .current_manual_migration(&fixture.annotator, context(&assignment), Some(&latest_id))
+        .await
+        .unwrap();
+    assert_eq!(loaded.cursor, edited.cursor);
+    assert_eq!(
+        assignment_pass(
+            &loaded.image_state,
+            &assignment.assignment_id,
+            &fixture.task_id
+        ),
+        Some(&latest_id)
+    );
+    let current_hash = loaded
+        .image_state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let current_confirmation = migration_confirmation_hash(&target_hash, &current_hash).unwrap();
+    let before = restarted.load_events(&fixture.image_id).await.unwrap();
+    let error = restarted
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&assignment),
+            &target_hash,
+            &current_hash,
+            &current_confirmation,
+            "legacy-incomplete",
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, StorageError::AssignmentConflict(message) if message == "migration correction pass is incomplete")
+    );
+    assert_eq!(
+        restarted.load_events(&fixture.image_id).await.unwrap(),
+        before
+    );
+    let completed = restarted
+        .keep_migration_target(
+            &fixture.annotator,
+            context(&assignment),
+            &latest_id,
+            &expectation(&loaded.image_state, &fixture.task_id, &fixture.targets[1]),
+            "legacy-resume-excluded",
+        )
+        .await
+        .unwrap();
+    assert_eq!(completed.cursor, MigrationCursor::FullImage);
+    assert_eq!(
+        completed.image_state.migration_passes[&first_id],
+        original_pass
+    );
+    assert_eq!(
+        completed.image_state.migration_passes[&latest_id]
+            .items
+            .len(),
+        2
+    );
+    let before = restarted.load_events(&fixture.image_id).await.unwrap();
+    let stale = restarted
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&assignment),
+            &target_hash,
+            &original_hash,
+            &original_confirmation,
+            "legacy-stale-digest",
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(stale, StorageError::AssignmentConflict(message)
+        if message == "migration confirmation digest is stale"));
+    assert_eq!(
+        restarted.load_events(&fixture.image_id).await.unwrap(),
+        before
+    );
+    let submitted = restarted
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&assignment),
+            &target_hash,
+            &current_hash,
+            &current_confirmation,
+            "legacy-submit",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        submitted.image_state.task_states[&fixture.task_id].status,
+        TaskStatus::Completed
+    );
+    assert_eq!(
+        submitted.image_state.migration_passes[&first_id],
+        original_pass
+    );
+    assert_eq!(submitted.image_state.migration_passes.len(), 2);
+    let events = restarted.load_events(&fixture.image_id).await.unwrap();
+    for end in 0..=events.len() {
+        rebuild_state(fixture.image_id.clone(), &events[..end]).unwrap();
+    }
+    assert_eq!(
+        DatasetRepository::new(fixture._temp.path())
+            .rebuild_image_state(&fixture.image_id)
+            .await
+            .unwrap(),
+        submitted.image_state
+    );
+}

@@ -122,7 +122,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             .query_by_role_and_label(egui::accesskit::Role::CheckBox, "Data saver")
             .is_none()
     );
-    assert!(full_image.query_by_label("Start correction pass").is_some());
+    assert!(full_image.query_by_label("Start correction pass").is_none());
 
     let mut no_guides_app = inspector_presets::build(
         InspectorPreset::MigrationFullImage,

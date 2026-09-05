@@ -2192,3 +2192,154 @@ fn direct_revisit_returns_focus_to_primary_action_when_overview_is_closed() {
         assert!(harness.get_by_label_contains("Confirm").is_focused());
     }
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_full_image_has_direct_controls_without_a_global_pass_start() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        let app = inspector_presets::build(
+            InspectorPreset::MigrationFullImage,
+            &egui::Context::default(),
+        );
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        assert!(harness.query_by_label("Start correction pass").is_none());
+        assert!(
+            harness
+                .query_by_label_contains("Confirm & finish")
+                .is_some()
+                || harness
+                    .query_by_label_contains("Confirm all guides & finish")
+                    .is_some()
+        );
+        if size.x < 1318.0 {
+            harness.state_mut().work.drawer = Some(Drawer::Inspector);
+            harness.step();
+        }
+        assert!(harness.query_by_label("Start correction pass").is_none());
+        let overview = harness.get_by_label("Review 2 resolved objects");
+        overview.focus();
+        harness.key_press(egui::Key::Enter);
+        for _ in 0..12 {
+            harness.step();
+        }
+        assert!(
+            harness
+                .query_by_label("Guide 1: Skeleton annotated; Guide present")
+                .is_some()
+        );
+        assert!(
+            harness
+                .query_by_label("Guide 2: Excluded; Guide present")
+                .is_some()
+        );
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn historical_migration_pass_reloads_and_resolves_through_normal_controls() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [egui::vec2(390.0, 844.0), egui::vec2(1440.0, 1000.0)] {
+        let api = Rc::new(SpyApi::new());
+        let mut app =
+            inspector_presets::build(InspectorPreset::MigrationPass, &egui::Context::default());
+        let persisted = app.work.current_state.clone().unwrap();
+        let task_id = app.work.selected_task_id.clone().unwrap();
+        let pass_id = persisted.migration_passes.keys().next().unwrap().clone();
+        app.work.migration = Default::default();
+        api.set_image_state(persisted);
+        app.runtime.api = Some(api.clone());
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        assert_eq!(
+            harness.state().work.migration.active_pass_id.as_ref(),
+            Some(&pass_id)
+        );
+        for index in 0..2 {
+            assert!(harness.query_by_label("Start correction pass").is_none());
+            let mut state = harness.state().work.current_state.clone().unwrap();
+            let target = state.migration_target_sets[&task_id].targets[index].clone();
+            assert!(
+                matches!(harness.state().work.migration.cursor.as_ref(), Some(labello_domain::MigrationCursor::Object { object_group_id, .. }) if *object_group_id == target.object_group_id)
+            );
+            let guide = state
+                .current_annotation(&target.guide_annotation_id)
+                .unwrap();
+            let item = labello_domain::MigrationPassItem {
+                object_group_id: target.object_group_id.clone(),
+                guide_annotation_version: guide.version,
+                guide_deleted: guide.deleted,
+                disposition_version: state.migration_dispositions[&task_id]
+                    [&target.object_group_id]
+                    .disposition_version,
+                action: labello_domain::MigrationPassItemAction::Kept,
+                event_id: EventId::from(format!("recovery-kept-{index}")),
+            };
+            state
+                .migration_passes
+                .get_mut(&pass_id)
+                .unwrap()
+                .items
+                .push(item);
+            let cursor = state.migration_cursor(&task_id, Some(&pass_id)).unwrap();
+            let active_pass = state.migration_passes[&pass_id].clone();
+            api.respond_to_next_migration_with(labello_client::ManualMigrationCommandResult {
+                image_state: state,
+                cursor: Some(cursor),
+                active_pass: Some(active_pass),
+                progress: labello_client::ManualMigrationProgress {
+                    expected: 2,
+                    annotated: 1,
+                    excluded: 1,
+                    pending: 0,
+                },
+                confirmation: None,
+                assignment: harness.state().work.assignment.clone(),
+                annotation_id: None,
+            });
+            let label = if size.x < 1318.0 {
+                "Keep & next"
+            } else {
+                "Keep current & advance"
+            };
+            click_accesskit_button(&mut harness, label);
+            step_until(&mut harness, 10, |app| !app.work.migration.busy);
+        }
+        assert_eq!(
+            harness.state().work.migration.cursor,
+            Some(labello_domain::MigrationCursor::FullImage)
+        );
+        assert!(
+            harness
+                .query_by_label_contains(if size.x < 1318.0 {
+                    "Confirm & finish"
+                } else {
+                    "Confirm all guides & finish"
+                })
+                .is_some()
+        );
+        assert_eq!(api.counts().migration_commands, 2);
+        harness.state_mut().trigger_migration_primary_action();
+        assert!(
+            harness
+                .state()
+                .runtime
+                .commands
+                .iter()
+                .any(|command| matches!(
+                    command,
+                    UiCommand::Migration {
+                        action: crate::app::MigrationAction::Confirm(_),
+                        ..
+                    }
+                ))
+        );
+    }
+}

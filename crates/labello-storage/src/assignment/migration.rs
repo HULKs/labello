@@ -1416,13 +1416,11 @@ impl DatasetRepository {
                 "migration cannot be submitted from an object phase",
             ));
         }
-        if state.migration_passes.values().any(|pass| {
-            pass.task_id == *context.task_id
-                && pass.assignment_id == *context.assignment_id
-                && state
-                    .migration_cursor(context.task_id, Some(&pass.pass_id))
-                    .is_ok_and(|cursor| cursor != MigrationCursor::FullImage)
-        }) {
+        // Earlier passes record decisions about earlier revisions. The latest
+        // assignment pass owns the remaining work that the UI can resume.
+        if let Some(pass_id) = assignment_pass(&state, context.assignment_id, context.task_id)
+            && state.migration_cursor(context.task_id, Some(pass_id))? != MigrationCursor::FullImage
+        {
             return Err(conflict("migration correction pass is incomplete"));
         }
         validate_exact_one(&state, task)?;
