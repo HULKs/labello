@@ -1759,7 +1759,7 @@ fn companion_reconciliation_success_and_failure_retain_unsaved_skeleton_drafts()
                 annotation_id: Some(annotation_id.clone()),
             })
         } else {
-            Err("The box has another active assignment. Retry after it is released.".into())
+            Err("The box has another active assignment. Retry after it is released.".to_string().into())
         };
         app.runtime
             .tx
