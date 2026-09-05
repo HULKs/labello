@@ -80,7 +80,10 @@ GitHub's standard organization runner group, not private infrastructure data.
 
 Build `deployment/release/Containerfile` from the repository root. It pins the
 Rust 1.98.0 Bookworm image by digest and includes rustfmt, Clippy, the
-`wasm32-unknown-unknown` target and Trunk 0.21.14. Keep its compiler tag aligned
+`wasm32-unknown-unknown` target, Trunk 0.21.14, Node 24.19.0,
+and the Linux libraries required by the pinned Chromium verification gate.
+The image uses a digest-pinned official Node donor stage and installs browser
+system dependencies from the tracked npm lockfile. Keep its compiler tag aligned
 with `rust-toolchain.toml` when updating the baseline. The retained
 `deployment/guest/github-runner-base/Containerfile` is historical upstream
 reproduction input and is not a Labello build entry point.

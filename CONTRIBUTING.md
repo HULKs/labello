@@ -59,8 +59,10 @@ not verified; it is never silently treated as passing.
 
 ## Verification Prerequisites
 
-Install a current stable Rust toolchain, the `wasm32-unknown-unknown` target,
-and Trunk 0.21.14. Native Linux builds also require the Wayland, X11,
+Install the repository-pinned Rust 1.98.0 toolchain, the
+`wasm32-unknown-unknown` target, and Trunk 0.21.14. Browser checks also require
+Node 24.19.0 and the pinned Chromium prerequisites in the
+[browser verification guide](docs/browser-verification.md). Native Linux builds also require the Wayland, X11,
 XKBCommon, and OpenGL development libraries used by `eframe`. The canonical
 script uses tracked lockfiles with Cargo and Trunk locked mode, so verification
 fails instead of rewriting dependency resolution.
@@ -68,3 +70,20 @@ fails instead of rewriting dependency resolution.
 See [the verification contract](docs/verification.md) for the baseline,
 changed-path classification, risk profiles, CI equivalence, branch settings,
 and evidence requirements.
+
+## UI acceptance evidence
+
+Map every applicable UI acceptance criterion to `egui_kittest`, native inspector,
+Chromium, or an explicitly recorded manual review. State the production owner,
+regression protection, exact commands and results, viewport/DPR/zoom, keyboard
+and accessibility findings, artifact links, and omitted checks. Include
+reproducible before/after browser evidence for visual fixes and an adjacent
+breakpoint. Inspect paint, spacing, wrapping, focus, loading, and disabled
+states; passing containment assertions alone do not prove visual quality.
+
+Inspector presets are synthetic shared-renderer fixtures. An inspector-only
+change cannot fix a product UI issue unless that issue concerns inspection
+infrastructure. Use the [browser verification guide](docs/browser-verification.md)
+for the executable matrix, allowed synthetic artifacts, and the current
+annotation/migration comparison. Browser widget accessibility and platform
+font scaling limitations must remain explicit in handoffs.

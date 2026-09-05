@@ -169,3 +169,18 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+## Executable display and visual evidence
+
+[`scripts/browser/matrix.json`](../scripts/browser/matrix.json) supplies the
+maintained sizes to deterministic UI tests, the native inspector's `--display`
+selector, and the Chromium gate. The inspector's `--scale` changes egui logical
+zoom; screenshot pixel density alone does not exercise layout scaling. Browser
+DPR and actual browser zoom are separate dimensions. Follow the
+[browser verification guide](browser-verification.md) for their commands,
+coverage, supported synthetic evidence, and explicit accessibility/text gaps.
+
+Shortcut settings stack complete action labels above binding controls in compact
+layouts. Related footer actions stay together, and the binding list uses the
+remaining dialog height. Offscreen controls require scrolling evidence; do not
+count a skipped containment assertion as proof of reachability.

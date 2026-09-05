@@ -25,7 +25,7 @@ without a stage runs those same checks sequentially for local reproduction.
 Both forms classify every changed path, and an unclassified path fails closed.
 Documentation-only changes run the documentation profile; every other change
 runs the baseline, and browser-affecting changes also run the release Trunk
-build. Use `./scripts/verify.sh all` to run the baseline and browser build
+build and the Chromium workflow and visual gate. Use `./scripts/verify.sh all` to run the baseline and browser build
 without changed-path optimization, or `./scripts/verify.sh classify <base>` to
 inspect the selected profiles.
 
@@ -53,6 +53,42 @@ from `apps/labello-wasm`:
 ```text
 trunk build --release --locked
 ```
+
+The browser stage then runs these commands from the repository root:
+
+```text
+node scripts/browser/build.mjs
+cargo build --locked -p labello-server
+cargo build --locked -p labello-storage --example browser_fixture
+cargo test --locked -p labello-storage --example browser_fixture
+npm --prefix scripts/browser ci
+npm --prefix scripts/browser test
+scripts/browser/node_modules/.bin/playwright install chromium
+node scripts/browser/run.mjs
+```
+
+The [browser verification guide](browser-verification.md) owns the executable
+matrix, initial workflow coverage, fixture isolation, visual baselines,
+failure injections, timeouts, and inspector comparison. This selected CI job
+is part of the required `Testing` gate. Node 24.19.0, the tracked npm lockfile,
+and Chromium's Linux system dependencies are additional prerequisites. Install
+the system dependencies with
+`./scripts/browser/node_modules/.bin/playwright install-deps chromium` after
+`npm --prefix scripts/browser ci`. The release build image includes them.
+
+### Synthetic UI verification artifacts
+
+Only the exception in [operations](operations.md#synthetic-ui-verification-artifacts)
+permits canvas evidence. The browser gate creates repository-owned artificial
+patterns, geometry, and labels with `labello-browser-v1` provenance. It admits
+only its own newly created fixture environment and allowlisted PNG/JSON
+outputs. Tests must prove refusal of non-fixture, foreign-origin, and unknown
+artifact-state inputs before CI publishes those outputs. Reports contain safe
+state names, revision, display metrics, bounded failure counts, and cleanup
+results. They must not include raw URLs, HTTP bodies, cookies, tokens,
+profiles, storage dumps, or production/user-derived content. CI uploads the
+explicit file allowlist for 14 days, never the runtime directory or a trace.
+A screenshot is evidence for independent visual review, not acceptance itself.
 
 CI preserves those test selections with pinned cargo-nextest 0.9.143 and a
 separate doctest job:

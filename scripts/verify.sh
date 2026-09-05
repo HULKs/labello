@@ -171,6 +171,10 @@ audit() {
     require_literal .github/workflows/ci.yml 'cache-bin: false'
     require_literal .github/workflows/ci.yml 'uses: jetli/trunk-action@1346cc09eace4beb84e403e199a471346d4684c9'
     require_literal .github/workflows/ci.yml 'version: v0.21.14'
+    require_literal .github/workflows/ci.yml 'name: Browser workflows and visual checks'
+    require_literal .github/workflows/ci.yml 'node-version: 24.19.0'
+    require_literal .github/workflows/ci.yml 'scripts/browser/artifacts/report.json'
+    require_literal docs/verification.md 'node scripts/browser/run.mjs'
     require_literal .github/workflows/ci.yml 'uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532'
     require_literal .github/workflows/ci.yml 'tool: cargo-nextest@0.9.143'
     require_literal .github/workflows/ci.yml 'fallback: none'
@@ -219,6 +223,13 @@ cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
 cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 trunk build --release --locked
+cargo build --locked -p labello-server
+cargo build --locked -p labello-storage --example browser_fixture
+cargo test --locked -p labello-storage --example browser_fixture
+npm --prefix scripts/browser ci
+npm --prefix scripts/browser test
+scripts/browser/node_modules/.bin/playwright install chromium
+node scripts/browser/run.mjs
 EOF
 
     local ci_test_command
@@ -335,6 +346,14 @@ browser_build() {
         # presence-only value used by some shells and automation harnesses.
         run env -u NO_COLOR trunk build --release --locked
     )
+    run node scripts/browser/build.mjs
+    run cargo build --locked -p labello-server
+    run cargo build --locked -p labello-storage --example browser_fixture
+    run cargo test --locked -p labello-storage --example browser_fixture
+    run npm --prefix scripts/browser ci
+    run npm --prefix scripts/browser test
+    run scripts/browser/node_modules/.bin/playwright install chromium
+    run node scripts/browser/run.mjs
 }
 
 changed() {

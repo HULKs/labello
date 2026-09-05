@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "Labello verification scaling",
+  "version": "1.0.0",
+  "permissions": ["tabs", "fontSettings"],
+  "background": {"service_worker": "worker.js"}
+}

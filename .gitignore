@@ -5,3 +5,5 @@
 /apps/labello-wasm/labello.client.json
 *.tmp
 .worktrees/
+/scripts/browser/node_modules/
+/scripts/browser/artifacts/

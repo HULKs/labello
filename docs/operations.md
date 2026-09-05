@@ -61,6 +61,23 @@ Request logs use matched route templates instead of raw URLs. Internal server
 errors return a generic message to clients; safe error categories and bounded
 diagnostics remain in server logs.
 
+### Synthetic UI verification artifacts
+
+Browser and native UI verification may retain screenshots, accessibility
+summaries, and visual comparison images only from repository-owned artificial
+fixtures generated specifically for tests. Fixture image patterns, annotation
+geometry, names, and labels must have recognizable synthetic provenance.
+This exception permits those fixture pixels and geometry in visual evidence;
+it does not permit production or user-derived content.
+
+The browser verifier creates a fresh private environment, verifies its fixture
+provenance before capture, and publishes only explicitly allowlisted PNG and
+sanitized JSON outputs. Non-fixture environments must be refused. Browser
+profiles, cookies, credentials, raw URLs, HTTP bodies, network archives, broad
+traces, storage dumps, crash directories, and runtime datasets remain forbidden
+artifacts even in a fixture run. Logs retain bounded categories and counts only.
+Fixture permission does not relax authentication or production logging policy.
+
 ## Health And Availability
 
 `GET /health` is an unauthenticated liveness check. A healthy response is

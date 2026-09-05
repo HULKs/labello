@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "viewports": [
+    {"name": "small", "width": 320, "height": 568, "dpr": [1, 2]},
+    {"name": "mobile", "width": 390, "height": 844, "dpr": [1, 2, 3]},
+    {"name": "medium", "width": 600, "height": 800, "dpr": [1, 2]},
+    {"name": "wide-boundary", "width": 1288, "height": 820, "dpr": [1, 2]},
+    {"name": "wide", "width": 1440, "height": 1000, "dpr": [1, 2]},
+    {"name": "short", "width": 320, "height": 320, "dpr": [1, 2]}
+  ],
+  "browserZoom": [1, 2],
+  "largerText": {"defaultFontSize": 24, "minimumFontSize": 20}
+}
