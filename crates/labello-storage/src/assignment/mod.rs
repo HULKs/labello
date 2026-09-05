@@ -12,10 +12,12 @@ use crate::{DatasetRepository, StorageError, StorageResult};
 mod claim;
 mod migration;
 mod review;
+mod revision;
 mod transaction;
 
 pub(crate) use migration::append_guide_invalidation_payloads;
 pub use migration::*;
+pub(crate) use revision::finalize_review_transaction;
 
 /// Assignments are renewed by claim retries and successful assignment-backed
 /// writes, so a separate heartbeat endpoint is not required.
@@ -97,7 +99,7 @@ impl DatasetRepository {
         Ok(assignment)
     }
 
-    pub async fn reopen_annotation_assignment(
+    pub async fn reopen_assignment(
         &self,
         user_id: &UserId,
         assignment_id: &AssignmentId,
@@ -105,6 +107,11 @@ impl DatasetRepository {
         task_id: &TaskId,
         kind: AssignmentKind,
     ) -> StorageResult<Assignment> {
+        if kind == AssignmentKind::Review {
+            return self
+                .reopen_review_assignment(user_id, assignment_id, image_id, task_id)
+                .await;
+        }
         if kind != AssignmentKind::Annotation {
             return Err(StorageError::InvalidAssignment(
                 "only annotation assignments can be reopened".to_string(),

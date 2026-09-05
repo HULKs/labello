@@ -21,8 +21,23 @@ pub struct ImageState {
     pub schema_version: u32,
     pub image_id: ImageId,
     pub current_sequence: u64,
+    /// Derived-cache generation; authoritative event schema remains version 3.
+    #[serde(default)]
+    pub review_projection_version: u32,
     pub annotations: BTreeMap<AnnotationId, Vec<AnnotationVersion>>,
     pub reviews: Vec<ReviewRecord>,
+    #[serde(default)]
+    pub review_rounds: BTreeMap<TaskId, crate::ReviewRound>,
+    #[serde(default)]
+    pub review_record_rounds: BTreeMap<crate::ReviewId, crate::EventId>,
+    #[serde(default)]
+    pub superseded_review_ids: BTreeSet<crate::ReviewId>,
+    #[serde(default)]
+    pub review_assignment_contexts: BTreeMap<crate::AssignmentId, crate::ReviewAssignmentContext>,
+    #[serde(default)]
+    pub review_revision_commits: BTreeMap<crate::AssignmentId, crate::ReviewRevisionCommit>,
+    #[serde(default)]
+    pub review_finished_sequences: BTreeMap<crate::AssignmentId, u64>,
     pub reviewer_corrections: Vec<ReviewerCorrectionRecord>,
     pub adjudications: Vec<AdjudicationRecord>,
     pub task_states: BTreeMap<TaskId, TaskState>,
@@ -54,8 +69,15 @@ impl ImageState {
             schema_version: SCHEMA_VERSION,
             image_id,
             current_sequence: 0,
+            review_projection_version: 1,
             annotations: BTreeMap::new(),
             reviews: Vec::new(),
+            review_rounds: BTreeMap::new(),
+            review_record_rounds: BTreeMap::new(),
+            superseded_review_ids: BTreeSet::new(),
+            review_assignment_contexts: BTreeMap::new(),
+            review_revision_commits: BTreeMap::new(),
+            review_finished_sequences: BTreeMap::new(),
             reviewer_corrections: Vec::new(),
             adjudications: Vec::new(),
             task_states: BTreeMap::new(),
@@ -77,6 +99,7 @@ mod annotation_replay;
 mod migration_replay;
 mod query;
 mod replay;
+mod review_replay;
 
 pub fn rebuild_state(image_id: ImageId, events: &[EventLogEntry]) -> DomainResult<ImageState> {
     let mut state = ImageState::new(image_id);

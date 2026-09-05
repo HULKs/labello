@@ -228,7 +228,7 @@ pub(super) fn current_task_review_decision(
     task_id: &TaskId,
 ) -> Option<ReviewDecision> {
     let task_state = state.task_states.get(task_id)?;
-    let task_reviews = state.reviews.iter().filter(|review| {
+    let task_reviews = state.effective_reviews_for_task(task_id).filter(|review| {
         matches!(
             &review.target,
             ReviewTarget::Task { task_id: reviewed } if reviewed == task_id
@@ -239,7 +239,9 @@ pub(super) fn current_task_review_decision(
         TaskStatus::Submitted => {
             let round_started_at = task_state.completed_at?;
             task_reviews
-                .filter(|review| review.timestamp >= round_started_at)
+                .filter(|review| {
+                    state.review_round(task_id).is_some() || review.timestamp >= round_started_at
+                })
                 .max_by_key(|review| review.timestamp)
                 .map(|review| review.decision.clone())
         }

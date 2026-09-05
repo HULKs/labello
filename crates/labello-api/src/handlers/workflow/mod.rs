@@ -242,15 +242,15 @@ pub(crate) async fn reopen_assignment(
     request.assignment_id.validate_path_segment()?;
     request.image_id.validate_path_segment()?;
     request.task_id.validate_path_segment()?;
-    if request.kind != AssignmentKind::Annotation {
+    if request.kind == AssignmentKind::Adjudication {
         return Err(ApiError::BadRequest(
-            "only annotation assignments can be reopened".to_string(),
+            "adjudication assignments cannot be reopened".to_string(),
         ));
     }
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
     let assignment = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &actor.user_id,
             &request.assignment_id,
             &request.image_id,
@@ -1075,6 +1075,54 @@ pub(crate) async fn record_review(
         "review recorded"
     );
     Ok(Json(image_state))
+}
+
+pub(crate) async fn commit_review_revision(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    Query(assignment): Query<AssignmentActionRequest>,
+    headers: HeaderMap,
+    Json(replacement): Json<labello_domain::ReviewRevisionCommit>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    image_id.validate_path_segment()?;
+    validate_assignment_request(&assignment, &image_id, AssignmentKind::Review)?;
+    let actor = actor_from_headers(&state, &headers)?;
+    if replacement.reviews.is_empty() || replacement.reviews.len() > 10_001 {
+        return Err(ApiError::BadRequest(
+            "revision requires between 1 and 10001 decisions".into(),
+        ));
+    }
+    for review in &replacement.reviews {
+        review.review_id.validate_path_segment()?;
+        if review.reviewer_user_id != actor.user_id {
+            return Err(ApiError::Unauthorized(
+                "cannot revise reviews for another user".into(),
+            ));
+        }
+        if review
+            .comment
+            .as_ref()
+            .is_some_and(|comment| comment.len() > 2_000)
+        {
+            return Err(ApiError::BadRequest(
+                "review comment exceeds 2000 bytes".into(),
+            ));
+        }
+    }
+    let repo = state.repo(&dataset_id)?;
+    Ok(Json(
+        repo.commit_review_revision(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &assignment.task_id,
+                kind: AssignmentKind::Review,
+            },
+            replacement,
+        )
+        .await?,
+    ))
 }
 
 pub(crate) async fn record_correction(

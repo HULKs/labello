@@ -1599,32 +1599,17 @@ impl DatasetRepository {
         }];
         let final_decision = matches!(review_target, ReviewTarget::MigrationConfirmation { .. });
         if decision == ReviewDecision::Rejected {
-            if let ReviewTarget::AnnotationVersion { annotation_id, .. } = &review_target {
-                let group_id = state.migration_target_sets[context.task_id]
-                    .targets
-                    .iter()
-                    .find(|target| &target.reserved_skeleton_annotation_id == annotation_id)
-                    .map(|target| target.object_group_id.clone());
-                if let Some(group_id) = group_id {
-                    payloads.push(correction_marker_payload(
-                        &state,
-                        context.task_id,
-                        &group_id,
-                        &primary_id,
-                        now,
-                    )?);
-                }
-            } else if let ReviewTarget::MigrationDisposition {
-                object_group_id, ..
-            } = &review_target
-            {
-                payloads.push(correction_marker_payload(
-                    &state,
-                    context.task_id,
+            if let Some((object_group_id, marker)) = state.migration_review_correction_marker(
+                context.task_id,
+                &review_target,
+                &primary_id,
+                now,
+            )? {
+                payloads.push(EventPayload::MigrationDependencyMarked {
+                    task_id: context.task_id.clone(),
                     object_group_id,
-                    &primary_id,
-                    now,
-                )?);
+                    marker,
+                });
             }
             payloads.push(task_state_payload(
                 context.task_id,
@@ -2360,31 +2345,6 @@ fn reopen_terminal_migration(
     Ok(())
 }
 
-fn correction_marker_payload(
-    state: &ImageState,
-    task_id: &TaskId,
-    group_id: &ObjectGroupId,
-    event_id: &EventId,
-    now: Timestamp,
-) -> StorageResult<EventPayload> {
-    let existing = state
-        .migration_dependencies
-        .get(task_id)
-        .and_then(|markers| markers.get(group_id));
-    Ok(EventPayload::MigrationDependencyMarked {
-        task_id: task_id.clone(),
-        object_group_id: group_id.clone(),
-        marker: labello_domain::MigrationDependencyMarker {
-            marker_version: existing.map_or(1, |marker| marker.marker_version + 1),
-            kind: MigrationDependencyKind::CorrectionRequired,
-            required_disposition_version: current_disposition(state, task_id, group_id)?
-                .disposition_version,
-            event_id: event_id.clone(),
-            timestamp: now,
-        },
-    })
-}
-
 fn task_state_payload(
     task_id: &TaskId,
     status: TaskStatus,
@@ -2538,47 +2498,7 @@ fn current_migration_reviews<'a>(
     events: &'a [EventLogEntry],
     task_id: &TaskId,
 ) -> Vec<&'a ReviewRecord> {
-    let start = events.iter().rposition(|event| {
-        matches!(&event.payload, EventPayload::TaskStateChanged { task_state } if task_state.task_id == *task_id && task_state.status == TaskStatus::Submitted)
-    });
-    if start.is_some_and(|start| {
-        events.iter().skip(start + 1).any(|event| {
-            matches!(&event.payload, EventPayload::TaskStateChanged { task_state }
-                if task_state.task_id == *task_id
-                    && matches!(task_state.status, TaskStatus::Pending | TaskStatus::InProgress | TaskStatus::NeedsCorrection))
-        })
-    }) {
-        return Vec::new();
-    }
-    events
-        .iter()
-        .skip(start.map_or(0, |index| index + 1))
-        .filter_map(|event| match &event.payload {
-            EventPayload::ReviewRecorded { review }
-                if matches!(&review.target,
-                    ReviewTarget::AnnotationVersion { annotation_id, .. }
-                        if events_target_annotation(events, task_id, annotation_id)
-                ) || matches!(&review.target,
-                    ReviewTarget::MigrationDisposition { task_id: reviewed, .. }
-                    | ReviewTarget::MigrationConfirmation { task_id: reviewed, .. }
-                        if reviewed == task_id
-                ) =>
-            {
-                Some(review)
-            }
-            _ => None,
-        })
-        .collect()
-}
-
-fn events_target_annotation(
-    events: &[EventLogEntry],
-    task_id: &TaskId,
-    annotation_id: &labello_domain::AnnotationId,
-) -> bool {
-    events.iter().any(|event| {
-        matches!(&event.payload, EventPayload::AnnotationVersionCreated { annotation, .. } if annotation.task_id == *task_id && annotation.annotation_id == *annotation_id)
-    })
+    labello_domain::current_migration_reviews(events, task_id)
 }
 
 fn current_confirmation_approvals(

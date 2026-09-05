@@ -854,7 +854,7 @@ async fn migration_commands_are_canonical_idempotent_atomic_and_replayable() {
     );
     let reopened_assignment = fixture
         .repository
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &fixture.annotator,
             &assignment.assignment_id,
             &fixture.image_id,
@@ -1925,7 +1925,7 @@ async fn reopening_submitted_migration_cancels_active_reviews() {
 
     let reopened = fixture
         .repository
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &fixture.annotator,
             &annotation.assignment_id,
             &fixture.image_id,
@@ -3607,4 +3607,446 @@ async fn discovered_skeleton_review_precedes_confirmation_and_rejection_requires
         )
         .await
         .unwrap();
+}
+
+// Proposed include inside assignment/migration/tests.rs. Syntax checked only.
+
+#[tokio::test]
+async fn migration_revision_captures_dispositions_discovery_and_confirmation_without_retracting_on_open()
+ {
+    let fixture = fixture(ReviewWorkflow::Approval, 2).await;
+    let annotation = claim_annotator(&fixture).await;
+    let initial = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let saved = fixture
+        .repository
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&annotation),
+            None,
+            &expectation(&initial, &fixture.task_id, &fixture.targets[0]),
+            skeleton(0.4),
+            "revision-annotated",
+        )
+        .await
+        .unwrap();
+    let excluded = fixture
+        .repository
+        .exclude_migration_target(
+            &fixture.annotator,
+            context(&annotation),
+            None,
+            &expectation(&saved.image_state, &fixture.task_id, &fixture.targets[1]),
+            MigrationExclusionReason::ObjectNotPresent,
+            None,
+            "revision-excluded",
+        )
+        .await
+        .unwrap();
+    assert_eq!(excluded.progress.excluded, 1);
+    let discovered = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&annotation),
+            None,
+            skeleton(0.8),
+            "revision-discovered",
+        )
+        .await
+        .unwrap();
+    let discovered_id = discovered.annotation_id.unwrap();
+    let target_hash = discovered.image_state.migration_target_sets[&fixture.task_id]
+        .target_set_hash
+        .clone();
+    let state_hash = discovered
+        .image_state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let confirmation_hash = migration_confirmation_hash(&target_hash, &state_hash).unwrap();
+    fixture
+        .repository
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&annotation),
+            &target_hash,
+            &state_hash,
+            &confirmation_hash,
+            "revision-submit",
+        )
+        .await
+        .unwrap();
+    let review = fixture
+        .repository
+        .assign_next_image(
+            &fixture.reviewers[0],
+            &fixture.task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let submitted = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let metadata = fixture.repository.load_dataset().await.unwrap();
+    let task = metadata.task(&fixture.task_id).unwrap();
+    let targets = submitted.review_targets(task).unwrap();
+    assert_eq!(targets.len(), 4);
+    assert!(
+        matches!(&targets[0], labello_domain::ReviewTarget::AnnotationVersion { annotation_id, version: 1 }
+        if annotation_id == &fixture.targets[0].reserved_skeleton_annotation_id)
+    );
+    assert!(
+        matches!(&targets[1], labello_domain::ReviewTarget::MigrationDisposition { task_id, object_group_id, disposition_version }
+        if task_id == &fixture.task_id && object_group_id == &fixture.targets[1].object_group_id
+            && *disposition_version == submitted.migration_dispositions[&fixture.task_id][object_group_id].disposition_version)
+    );
+    assert!(
+        matches!(&targets[2], labello_domain::ReviewTarget::AnnotationVersion { annotation_id, version: 1 }
+        if annotation_id == &discovered_id)
+    );
+    assert!(
+        matches!(&targets[3], labello_domain::ReviewTarget::MigrationConfirmation { task_id, confirmation_hash: captured }
+        if task_id == &fixture.task_id && captured == &confirmation_hash)
+    );
+
+    for (index, target) in fixture.targets.iter().enumerate() {
+        fixture
+            .repository
+            .review_migration(
+                &fixture.reviewers[0],
+                context(&review),
+                &MigrationReviewTarget::Disposition {
+                    object_group_id: target.object_group_id.clone(),
+                    disposition_version: submitted.migration_dispositions[&fixture.task_id]
+                        [&target.object_group_id]
+                        .disposition_version,
+                },
+                ReviewDecision::Approved,
+                None,
+                &format!("revision-review-object-{index}"),
+            )
+            .await
+            .unwrap();
+    }
+    fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&review),
+            &MigrationReviewTarget::Discovered {
+                annotation_id: discovered_id,
+                version: 1,
+            },
+            ReviewDecision::Approved,
+            None,
+            "revision-review-discovery",
+        )
+        .await
+        .unwrap();
+    let completed = fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&review),
+            &MigrationReviewTarget::Confirmation { confirmation_hash },
+            ReviewDecision::Approved,
+            None,
+            "revision-review-final",
+        )
+        .await
+        .unwrap()
+        .image_state;
+    assert_eq!(
+        completed.task_states[&fixture.task_id].status,
+        TaskStatus::Completed
+    );
+
+    let reopened = fixture
+        .repository
+        .reopen_review_assignment(
+            &fixture.reviewers[0],
+            &review.assignment_id,
+            &fixture.image_id,
+            &fixture.task_id,
+        )
+        .await
+        .unwrap();
+    assert_ne!(reopened.assignment_id, review.assignment_id);
+    let opened = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let captured = &opened.review_assignment_contexts[&reopened.assignment_id];
+    assert!(captured.decision_revision);
+    assert_eq!(captured.targets, targets);
+    assert_eq!(opened.task_states, completed.task_states);
+    assert_eq!(opened.reviews, completed.reviews);
+    assert_eq!(opened.annotations, completed.annotations);
+    assert_eq!(
+        opened.migration_confirmations,
+        completed.migration_confirmations
+    );
+    assert_eq!(
+        opened.migration_dispositions,
+        completed.migration_dispositions
+    );
+    for target in &targets {
+        assert_eq!(
+            opened
+                .effective_review_for_target(&fixture.task_id, target, &fixture.reviewers[0])
+                .unwrap()
+                .decision,
+            ReviewDecision::Approved
+        );
+    }
+    let replacement = labello_domain::ReviewRevisionCommit {
+        reviews: targets
+            .iter()
+            .enumerate()
+            .map(|(index, target)| labello_domain::ReviewRecord {
+                review_id: labello_domain::ReviewId::from(format!("migration-replacement-{index}")),
+                target: target.clone(),
+                reviewer_user_id: fixture.reviewers[0].clone(),
+                decision: if index == 0 || index + 1 == targets.len() {
+                    ReviewDecision::Rejected
+                } else {
+                    ReviewDecision::Approved
+                },
+                timestamp: labello_domain::now(),
+                comment: None,
+            })
+            .collect(),
+    };
+    let committed = fixture
+        .repository
+        .commit_review_revision(
+            &fixture.reviewers[0],
+            context(&reopened),
+            replacement.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        committed.task_states[&fixture.task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    assert_eq!(committed.annotations, completed.annotations);
+    assert!(
+        !committed
+            .migration_confirmations
+            .contains_key(&fixture.task_id)
+    );
+    assert!(
+        committed.migration_dependencies[&fixture.task_id]
+            .values()
+            .any(
+                |marker| marker.kind == labello_domain::MigrationDependencyKind::CorrectionRequired
+            )
+    );
+    assert!(
+        fixture
+            .repository
+            .reopen_review_assignment(
+                &fixture.reviewers[0],
+                &reopened.assignment_id,
+                &fixture.image_id,
+                &fixture.task_id
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        committed.migration_dispositions,
+        completed.migration_dispositions
+    );
+    assert_eq!(
+        assignment_status(&committed, &reopened),
+        AssignmentStatus::Completed
+    );
+    assert!(
+        completed
+            .reviews
+            .iter()
+            .all(|review| committed.reviews.contains(review))
+    );
+    assert!(
+        captured
+            .superseded_review_ids
+            .iter()
+            .all(|id| committed.superseded_review_ids.contains(id))
+    );
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.payload, EventPayload::ReviewRevisionCommitted { .. }))
+            .count(),
+        1
+    );
+    let replayed = rebuild_state(fixture.image_id.clone(), &events).unwrap();
+    assert_eq!(replayed, committed);
+    let retried = fixture
+        .repository
+        .commit_review_revision(&fixture.reviewers[0], context(&reopened), replacement)
+        .await
+        .unwrap();
+    assert_eq!(retried, committed);
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        events
+    );
+}
+
+#[tokio::test]
+async fn rejected_migration_with_invalidated_confirmation_cannot_reopen_previous_review() {
+    let fixture = fixture(ReviewWorkflow::Approval, 1).await;
+    let review = prepare_submitted_migration(&fixture).await;
+    let submitted = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let confirmation_hash = submitted.migration_confirmations[&fixture.task_id]
+        .confirmation_hash
+        .clone();
+    let rejected = fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&review),
+            &MigrationReviewTarget::Confirmation { confirmation_hash },
+            ReviewDecision::Rejected,
+            None,
+            "revision-reject-original",
+        )
+        .await
+        .unwrap()
+        .image_state;
+    assert_eq!(
+        rejected.task_states[&fixture.task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    assert!(
+        !rejected
+            .migration_confirmations
+            .contains_key(&fixture.task_id)
+    );
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(
+        fixture
+            .repository
+            .reopen_review_assignment(
+                &fixture.reviewers[0],
+                &review.assignment_id,
+                &fixture.image_id,
+                &fixture.task_id
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        events
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .load_image_state(&fixture.image_id)
+            .await
+            .unwrap(),
+        rejected
+    );
+}
+
+#[tokio::test]
+async fn skipped_migration_review_reopens_with_the_same_effective_exact_object_decision() {
+    let fixture = fixture(ReviewWorkflow::Approval, 1).await;
+    let review = prepare_submitted_migration(&fixture).await;
+    fixture
+        .repository
+        .release_assignment(
+            &fixture.reviewers[0],
+            &review.assignment_id,
+            &fixture.image_id,
+            &fixture.task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap();
+    let skipped = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let metadata = fixture.repository.load_dataset().await.unwrap();
+    let targets = skipped
+        .review_targets(metadata.task(&fixture.task_id).unwrap())
+        .unwrap();
+    let effective = skipped
+        .effective_review_for_target(&fixture.task_id, &targets[0], &fixture.reviewers[0])
+        .unwrap()
+        .clone();
+    let reopened = fixture
+        .repository
+        .reopen_review_assignment(
+            &fixture.reviewers[0],
+            &review.assignment_id,
+            &fixture.image_id,
+            &fixture.task_id,
+        )
+        .await
+        .unwrap();
+    assert_ne!(reopened.assignment_id, review.assignment_id);
+    let current = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(!current.review_assignment_contexts[&reopened.assignment_id].decision_revision);
+    assert_eq!(
+        current.review_assignment_contexts[&reopened.assignment_id].targets,
+        targets
+    );
+    assert_eq!(
+        current.effective_review_for_target(&fixture.task_id, &targets[0], &fixture.reviewers[0]),
+        Some(&effective)
+    );
+    assert_eq!(current.reviews, skipped.reviews);
+    assert_eq!(current.task_states, skipped.task_states);
+    assert_eq!(
+        current.migration_confirmations,
+        skipped.migration_confirmations
+    );
+    assert_eq!(
+        assignment_status(&current, &review),
+        AssignmentStatus::Cancelled
+    );
+    assert_eq!(
+        assignment_status(&current, &reopened),
+        AssignmentStatus::Active
+    );
 }

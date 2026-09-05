@@ -966,7 +966,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
         harness
             .state()
             .work
-            .previous_annotation_assignment
+            .previous_assignment
             .as_ref()
             .is_some_and(|assignment| assignment.status == AssignmentStatus::Completed)
     );
@@ -1682,14 +1682,8 @@ fn discovered_review_targets_are_exact_and_coordinate_less_history_uses_full_ima
         harness.step();
         assert!(harness.state().work.canvas.current_zoom() > 1.0);
         let user_id = harness.state().config.user_id.clone();
-        harness
-            .state_mut()
-            .work
-            .current_state
-            .as_mut()
-            .unwrap()
-            .reviews
-            .push(labello_domain::ReviewRecord {
+        let state = harness.state_mut().work.current_state.as_mut().unwrap();
+        let review = labello_domain::ReviewRecord {
                 review_id: labello_domain::ReviewId::from("discovery-review-test"),
                 target: labello_domain::ReviewTarget::AnnotationVersion {
                     annotation_id: first_id,
@@ -1699,7 +1693,12 @@ fn discovered_review_targets_are_exact_and_coordinate_less_history_uses_full_ima
                 decision: labello_domain::ReviewDecision::Approved,
                 timestamp: labello_domain::now(),
                 comment: None,
-            });
+            };
+        state.apply_event(&labello_domain::EventLogEntry::new(
+            state.current_sequence + 1, state.image_id.clone(),
+            review.reviewer_user_id.clone(), labello_domain::DatasetRole::Reviewer,
+            review.timestamp, labello_domain::EventPayload::ReviewRecorded { review },
+        )).unwrap();
         harness.step();
         assert!(
             matches!(harness.state().current_migration_review_target(), Some((_, labello_client::MigrationReviewTarget::Discovered { annotation_id, version: 1 })) if annotation_id == labello_domain::AnnotationId::from("discovered-object-2"))

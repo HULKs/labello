@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn apply_loaded_dataset(&mut self, loaded: LoadedDataset) {
-        self.clear_previous_annotation_assignment();
+        self.clear_previous_assignment();
         self.clear_current_image();
         self.sync_work_config(loaded.metadata);
         self.work.keybindings = loaded.keybindings;
@@ -193,6 +193,8 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         self.work.review_index = 0;
         self.work.review_rejected = false;
+        self.work.staged_review_decisions.clear();
+        self.work.review_revision_commit = None;
         self.work.correction_draft = None;
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
@@ -208,7 +210,7 @@ impl LabelloApp {
                 egui::TextureOptions::LINEAR,
             )
         });
-        if self.view == AppView::Review {
+        if self.view == AppView::Review && !self.review_revision_active() {
             self.work.review_index = self
                 .work
                 .selected_task_id
@@ -251,7 +253,7 @@ impl LabelloApp {
             return;
         }
         if let Some(crate::app::PendingTransition::PreviousAssignment(assignment)) = transition {
-            self.work.previous_annotation_assignment = Some(assignment.clone());
+            self.work.previous_assignment = Some(assignment.clone());
             self.clear_current_image();
             self.request_reopen_assignment(assignment);
             return;

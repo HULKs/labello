@@ -597,6 +597,7 @@ pub(crate) enum UiCommand {
         dataset_id: DatasetId,
         assignment: Assignment,
         review: ReviewRecord,
+        revision: Option<labello_domain::ReviewRevisionCommit>,
         phase: ReviewPhase,
     },
     Correction {

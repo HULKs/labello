@@ -218,6 +218,13 @@ refocuses its active canonical guide or discovered skeleton. Discovered-object
 focus uses its linked box, positioned-keypoint bounds, or the full image when
 historical data has no positions.
 
+Review Previous, also available through the configured Previous image shortcut,
+returns to the immediately previous eligible skipped or completed review.
+Completed reviews open a decision-only revision on current geometry. Stage the
+replacement decisions and explicitly commit the full-image result; opening or
+cancelling preserves the old outcome. Later work can make the previous review
+ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
+
 Saving a missing migration object also creates a derived box in its configured
 box task and reopens that task for correction and ordinary review. Still-derived
 boxes follow skeleton edits and removal. Independently edited or reviewed boxes

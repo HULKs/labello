@@ -1145,7 +1145,19 @@ impl LabelloApp {
             self.shortcut_text(ui.ctx(), labello_domain::UserAction::AcceptReviewObject);
         let reject_shortcut =
             self.shortcut_text(ui.ctx(), labello_domain::UserAction::RejectReviewObject);
-        let (approve, reject) = if shortcut_only {
+        let revision = self.review_revision_active();
+        let final_phase = matches!(
+            target,
+            labello_client::MigrationReviewTarget::Confirmation { .. }
+        );
+        let (approve, reject) = if revision && final_phase {
+            (
+                "Commit approval".to_string(),
+                "Commit rejection".to_string(),
+            )
+        } else if revision && !shortcut_only {
+            ("Stage approval".to_string(), "Stage rejection".to_string())
+        } else if shortcut_only {
             (
                 shortcut_button_label(&approve_shortcut, "Accept"),
                 shortcut_button_label(&reject_shortcut, "Reject"),
@@ -1168,9 +1180,14 @@ impl LabelloApp {
             button_width.unwrap_or_default(),
             if compact { 44.0 } else { 0.0 },
         ));
-        if theme::primary_button(ui, !self.work.migration.busy, approve_button)
-            .on_hover_text(format!("Accept migration item ({approve_shortcut})"))
-            .clicked()
+        let ready = !self.work.migration.busy && !self.loading.saving;
+        if theme::primary_button(
+            ui,
+            ready && !(revision && self.work.review_rejected),
+            approve_button,
+        )
+        .on_hover_text(format!("Accept migration item ({approve_shortcut})"))
+        .clicked()
         {
             self.request_review_migration(
                 task_id.clone(),
@@ -1178,7 +1195,7 @@ impl LabelloApp {
                 labello_domain::ReviewDecision::Approved,
             );
         }
-        if theme::danger_button(ui, !self.work.migration.busy, reject_button)
+        if theme::danger_button(ui, ready, reject_button)
             .on_hover_text(format!("Reject migration item ({reject_shortcut})"))
             .clicked()
         {
@@ -1524,7 +1541,7 @@ impl LabelloApp {
             && !self.loading.image
             && !self.work.migration.busy
             && self.work.pending_transition.is_none();
-        if self.work.previous_annotation_assignment.is_some()
+        if self.work.previous_assignment.is_some()
             && ui
                 .add_enabled(
                     ready,
@@ -1575,7 +1592,7 @@ impl LabelloApp {
                 && !self.loading.image
                 && !self.work.migration.busy
                 && self.work.pending_transition.is_none();
-            if self.work.previous_annotation_assignment.is_some()
+            if self.work.previous_assignment.is_some()
                 && ui
                     .add_enabled(ready, egui::Button::new("Previous assignment"))
                     .clicked()
@@ -1887,72 +1904,31 @@ impl LabelloApp {
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
-        let Some((task_id, set, state)) = self.work.current_state.as_ref().and_then(|state| {
-            let task_id = self.work.selected_task_id.as_ref()?;
-            Some((task_id, state.migration_target_sets.get(task_id)?, state))
-        }) else {
+        let (Some(state), Some(task)) = (self.work.current_state.as_ref(), self.selected_task())
+        else {
             return 0;
         };
-        let mut targets = set.targets.iter().collect::<Vec<_>>();
-        targets.sort_by_key(|target| target.sequence_index);
-        let canonical = targets
+        let Ok(targets) = state.review_object_targets(task) else {
+            return 0;
+        };
+        let object_count = targets.len();
+        if self.review_revision_active() && self.work.review_rejected {
+            return object_count;
+        }
+        targets
             .iter()
+            .take(object_count)
             .position(|target| {
-                let Some(disposition) = state
-                    .migration_dispositions
-                    .get(task_id)
-                    .and_then(|values| values.get(&target.object_group_id))
-                else {
-                    return true;
+                let review = if self.review_revision_active() {
+                    self.staged_review_decision(target)
+                } else {
+                    state.effective_review_for_target(&task.task_id, target, &self.config.user_id)
                 };
-                !state.reviews.iter().any(|review| {
-                    review.reviewer_user_id == self.config.user_id
-                        && state
-                            .task_states
-                            .get(task_id)
-                            .is_none_or(|task| review.timestamp >= task.updated_at)
-                        && review.decision == labello_domain::ReviewDecision::Approved
-                        && match (&review.target, &disposition.status) {
-                            (
-                                labello_domain::ReviewTarget::AnnotationVersion {
-                                    annotation_id,
-                                    version,
-                                },
-                                MigrationDispositionStatus::Annotated {
-                                    skeleton_annotation_id,
-                                    skeleton_version,
-                                },
-                            ) => {
-                                annotation_id == skeleton_annotation_id
-                                    && version == skeleton_version
-                            }
-                            (
-                                labello_domain::ReviewTarget::MigrationDisposition {
-                                    task_id: reviewed_task,
-                                    object_group_id,
-                                    disposition_version,
-                                },
-                                MigrationDispositionStatus::Excluded { .. },
-                            ) => {
-                                reviewed_task == task_id
-                                    && object_group_id == &target.object_group_id
-                                    && *disposition_version == disposition.disposition_version
-                            }
-                            _ => false,
-                        }
+                review.is_none_or(|review| {
+                    review.decision != labello_domain::ReviewDecision::Approved
                 })
             })
-            .unwrap_or(targets.len());
-        if canonical < targets.len() {
-            return canonical;
-        }
-        targets.len() + state.migration_discovered_skeletons(task_id).iter().position(|skeleton| {
-            !state.reviews.iter().any(|review| review.reviewer_user_id == self.config.user_id
-                && state.task_states.get(task_id).is_none_or(|task| review.timestamp >= task.updated_at)
-                && review.decision == labello_domain::ReviewDecision::Approved
-                && matches!(&review.target, labello_domain::ReviewTarget::AnnotationVersion { annotation_id, version }
-                    if annotation_id == &skeleton.annotation_id && *version == skeleton.version))
-        }).unwrap_or(state.migration_discovered_skeletons(task_id).len())
+            .unwrap_or(object_count)
     }
 
     fn migration_targets(&self) -> Vec<labello_domain::MigrationTarget> {
@@ -2934,6 +2910,32 @@ impl LabelloApp {
         let Some(assignment) = self.work.assignment.clone() else {
             return;
         };
+        if self.review_revision_active() {
+            let Some(review_target) = self
+                .work
+                .current_state
+                .as_ref()
+                .and_then(|state| {
+                    state
+                        .review_assignment_contexts
+                        .get(&assignment.assignment_id)
+                })
+                .and_then(|context| context.targets.get(self.work.migration.review_index))
+                .cloned()
+            else {
+                return;
+            };
+            let phase = if matches!(
+                target,
+                labello_client::MigrationReviewTarget::Confirmation { .. }
+            ) {
+                crate::app::ReviewPhase::FullImage
+            } else {
+                crate::app::ReviewPhase::Object
+            };
+            self.queue_review(assignment, review_target, decision, phase);
+            return;
+        }
         self.queue_migration_action(MigrationAction::Review(
             labello_client::ReviewMigrationRequest {
                 assignment_id: assignment.assignment_id,
