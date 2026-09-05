@@ -459,6 +459,24 @@ fn workspace_idle_resize_settles_migration_actions() {
         if let Some(index) = review_index {
             // Initial assignment synchronization chooses the canonical first target.
             // Now exercise the explicit object/final positions in the stable scope.
+            if index == 2 {
+                let task = harness.state().selected_task().unwrap().clone();
+                let user = harness.state().config.user_id.clone();
+                let state = harness.state_mut().work.current_state.as_mut().unwrap();
+                for (position, target) in state.review_object_targets(&task).unwrap().into_iter().enumerate() {
+                    let timestamp = now();
+                    state.apply_event(&EventLogEntry::new(
+                        state.current_sequence + 1, state.image_id.clone(), user.clone(),
+                        DatasetRole::Reviewer, timestamp, EventPayload::ReviewRecorded {
+                            review: labello_domain::ReviewRecord {
+                                review_id: labello_domain::ReviewId::from(format!("resize-review-{position}")),
+                                target, reviewer_user_id: user.clone(),
+                                decision: labello_domain::ReviewDecision::Approved, timestamp, comment: None,
+                            },
+                        },
+                    )).unwrap();
+                }
+            }
             harness.state_mut().work.migration.review_index = index;
             let context = harness.state().review_context().expect("valid migration review context");
             assert_eq!(matches!(context.phase, crate::review_context::ReviewContextPhase::FullImage { .. }), index == 2);
