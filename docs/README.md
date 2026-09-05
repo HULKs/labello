@@ -26,6 +26,9 @@ documents are maintained current references:
 
 Supporting project material is grouped by purpose:
 
+- The [native inspector guide](../apps/egui-mcp-inspector/README.md) covers
+  headless setup, MCP operation, parallel-agent isolation, and native UI
+  verification. Browser acceptance remains in the verification reference.
 - [`plans/`](plans/) is indexed by explicit status and contains active,
   completed, and historical implementation records plus the current
   [workflow policy ownership](plans/structural-refactor-policy-ownership.md)

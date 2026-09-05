@@ -316,6 +316,14 @@ cargo check --manifest-path apps/egui-mcp-inspector/Cargo.toml
 
 ## GUI Inspection
 
+For UI development or workflow interaction verification, read
+[`apps/egui-mcp-inspector/README.md`](apps/egui-mcp-inspector/README.md) before
+launching inspection. It owns headless setup, MCP connection, the inspection
+loop, evidence, cleanup, and parallel-agent isolation. A missing physical
+display is not a reason to skip native inspection; use the documented Xvfb
+recipe. Each concurrent driver needs its own app, loopback port, MCP server
+process, and artifact directory. Use the assigned worktree's build.
+
 Use each validation surface only for what it proves:
 
 - `egui_kittest` validates deterministic shared-UI behavior, geometry, and
@@ -324,20 +332,9 @@ Use each validation surface only for what it proves:
   trees across deterministic presets.
 - Chromium validates actual WASM/browser behavior.
 
-Run the inspector from the repository root:
-
-```sh
-EGUI_INSPECTION=1 cargo run --manifest-path apps/egui-mcp-inspector/Cargo.toml
-```
-
-Use `-- --preset <name>` for a frozen state or `-- --live` for a local server.
-The preset list and live-mode limitations are maintained in
-`apps/egui-mcp-inspector/README.md`. Live mode omits browser-only folder upload,
-snapshot download, OAuth, and persistent native drafts.
-
-Keep the inspector bound to loopback. Its default inspection port has no
-authentication. Restart OpenCode after changing `opencode.json` so its egui MCP
-configuration reloads.
+Use presets for deterministic shared states and live mode with an isolated,
+disposable server for supported workflow interactions. The inspector guide
+lists browser-only omissions and the required Chromium checks.
 
 ## Commits
 
