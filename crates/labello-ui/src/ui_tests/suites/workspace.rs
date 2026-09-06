@@ -2759,3 +2759,16 @@ fn continuing_a_skeleton_after_autosave_persists_later_keypoints() {
         }
     ));
 }
+
+#[test]
+fn statistics_opens_without_staging_an_assignment_transition() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let epoch = harness.state().workspace_epoch;
+    let assignment = harness.state().work.assignment.clone();
+    harness.state_mut().open_view(AppView::Stats);
+    assert!(harness.state().work.pending_transition.is_none(), "statistics must not stage an assignment transition");
+    assert_eq!(harness.state().view, AppView::Annotate);
+    assert_eq!(harness.state().workspace_epoch, epoch);
+    assert_eq!(harness.state().work.assignment, assignment);
+}

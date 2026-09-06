@@ -4,11 +4,111 @@ use eframe::egui::{self, RichText};
 use labello_domain::{ClassId, TaskId};
 
 use crate::{
-    app::{LabelloApp, LayoutMode},
+    app::{AppView, LabelloApp, LayoutMode, StatisticsOverlayState},
     theme,
 };
 
 impl LabelloApp {
+    pub(crate) fn statistics_visible(&self) -> bool {
+        self.navigation.statistics.open || self.view == AppView::Stats
+    }
+
+    pub(crate) fn open_statistics(&mut self) {
+        if self.navigation.statistics.open {
+            return;
+        }
+        self.navigation.statistics = StatisticsOverlayState {
+            open: true,
+            assignment_id: self
+                .work
+                .assignment
+                .as_ref()
+                .map(|assignment| assignment.assignment_id.clone()),
+            invoker: self
+                .runtime
+                .repaint_ctx
+                .as_ref()
+                .and_then(|ctx| ctx.memory(|memory| memory.focused())),
+            from_navigation: self.navigation.drawer_open,
+            focus_close: true,
+            restore_focus: None,
+        };
+        self.request_stats();
+    }
+
+    pub(crate) fn statistics_overlay(&mut self, ctx: &egui::Context) {
+        if self
+            .navigation
+            .statistics
+            .assignment_id
+            .as_ref()
+            .is_some_and(|id| {
+                self.work
+                    .assignment
+                    .as_ref()
+                    .is_none_or(|assignment| &assignment.assignment_id != id)
+            })
+        {
+            self.navigation.statistics = Default::default();
+            return;
+        }
+        let screen = ctx.content_rect();
+        let width = (screen.width() - 56.0).clamp(200.0, 1050.0);
+        let max_height = (screen.height() - 56.0).max(160.0);
+        let id = egui::Id::new("statistics-overlay");
+        let resized = ctx.data_mut(|data| {
+            let viewport_id = id.with("viewport");
+            let previous = data.get_temp::<egui::Rect>(viewport_id);
+            data.insert_temp(viewport_id, screen);
+            previous.is_some_and(|previous| previous != screen)
+        });
+        let area = egui::Modal::default_area(id)
+            .default_width(width)
+            // Remeasure the anchored area and repaint immediately after a viewport change.
+            .sizing_pass(resized)
+            .constrain_to(screen);
+        let mut close = false;
+        let response = theme::modal(ctx, id).area(area).show(ctx, |ui| {
+            ui.set_width(width);
+            ui.set_max_height(max_height);
+            ui.horizontal(|ui| {
+                ui.heading("Statistics");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let button = ui.add(
+                        egui::Button::new("Close statistics").min_size(egui::vec2(120.0, 44.0)),
+                    );
+                    if std::mem::take(&mut self.navigation.statistics.focus_close) {
+                        button.request_focus();
+                    }
+                    close = button.clicked();
+                });
+            });
+            egui::ScrollArea::vertical()
+                .id_salt("statistics-overlay-scroll")
+                .max_height((max_height - 64.0).max(80.0))
+                .show(ui, |ui| {
+                    if let Some(error) = &self.runtime.error {
+                        theme::inline_message(ui, theme::Intent::Warning, error);
+                    }
+                    self.stats_view(ui, LayoutMode::for_width(width));
+                });
+        });
+        response.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Dataset statistics")
+        });
+        ctx.accesskit_node_builder(response.response.id, |node| node.set_modal());
+        if close || response.should_close() {
+            self.navigation.statistics.open = false;
+            self.navigation.statistics.restore_focus = self.navigation.statistics.invoker;
+            if self.navigation.statistics.from_navigation
+                && LayoutMode::for_width(screen.width()) != LayoutMode::Wide
+            {
+                self.navigation.drawer_open = true;
+            }
+            ctx.request_repaint();
+        }
+    }
+
     pub(crate) fn stats_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         let has_data = self.datasets.last_stats_completion.is_some();
         let initial_loading = self.loading.stats && !has_data;

@@ -1438,8 +1438,11 @@ fn stats_and_responsive_layouts_render_without_losing_primary_actions() {
     assert_eq!(api.counts().dataset_stats, 0);
 
     click_application_menu_item(&mut harness, "Statistics");
-    release_and_switch(&mut harness);
-    step_until(&mut harness, 8, |app| app.view == AppView::Stats);
+    step_until(&mut harness, 8, |app| {
+        app.navigation.statistics.open && !app.loading.stats
+    });
+    assert_eq!(harness.state().view, AppView::Annotate);
+    assert_eq!(api.counts().release_assignment, 0);
     harness.step();
     assert!(harness.query_by_label("Live Statistics").is_some());
     click(&mut harness, "Refresh now");
@@ -1453,7 +1456,7 @@ fn stats_and_responsive_layouts_render_without_losing_primary_actions() {
 
     harness.set_size(egui::vec2(1280.0, 820.0));
     harness.step();
-    click_application_menu_item(&mut harness, "Annotate");
+    click(&mut harness, "Close statistics");
     harness.step();
     assert!(harness.query_by_label_contains("Save").is_some());
     assert!(harness.query_by_label_contains("Submit & next").is_some());

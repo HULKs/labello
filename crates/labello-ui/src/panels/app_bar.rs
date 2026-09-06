@@ -164,14 +164,15 @@ impl LabelloApp {
             self.navigation.drawer_open = false;
             self.navigation.restore_drawer_trigger_focus = false;
             for (view, label) in destinations {
-                if left_ui
-                    .add_sized(
-                        [navigation_width(label), 44.0],
-                        egui::Button::selectable(self.view == view, label),
-                    )
-                    .clicked()
-                {
+                let response = left_ui.add_sized(
+                    [navigation_width(label), 44.0],
+                    egui::Button::selectable(self.view == view, label),
+                );
+                if response.clicked() {
                     self.open_view(view);
+                    if view == AppView::Stats {
+                        self.navigation.statistics.invoker = Some(response.id);
+                    }
                 }
             }
             for action in actions.iter().rev() {
@@ -201,14 +202,24 @@ impl LabelloApp {
         ui.set_min_width(theme::MENU_WIDTH);
         let item_width = ui.available_width().max(theme::MENU_WIDTH);
         for (view, label) in destinations {
-            if ui
-                .add(
-                    egui::Button::selectable(self.view == *view, *label)
-                        .min_size(egui::vec2(item_width, 44.0)),
-                )
-                .clicked()
+            let response = ui.add(
+                egui::Button::selectable(self.view == *view, *label)
+                    .min_size(egui::vec2(item_width, 44.0)),
+            );
+            if *view == AppView::Stats
+                && self.navigation.statistics.restore_focus == Some(response.id)
+                && ui
+                    .ctx()
+                    .memory(|memory| memory.allows_interaction(response.layer_id))
             {
+                response.request_focus();
+                self.navigation.statistics.restore_focus = None;
+            }
+            if response.clicked() {
                 self.open_view(*view);
+                if *view == AppView::Stats {
+                    self.navigation.statistics.invoker = Some(response.id);
+                }
                 ui.close();
                 action_taken = true;
             }

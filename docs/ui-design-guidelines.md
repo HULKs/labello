@@ -175,9 +175,14 @@ has been recorded.
 - **Admin:** organize by Overview, People, Images, Schema, Automation, and
   Backups; preserve staged edits between destinations; use wide rows and compact
   cards; retain validation and role protections.
-- **Statistics:** keep real data visible during refresh, order columns by the
-  workflow, align numeric comparisons, and expose an accessible value for every
-  chart item.
+- **Statistics:** open a dataset-scoped modal above the current workspace or
+  setup. Opening, refreshing, and closing it preserve the assignment, image,
+  draft, selection, canvas transform, and workspace epoch. Continue legitimate
+  in-flight workflow results and expose recovery when ownership becomes invalid.
+  Block background input, provide Close and Escape dismissal, restore focus to
+  the invoking control, and constrain the content to a scrollable viewport.
+  Keep real data visible during refresh, order columns by the workflow, align
+  numeric comparisons, and expose an accessible value for every chart item.
 
 ## Verification
 

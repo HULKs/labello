@@ -449,14 +449,8 @@ fn admin_people_directory_saves_roles_and_protects_the_last_admin() {
     );
     harness.state_mut().open_view(AppView::Stats);
     assert_eq!(harness.state().view, AppView::Admin);
-    assert!(
-        harness
-            .state()
-            .runtime
-            .error
-            .as_deref()
-            .is_some_and(|error| error.contains("before leaving Admin"))
-    );
+    assert!(harness.state().navigation.statistics.open);
+    assert!(harness.state().admin_changes_dirty());
     assert!(harness.query_by_label("Discard staged changes").is_some());
     let dataset_id = harness.state().config.dataset_id.clone();
     harness
@@ -481,6 +475,14 @@ fn admin_people_directory_saves_roles_and_protects_the_last_admin() {
             .as_deref()
             .is_some_and(|error| error.contains("before signing out"))
     );
+    for _ in 0..4 {
+        harness.step();
+    }
+    click(&mut harness, "Close statistics");
+    assert!(!harness.state().navigation.statistics.open);
+    for _ in 0..4 {
+        harness.step();
+    }
     click_accesskit_button(&mut harness, "Save Admin changes");
     step_until(&mut harness, 8, |app| {
         !app.loading.admin

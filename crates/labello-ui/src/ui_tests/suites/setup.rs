@@ -265,7 +265,14 @@ fn adjudicator_only_dataset_recommends_statistics() {
             .is_none()
     );
     click(&mut harness, "Continue with Demo Dataset");
-    step_until(&mut harness, 12, |app| app.view == AppView::Stats);
+    step_until(&mut harness, 12, |app| app.navigation.statistics.open);
+    assert_eq!(harness.state().view, AppView::Setup);
+    harness.key_press(egui::Key::Escape);
+    for _ in 0..4 {
+        harness.step();
+    }
+    assert!(!harness.state().navigation.statistics.open);
+    assert!(harness.get_by_label("Continue with Demo Dataset").is_focused());
 }
 
 #[test]

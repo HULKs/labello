@@ -211,7 +211,9 @@ Available presets are `annotation`, `setup`, `about`, `build-mismatch`,
 pending imported guide with one optional `center` keypoint and no positioned
 draft input, without a server or dataset. Preset actions
 are intentionally local and deterministic; restart with another preset for a
-clean inspection context.
+clean inspection context. The `statistics` and `statistics-failure` presets open
+an accessible, scrollable statistics modal above Setup; Escape or Close returns
+to that underlying view.
 
 `overlay-annotation`, `overlay-review`, `overlay-correction`, and
 `overlay-migration` show visible, occluded, and not-present keypoints over

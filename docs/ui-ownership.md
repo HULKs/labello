@@ -17,7 +17,7 @@ explicit feature states:
 - `admin`: administration filters, snapshots, roles, and staged configuration.
 - `import`: the import wizard, source registration, planning, and job progress.
 - `navigation`: responsive application-drawer visibility, atomic app-bar
-  collapse ownership, and focus restoration.
+  collapse ownership, statistics-overlay visibility, and focus restoration.
 - `work`: assignment, annotation, review, adjudication, migration, canvas, and
   edit-history state.
 
@@ -66,6 +66,7 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/task_selector.rs`: task selection;
 - `panels/inspector.rs`: annotation, review, and adjudication controls;
 - `panels/workspace.rs`: central workspace and canvas controls;
+- `statistics.rs`: the dataset statistics modal and its existing metric renderer;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -157,6 +158,22 @@ There is no image-quality selection, per-image representation override or saved
 quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
 failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
+
+Statistics data, remote status, and active request identity remain dataset-owned.
+The navigation-owned modal does not perform an assignment transition or start a
+workspace epoch. Refresh uses the existing request/epoch gate and may run while
+assignment requests are active. Authentication/workspace invalidation dismisses
+the modal; losing its original assignment dismisses it without restoring work.
+Viewport changes trigger one modal sizing pass and an immediate follow-up repaint,
+so the open overlay stays constrained without waiting for statistics refresh or
+new input. This geometry cache belongs to egui and carries no workflow state.
+
+Required draft recovery and migration companion reconciliation take precedence
+when Statistics is open. Recovery clears the overlay under the existing recovery
+rules; reconciliation temporarily covers it without discarding its open state.
+After reconciliation is cancelled or completed, Statistics resumes ahead of
+ordinary revisit/assignment-transition dialogs. Closing Statistics preserves the
+underlying migration assignment and draft.
 
 ## Direct Migration Revisit
 

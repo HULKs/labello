@@ -318,8 +318,7 @@ impl LabelloApp {
     pub(crate) fn request_stats(&mut self) {
         if self.loading.stats
             || self.runtime.api.is_none()
-            || self.loading.image
-            || !matches!(self.view, AppView::Stats)
+            || !self.statistics_visible()
         {
             return;
         }

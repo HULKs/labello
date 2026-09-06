@@ -253,7 +253,7 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         }
         InspectorPreset::StatisticsFailure => {
             let mut app = setup_preset();
-            app.view = AppView::Stats;
+            app.open_statistics();
             app.datasets.stats_error = Some("Statistics service is unavailable".to_string());
             app
         }
@@ -1077,7 +1077,7 @@ fn admin_preset() -> LabelloApp {
 
 fn statistics_preset() -> LabelloApp {
     let mut app = setup_preset();
-    app.view = AppView::Stats;
+    app.open_statistics();
     app.datasets.stats = DatasetStats {
         total_images: 24,
         completed_tasks: 18,

@@ -28,6 +28,19 @@ impl eframe::App for LabelloApp {
         self.refresh_import_if_due();
         self.autosave_if_due();
         self.handle_shortcuts(ui.ctx());
+        if self.navigation.statistics.restore_focus.is_some() {
+            if !self.navigation.drawer_open
+                && ui.ctx().memory(|memory| memory.top_modal_layer().is_none())
+            {
+                let invoker = self.navigation.statistics.restore_focus.take().unwrap();
+                ui.ctx().memory_mut(|memory| memory.request_focus(invoker));
+            } else {
+                ui.ctx().request_repaint();
+            }
+        }
+        if self.navigation.statistics.open {
+            ui.disable();
+        }
         let viewport = ui.available_size();
         let layout = LayoutMode::for_width(ui.available_width());
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
@@ -164,7 +177,7 @@ impl eframe::App for LabelloApp {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(500));
         }
-        if self.view == AppView::Stats && !self.loading.stats {
+        if self.statistics_visible() && !self.loading.stats {
             let until_refresh = self
                 .datasets
                 .last_stats_attempt
