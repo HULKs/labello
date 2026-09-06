@@ -2343,3 +2343,37 @@ fn historical_migration_pass_reloads_and_resolves_through_normal_controls() {
         );
     }
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn untouched_migration_navigation_releases_but_keypoint_input_remains_protected() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for touched in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut app = inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
+        api.state.borrow_mut().active_assignments.push(app.work.assignment.clone().unwrap());
+        api.set_image_state(app.work.current_state.clone().unwrap());
+        app.runtime.api = Some(api.clone());
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
+        harness.step();
+        assert!(!harness.state().assignment_has_work());
+        if touched {
+            let canvas = harness.get_by_label("Annotation canvas").rect();
+            click_at(&mut harness, canvas.center());
+            assert!(harness.state().assignment_has_work());
+            harness.state_mut().remove_last_migration_keypoint();
+            assert!(harness.state().assignment_has_work());
+        }
+        harness.state_mut().open_view(AppView::Setup);
+        assert_eq!(harness.state().loading.saving, !touched);
+        harness.step();
+        if touched {
+            assert!(harness.state().work.pending_transition.is_some());
+            assert_eq!(api.counts().release_assignment, 0);
+        } else {
+            assert!(harness.query_by_label("Switch active assignment?").is_none());
+            step_until(&mut harness, 12, |app| app.view == AppView::Setup);
+            assert_eq!(api.counts().release_assignment, 1);
+        }
+    }
+}

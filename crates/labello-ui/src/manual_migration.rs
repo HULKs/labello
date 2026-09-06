@@ -623,6 +623,7 @@ impl LabelloApp {
             self.work.migration.draft = Some(ManualMigrationState::empty_skeleton(names));
             self.work.migration.keypoint_index = 0;
             self.work.migration.draft_dirty = true;
+            self.work.assignment_touched = true;
         }
         let (_, _, _, _, next_name) = self.migration_draft_decisions();
         let decision_summary = self.migration_decision_summary();
@@ -840,6 +841,7 @@ impl LabelloApp {
             .labelled_by(reason_label.id);
         if self.work.migration.exclusion_reason != previous_reason {
             self.work.migration.exclusion_dirty = true;
+            self.work.assignment_touched = true;
         }
         let note_label = ui.label(
             if self.work.migration.exclusion_reason == MigrationExclusionReason::Other {
@@ -862,6 +864,7 @@ impl LabelloApp {
             .changed()
         {
             self.work.migration.exclusion_dirty = true;
+            self.work.assignment_touched = true;
         }
         let note_bytes = self.work.migration.exclusion_note.trim().len();
         let note_valid = note_bytes <= MAX_EXCLUSION_NOTE_BYTES
@@ -973,6 +976,7 @@ impl LabelloApp {
             self.work.migration.draft = Some(ManualMigrationState::empty_skeleton(names));
             self.work.migration.keypoint_index = 0;
             self.work.migration.draft_dirty = true;
+            self.work.assignment_touched = true;
         }
         let (_, _, _, _, next_name) = self.migration_draft_decisions();
         let decision_summary = self.migration_decision_summary();
@@ -2272,6 +2276,7 @@ impl LabelloApp {
         }
         keypoint.point = Some(edit.point);
         self.work.migration.draft_dirty = true;
+        self.work.assignment_touched = true;
     }
 
     fn begin_revisit_migration_target(&mut self, group_id: ObjectGroupId) {
@@ -2531,6 +2536,7 @@ impl LabelloApp {
         };
         self.work.migration.keypoint_index += 1;
         self.work.migration.draft_dirty = true;
+        self.work.assignment_touched = true;
         self.work.migration.next_hidden = false;
     }
 
@@ -2550,6 +2556,7 @@ impl LabelloApp {
         if allowed && !would_leave_unpositioned {
             self.work.migration.keypoint_index += 1;
             self.work.migration.draft_dirty = true;
+            self.work.assignment_touched = true;
             self.work.migration.next_hidden = false;
         }
     }
@@ -2574,6 +2581,7 @@ impl LabelloApp {
         keypoint.state = KeypointState::Absent;
         self.work.migration.keypoint_index = index;
         self.work.migration.draft_dirty = true;
+        self.work.assignment_touched = true;
         self.work.migration.next_hidden = false;
     }
 
@@ -3047,6 +3055,9 @@ impl LabelloApp {
             key: idempotency_key.clone(),
         });
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
+        if !matches!(action, MigrationAction::Revisit(_)) {
+            self.work.assignment_touched = true;
+        }
         self.work.migration.busy = true;
         self.work.migration.error = None;
         self.queue_command(UiCommand::Migration {

@@ -138,7 +138,7 @@ fn workers_select_class_specific_workflows() {
     assert!(harness.query_by_label("Current").is_none());
     assert!(harness.query_all_by_label("Vehicle boxes").next().is_some());
     click(&mut harness, "Vehicle boxes");
-    release_and_switch(&mut harness);
+    assert!(harness.query_by_label("Release and switch").is_none());
     step_until(&mut harness, 12, |app| {
         app.selected_class_id() == Some(&ClassId::from("vehicle")) && app.work.current.is_some()
     });
@@ -2064,9 +2064,9 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(
         harness
             .query_by_label("Switch active assignment?")
-            .is_some()
+            .is_none()
     );
-    release_and_switch(&mut harness);
+    assert!(harness.query_by_label("Release and switch").is_none());
     step_until(&mut harness, 10, |app| {
         app.view == AppView::Review && app.work.current.is_some() && !app.loading.image
     });
@@ -2771,4 +2771,135 @@ fn statistics_opens_without_staging_an_assignment_transition() {
     assert_eq!(harness.state().view, AppView::Annotate);
     assert_eq!(harness.state().workspace_epoch, epoch);
     assert_eq!(harness.state().work.assignment, assignment);
+}
+
+#[test]
+fn untouched_assignment_navigation_releases_without_confirmation_and_preserves_failure() {
+    for review in [false, true] {
+        for fail in [false, true] {
+            let api = Rc::new(SpyApi::new());
+            seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+                x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+            }), true);
+            let mut harness = if review {
+                loaded_review_harness(api.clone())
+            } else {
+                loaded_work_harness(api.clone())
+            };
+            step_until(&mut harness, 12, |app| !app.work.queue.is_loading());
+            let assignment = harness.state().work.assignment.clone().unwrap();
+            let annotations = harness.state().work.annotations.clone();
+            assert!(!annotations.is_empty());
+            harness.state_mut().work.selected_annotation = Some(annotations[0].annotation_id.clone());
+            let view = harness.state().view;
+            harness.state_mut().refocus_active_object();
+            assert!(!harness.state().assignment_has_work());
+            api.state.borrow_mut().fail_next_release = fail;
+            harness.state_mut().open_view(AppView::Setup);
+            assert!(harness.state().loading.saving);
+            assert_eq!(harness.state().view, view);
+            assert_eq!(harness.state().work.assignment.as_ref(), Some(&assignment));
+            harness.state_mut().open_view(AppView::Admin);
+            harness.state_mut().open_about();
+            assert_eq!(harness.state().work.pending_transition,
+                Some(crate::app::PendingTransition::View(AppView::Setup)));
+            assert_eq!(harness.state().runtime.commands.iter().filter(|command|
+                matches!(command, UiCommand::ReleaseAssignment { .. })).count(), 1);
+            harness.step();
+            assert!(harness.query_by_label("Switch active assignment?").is_none());
+            step_until(&mut harness, 12, |app| !app.loading.saving);
+            if fail {
+                assert_eq!(harness.state().view, view);
+                assert_eq!(harness.state().work.assignment.as_ref(), Some(&assignment));
+                assert_eq!(harness.state().work.annotations, annotations);
+                assert!(harness.state().runtime.error.as_deref().unwrap().contains("release failed"));
+                assert!(harness.state().work.pending_transition.is_none());
+                harness.state_mut().open_view(AppView::Setup);
+                step_until(&mut harness, 12, |app| app.view == AppView::Setup);
+            } else {
+                assert_eq!(harness.state().view, AppView::Setup);
+                assert!(harness.state().work.assignment.is_none());
+            }
+            assert!(!api.has_active_assignment(&assignment.assignment_id));
+        }
+    }
+}
+
+#[test]
+fn saved_annotation_work_still_requires_navigation_confirmation() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    click(&mut harness, "Accept");
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
+    harness.state_mut().open_view(AppView::Setup);
+    harness.step();
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    assert!(!harness.state().loading.saving);
+}
+
+#[test]
+fn discarded_review_correction_still_requires_navigation_confirmation() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api);
+    harness.state_mut().start_correction();
+    assert!(harness.state().work.correction_draft.is_some());
+    harness.state_mut().discard_correction();
+    harness.state_mut().open_view(AppView::Setup);
+    harness.step();
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+}
+
+#[test]
+fn automatic_release_rejects_stale_completions_and_blocks_background_input() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    harness.state_mut().open_view(AppView::Setup);
+    let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+    let UiCommand::ReleaseAssignment { request, operation_id, assignment, .. } = command else {
+        panic!("expected release");
+    };
+    let mut stale = request.clone();
+    stale.workspace_epoch = stale.workspace_epoch.wrapping_add(1);
+    harness.state().runtime.tx.send(UiMessage::ReleaseFinished {
+        request: stale, operation_id, assignment_id: assignment.assignment_id.clone(), result: Ok(()),
+    }).unwrap();
+    harness.step();
+    assert_eq!(harness.state().view, AppView::Annotate);
+    assert!(harness.state().loading.saving);
+    assert!(harness.query_by_label("Switch active assignment?").is_none());
+    assert!(harness.get_by_label("Accept").accesskit_node().is_disabled());
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    assert!(harness.state().work.pending_transition.is_some());
+    harness.state().runtime.tx.send(UiMessage::ReleaseFinished {
+        request: request.clone(), operation_id, assignment_id: assignment.assignment_id.clone(), result: Ok(()),
+    }).unwrap();
+    step_until(&mut harness, 8, |app| app.view == AppView::Setup);
+    let epoch = harness.state().workspace_epoch;
+    harness.state().runtime.tx.send(UiMessage::ReleaseFinished {
+        request, operation_id, assignment_id: assignment.assignment_id, result: Ok(()),
+    }).unwrap();
+    harness.step();
+    assert_eq!(harness.state().workspace_epoch, epoch);
+    assert_eq!(harness.state().view, AppView::Setup);
+}
+
+#[test]
+fn recorded_review_decision_still_requires_navigation_confirmation() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    click(&mut harness, "Approve object");
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert_eq!(api.counts().record_review, 1);
+    harness.state_mut().open_view(AppView::Setup);
+    harness.step();
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
 }

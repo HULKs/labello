@@ -47,6 +47,7 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
+        self.work.assignment_touched = false;
         self.work.review_index = 0;
         self.work.review_rejected = false;
         self.work.correction_draft = None;
@@ -852,6 +853,7 @@ impl LabelloApp {
         }
         let operation_id = self.begin_operation();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
+        self.work.assignment_touched = true;
         self.queue_command(UiCommand::Review {
             request,
             operation_id,
