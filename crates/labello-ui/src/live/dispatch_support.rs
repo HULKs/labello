@@ -12,7 +12,7 @@ impl LabelloApp {
                 let result = api
                     .dataset_stats(&dataset_id)
                     .await
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::StatsLoaded { request, result }
             }),
             UiCommand::AssignmentAvailability {
@@ -26,7 +26,7 @@ impl LabelloApp {
                         labello_client::AssignmentAvailabilityRequest { kind },
                     )
                     .await
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::AssignmentAvailabilityLoaded { request, result }
             }),
             UiCommand::SaveKeybindings {
@@ -39,7 +39,7 @@ impl LabelloApp {
                     result: api
                         .save_keybindings(&dataset_id, keybindings)
                         .await
-                        .map_err(|error| error.to_string()),
+                        .map_err(UiRequestError::from),
                 }
             }),
             command => return Some(command),

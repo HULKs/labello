@@ -14,7 +14,7 @@ use labello_domain::{
 use crate::{
     app::{
         AppView, IMAGE_QUEUE_SIZE, LabelloApp, LoadedImage, ReviewPhase, SaveStatus, UiCommand,
-        UiMessage,
+        UiMessage, UiRequestError,
     },
     queue::QueuedImage,
 };
@@ -92,7 +92,7 @@ impl LabelloApp {
                             request,
                             operation_id,
                             assignment: None,
-                            result: Box::new(Err(error.to_string())),
+                            result: Box::new(Err(UiRequestError::from(error))),
                         };
                     }
                 };
@@ -113,7 +113,7 @@ impl LabelloApp {
                 )
                 .await
                 .map(Some)
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::ImageLoaded {
                     request,
                     operation_id,
@@ -147,7 +147,7 @@ impl LabelloApp {
                         return UiMessage::PrefetchLoaded {
                             request,
                             operation_id,
-                            result: Box::new(Err(error.to_string())),
+                            result: Box::new(Err(UiRequestError::from(error))),
                         };
                     }
                 };
@@ -167,7 +167,7 @@ impl LabelloApp {
                 )
                 .await
                 .map(Some)
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 if result.is_err() {
                     let _ = api
                         .release_assignment(&dataset_id, assignment_action(&assignment))
@@ -192,7 +192,7 @@ impl LabelloApp {
                         assignment_action(&cached.assignment),
                     )
                     .await
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::PreparedReviewRevalidated {
                     request,
                     operation_id,
@@ -209,7 +209,7 @@ impl LabelloApp {
                     .release_assignment(&dataset_id, assignment_action(&assignment))
                     .await
                     .map(|_| ())
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::ReservationReleased { request, result }
             }),
             UiCommand::ReloadAssignment {
@@ -229,7 +229,7 @@ impl LabelloApp {
                 )
                 .await
                 .map(Some)
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::ImageLoaded {
                     request,
                     operation_id,
@@ -257,7 +257,7 @@ impl LabelloApp {
                                 request,
                                 operation_id,
                                 assignment: None,
-                                result: Box::new(Err(error.to_string())),
+                                result: Box::new(Err(UiRequestError::from(error))),
                             };
                         }
                     }
@@ -270,7 +270,7 @@ impl LabelloApp {
                     true,
                 )
                 .await
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::PreviousAssignmentLoaded {
                     request,
                     operation_id,
@@ -300,7 +300,7 @@ impl LabelloApp {
                     submit,
                 })
                 .await
-                .map_err(|error| error.to_string());
+                .map_err(UiRequestError::from);
                 UiMessage::SaveFinished {
                     request,
                     operation_id,
@@ -321,7 +321,7 @@ impl LabelloApp {
                     .release_assignment(&dataset_id, assignment_action(&assignment))
                     .await
                     .map(|_| ())
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::ReleaseFinished {
                     request,
                     operation_id,
@@ -342,7 +342,7 @@ impl LabelloApp {
                 let result = api
                     .record_assigned_review(&dataset_id, assignment_action(&assignment), review)
                     .await
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::ReviewFinished {
                     request,
                     operation_id,
@@ -368,7 +368,7 @@ impl LabelloApp {
                     )
                     .await
                     .map(|_| ())
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::CorrectionFinished {
                     request,
                     operation_id,
@@ -392,7 +392,7 @@ impl LabelloApp {
                     )
                     .await
                     .map(|_| ())
-                    .map_err(|error| error.to_string());
+                    .map_err(UiRequestError::from);
                 UiMessage::AdjudicationFinished {
                     request,
                     operation_id,

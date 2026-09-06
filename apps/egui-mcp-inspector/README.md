@@ -177,8 +177,8 @@ Keep allocation and process ownership in the orchestration handoff. A port
 conflict is a failed launch, not permission to attach to or stop its occupant.
 
 In live mode the current app initially targets `http://127.0.0.1:8080`. To use
-a dedicated server on another port, select its endpoint through Setup >
-Connection > API URL > Reconnect before signing in or claiming work. There is
+a dedicated server on another port, select its endpoint through Advanced
+connection > API URL > Reconnect before signing in or claiming work. There is
 no inspector CLI endpoint flag. Configure each disposable server using the
 [server configuration contract](../../docs/configuration.md), including
 `LABELLO_CONFIG`, `LABELLO_BIND`, and `LABELLO_DATASETS_ROOT` where appropriate.
@@ -219,8 +219,8 @@ EGUI_INSPECTION=127.0.0.1:5719 cargo run --locked \
 ```
 
 Live mode defaults to `http://127.0.0.1:8080`. When the loopback server enables
-`developmentAuth.localAdminLogin`, use `Continue as local admin` in the setup
-view. The inspector retains that local session without exposing credentials in
+`developmentAuth.localAdminLogin`, use `Continue as local admin` on the login
+page. The inspector retains that local session without exposing credentials in
 arguments, URLs, or UI fields.
 
 Live mode uses real server state: opening work can claim an assignment, and UI

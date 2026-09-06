@@ -23,7 +23,7 @@ fn session_is_restored_before_datasets_load_and_logout_clears_it() {
     assert!(harness.state().datasets.summaries.is_empty());
     assert!(harness.state().work.drawer.is_none());
     assert!(!harness.state().work.show_tutorial);
-    assert_eq!(harness.state().setup.section, SetupSection::Connection);
+    assert_eq!(harness.state().setup.section, SetupSection::Login);
     assert!(harness.query_by_label("Sign in with GitHub").is_some());
 }
 
@@ -39,7 +39,7 @@ fn signed_out_setup_offers_advertised_login_methods_without_raw_credentials() {
         .with_max_steps(20)
         .build_eframe(|_| app);
     step_until(&mut harness, 8, |app| app.auth.checked);
-    assert_eq!(harness.state().setup.section, SetupSection::Connection);
+    assert_eq!(harness.state().setup.section, SetupSection::Login);
     assert!(harness.query_by_label("Datasets").is_none());
     assert!(harness.query_by_label("Sign in with GitHub").is_some());
     assert!(harness.query_by_label("Continue as local admin").is_some());
@@ -78,7 +78,7 @@ fn auth_options_failure_clears_state_from_the_previous_endpoint() {
         .tx
         .send(UiMessage::AuthOptionsLoaded {
             request,
-            result: Err("server unavailable".to_string()),
+            result: Err("server unavailable".to_string().into()),
         })
         .unwrap();
 
@@ -274,7 +274,7 @@ fn api_url_focus_loss_does_not_reconnect_and_enter_commits() {
         view: AppView::Setup,
         ..Default::default()
     };
-    app.setup.section = SetupSection::Connection;
+    app.setup.section = SetupSection::AdvancedConnection;
     let original_url = app.config.api_base_url.clone();
     let mut harness = Harness::builder()
         .with_size(egui::vec2(900.0, 780.0))
@@ -290,7 +290,7 @@ fn api_url_focus_loss_does_not_reconnect_and_enter_commits() {
     harness.step();
     let auth_epoch = harness.state().auth_epoch;
 
-    let connection = harness.get_by_label("Connection").rect().center();
+    let connection = harness.get_by_label("Advanced connection").rect().center();
     click_at(&mut harness, connection);
     assert_eq!(harness.state().config.api_base_url, original_url);
     assert_eq!(harness.state().auth_epoch, auth_epoch);
@@ -309,11 +309,351 @@ fn api_url_focus_loss_does_not_reconnect_and_enter_commits() {
     assert!(harness.state().auth_epoch > auth_epoch);
     harness.state_mut().setup.section = SetupSection::Datasets;
     harness.step();
-    assert_eq!(harness.state().setup.section, SetupSection::Connection);
+    assert_eq!(harness.state().setup.section, SetupSection::Login);
+    assert!(harness.query_by_label("Reconnect").is_none());
+    click(&mut harness, "Advanced connection");
     assert!(harness.query_by_label("Reconnect").is_some());
     assert!(
         harness
             .query_by_label("Checking dataset access...")
             .is_none()
     );
+}
+
+#[test]
+fn signed_out_login_keeps_endpoint_configuration_in_advanced_view() {
+    let api = Rc::new(SpyApi::new());
+    api.fail_me();
+    let mut app = base_live_app(api);
+    app.auth.checked = false;
+    app.auth.options_checked = false;
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1000.0, 780.0))
+        .with_max_steps(20)
+        .build_eframe(|_| app);
+    step_until(&mut harness, 8, |app| app.auth.checked);
+    assert!(harness.query_by_label("Sign in with GitHub").is_some());
+    assert!(harness.query_by_label("API URL").is_none());
+    assert!(harness.query_by_label("About").is_some());
+    click(&mut harness, "Advanced connection");
+    assert!(harness.query_by_label("API URL").is_some());
+}
+
+#[test]
+fn expired_session_blocks_commands_and_retains_draft_for_the_same_account() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    let app = harness.state_mut();
+    app.work.save_status = SaveStatus::Dirty;
+    let draft = app.work.annotations.clone();
+    app.import.open = true;
+    app.import.destination_name = "Retained import draft".to_string();
+    app.import.capabilities_loading = true;
+    app.import.source_picker.loading = true;
+    app.import.source_picker.pending_request_id = Some(123);
+    app.import.yolo_inspection_loading = true;
+    let import_epoch = app.import_epoch;
+    let request = test_request(app, 9100, None);
+    app.runtime.active_requests.insert(request.request_id);
+    api.fail_me();
+    app.runtime
+        .tx
+        .send(UiMessage::StatsLoaded {
+            request,
+            result: Err(ClientError::Api {
+                status: 401,
+                message: "authentication required".to_string(),
+            }
+            .into()),
+        })
+        .unwrap();
+    let context = egui::Context::default();
+    app.process_messages(&context);
+    assert!(app.loading.session);
+    assert!(!app.auth.checked);
+    assert_eq!(app.view, AppView::Setup);
+    assert!(app.import_epoch > import_epoch);
+    assert!(!app.import.capabilities_loading);
+    assert!(!app.import.source_picker.loading);
+    assert!(app.import.source_picker.pending_request_id.is_none());
+    assert!(!app.import.yolo_inspection_loading);
+    assert_eq!(app.import.destination_name, "Retained import draft");
+    app.start_next_command();
+    app.process_messages(&context);
+    assert!(app.auth.account.is_none());
+    assert!(app.auth.session_error.is_none());
+    assert_eq!(app.work.annotations, draft);
+    app.request_auth_options();
+    let request = app.runtime.commands.front().unwrap().request().clone();
+    app.runtime.commands.clear();
+    app.runtime
+        .tx
+        .send(UiMessage::AuthOptionsLoaded {
+            request,
+            result: Err("temporary options failure".to_string().into()),
+        })
+        .unwrap();
+    app.process_messages(&context);
+    assert!(app.auth.recovery.is_some());
+    assert_eq!(app.work.annotations, draft);
+    app.request_create_dataset();
+    assert!(app.runtime.commands.is_empty());
+    app.request_local_admin_login();
+    app.start_next_command();
+    app.process_messages(&context);
+    assert_eq!(
+        app.auth.account.as_ref().unwrap().user_id,
+        UserId::from("admin")
+    );
+    assert_eq!(app.view, AppView::Annotate);
+    assert_eq!(app.work.annotations, draft);
+}
+
+#[test]
+fn role_denial_rechecks_session_without_signing_out_or_losing_work() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    let assignment = app.work.assignment.clone();
+    let request = test_request(app, 9101, None);
+    app.runtime.active_requests.insert(request.request_id);
+    app.runtime
+        .tx
+        .send(UiMessage::StatsLoaded {
+            request,
+            result: Err(ClientError::Api {
+                status: 401,
+                message: "dataset access denied".to_string(),
+            }
+            .into()),
+        })
+        .unwrap();
+    let context = egui::Context::default();
+    app.process_messages(&context);
+    app.start_next_command();
+    app.process_messages(&context);
+    assert!(app.auth.account.is_some());
+    assert_eq!(app.view, AppView::Annotate);
+    assert_eq!(app.work.assignment, assignment);
+}
+
+#[test]
+fn expired_session_login_to_another_account_clears_previous_work() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    let app = harness.state_mut();
+    let request = test_request(app, 9102, None);
+    app.runtime.active_requests.insert(request.request_id);
+    api.fail_me();
+    app.runtime
+        .tx
+        .send(UiMessage::StatsLoaded {
+            request,
+            result: Err(ClientError::Api {
+                status: 401,
+                message: "authentication required".to_string(),
+            }
+            .into()),
+        })
+        .unwrap();
+    let context = egui::Context::default();
+    app.process_messages(&context);
+    app.start_next_command();
+    app.process_messages(&context);
+    api.state.borrow_mut().users[0].account.user_id = UserId::from("different_account");
+    app.request_local_admin_login();
+    app.start_next_command();
+    app.process_messages(&context);
+    assert_eq!(
+        app.auth.account.as_ref().unwrap().user_id,
+        UserId::from("different_account")
+    );
+    assert!(app.work.assignment.is_none());
+    assert!(app.work.annotations.is_empty());
+    assert!(app.datasets.metadata.is_none());
+}
+
+#[test]
+fn endpoint_change_immediately_invalidates_account_dataset_and_auth_options() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    let old_epoch = app.auth_epoch;
+    app.config.api_base_url = "http://127.0.0.1:19999/".to_string();
+    app.rebuild_http_api();
+    assert!(app.auth_epoch > old_epoch);
+    assert!(app.auth.account.is_none());
+    assert!(!app.auth.options_checked);
+    assert!(!app.auth.checked);
+    assert!(!app.auth.options.github_oauth);
+    assert!(!app.auth.options.local_admin_login);
+    assert!(app.datasets.metadata.is_none());
+    assert!(app.datasets.summaries.is_empty());
+    assert!(app.work.assignment.is_none());
+    assert!(app.runtime.commands.is_empty());
+}
+
+#[test]
+fn login_discovery_and_failure_states_never_flash_sign_in_methods() {
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        for state in 0..5 {
+            let api = Rc::new(SpyApi::new());
+            let mut app = base_live_app(api);
+            app.auth.checked = true;
+            app.auth.options_checked = true;
+            app.auth.account = None;
+            app.auth.options = AuthOptions {
+                github_oauth: true,
+                local_admin_login: true,
+            };
+            let expected = match state {
+                0 => {
+                    app.auth.options_checked = false;
+                    app.loading.session = true;
+                    "Loading sign-in options..."
+                }
+                1 => {
+                    app.auth.checked = false;
+                    app.loading.session = true;
+                    "Checking your session..."
+                }
+                2 => {
+                    app.auth.options_error = Some("Sign-in options could not be loaded. This deliberately long message must wrap within the login page.".to_string());
+                    "Could not load sign-in options."
+                }
+                3 => {
+                    app.auth.session_error = Some("Session service unavailable".to_string());
+                    "Could not check your session."
+                }
+                _ => {
+                    app.auth.options = AuthOptions {
+                        github_oauth: false,
+                        local_admin_login: false,
+                    };
+                    "No interactive sign-in method is enabled on this server."
+                }
+            };
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+            harness.step();
+            assert!(
+                harness.query_by_label(expected).is_some(),
+                "missing explicit login state"
+            );
+            assert!(harness.query_by_label("Sign in with GitHub").is_none());
+            assert!(harness.query_by_label("Continue as local admin").is_none());
+            assert!(harness.query_by_label("API URL").is_none());
+            assert!(harness.query_by_label("About").is_some());
+        }
+    }
+}
+
+#[test]
+fn login_options_failure_retries_and_about_survives_session_discovery() {
+    let api = Rc::new(SpyApi::new());
+    api.fail_me();
+    let mut app = base_live_app(api.clone());
+    app.auth.checked = true;
+    app.auth.options_checked = true;
+    app.auth.options_error = Some("temporary failure".to_string());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1000.0, 780.0))
+        .build_eframe(|_| app);
+    click(&mut harness, "Retry sign-in options");
+    step_until(&mut harness, 8, |app| app.auth.checked);
+    assert!(harness.state().auth.options_error.is_none());
+    assert!(harness.query_by_label("Sign in with GitHub").is_some());
+    click(&mut harness, "About");
+    harness.state_mut().request_session();
+    harness.state_mut().start_next_command();
+    harness.step();
+    assert!(harness.query_by_label("About Labello").is_some());
+}
+
+#[test]
+fn stale_unauthorized_response_cannot_start_session_recovery() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    let mut request = test_request(app, 9103, None);
+    request.auth_epoch = app.auth_epoch.wrapping_sub(1);
+    app.runtime.active_requests.insert(request.request_id);
+    app.runtime
+        .tx
+        .send(UiMessage::StatsLoaded {
+            request,
+            result: Err(ClientError::Api {
+                status: 401,
+                message: "authentication required".to_string(),
+            }
+            .into()),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(app.auth.recovery.is_none());
+    assert!(app.auth.checked);
+    assert!(!app.loading.session);
+    assert_eq!(app.view, AppView::Annotate);
+}
+
+#[test]
+fn login_primary_action_precedes_navigation_and_header_is_centered() {
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        let mut app = base_live_app(Rc::new(SpyApi::new()));
+        app.auth.checked = true;
+        app.auth.options_checked = true;
+        app.auth.account = None;
+        app.auth.options = AuthOptions {
+            github_oauth: false,
+            local_admin_login: true,
+        };
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        let name = harness.get_by_label("Labello").rect();
+        let icon = harness.get_by_label("Labello icon").rect();
+        assert!((name.center().y - 28.0).abs() <= 1.0, "{size:?}: {name:?}");
+        assert!((icon.center().y - name.center().y).abs() <= 1.0);
+        assert!(icon.right() < name.left());
+        let action = harness.get_by_label("Continue as local admin").rect();
+        let about = harness.get_by_role_and_label(egui::accesskit::Role::Button, "About").rect();
+        assert!(action.bottom() < about.top());
+        assert!(action.width() <= 441.0 && action.width() >= size.x.min(440.0) - 50.0);
+        assert!(action.left() >= 0.0 && action.right() <= size.x);
+        assert!(action.bottom() <= size.y, "sign-in is initially below the fold at {size:?}");
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(8);
+        let action = harness.get_by_label("Continue as local admin");
+        assert!(action.is_focused(), "sign-in must be the first keyboard action");
+        assert!(action.rect().top() >= 56.0 && action.rect().bottom() <= size.y);
+    }
+}
+
+#[test]
+fn short_login_scrolls_the_keyboard_focused_retry_into_view() {
+    let mut app = base_live_app(Rc::new(SpyApi::new()));
+    app.auth.checked = true;
+    app.auth.options_checked = true;
+    app.auth.account = None;
+    app.auth.options_error = Some("The sign-in service is temporarily unavailable. ".repeat(12));
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(320.0, 320.0))
+        .build_eframe(|_| app);
+    harness.step();
+    assert!(harness.get_by_label("Retry sign-in options").rect().bottom() > 320.0);
+    harness.key_press(egui::Key::Tab);
+    harness.run_steps(8);
+    let button = harness.get_by_label("Retry sign-in options");
+    assert!(button.is_focused());
+    assert!(button.rect().bottom() <= 320.0);
+    assert!(button.rect().top() >= 56.0);
 }

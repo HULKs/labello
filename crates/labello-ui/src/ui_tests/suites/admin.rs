@@ -900,7 +900,7 @@ fn failed_admin_navigation_stays_in_admin_with_page_retry() {
         .tx
         .send(UiMessage::AdminLoaded {
             request,
-            result: Box::new(Err("admin service unavailable".to_string())),
+            result: Box::new(Err("admin service unavailable".to_string().into())),
         })
         .unwrap();
     app.process_messages(&egui::Context::default());

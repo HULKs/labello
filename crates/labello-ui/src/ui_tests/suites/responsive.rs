@@ -12,7 +12,7 @@ fn setup_sections_are_permission_gated_responsive_and_preserve_import_state() {
 
     harness.state_mut().auth.can_create_datasets = true;
     harness.step();
-    for label in ["Datasets", "Connection", "Create", "Import"] {
+    for label in ["Datasets", "Advanced connection", "Create", "Import"] {
         assert!(harness.query_by_label(label).is_some());
     }
     assert!(harness.query_by_label("Setup navigation").is_some());
@@ -32,8 +32,8 @@ fn setup_sections_are_permission_gated_responsive_and_preserve_import_state() {
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Setup section")
         .click_accesskit();
     harness.step();
-    click_accesskit_button(&mut harness, "Connection");
-    assert_eq!(harness.state().setup.section, SetupSection::Connection);
+    click_accesskit_button(&mut harness, "Advanced connection");
+    assert_eq!(harness.state().setup.section, SetupSection::AdvancedConnection);
     assert!(harness.state().import.open);
     assert_eq!(harness.state().import.destination_id, "active-import");
 

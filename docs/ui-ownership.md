@@ -10,7 +10,8 @@ explicit feature states:
 
 - `runtime`: API transport, command queue, response channel, active requests,
   repainting, and browser persistence scheduling.
-- `auth`: session state and the active session request.
+- `auth`: authentication-option discovery, session state and failures, the
+  active session request, and account-bound sign-in recovery.
 - `datasets`: dataset metadata, users, statistics, and dataset-scoped request
   identities.
 - `admin`: administration filters, snapshots, roles, and staged configuration.
@@ -38,11 +39,22 @@ The root live loop performs only scheduling and exhaustive delegation:
 
 Request IDs, auth/workspace/import epochs, command rollback, and prepared
 assignment reservation release live in `live/ownership.rs`. A reducer must not
-invent a second stale-response rule. Feature reducers may update their feature
+invent a second stale-response rule. Request failures retain structured
+unauthorized status through the dispatcher/message boundary. After the normal
+ownership checks and feature reducer, the central loop coalesces a session
+recheck for an authentication rejection. Sign-in recovery blocks further work
+commands, hides account-scoped rendering, and retains the draft until its owner
+returns or a different account replaces the workspace. Feature reducers may update
+their feature
 state and the explicitly named navigation, loading, notice, or error effects
 carried by the root.
 
 ## Rendering
+
+`setup.rs` owns the dedicated login page, advanced connection view,
+pre-authentication About destination, and authenticated dataset setup. Authentication methods are
+hidden until both options and session discovery finish. Endpoint replacement
+clears account and dataset state before scheduling requests against the new API.
 
 Workspace rendering is grouped by the reason it changes:
 

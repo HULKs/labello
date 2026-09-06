@@ -10,13 +10,21 @@ use web_time::{Duration, Instant};
 use crate::app::{
     ASSIGNMENT_AVAILABILITY_CACHE_TTL, AppView, ImportRequestIdentity, LabelloApp, LoadedAdmin,
     LoadedDataset, LoadedImage, RequestIdentity, SaveStatus, SetupSection, UiCommand, UiMessage,
+    UiRequestError,
 };
 
 impl LabelloApp {
     pub(crate) fn rebuild_http_api(&mut self) {
         self.begin_auth_epoch();
-        self.begin_import_epoch();
-        self.import = Default::default();
+        self.clear_authenticated_state();
+        self.auth.options_checked = false;
+        self.auth.checked = false;
+        self.auth.options = labello_client::AuthOptions {
+            github_oauth: false,
+            local_admin_login: false,
+        };
+        self.auth.options_error = None;
+        self.auth.session_error = None;
         let api = HttpLabelloApi::new(&self.config.api_base_url).and_then(|api| {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(application_url) = &self.config.application_url {
@@ -76,24 +84,34 @@ impl LabelloApp {
                 }
                 continue;
             }
-            let message = match self.reduce_import_message(ctx, message) {
-                None => continue,
-                Some(message) => message,
-            };
-            let message = match self.reduce_session_message(ctx, message) {
-                None => continue,
-                Some(message) => message,
-            };
-            let message = match self.reduce_workflow_message(ctx, message) {
-                None => continue,
-                Some(message) => message,
-            };
-            if let Some(message) = self.reduce_support_message(ctx, message) {
-                unreachable!("unhandled UI message: {message:?}");
+            let check_session = self.auth.account.is_some()
+                && !self.loading.session
+                && message.requires_session_check();
+            self.reduce_message(ctx, message);
+            if check_session {
+                self.request_session_recovery();
             }
         }
         if processed == 8 {
             ctx.request_repaint();
+        }
+    }
+
+    fn reduce_message(&mut self, ctx: &egui::Context, message: UiMessage) {
+        let message = match self.reduce_import_message(ctx, message) {
+            None => return,
+            Some(message) => message,
+        };
+        let message = match self.reduce_session_message(ctx, message) {
+            None => return,
+            Some(message) => message,
+        };
+        let message = match self.reduce_workflow_message(ctx, message) {
+            None => return,
+            Some(message) => message,
+        };
+        if let Some(message) = self.reduce_support_message(ctx, message) {
+            unreachable!("unhandled UI message: {message:?}");
         }
     }
 

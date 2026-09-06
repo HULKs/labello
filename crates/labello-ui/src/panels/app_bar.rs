@@ -1,5 +1,17 @@
 impl LabelloApp {
     pub(crate) fn app_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        if self.view == AppView::Setup && (!self.auth.checked || self.auth.account.is_none()) {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = theme::SPACE_3;
+                ui.add(
+                    egui::Image::new(egui::include_image!("../../../../assets/labello-icon.svg"))
+                        .fit_to_exact_size(egui::vec2(36.0, 36.0))
+                        .alt_text("Labello icon"),
+                );
+                ui.heading("Labello");
+            });
+            return;
+        }
         let dataset_name = self
             .datasets
             .metadata

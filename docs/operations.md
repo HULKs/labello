@@ -292,6 +292,35 @@ At each release and on the operator's normal backup cadence:
 This drill verifies the backup procedure, not snapshot restore, which remains
 unsupported.
 
+## Login and session recovery
+
+The browser starts on a dedicated login page while checking sign-in options and
+the current session. Authentication controls appear only after discovery
+finishes and only for methods enabled by the server. Options-fetch and session
+check failures provide separate retry actions; a server with no interactive
+method shows an explicit empty state. `About` remains available without a
+session. `Advanced connection` contains the API URL override and reconnect
+control; ordinary deployments supply that URL through the public browser
+configuration.
+
+Changing the endpoint immediately invalidates the account, authentication
+options, datasets, imports, and pending request ownership. Use the same hostname
+through cookie-based login; `localhost` and `127.0.0.1` have different cookie
+hosts. Local administrator login remains loopback-only development behavior.
+
+A current API 401 prompts a session recheck before further work commands run.
+A role denial with a valid session returns to the current work and preserves its
+error. An expired session shows sign-in recovery and retains the current draft
+for its original account. Returning as that account can continue the draft;
+signing in as another account clears the previous work from the UI. Browser
+drafts remain scoped to server, user, dataset and assignment and retain their
+existing expiry and recovery checks. Explicit logout keeps its existing staged
+edit and browser-draft policy. Recovery does not grant offline mutation support.
+
+Raw browser upload failures also prompt session revalidation because those
+adapters return an error message without a structured HTTP status. Local folder
+selection failures do not trigger a session check.
+
 ## OAuth cookie-path rollout
 
 The OAuth flow cookie follows the public callback path configured in

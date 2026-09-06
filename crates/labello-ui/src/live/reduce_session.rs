@@ -74,7 +74,7 @@ impl LabelloApp {
                             if pending_activate_target.is_some() {
                                 self.work.migration.inspected_group_id = None;
                             }
-                            self.work.migration.error = Some(error);
+                            self.work.migration.error = Some(error.to_string());
                             self.assignment_availability_mutation_completed(
                                 request
                                     .dataset_id
@@ -90,13 +90,17 @@ impl LabelloApp {
                     self.auth.options_checked = true;
                     match result {
                         Ok(options) => {
+                            self.auth.options_error = None;
                             self.auth.options = options;
                             self.runtime.error = None;
                         }
                         Err(error) => {
-                            self.clear_authenticated_state();
+                            if self.auth.recovery.is_none() {
+                                self.clear_authenticated_state();
+                            }
+                            self.auth.options_error = Some(error.to_string());
                             self.auth.checked = true;
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -112,6 +116,19 @@ impl LabelloApp {
                     match result {
                         Ok(session) => {
                             let account = session.account;
+                            self.auth.session_error = None;
+                            if let Some(recovery) = self.auth.recovery.take() {
+                                if recovery.user_id == account.user_id {
+                                    self.auth.account = Some(account);
+                                    self.auth.can_create_datasets = session.can_create_datasets;
+                                    self.view = recovery.view;
+                                    self.runtime.notice = Some("Session restored. Your draft is unchanged.".to_string());
+                                    self.runtime.persistence.restoration_attempted = true;
+                                    self.request_dataset_list();
+                                    return None;
+                                }
+                                self.clear_authenticated_state();
+                            }
                             if self.auth.account.as_ref().map(|current| &current.user_id)
                                 != Some(&account.user_id)
                             {
@@ -124,23 +141,30 @@ impl LabelloApp {
                             );
                             self.auth.account = Some(account);
                             self.auth.can_create_datasets = session.can_create_datasets;
-                            self.setup.section = SetupSection::Datasets;
+                            if self.setup.section != SetupSection::About {
+                                self.setup.section = SetupSection::Datasets;
+                            }
                             self.runtime.error = None;
                             self.initialize_browser_workspace();
                             self.request_dataset_list();
                         }
                         Err(error) => {
-                            if self.auth.account.is_some() {
-                                self.begin_import_epoch();
-                                self.import = Default::default();
-                            }
-                            self.auth.account = None;
+                            let had_account = self.auth.account.take().is_some();
                             self.auth.can_create_datasets = false;
                             self.datasets.summaries.clear();
                             self.datasets.summaries_error = None;
-                            if show_error {
-                                self.runtime.error = Some(error);
+                            self.view = AppView::Setup;
+                            if !matches!(self.setup.section, SetupSection::About | SetupSection::AdvancedConnection) {
+                                self.setup.section = SetupSection::Login;
+                            }
+                            if error.unauthorized {
+                                self.auth.session_error = None;
+                                if had_account || self.auth.recovery.is_some() {
+                                    self.runtime.notice = Some("Your session expired. Sign in again to continue; your draft is retained for this account.".to_string());
+                                }
+                                self.runtime.error = show_error.then(|| error.to_string());
                             } else {
+                                self.auth.session_error = Some(error.to_string());
                                 self.runtime.error = None;
                             }
                         }
@@ -154,12 +178,12 @@ impl LabelloApp {
                             self.runtime.notice = Some("Signed out".to_string());
                             self.runtime.error = None;
                         }
-                        Err(error) => self.runtime.error = Some(error),
+                        Err(error) => self.runtime.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::GithubLoginUrl { result, .. } => match result {
                     Ok(url) => ctx.open_url(egui::OpenUrl::same_tab(url)),
-                    Err(error) => self.runtime.error = Some(error),
+                    Err(error) => self.runtime.error = Some(error.to_string()),
                 },
                 UiMessage::DatasetList { result, .. } => {
                     self.loading.datasets = false;
@@ -170,8 +194,8 @@ impl LabelloApp {
                             self.reopen_previous_workspace();
                         }
                         Err(error) => {
-                            self.datasets.summaries_error = Some(error.clone());
-                            self.runtime.error = Some(error);
+                            self.datasets.summaries_error = Some(error.to_string());
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -197,7 +221,7 @@ impl LabelloApp {
                     }
                     Err(error) => {
                         self.loading.dataset = false;
-                        self.runtime.error = Some(error);
+                        self.runtime.error = Some(error.to_string());
                     }
                 },
                 UiMessage::DatasetLoaded { result, .. } => {
@@ -207,7 +231,7 @@ impl LabelloApp {
                             self.upsert_dataset_summary(&loaded.metadata);
                             self.apply_loaded_dataset(loaded);
                         }
-                        Err(error) => self.runtime.error = Some(error),
+                        Err(error) => self.runtime.error = Some(error.to_string()),
                     }
                 }
                 UiMessage::AdminLoaded { result, .. } => {
@@ -235,8 +259,8 @@ impl LabelloApp {
                             }
                         }
                         Err(error) => {
-                            self.admin.load_error = Some(error.clone());
-                            self.runtime.error = Some(error);
+                            self.admin.load_error = Some(error.to_string());
+                            self.runtime.error = Some(error.to_string());
                         }
                     }
                 }
@@ -261,7 +285,7 @@ impl LabelloApp {
                     Err(error) => {
                         self.loading.admin = false;
                         self.admin.pending_role_saves.clear();
-                        self.runtime.error = Some(error);
+                        self.runtime.error = Some(error.to_string());
                         self.assignment_availability_mutation_completed(
                             request
                                 .dataset_id
@@ -290,7 +314,7 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.admin.pending_role_saves.clear();
-                            self.runtime.error = Some(error);
+                            self.runtime.error = Some(error.to_string());
                             self.assignment_availability_mutation_completed(
                                 request
                                     .dataset_id
@@ -309,7 +333,7 @@ impl LabelloApp {
                             self.admin.images = Some(page);
                             self.admin.images_error = None;
                         }
-                        Err(error) => self.admin.images_error = Some(error),
+                        Err(error) => self.admin.images_error = Some(error.to_string()),
                     }
                 }
                 UiMessage::SnapshotsLoaded { result, .. } => {
@@ -320,7 +344,7 @@ impl LabelloApp {
                             self.admin.snapshots_loaded = true;
                             self.admin.snapshots_error = None;
                         }
-                        Err(error) => self.admin.snapshots_error = Some(error),
+                        Err(error) => self.admin.snapshots_error = Some(error.to_string()),
                     }
                 }
                 UiMessage::SnapshotCreated { result, .. } => {
@@ -334,7 +358,7 @@ impl LabelloApp {
                             self.admin.snapshot_action_error = None;
                             self.request_snapshots();
                         }
-                        Err(error) => self.admin.snapshot_action_error = Some(error),
+                        Err(error) => self.admin.snapshot_action_error = Some(error.to_string()),
                     }
                 }
                 UiMessage::SnapshotDownloaded { result, .. } => {
@@ -342,9 +366,9 @@ impl LabelloApp {
                     match result {
                         Ok(file) => match crate::admin::download_snapshot_file(file) {
                             Ok(()) => self.admin.snapshot_action_error = None,
-                            Err(error) => self.admin.snapshot_action_error = Some(error),
+                            Err(error) => self.admin.snapshot_action_error = Some(error.to_string()),
                         },
-                        Err(error) => self.admin.snapshot_action_error = Some(error),
+                        Err(error) => self.admin.snapshot_action_error = Some(error.to_string()),
                     }
                 }
             message => return Some(message),

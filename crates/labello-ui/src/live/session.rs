@@ -15,6 +15,7 @@ impl LabelloApp {
         self.begin_import_epoch();
         self.import = Default::default();
         self.auth.account = None;
+        self.auth.recovery = None;
         self.auth.can_create_datasets = false;
         self.datasets.summaries.clear();
         self.datasets.summaries_error = None;
@@ -56,6 +57,8 @@ impl LabelloApp {
             local_admin_login: false,
         };
         self.auth.options_checked = false;
+        self.auth.options_error = None;
+        self.auth.session_error = None;
         self.auth.checked = false;
         self.loading.session = true;
         self.queue_command(UiCommand::AuthOptions { request });
@@ -87,6 +90,29 @@ impl LabelloApp {
         }
     }
 
+    fn request_session_recovery(&mut self) {
+        let Some(account) = self.auth.account.as_ref() else {
+            return;
+        };
+        if self.auth.recovery.is_none() {
+            self.auth.recovery = Some(crate::app::SessionRecovery {
+                user_id: account.user_id.clone(),
+                view: self.view,
+            });
+        }
+        self.queue_current_drafts();
+        self.persist_workspace_preference();
+        self.suspend_import_for_auth();
+        self.view = AppView::Setup;
+        self.setup.section = SetupSection::Login;
+        self.work.drawer = None;
+        self.work.pending_transition = None;
+        self.work.show_tutorial = false;
+        self.work.show_settings = false;
+        self.navigation.drawer_open = false;
+        self.request_session();
+    }
+
     pub(crate) fn request_session(&mut self) {
         if self.runtime.api.is_none() {
             return;
@@ -96,6 +122,7 @@ impl LabelloApp {
         self.auth.session_request_id = request.request_id;
         self.auth.active_session_request_id = Some(request.request_id);
         self.auth.local_admin_login_pending = false;
+        self.auth.session_error = None;
         self.auth.checked = false;
         self.loading.session = true;
         self.queue_command(UiCommand::Session { request });
@@ -109,6 +136,7 @@ impl LabelloApp {
         let request = self.request_identity(None);
         self.auth.session_request_id = request.request_id;
         self.auth.active_session_request_id = Some(request.request_id);
+        self.auth.session_error = None;
         self.auth.local_admin_login_pending = true;
         self.auth.checked = false;
         self.loading.session = true;
