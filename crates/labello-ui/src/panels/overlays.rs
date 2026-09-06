@@ -123,16 +123,20 @@ impl LabelloApp {
         let destination = self.transition_label(&pending);
         let discards_migration_draft =
             self.manual_migration_active() && self.migration_has_unsaved_input();
+        let discards_review =
+            self.review_revision_active() && !self.work.staged_review_decisions.is_empty();
         let discards_edits = matches!(
             pending,
             PendingTransition::NextAssignment | PendingTransition::PreviousAssignment(_)
         ) && self.view == AppView::Annotate
             && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || discards_migration_draft);
-        if pending == PendingTransition::NextAssignment && !discards_edits {
+        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review {
             return;
         }
-        let modal_title = if discards_migration_draft {
+        let modal_title = if discards_review {
+            "Discard staged review decisions?"
+        } else if discards_migration_draft {
             "Unsaved migration draft"
         } else if discards_edits {
             "Unsaved annotation changes"
@@ -142,9 +146,17 @@ impl LabelloApp {
         let response =
             theme::modal(ctx, egui::Id::new("assignment-transition-modal")).show(ctx, |ui| {
                 ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(240.0, 560.0));
+                let action_rows = if self.view == AppView::Annotate { 3.0 } else { 2.0 };
+                let action_height = action_rows * (ui.spacing().interact_size.y + ui.spacing().item_spacing.y);
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 64.0 - action_height).max(48.0))
+                    .show(ui, |ui| {
                 ui.heading(modal_title);
                 ui.label(format!("Current workflow: {current}"));
                 ui.label(format!("Pending destination: {destination}"));
+                if discards_review {
+                    ui.label("Leaving discards staged replacement decisions. The previous effective outcome remains unchanged.");
+                }
                 if discards_edits {
                     theme::inline_message(ui, theme::Intent::Warning, if discards_migration_draft {
                         "Continuing will discard migration keypoints or exclusion input that has not been saved."
@@ -152,6 +164,7 @@ impl LabelloApp {
                         "Skipping now will discard annotation changes that have not been saved."
                     });
                 }
+                });
                 ui.add_space(8.0);
                 ui.horizontal_wrapped(|ui| {
                     if self.view == AppView::Annotate
@@ -165,10 +178,12 @@ impl LabelloApp {
                     {
                         self.submit_pending_transition();
                     }
-                    if theme::danger_button(
+                    let release = theme::danger_button(
                         ui,
                         !self.loading.saving,
-                        egui::Button::new(if discards_edits {
+                        egui::Button::new(if discards_review {
+                            "Discard revision and switch"
+                        } else if discards_edits {
                             if discards_migration_draft {
                                 "Discard draft and switch"
                             } else {
@@ -177,14 +192,12 @@ impl LabelloApp {
                         } else {
                             "Release and switch"
                         }),
-                    )
-                    .clicked()
-                    {
+                    );
+                    if release.clicked() {
                         self.release_pending_transition();
                     }
-                    if theme::quiet_button(ui, !self.loading.saving, egui::Button::new("Cancel"))
-                        .clicked()
-                    {
+                    let cancel = theme::quiet_button(ui, !self.loading.saving, egui::Button::new("Cancel"));
+                    if cancel.clicked() {
                         self.cancel_pending_transition();
                     }
                 });

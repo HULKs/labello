@@ -297,6 +297,7 @@ impl DatasetRepository {
         task_id: &TaskId,
         kind: AssignmentKind,
     ) -> StorageResult<Option<(Assignment, labello_domain::ImageState)>> {
+        let _config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset().await?;
         let role = role_for_kind(&kind);
         require_role(
@@ -348,6 +349,14 @@ impl DatasetRepository {
         if stored.status != AssignmentStatus::Active || assignment_is_expired(stored, now) {
             return Ok(None);
         }
+        let revision = state
+            .review_assignment_contexts
+            .get(assignment_id)
+            .is_some_and(|context| context.decision_revision);
+        if revision {
+            self.validate_review_revision_context(&state, task, stored)
+                .await?;
+        }
         let status = state
             .task_states
             .get(task_id)
@@ -355,13 +364,13 @@ impl DatasetRepository {
             .unwrap_or(&TaskStatus::Pending);
         let eligible = match kind {
             AssignmentKind::Annotation => state.assignment_eligible(task_id),
-            AssignmentKind::Review => status == &TaskStatus::Submitted,
+            AssignmentKind::Review => revision || status == &TaskStatus::Submitted,
             AssignmentKind::Adjudication => status == &TaskStatus::AdjudicationRequired,
         };
         if !eligible {
             return Ok(None);
         }
-        if kind == AssignmentKind::Review {
+        if kind == AssignmentKind::Review && !revision {
             let events = self.load_events(image_id).await?;
             let already_final = if task.manual_box_guide_migration.is_some() {
                 has_migration_final_review_by_user(&events, task_id, user_id)
@@ -411,6 +420,7 @@ impl DatasetRepository {
         kind: AssignmentKind,
         excluded_image_ids: &[ImageId],
     ) -> StorageResult<Option<Assignment>> {
+        let _config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset().await?;
         let required_role = match kind {
             AssignmentKind::Annotation => DatasetRole::Annotator,
@@ -517,8 +527,12 @@ impl DatasetRepository {
                 created_at: now,
                 updated_at: now,
             };
-            payloads.push(EventPayload::AssignmentUpdated {
-                assignment: assignment.clone(),
+            payloads.push(if kind == AssignmentKind::Review {
+                super::revision::capture_review_assignment(&state, task, &assignment, None)?
+            } else {
+                EventPayload::AssignmentUpdated {
+                    assignment: assignment.clone(),
+                }
             });
             if kind == AssignmentKind::Annotation && status == TaskStatus::Pending {
                 let task_state = TaskState {
@@ -597,6 +611,9 @@ impl DatasetRepository {
         now: labello_domain::Timestamp,
     ) -> StorageResult<bool> {
         let task_id = &task.task_id;
+        if super::revision::active_review_revision(state, task_id).is_some() {
+            return Ok(false);
+        }
         if *kind == AssignmentKind::Annotation && !state.assignment_eligible(task_id) {
             return Ok(false);
         }
