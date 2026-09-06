@@ -21,13 +21,7 @@ use crate::{
 
 impl LabelloApp {
     pub(crate) fn clear_current_image(&mut self) {
-        self.work.quality.cancel_all();
-        if let Some(id) = self.work.quality.loading.take() {
-            self.runtime.active_requests.remove(&id);
-        }
-        self.work.quality.error = None;
-        self.work.quality.current = self.work.quality.policy();
-        self.work.quality.requested = self.work.quality.policy();
+        self.work.image_transfers.cancel_all();
         self.release_prepared_assignments();
         if let Some(request_id) = self.work.active_load_id {
             self.runtime.active_requests.remove(&request_id);
@@ -70,13 +64,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn start_workflow_command(&self, api: Rc<dyn LabelloApi>, command: UiCommand) {
-        if matches!(
-            &command,
-            UiCommand::LoadRepresentation { .. } | UiCommand::PrefetchAssignment { .. }
-        ) && !self
-            .runtime
-            .active_requests
-            .contains(&command.request().request_id)
+        if matches!(&command, UiCommand::PrefetchAssignment { .. })
+            && !self
+                .runtime
+                .active_requests
+                .contains(&command.request().request_id)
         {
             return;
         }
@@ -84,52 +76,12 @@ impl LabelloApp {
             UiCommand::ClaimAssignment { operation_id, .. }
             | UiCommand::PrefetchAssignment { operation_id, .. }
             | UiCommand::ReloadAssignment { operation_id, .. }
-            | UiCommand::ReopenAssignment { operation_id, .. } => Some(
-                self.work
-                    .quality
-                    .transfer(*operation_id, self.work.quality.policy()),
-            ),
-            UiCommand::LoadRepresentation {
-                operation_id,
-                representation,
-                ..
-            } => Some(self.work.quality.transfer(*operation_id, *representation)),
+            | UiCommand::ReopenAssignment { operation_id, .. } => {
+                Some(self.work.image_transfers.transfer(*operation_id))
+            }
             _ => None,
         };
         match command {
-            UiCommand::LoadRepresentation {
-                request,
-                operation_id,
-                dataset_id,
-                assignment,
-                ..
-            } => {
-                let fetch_prelabels = self.work.current.is_none() && self.view == AppView::Annotate;
-                let prelabel_config_ids = if fetch_prelabels {
-                    self.selected_task()
-                        .map(|task| task.prelabel_config_ids.clone())
-                        .unwrap_or_default()
-                } else {
-                    Vec::new()
-                };
-                self.spawn_message(request.clone(), async move {
-                    let result = load_image(
-                        api,
-                        dataset_id,
-                        assignment,
-                        prelabel_config_ids,
-                        fetch_prelabels,
-                        transfer.expect("representation transfer"),
-                    )
-                    .await
-                    .map_err(|error| error.to_string());
-                    UiMessage::RepresentationLoaded {
-                        request,
-                        operation_id,
-                        result: Box::new(result),
-                    }
-                });
-            }
             UiCommand::ClaimAssignment {
                 request,
                 operation_id,
@@ -1030,9 +982,8 @@ async fn load_image(
     assignment: Assignment,
     prelabel_config_ids: Vec<PrelabelConfigId>,
     fetch_prelabels: bool,
-    transfer: crate::image_quality::ImageTransfer,
+    transfer: crate::image_transfer::ImageTransfer,
 ) -> labello_client::ClientResult<LoadedImage> {
-    let representation = transfer.representation;
     transfer
         .run(load_image_data(
             api,
@@ -1040,7 +991,6 @@ async fn load_image(
             assignment,
             prelabel_config_ids,
             fetch_prelabels,
-            representation,
         ))
         .await
 }
@@ -1051,17 +1001,11 @@ async fn load_image_data(
     assignment: Assignment,
     prelabel_config_ids: Vec<PrelabelConfigId>,
     fetch_prelabels: bool,
-    representation: crate::image_quality::Representation,
 ) -> labello_client::ClientResult<LoadedImage> {
     let (image, state, preview) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
-        crate::image_quality::preview_for_representation(
-            api.as_ref(),
-            &dataset_id,
-            &assignment.image_id,
-            representation
-        ),
+        load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id,),
     )?;
     let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
         [preview.width as usize, preview.height as usize],
@@ -1084,7 +1028,6 @@ async fn load_image_data(
     }
     let annotations = state.active_annotations().cloned().collect();
     Ok(LoadedImage {
-        representation,
         assignment,
         queued: QueuedImage { image, prelabels },
         annotations,
@@ -1097,26 +1040,14 @@ pub(crate) async fn load_working_preview(
     api: &dyn LabelloApi,
     dataset_id: &labello_domain::DatasetId,
     image_id: &labello_domain::ImageId,
-    profile: labello_client::ImagePreviewProfile,
 ) -> labello_client::ClientResult<labello_client::ImagePreview> {
-    let encoded = api
-        .get_encoded_image_preview(dataset_id, image_id, profile)
-        .await;
-    let decoded = encoded.and_then(|encoded| encoded.decode());
-    match decoded {
-        Ok(preview) => Ok(preview),
-        Err(_) if profile == labello_client::ImagePreviewProfile::StandardV1 => {
-            tracing::warn!(
-                event = "image.preview.fallback",
-                profile = "standard_v1",
-                reason = "encoded_preview_failed",
-                "using bounded RGBA preview"
-            );
-            // One fallback request at the identical working size. Never fetch originals.
-            api.get_image_preview(dataset_id, image_id, 1600).await
-        }
-        Err(error) => Err(error),
-    }
+    api.get_encoded_image_preview(
+        dataset_id,
+        image_id,
+        labello_client::ImagePreviewProfile::DataSaverV1,
+    )
+    .await?
+    .decode()
 }
 
 fn assignment_action(assignment: &Assignment) -> AssignmentActionRequest {

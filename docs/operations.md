@@ -455,10 +455,10 @@ them. Normal browser image/prefetch references are cleared on session/endpoint
 changes and obsolete replies are ignored.
 
 Cache storage is finite and evicts old entries. A corrupt entry regenerates;
-unavailable storage or worker capacity produces a bounded error. Standard UI
-loads may retry once through the bounded legacy RGBA route. Data Saver does not
-automatically fetch a larger representation. Logs contain only static preview
-failure/fallback categories, never encoded bytes, source paths, or decoder text.
+unavailable storage or worker capacity produces a bounded error. Working-image
+loads use Data Saver and never automatically fetch a larger representation.
+Logs contain only static preview failure categories, never encoded bytes,
+source paths, or decoder text.
 
 To discard or relocate previews, stop the server, remove only the configured
 cache directory, adjust `previews.cacheRoot` if needed, and restart. Never remove
@@ -466,19 +466,17 @@ an active cache lock or edit cache entries while the service runs. A second
 owner, unexpected files, or unsafe paths fail closed; fix the directory while
 stopped. Derived cache loss never requires restoring authoritative dataset data.
 
-### Data saver and original detail
+### Working-image Data saver previews
 
-Data saver is an explicit per-browser, API-endpoint and account preference,
-defaulting off. It uses the versioned 1280-pixel quality-80 WebP cache profile;
-Standard remains the lossless 1600-pixel profile. Current and upcoming-image
-prefetch follow the selection. Data saver failure exposes Retry image and Load
-original detail; it never automatically transfers RGBA or originals.
+Working views always use the versioned 1280-pixel quality-80 WebP cache profile,
+including annotation, review, migration, retries and upcoming-image prefetch.
+There is no quality selector or original-detail action. Previous browser quality
+preferences are ignored. A failed load exposes Retry image load; it never
+transfers Standard, legacy RGBA or original bytes as a fallback.
 
-Original detail is an explicit, bounded source read for one image visit. Advancing
-returns to the selected preview profile. Switching quality preserves draft
-edits, normalized coordinates, selection and canvas transform. Superseded image
-transfers are cancelled where possible; bytes already transferred still count
-against data use. Assignment claims finish independently so unused claims can be
-released, and already-started server workers finish within their configured
+Original dimensions remain authoritative for annotation coordinates. Superseded
+image transfers are cancelled where possible; bytes already transferred still
+count against data use. Assignment claims finish independently so unused claims
+can be released, and already-started server workers finish within their configured
 bounds. Network loss retains the documented draft-recovery limitations and does
 not add offline annotation or conflict resolution.

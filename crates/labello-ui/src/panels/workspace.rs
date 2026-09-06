@@ -180,9 +180,7 @@ impl LabelloApp {
                     ui.set_min_height(44.0);
                     add_summary(ui, 50.0);
                     if current.is_some() {
-                        if short {
-                            self.short_image_quality_button(ui);
-                        } else if let Some(phase) = review_phase.as_ref() {
+                        if let Some(phase) = review_phase.as_ref() {
                             theme::bounded_badge(ui, phase, theme::Intent::Info, 110.0);
                         } else if let Some(workflow) = workflow.as_ref() {
                             theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
@@ -199,7 +197,6 @@ impl LabelloApp {
             })
         } else if short && current.is_some() {
             ui.horizontal(|ui| {
-                self.short_image_quality_button(ui);
                 self.canvas_controls(ui, layout);
                 if show_panel_buttons {
                     self.context_panel_buttons(ui);

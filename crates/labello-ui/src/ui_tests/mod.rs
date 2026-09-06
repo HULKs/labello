@@ -74,4 +74,4 @@ include!("suites/accessibility.rs");
 include!("suites/responsive.rs");
 
 include!("suites/build_information.rs");
-include!("suites/image_quality.rs");
+include!("suites/data_saver.rs");

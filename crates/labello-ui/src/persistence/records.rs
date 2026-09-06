@@ -413,15 +413,3 @@ impl From<StoredCorrectionDraft> for crate::app::CorrectionDraft {
         }
     }
 }
-
-pub(crate) fn load_data_saver(identity: &StorageIdentity) -> Result<bool, String> {
-    match local_get(&format!("{}:data-saver", identity.prefix()))?.as_deref() {
-        None | Some("false") => Ok(false),
-        Some("true") => Ok(true),
-        Some(_) => Err("Image quality preference is invalid; Standard detail is selected.".into()),
-    }
-}
-
-pub(crate) fn save_data_saver(identity: &StorageIdentity, selected: bool) -> Result<(), String> {
-    local_set(&format!("{}:data-saver", identity.prefix()), if selected { "true" } else { "false" })
-}

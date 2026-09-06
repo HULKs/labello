@@ -42,7 +42,6 @@ fn assignment_reload_discards_stale_manual_cursor_pass_and_local_draft() {
     let mut app =
         inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
     let loaded = LoadedImage {
-        representation: Default::default(),
         assignment: app.work.assignment.clone().unwrap(),
         queued: app.work.current.clone().unwrap(),
         annotations: app.work.annotations.clone(),

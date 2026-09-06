@@ -478,22 +478,15 @@ contract disagreements, and implementation defects are tracked in
 authorized maintainers in the
 [Labello project](https://github.com/orgs/HULKs/projects/12).
 
-## Working image quality
+## Working image previews
 
-Standard detail uses a lossless working preview. Turn on **Data saver** in the
-working view to use smaller, lossy previews and reduce transfer size. The choice
-is off by default and saved for this browser, API endpoint and account; it also
-applies to upcoming images, review and migration work.
+Annotation, review and migration always use Data saver previews: lossy WebP at
+quality 80, with a maximum edge of 1280 pixels. Upcoming-image prefetch and retries
+use the same profile. There is no image-quality setting or original-detail action;
+previously saved quality preferences are ignored.
 
-Use **Load original detail** when an image needs closer inspection. This loads
-original detail only for the current visit; the next image returns to your
-selected preview policy. **Use selected preview** returns immediately to that
-policy. Quality changes keep your edits, selection and canvas focus/zoom. Failed
-loads show **Retry image** and an explicit original-detail choice; Data saver
-never silently loads a larger representation.
-
-On compact layouts, detail actions are in **Image quality**. In very short
-windows, use the **Quality**, **Data saver**, or **Original** button to open
-quality settings. Original display and preview limits are documented in [configuration](docs/configuration.md#image-preview-limits)
-and the [API contract](docs/api.md#explicit-original-detail). Cached images do not
+Failed loads show **Retry image load** and never automatically fetch larger
+previews or original bytes. Annotation coordinates still use the original image
+dimensions. Preview limits are documented in
+[configuration](docs/configuration.md#image-preview-limits). Cached images do not
 provide an offline annotation workflow.

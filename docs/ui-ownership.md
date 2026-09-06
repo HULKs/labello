@@ -129,35 +129,21 @@ protections; cancelling leaves work intact. The panel reserves no height without
 a mismatch and leaves room for future activity content to its left without
 implementing activity statistics.
 
-## Working Image Representations
+## Working image previews
 
-`image_quality` owns the account-scoped manual Data saver choice, temporary
-original-detail state, representation requests and cancellation registry.
-`live_workflow::load_working_preview` owns the encoded Standard/Data Saver
-capability and exactly one bounded Standard RGBA fallback. Initial annotation,
-review, migration and prefetch use the selected profile; prefetch never requests
-original detail. The shared client decodes under the same bounds/convention on
-native and WASM; `ImagePreview::rgba` always means decoded RGBA.
+`live_workflow::load_working_preview` always requests the encoded Data Saver v1
+profile for annotation, review, migration, assignment reload/reopen and prefetch.
+It propagates transfer and decode failures without falling back to Standard,
+legacy RGBA or original bytes. The shared client decodes under the same bounds
+and geometry convention on native and WASM.
 
-A representation reply can replace only the current assignment's texture and
-quality status. It cannot replace annotation/review/migration drafts, selection,
-save generations, undo history or canvas transform. Initial image recovery can
-apply a complete loaded assignment when no current work exists. Existing
-request/auth/workspace epochs plus exact assignment/image identity reject stale
-replies. Quality changes discard prepared representations, release reservations,
-cancel superseded transfer futures, and refill under the selected profile.
-Claim responses are allowed to finish so cancelled work can be released.
+`image_transfer` owns transfer cancellation. Existing request/auth/workspace
+epochs own stale-response rejection, assignment identity and image-reference
+cleanup. Claims finish independently so obsolete reservations can be released.
+The command dispatcher schedules another frame while commands remain, including
+when it discards a superseded request.
 
-The Data saver checkbox is persisted separately from workspace location, per
-normalized API endpoint and authenticated account. It does not follow viewport
-or network estimates. The original-detail override lasts one image visit and is
-never persisted. Context isolation cancels transfers and resets in-memory quality
-state; stored per-account preference remains available for the next login.
-
-Working views show quality selection, active/loading/failure status, explicit
-original detail and retry. Compact layouts group detail actions in Image quality;
-short viewports (height below 480 points) put quality controls in Settings. A
-44-point context-bar button opens them and displays the active quality, preserving
-canvas space. The command dispatcher schedules another frame while commands
-remain, including when it discards a superseded image request.
-No cached image implies an active assignment or offline annotation support.
+There is no image-quality selection, per-image representation override or saved
+quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
+failure states and retry actions reload the same Data saver profile. Cached
+images never imply an active assignment or offline annotation support.

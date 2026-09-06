@@ -229,14 +229,12 @@ restart. Unrecognized files are preserved and fail cache initialization.
 Cancelling a caller before work starts publishes nothing; after start its bounded
 worker retains permits and completes or cleans up atomic publication.
 
-### Browser image quality preference
+### Browser image previews
 
-The `:data-saver` localStorage key under the existing normalized
-endpoint/account `StorageIdentity` prefix contains only `true` or `false`.
-Missing/invalid values select Standard; storage failures are surfaced. The
-preference is independent of dataset location and drafts. Signing out or changing
-endpoint clears application image references and rejects/cancels obsolete
-transfers without deleting another identity's saved preference. Original detail
-is a transient per-image visit override and never enters browser persistence.
-Derived previews and this preference do not authorize offline work or restore a
-server assignment.
+Working-image loads always use Data Saver v1. The application no longer reads or
+writes the old `:data-saver` localStorage preference under an endpoint/account
+`StorageIdentity` prefix. Existing values are harmless and ignored; neither a
+saved `false` nor an invalid value can select a larger preview. Workspace and
+draft persistence formats are unchanged. Signing out or changing endpoint clears
+image references and rejects/cancels obsolete transfers. Derived previews do not
+authorize offline work or restore a server assignment.
