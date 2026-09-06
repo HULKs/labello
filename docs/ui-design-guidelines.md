@@ -149,6 +149,23 @@ has been recorded.
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
+- **Image overlays:** use filled circles for visible keypoints and hollow
+  diamonds for occluded keypoints in saved annotations, active drafts, reviewer
+  corrections, and migration. Not-present keypoints have no image marker or
+  incident edge. Suggestions retain hollow markers and their prelabel color;
+  visible suggestions use circles and occluded suggestions use diamonds.
+  Retain class or workflow colors with a single one-point contrasting halo
+  on boxes, edges, keypoints, selection handles, and focus indicators. Choose
+  black for light class colors and white for dark ones, keeping at least 4.5:1
+  between the color and its halo. Inspect legibility on light, dark, and textured
+  images; this does not guarantee contrast against every image pixel. Keep context
+  guides, drafts, and box suggestions dashed, with gaps wide enough to separate
+  the outlined dashes. Give every dashed box corner a continuous L-shaped dash
+  and distribute edge gaps evenly between corner dashes. For unfocused migration context boxes, scale dash length
+  and gap with viewport zoom so both shrink when zooming out. Keep stroke width
+  fixed in screen space.
+  Expose keypoint names, states, and marker descriptions on the canvas's
+  accessibility node without encoding image coordinates.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.

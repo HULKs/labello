@@ -18,6 +18,7 @@ fn paint_canvas(
     prelabels: &[PrelabelSuggestion],
     annotation_color: Color32,
     annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
+    zoom: f32,
 ) {
     let painter = ui.painter_at(viewport);
     painter.rect_filled(
@@ -53,18 +54,18 @@ fn paint_canvas(
         match &suggestion.geometry {
             AnnotationGeometry::BoundingBox(bbox) => {
                 let rect = bbox_to_screen_rect(image_rect, *bbox);
-                paint_dashed_segment(&painter, rect.left_top(), rect.right_top(), color);
-                paint_dashed_segment(&painter, rect.right_top(), rect.right_bottom(), color);
-                paint_dashed_segment(&painter, rect.right_bottom(), rect.left_bottom(), color);
-                paint_dashed_segment(&painter, rect.left_bottom(), rect.left_top(), color);
+                paint_dashed_box(&painter, rect, color, 1.0);
             }
             AnnotationGeometry::Skeleton(skeleton) => {
                 for keypoint in &skeleton.keypoints {
-                    if let Some(point) = keypoint.point {
-                        painter.circle_stroke(
+                    if keypoint.state != KeypointState::Absent && let Some(point) = keypoint.point {
+                        paint_keypoint(
+                            &painter,
                             normalized_to_screen(image_rect, pos2(point.x, point.y)),
+                            &keypoint.state,
+                            color,
                             6.0,
-                            Stroke::new(2.0, color),
+                            true,
                         );
                     }
                 }
@@ -86,7 +87,7 @@ fn paint_canvas(
                 if selected {
                     paint_selected_box(&painter, image_rect, bbox, editable, style.color);
                 } else if style.dashed_box {
-                    paint_context_box(&painter, image_rect, bbox, style.color);
+                    paint_context_box(&painter, image_rect, bbox, style.color, zoom);
                 } else {
                     paint_existing_box(&painter, image_rect, bbox, style.color);
                 }
@@ -107,17 +108,19 @@ fn paint_canvas(
                         keypoint_preview,
                     );
                     if let (Some(from), Some(to)) = (from, to) {
-                        painter.line_segment(
+                        paint_outlined_segment(
+                            &painter,
                             [
                                 normalized_to_screen(image_rect, pos2(from.x, from.y)),
                                 normalized_to_screen(image_rect, pos2(to.x, to.y)),
                             ],
-                            Stroke::new(if selected { 3.0 } else { 2.0 }, color),
+                            color,
+                            if selected { 2.0 } else { 1.5 },
                         );
                     }
                 }
                 for (keypoint_index, keypoint) in skeleton.keypoints.iter().enumerate() {
-                    if let Some(point) = keypoint.point {
+                    if keypoint.state != KeypointState::Absent && let Some(point) = keypoint.point {
                         let point = previewed_keypoint_point(
                             &annotation.annotation_id,
                             keypoint_index,
@@ -125,16 +128,11 @@ fn paint_canvas(
                             keypoint_preview,
                         );
                         let center = normalized_to_screen(image_rect, pos2(point.x, point.y));
-                        if selected {
-                            painter.circle_stroke(center, 7.0, Stroke::new(2.0, Color32::WHITE));
-                        }
-                        painter.circle_filled(center, if selected { 5.0 } else { 4.0 }, color);
+                        paint_keypoint(&painter, center, &keypoint.state, color, if selected { 5.0 } else { 4.0 }, false);
                         if selected && selected_keypoint == Some(keypoint_index) {
-                            painter.circle_stroke(
-                                center,
-                                10.0,
-                                Stroke::new(3.0, theme::FOCUS_RING),
-                            );
+                            for stroke in overlay_strokes(theme::FOCUS_RING, 2.0) {
+                                painter.circle_stroke(center, 14.0, stroke);
+                            }
                         }
                     }
                 }
@@ -165,6 +163,7 @@ fn skeleton_keypoint_point(
         .iter()
         .enumerate()
         .find(|(_, keypoint)| keypoint.name == keypoint_name)
+        .filter(|(_, keypoint)| keypoint.state != KeypointState::Absent)
         .and_then(|(keypoint_index, keypoint)| {
             keypoint.point.map(|point| {
                 previewed_keypoint_point(
@@ -237,6 +236,56 @@ fn rounded_corner_mask(viewport: Rect, color: Color32) -> Mesh {
     mesh
 }
 
+// A single one-point halo separates the class color from image content without
+// turning small markers and thin edges into concentric black/white bands.
+fn overlay_outline(color: Color32) -> Color32 {
+    let linear = egui::Rgba::from(color);
+    let luminance = 0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b();
+    if luminance > 0.179 {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
+}
+
+fn overlay_strokes(color: Color32, width: f32) -> [Stroke; 2] {
+    [Stroke::new(width + 2.0, overlay_outline(color)), Stroke::new(width, color)]
+}
+
+fn paint_outlined_segment(painter: &egui::Painter, points: [Pos2; 2], color: Color32, width: f32) {
+    for stroke in overlay_strokes(color, width) {
+        painter.line_segment(points, stroke);
+    }
+}
+
+fn paint_outlined_rect(painter: &egui::Painter, rect: Rect, radius: u8, color: Color32, width: f32) {
+    for stroke in overlay_strokes(color, width) {
+        painter.rect_stroke(rect, CornerRadius::same(radius), stroke, StrokeKind::Middle);
+    }
+}
+
+fn paint_keypoint(painter: &egui::Painter, center: Pos2, state: &KeypointState, color: Color32, radius: f32, suggestion: bool) {
+    match state {
+        KeypointState::Visible if !suggestion => {
+            painter.circle_filled(center, radius + 1.0, overlay_outline(color));
+            painter.circle_filled(center, radius, color);
+        }
+        KeypointState::Visible => {
+            for stroke in overlay_strokes(color, 2.0) {
+                painter.circle_stroke(center, radius, stroke);
+            }
+        }
+        KeypointState::Hidden => {
+            let radius = radius + 2.0;
+            let points = [center + vec2(0.0, -radius), center + vec2(radius, 0.0), center + vec2(0.0, radius), center + vec2(-radius, 0.0)];
+            for stroke in overlay_strokes(color, 2.0) {
+                painter.add(egui::Shape::closed_line(points.to_vec(), stroke));
+            }
+        }
+        KeypointState::Absent => {}
+    }
+}
+
 fn paint_existing_box(
     painter: &egui::Painter,
     image_rect: Rect,
@@ -249,12 +298,7 @@ fn paint_existing_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 14),
     );
-    painter.rect_stroke(
-        rect,
-        CornerRadius::same(4),
-        Stroke::new(1.5, color),
-        StrokeKind::Inside,
-    );
+    paint_outlined_rect(painter, rect, 4, color, 1.5);
 }
 
 fn paint_context_box(
@@ -262,6 +306,7 @@ fn paint_context_box(
     image_rect: Rect,
     bbox: BoundingBox,
     color: Color32,
+    zoom: f32,
 ) {
     let rect = bbox_to_screen_rect(image_rect, bbox);
     painter.rect_filled(
@@ -269,10 +314,7 @@ fn paint_context_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 7),
     );
-    paint_dashed_segment(painter, rect.left_top(), rect.right_top(), color);
-    paint_dashed_segment(painter, rect.right_top(), rect.right_bottom(), color);
-    paint_dashed_segment(painter, rect.right_bottom(), rect.left_bottom(), color);
-    paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
+    paint_dashed_box(painter, rect, color, zoom);
 }
 
 fn paint_selected_box(
@@ -288,23 +330,13 @@ fn paint_selected_box(
         CornerRadius::same(5),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 28),
     );
-    painter.rect_stroke(
-        rect,
-        CornerRadius::same(5),
-        Stroke::new(3.0, color),
-        StrokeKind::Inside,
-    );
+    paint_outlined_rect(painter, rect, 5, color, 2.0);
 
     if editable {
         for (_, center) in resize_handles(rect) {
             let handle = Rect::from_center_size(center, Vec2::splat(HANDLE_SIZE));
             painter.rect_filled(handle, CornerRadius::same(2), Color32::WHITE);
-            painter.rect_stroke(
-                handle,
-                CornerRadius::same(2),
-                Stroke::new(1.5, theme::SELECTION),
-                StrokeKind::Inside,
-            );
+            paint_outlined_rect(painter, handle, 2, theme::SELECTION, 1.5);
         }
     }
 }
@@ -317,39 +349,39 @@ fn paint_draft_box(painter: &egui::Painter, image_rect: Rect, bbox: BoundingBox)
         CornerRadius::same(3),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 30),
     );
-    paint_dashed_segment(painter, rect.left_top(), rect.right_top(), color);
-    paint_dashed_segment(painter, rect.right_top(), rect.right_bottom(), color);
-    paint_dashed_segment(painter, rect.right_bottom(), rect.left_bottom(), color);
-    paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
+    paint_dashed_box(painter, rect, color, 1.0);
 }
 
-fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32) {
-    if !start.x.is_finite() || !start.y.is_finite() || !end.x.is_finite() || !end.y.is_finite() {
+fn paint_dashed_box(painter: &egui::Painter, rect: Rect, color: Color32, zoom: f32) {
+    if !valid_rect(rect) || !rect.size().length().is_finite() {
         return;
     }
-    let vector = end - start;
-    let length = vector.length();
-    if !length.is_finite() || length <= f32::EPSILON {
-        return;
-    }
-    let direction = vector / length;
-    let mut offset = 0.0;
-    for _ in 0..MAX_DASH_SEGMENTS {
-        if offset >= length {
-            break;
+    let scale = finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM);
+    let dash_length = 4.0 * scale;
+    let minimum_gap = 5.0 * scale;
+    // Each corner owns a single bent dash, half on each adjacent edge.
+    // Short boxes keep four distinct corners without overlapping their legs.
+    let leg = (dash_length * 0.5).min(rect.width().min(rect.height()) * 0.25);
+    let corners = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()];
+    for index in 0..4 {
+        let corner = corners[index];
+        let previous = corners[(index + 3) % 4];
+        let next = corners[(index + 1) % 4];
+        let incoming = (previous - corner).normalized();
+        let outgoing = (next - corner).normalized();
+        for stroke in overlay_strokes(color, 2.0) {
+            painter.add(egui::Shape::line(vec![corner + incoming * leg, corner, corner + outgoing * leg], stroke));
         }
-        let dash_end = (offset + 6.0).min(length);
-        if !dash_end.is_finite() || dash_end <= offset {
-            break;
+        let remaining = (next - corner).length() - 2.0 * leg;
+        let count = (((remaining - minimum_gap) / (dash_length + minimum_gap)).floor().max(0.0) as usize)
+            .min(MAX_DASH_SEGMENTS);
+        // Distribute the remainder into equal gaps instead of truncating a dash
+        // at the next corner. Dash length remains proportional to viewport zoom.
+        let gap = (remaining - count as f32 * dash_length) / (count + 1) as f32;
+        for dash in 0..count {
+            let offset = leg + gap + dash as f32 * (dash_length + gap);
+            paint_outlined_segment(painter, [corner + outgoing * offset,
+                corner + outgoing * (offset + dash_length)], color, 2.0);
         }
-        painter.line_segment(
-            [start + direction * offset, start + direction * dash_end],
-            Stroke::new(2.0, color),
-        );
-        let next = offset + 10.0;
-        if !next.is_finite() || next <= offset {
-            break;
-        }
-        offset = next;
     }
 }

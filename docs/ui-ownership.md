@@ -76,6 +76,10 @@ The canvas keeps its public state and entry points in `canvas.rs`. Its internal
 implementation is split only into rendering, painting, interaction,
 hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
 the canvas module so these boundaries do not weaken behavioral coverage.
+The painting owner applies one outlined-stroke and keypoint-marker policy to
+annotations, drafts, correction previews, migration guides, and suggestions.
+The rendering owner describes the same projected keypoint states in AccessKit;
+view adapters do not define their own visibility markers.
 
 ## Browser persistence
 
@@ -101,6 +105,11 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+Continuing an active skeleton after an earlier keypoint autosave creates the next
+human-edited annotation revision. The edit owner marks the persisted annotation
+modified before saving later keypoints, preserving Visible, Occluded and
+coordinate-free Not present outcomes through save and reload.
 
 ## Build information
 

@@ -2699,3 +2699,63 @@ fn working_previews_always_use_data_saver_without_larger_fallbacks() {
     assert!(api.state.borrow().active_assignments.is_empty());
     assert!(api.events().is_empty());
 }
+
+#[test]
+fn continuing_a_skeleton_after_autosave_persists_later_keypoints() {
+    let api = Rc::new(SpyApi::new());
+    {
+        let mut state = api.state.borrow_mut();
+        let task = &mut state.metadata.tasks[0];
+        task.annotation_type = AnnotationType::Skeleton;
+        task.prelabel_config_ids.clear();
+        task.skeleton = Some(SkeletonSpec {
+            keypoints: ["first", "second", "third"]
+                .into_iter()
+                .map(|name| KeypointSpec {
+                    name: name.to_string(),
+                    required: false,
+                })
+                .collect(),
+            edges: Vec::new(),
+            allow_hidden: true,
+            allow_absent: true,
+        });
+    }
+    let mut harness = loaded_work_harness(api);
+    harness
+        .state_mut()
+        .place_keypoint(labello_domain::NormalizedPoint { x: 0.3, y: 0.3 });
+    harness.state_mut().autosave();
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert_eq!(harness.state().work.annotations[0].version, 1);
+    harness.state_mut().work.next_keypoint_hidden = true;
+    harness
+        .state_mut()
+        .place_keypoint(labello_domain::NormalizedPoint { x: 0.5, y: 0.5 });
+    harness.state_mut().skip_keypoint();
+    harness.state_mut().autosave();
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let saved = &harness.state().work.annotations[0];
+    let AnnotationGeometry::Skeleton(geometry) = &saved.geometry else {
+        panic!("expected skeleton")
+    };
+    assert_eq!(
+        geometry
+            .keypoints
+            .iter()
+            .map(|point| point.state.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            labello_domain::KeypointState::Visible,
+            labello_domain::KeypointState::Hidden,
+            labello_domain::KeypointState::Absent
+        ]
+    );
+    assert_eq!(saved.version, 2);
+    assert!(matches!(
+        saved.revision_source,
+        labello_domain::RevisionSource::Human {
+            action: labello_domain::HumanRevisionKind::Edited
+        }
+    ));
+}

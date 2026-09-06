@@ -59,10 +59,14 @@ pub enum InspectorPreset {
     MigrationReview,
     MigrationAnnotatedEdit,
     MigrationGuideDeleted,
+    OverlayAnnotation,
+    OverlayReview,
+    OverlayCorrection,
+    OverlayMigration,
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 38] = [
+    pub const ALL: [Self; 42] = [
         Self::Annotation,
         Self::Setup,
         Self::About,
@@ -101,6 +105,10 @@ impl InspectorPreset {
         Self::MigrationReview,
         Self::MigrationAnnotatedEdit,
         Self::MigrationGuideDeleted,
+        Self::OverlayAnnotation,
+        Self::OverlayReview,
+        Self::OverlayCorrection,
+        Self::OverlayMigration,
     ];
 
     pub const fn name(self) -> &'static str {
@@ -143,6 +151,10 @@ impl InspectorPreset {
             Self::MigrationReview => "migration-review",
             Self::MigrationAnnotatedEdit => "migration-annotated-edit",
             Self::MigrationGuideDeleted => "migration-guide-deleted",
+            Self::OverlayAnnotation => "overlay-annotation",
+            Self::OverlayReview => "overlay-review",
+            Self::OverlayCorrection => "overlay-correction",
+            Self::OverlayMigration => "overlay-migration",
         }
     }
 
@@ -153,6 +165,10 @@ impl InspectorPreset {
 
 pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
     match preset {
+        InspectorPreset::OverlayAnnotation
+        | InspectorPreset::OverlayReview
+        | InspectorPreset::OverlayCorrection
+        | InspectorPreset::OverlayMigration => overlay_preset(ctx, preset),
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
         InspectorPreset::Setup => setup_preset(),
         InspectorPreset::About | InspectorPreset::BuildUnavailable => {
@@ -1141,6 +1157,156 @@ fn sample_annotation() -> AnnotationVersion {
         updated_at: timestamp(),
         deleted: false,
     }
+}
+
+fn overlay_preset(ctx: &egui::Context, preset: InspectorPreset) -> LabelloApp {
+    use labello_domain::{
+        KeypointAnnotation, KeypointState, NormalizedPoint, SkeletonEdge, SkeletonGeometry,
+    };
+    let migration = preset == InspectorPreset::OverlayMigration;
+    let review = matches!(
+        preset,
+        InspectorPreset::OverlayReview | InspectorPreset::OverlayCorrection
+    );
+    let mut app = if migration {
+        migration_preset(ctx, MigrationPreset::Object)
+    } else {
+        work_preset(
+            if review {
+                AssignmentKind::Review
+            } else {
+                AssignmentKind::Annotation
+            },
+            ctx,
+        )
+    };
+    let names = [
+        "light_visible",
+        "light_occluded",
+        "dark_visible",
+        "dark_occluded",
+        "texture_visible",
+        "texture_occluded",
+        "not_present",
+    ];
+    let skeleton = SkeletonGeometry {
+        keypoints: names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| KeypointAnnotation {
+                name: (*name).into(),
+                state: if index == 6 {
+                    KeypointState::Absent
+                } else if index % 2 == 0 {
+                    KeypointState::Visible
+                } else {
+                    KeypointState::Hidden
+                },
+                point: (index < 6).then_some(NormalizedPoint {
+                    x: 0.17 + (index / 2) as f32 / 3.0,
+                    y: if index % 2 == 0 { 0.35 } else { 0.65 },
+                }),
+            })
+            .collect(),
+    };
+    let spec = SkeletonSpec {
+        keypoints: names
+            .iter()
+            .map(|name| KeypointSpec {
+                name: (*name).into(),
+                required: false,
+            })
+            .collect(),
+        edges: [(0, 1), (2, 3), (4, 5)]
+            .into_iter()
+            .map(|(from, to)| SkeletonEdge {
+                from: names[from].into(),
+                to: names[to].into(),
+            })
+            .collect(),
+        allow_hidden: true,
+        allow_absent: true,
+    };
+    if migration {
+        let task_id = app.work.selected_task_id.clone().unwrap();
+        app.work
+            .tasks
+            .iter_mut()
+            .find(|task| task.task_id == task_id)
+            .unwrap()
+            .skeleton = Some(spec);
+        app.work.migration.draft_group = Some(ObjectGroupId::from("group-left"));
+        app.work.migration.draft = Some(skeleton);
+        app.work.migration.keypoint_index = 6;
+    } else {
+        let task_id = TaskId::from("skeleton:synthetic-overlay");
+        let mut task = inspector_workflow(
+            task_id.as_str(),
+            "Synthetic overlay contrast",
+            AnnotationType::Skeleton,
+        );
+        task.skeleton = Some(spec);
+        task.review.allow_reviewer_corrections = true;
+        app.work.tasks = vec![task];
+        app.work.selected_task_id = Some(task_id.clone());
+        app.work.assignment.as_mut().unwrap().task_id = task_id.clone();
+        app.work.tool = crate::app::Tool::Keypoints;
+        let annotation = &mut app.work.annotations[0];
+        annotation.task_id = task_id.clone();
+        annotation.annotation_type = AnnotationType::Skeleton;
+        annotation.geometry = AnnotationGeometry::Skeleton(skeleton.clone());
+        if preset == InspectorPreset::OverlayCorrection {
+            app.work.correction_draft = Some(CorrectionDraft {
+                correction_id: CorrectionId::from("synthetic-correction"),
+                annotation_id: annotation.annotation_id.clone(),
+                expected_version: annotation.version,
+                original_geometry: annotation.geometry.clone(),
+                edited_geometry: annotation.geometry.clone(),
+                reason: String::new(),
+                geometry_history: Vec::new(),
+                selected_keypoint: Some(1),
+            });
+        } else if !review {
+            app.work.active_skeleton = Some(annotation.annotation_id.clone());
+            app.work.skeleton_keypoint_index = 6;
+            let mut suggestion = skeleton;
+            for keypoint in &mut suggestion.keypoints {
+                if let Some(point) = &mut keypoint.point {
+                    point.x += 0.08;
+                }
+            }
+            app.work.current.as_mut().unwrap().prelabels =
+                vec![labello_domain::PrelabelSuggestion {
+                    suggestion_id: "synthetic-overlay-suggestion".into(),
+                    config_id: "synthetic-overlay-config".into(),
+                    task_id,
+                    class_id: ClassId::from("person"),
+                    confidence: 0.9,
+                    geometry: AnnotationGeometry::Skeleton(suggestion),
+                }];
+        }
+    }
+    let size = [600, 400];
+    let mut image = egui::ColorImage::filled(size, egui::Color32::WHITE);
+    for y in 0..size[1] {
+        for x in 0..size[0] {
+            image.pixels[y * size[0] + x] = if x < 200 {
+                egui::Color32::WHITE
+            } else if x < 400 {
+                egui::Color32::BLACK
+            } else if (x / 20 + y / 20) % 2 == 0 {
+                egui::Color32::from_rgb(220, 220, 100)
+            } else {
+                egui::Color32::from_rgb(35, 35, 100)
+            };
+        }
+    }
+    app.work.current_texture = Some(ctx.load_texture(
+        "synthetic-overlay-contrast",
+        image,
+        egui::TextureOptions::NEAREST,
+    ));
+    app
 }
 
 fn preview_image() -> egui::ColorImage {

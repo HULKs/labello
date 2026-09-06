@@ -212,6 +212,12 @@ draft input, without a server or dataset. Preset actions
 are intentionally local and deterministic; restart with another preset for a
 clean inspection context.
 
+`overlay-annotation`, `overlay-review`, `overlay-correction`, and
+`overlay-migration` show visible, occluded, and not-present keypoints over
+synthetic white, black, and textured regions. Annotation includes an active
+skeleton draft and prelabel suggestions; correction includes a focused
+occluded keypoint. These fixtures exercise the shared production painter.
+
 To connect the inspector to a running Labello server instead, use live mode:
 
 ```sh
