@@ -408,25 +408,27 @@ impl LabelloApp {
 
         match action {
             AppBarAction::Setup => {
-                let tooth_angle = std::f32::consts::TAU / 8.0;
-                let mut outline = Vec::with_capacity(32);
-                for index in 0..8 {
-                    let angle = index as f32 * tooth_angle;
-                    for (offset, radius) in [
-                        (-0.34, 6.1),
-                        (-0.18, 8.3),
-                        (0.18, 8.3),
-                        (0.34, 6.1),
-                    ] {
-                        let point_angle = angle + offset * tooth_angle;
-                        outline.push(
-                            center
-                                + egui::vec2(point_angle.cos(), point_angle.sin()) * radius,
-                        );
-                    }
-                }
-                painter.add(egui::Shape::closed_line(outline, stroke));
-                painter.circle_stroke(center, 2.6, stroke);
+                painter.add(egui::Shape::line(
+                    vec![
+                        center + egui::vec2(-8.0, -1.0),
+                        center + egui::vec2(0.0, -8.0),
+                        center + egui::vec2(8.0, -1.0),
+                    ],
+                    stroke,
+                ));
+                painter.add(egui::Shape::line(
+                    vec![
+                        center + egui::vec2(-6.0, -2.5),
+                        center + egui::vec2(-6.0, 7.0),
+                        center + egui::vec2(-2.0, 7.0),
+                        center + egui::vec2(-2.0, 2.0),
+                        center + egui::vec2(2.0, 2.0),
+                        center + egui::vec2(2.0, 7.0),
+                        center + egui::vec2(6.0, 7.0),
+                        center + egui::vec2(6.0, -2.5),
+                    ],
+                    stroke,
+                ));
             }
             AppBarAction::Tutorial => {
                 painter.text(

@@ -1535,3 +1535,29 @@ fn command_and_message_budgets_preserve_frame_responsiveness() {
     assert_ne!(app.runtime.notice.as_deref(), Some("Uploaded stale files"));
     assert_eq!(app.view, AppView::Stats);
 }
+
+#[test]
+fn setup_home_action_preserves_responsive_navigation_and_work_protection() {
+    for (width, height) in viewport_sizes() {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_work_harness(api);
+        harness.set_size(egui::vec2(width, height));
+        harness.state_mut().work.save_status = SaveStatus::Dirty;
+        let assignment = harness.state().work.assignment.clone();
+        harness.step();
+        if let Some(button) =
+            harness.query_by_role_and_label(egui::accesskit::Role::Button, "Open setup")
+        {
+            assert!(button.rect().width() >= 44.0);
+            assert!(button.rect().height() >= 44.0);
+        }
+        click_application_menu_item(&mut harness, "Setup");
+        assert_eq!(harness.state().view, AppView::Annotate);
+        assert!(matches!(
+            harness.state().work.pending_transition,
+            Some(crate::app::PendingTransition::View(AppView::Setup))
+        ));
+        assert_eq!(harness.state().work.assignment, assignment);
+        assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
+    }
+}
