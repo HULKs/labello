@@ -2907,3 +2907,706 @@ fn assignment_status(state: &ImageState, assignment: &Assignment) -> AssignmentS
         .status
         .clone()
 }
+
+#[tokio::test]
+async fn discovery_companion_transaction_retries_replays_updates_and_withdraws() {
+    let fixture = fixture(ReviewWorkflow::None, 0).await;
+    let assignment = claim_annotator(&fixture).await;
+    let initial = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    let added = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            skeleton(0.7),
+            "pair-create",
+        )
+        .await
+        .unwrap();
+    let skeleton_id = added.annotation_id.clone().unwrap();
+    let link = added.image_state.migration_companions[&skeleton_id].clone();
+    assert_eq!(link.skeleton_version, 1);
+    assert_eq!(link.box_version, 1);
+    let bounding_box = added
+        .image_state
+        .migration_companion_box(&skeleton_id)
+        .unwrap();
+    assert_eq!(bounding_box.task_id, fixture.guide_task_id);
+    assert!(bounding_box.object_group_id.is_none());
+    assert!(
+        added
+            .image_state
+            .migration_companion_is_derived(&skeleton_id)
+    );
+    assert_eq!(
+        added.image_state.task_states[&fixture.guide_task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    assert!(
+        added.image_state.task_states[&fixture.guide_task_id]
+            .outcome
+            .is_none()
+    );
+    assert_eq!(
+        added.image_state.migration_target_sets,
+        initial.migration_target_sets
+    );
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    let replayed = rebuild_state(fixture.image_id.clone(), &events).unwrap();
+    assert_eq!(replayed, added.image_state);
+    for boundary in 0..=events.len() {
+        let prefix = rebuild_state(fixture.image_id.clone(), &events[..boundary]).unwrap();
+        let decoded: ImageState =
+            serde_json::from_slice(&serde_json::to_vec(&prefix).unwrap()).unwrap();
+        assert_eq!(prefix, decoded);
+    }
+    let derived_event = events
+        .iter()
+        .find(|event| {
+            matches!(&event.payload,
+        EventPayload::AnnotationVersionCreated { annotation, .. }
+            if matches!(annotation.revision_source, RevisionSource::MigrationSkeleton { .. }))
+        })
+        .unwrap();
+    let mut legacy_encoding = derived_event.clone();
+    legacy_encoding.schema_version = 2;
+    assert!(serde_json::to_value(&legacy_encoding).is_err());
+    let schema = serde_json::to_value(labello_domain::labello_schema_bundle())
+        .unwrap()
+        .to_string();
+    assert!(
+        schema.contains("migration_companion_linked") && schema.contains("migrationCompanions")
+    );
+    let roundtrip: ImageState =
+        serde_json::from_slice(&serde_json::to_vec(&replayed).unwrap()).unwrap();
+    assert_eq!(roundtrip, replayed);
+    let retried = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            skeleton(0.7),
+            "pair-create",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retried.image_state.current_sequence,
+        added.image_state.current_sequence
+    );
+    let edited = fixture
+        .repository
+        .edit_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            1,
+            skeleton(0.8),
+            "pair-edit",
+        )
+        .await
+        .unwrap();
+    let edited_link = &edited.image_state.migration_companions[&skeleton_id];
+    assert_eq!(edited_link.box_annotation_id, link.box_annotation_id);
+    assert_eq!(edited_link.box_version, 2);
+    assert_eq!(edited_link.skeleton_version, 2);
+    assert_eq!(
+        edited.image_state.migration_target_sets,
+        initial.migration_target_sets
+    );
+    let removed = fixture
+        .repository
+        .delete_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            2,
+            "pair-delete",
+        )
+        .await
+        .unwrap();
+    assert!(
+        removed
+            .image_state
+            .current_annotation(&link.box_annotation_id)
+            .unwrap()
+            .deleted
+    );
+    assert!(
+        removed
+            .image_state
+            .current_annotation(&skeleton_id)
+            .unwrap()
+            .deleted
+    );
+    let retried = fixture
+        .repository
+        .delete_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            2,
+            "pair-delete",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retried.image_state.current_sequence,
+        removed.image_state.current_sequence
+    );
+}
+
+#[tokio::test]
+async fn discovery_companion_conflicts_preserve_both_objects_and_require_explicit_reconciliation() {
+    let fixture = fixture(ReviewWorkflow::None, 0).await;
+    let assignment = claim_annotator(&fixture).await;
+    let added = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            skeleton(0.7),
+            "conflict-create",
+        )
+        .await
+        .unwrap();
+    let skeleton_id = added.annotation_id.unwrap();
+    let mut bounding_box = added
+        .image_state
+        .migration_companion_box(&skeleton_id)
+        .unwrap()
+        .clone();
+    bounding_box.version += 1;
+    bounding_box.revision_source = RevisionSource::Human {
+        action: HumanRevisionKind::Edited,
+    };
+    bounding_box.updated_at = labello_domain::now();
+    fixture
+        .repository
+        .append_payloads_unlocked(
+            &fixture.image_id,
+            &Actor {
+                user_id: fixture.annotator.clone(),
+                role: DatasetRole::Annotator,
+            },
+            vec![EventPayload::AnnotationVersionCreated {
+                annotation: bounding_box.clone(),
+                previous_version: Some(1),
+                reason: Some("ordinary box correction".into()),
+            }],
+        )
+        .await
+        .unwrap();
+    let before = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(
+        fixture
+            .repository
+            .edit_migration_skeleton(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &skeleton_id,
+                1,
+                skeleton(0.8),
+                "blocked-edit"
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        fixture
+            .repository
+            .delete_migration_skeleton(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &skeleton_id,
+                1,
+                "blocked-delete"
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        fixture
+            .repository
+            .reconcile_migration_companion(
+                &fixture.annotator,
+                context(&assignment),
+                None,
+                &skeleton_id,
+                1,
+                Some(1),
+                "stale-reconcile"
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        before
+    );
+    let reconciled = fixture
+        .repository
+        .reconcile_migration_companion(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            1,
+            Some(2),
+            "explicit-reconcile",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        reconciled.image_state.migration_companions[&skeleton_id].box_version,
+        3
+    );
+    assert!(
+        reconciled
+            .image_state
+            .migration_companion_is_derived(&skeleton_id)
+    );
+    let retry = fixture
+        .repository
+        .reconcile_migration_companion(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            1,
+            Some(2),
+            "explicit-reconcile",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retry.image_state.current_sequence,
+        reconciled.image_state.current_sequence
+    );
+    fixture
+        .repository
+        .edit_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &skeleton_id,
+            1,
+            skeleton(0.8),
+            "retained-edit",
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn discovery_companion_rejects_competing_guide_assignment_and_wrong_actor_atomically() {
+    let fixture = fixture(ReviewWorkflow::None, 0).await;
+    let assignment = claim_annotator(&fixture).await;
+    open_guide_assignment(&fixture).await;
+    let before = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    let error = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            skeleton(0.7),
+            "competing-create",
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("active assignment"));
+    assert!(
+        fixture
+            .repository
+            .add_migration_skeleton(
+                &fixture.reviewers[0],
+                context(&assignment),
+                None,
+                skeleton(0.7),
+                "wrong-actor-create"
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        before
+    );
+}
+
+#[tokio::test]
+async fn legacy_discovery_reconciliation_is_explicit_resumable_and_preserves_unresolved_objects() {
+    let fixture =
+        fixture_with_skeleton_spec(ReviewWorkflow::None, 0, optional_skeleton_spec()).await;
+    let assignment = claim_annotator(&fixture).await;
+    let timestamp = labello_domain::now();
+    let mut payloads = Vec::new();
+    for (name, geometry, proven) in [
+        ("legacy-one", mixed_optional_skeleton(), true),
+        ("legacy-two", mixed_optional_skeleton(), true),
+        ("legacy-no-positions", all_not_present_skeleton(), true),
+        ("ordinary-skeleton", mixed_optional_skeleton(), false),
+    ] {
+        payloads.push(EventPayload::AnnotationVersionCreated {
+            annotation: AnnotationVersion {
+                annotation_id: AnnotationId::from(name),
+                version: 1,
+                object_group_id: None,
+                origin: AnnotationOrigin::native(),
+                task_id: fixture.task_id.clone(),
+                class_id: ClassId::from("person"),
+                annotation_type: AnnotationType::Skeleton,
+                revision_source: RevisionSource::Human {
+                    action: HumanRevisionKind::Authored,
+                },
+                geometry: AnnotationGeometry::Skeleton(geometry),
+                author_user_id: fixture.annotator.clone(),
+                created_at: timestamp,
+                updated_at: timestamp,
+                deleted: false,
+            },
+            previous_version: None,
+            reason: proven.then(|| "object discovered during full-image migration review".into()),
+        });
+    }
+    fixture
+        .repository
+        .append_payloads_unlocked(
+            &fixture.image_id,
+            &Actor {
+                user_id: fixture.annotator.clone(),
+                role: DatasetRole::Annotator,
+            },
+            payloads,
+        )
+        .await
+        .unwrap();
+    let initial = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(initial.migration_companions.is_empty());
+    assert!(
+        initial
+            .migration_discovery_focus(
+                &AnnotationId::from("legacy-no-positions"),
+                labello_domain::ImageDimensions {
+                    width: 100,
+                    height: 100
+                }
+            )
+            .is_none()
+    );
+    // A read cannot silently repair historical data.
+    fixture
+        .repository
+        .current_manual_migration(&fixture.annotator, context(&assignment), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        initial,
+        fixture
+            .repository
+            .load_image_state(&fixture.image_id)
+            .await
+            .unwrap()
+    );
+    for name in ["legacy-no-positions", "ordinary-skeleton"] {
+        assert!(
+            fixture
+                .repository
+                .reconcile_migration_companion(
+                    &fixture.annotator,
+                    context(&assignment),
+                    None,
+                    &AnnotationId::from(name),
+                    1,
+                    None,
+                    name
+                )
+                .await
+                .is_err()
+        );
+    }
+    let first = fixture
+        .repository
+        .reconcile_migration_companion(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &AnnotationId::from("legacy-one"),
+            1,
+            None,
+            "repair-one",
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.image_state.migration_companions.len(), 1);
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    let rebuilt = rebuild_state(fixture.image_id.clone(), &events).unwrap();
+    assert_eq!(rebuilt, first.image_state);
+    // Resume after one committed object, retaining the original skeleton IDs and versions.
+    let second = fixture
+        .repository
+        .reconcile_migration_companion(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &AnnotationId::from("legacy-two"),
+            1,
+            None,
+            "repair-two",
+        )
+        .await
+        .unwrap();
+    let retry = fixture
+        .repository
+        .reconcile_migration_companion(
+            &fixture.annotator,
+            context(&assignment),
+            None,
+            &AnnotationId::from("legacy-one"),
+            1,
+            None,
+            "repair-one",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retry.image_state.current_sequence,
+        second.image_state.current_sequence
+    );
+    assert_eq!(retry.image_state.migration_companions.len(), 2);
+    assert_eq!(
+        retry.image_state.migration_target_sets,
+        initial.migration_target_sets
+    );
+    for name in [
+        "legacy-one",
+        "legacy-two",
+        "legacy-no-positions",
+        "ordinary-skeleton",
+    ] {
+        assert_eq!(
+            retry
+                .image_state
+                .current_annotation(&AnnotationId::from(name)),
+            initial.current_annotation(&AnnotationId::from(name))
+        );
+    }
+    let bundle = fixture
+        .repository
+        .create_offline_bundle(&fixture.annotator, 10, false)
+        .await
+        .unwrap();
+    let roundtrip: labello_domain::OfflineBundle =
+        serde_json::from_slice(&serde_json::to_vec(&bundle).unwrap()).unwrap();
+    assert_eq!(
+        roundtrip.images[0].state.migration_companions,
+        retry.image_state.migration_companions
+    );
+    let snapshot = fixture.repository.create_snapshot().await.unwrap();
+    let state_file = snapshot
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("/state.json"))
+        .unwrap();
+    let snapshot_state: ImageState = serde_json::from_slice(
+        &tokio::fs::read(
+            fixture
+                .repository
+                .snapshots_dir()
+                .join(&snapshot.snapshot_id)
+                .join(&state_file.path),
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        snapshot_state.migration_companions,
+        retry.image_state.migration_companions
+    );
+}
+
+#[tokio::test]
+async fn discovered_skeleton_review_precedes_confirmation_and_rejection_requires_a_new_version() {
+    let fixture = fixture(ReviewWorkflow::Approval, 0).await;
+    let annotation = claim_annotator(&fixture).await;
+    let added = fixture
+        .repository
+        .add_migration_skeleton(
+            &fixture.annotator,
+            context(&annotation),
+            None,
+            skeleton(0.7),
+            "review-discovery-create",
+        )
+        .await
+        .unwrap();
+    let skeleton_id = added.annotation_id.unwrap();
+    let target_hash = added.image_state.migration_target_sets[&fixture.task_id]
+        .target_set_hash
+        .clone();
+    let state_hash = added
+        .image_state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let confirmation_hash = migration_confirmation_hash(&target_hash, &state_hash).unwrap();
+    fixture
+        .repository
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&annotation),
+            &target_hash,
+            &state_hash,
+            &confirmation_hash,
+            "submit-discovery",
+        )
+        .await
+        .unwrap();
+    let reviewer = fixture
+        .repository
+        .assign_next_image(
+            &fixture.reviewers[0],
+            &fixture.task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let before = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    assert!(
+        fixture
+            .repository
+            .review_migration(
+                &fixture.reviewers[0],
+                context(&reviewer),
+                &MigrationReviewTarget::Confirmation { confirmation_hash },
+                ReviewDecision::Approved,
+                None,
+                "skip-discovery"
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        before
+    );
+    let rejected = fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&reviewer),
+            &MigrationReviewTarget::Discovered {
+                annotation_id: skeleton_id.clone(),
+                version: 1,
+            },
+            ReviewDecision::Rejected,
+            None,
+            "reject-discovery",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        rejected.image_state.task_states[&fixture.task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    assert!(
+        rejected
+            .image_state
+            .migration_discovery_requires_correction(
+                rejected
+                    .image_state
+                    .current_annotation(&skeleton_id)
+                    .unwrap()
+            )
+    );
+    assert!(
+        rejected.image_state.migration_target_sets[&fixture.task_id]
+            .targets
+            .is_empty()
+    );
+    let correction = claim_annotator(&fixture).await;
+    let state_hash = rejected
+        .image_state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let confirmation_hash = migration_confirmation_hash(&target_hash, &state_hash).unwrap();
+    assert!(
+        fixture
+            .repository
+            .confirm_and_submit_migration(
+                &fixture.annotator,
+                context(&correction),
+                &target_hash,
+                &state_hash,
+                &confirmation_hash,
+                "unchanged-rejected-discovery"
+            )
+            .await
+            .is_err()
+    );
+    fixture
+        .repository
+        .edit_migration_skeleton(
+            &fixture.annotator,
+            context(&correction),
+            None,
+            &skeleton_id,
+            1,
+            skeleton(0.8),
+            "correct-discovery",
+        )
+        .await
+        .unwrap();
+}
+
+mod config_races;

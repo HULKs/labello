@@ -362,6 +362,7 @@ impl LabelloApp {
         if !self.work_view()
             || ctx.text_edit_focused()
             || self.work.pending_transition.is_some()
+            || self.work.migration.pending_companion_reconciliation.is_some()
             || self.work.show_settings
             || self.runtime.persistence.recovery.is_some()
             || self.navigation.drawer_open

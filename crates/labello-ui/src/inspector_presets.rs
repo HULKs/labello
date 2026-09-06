@@ -57,6 +57,8 @@ pub enum InspectorPreset {
     MigrationPass,
     MigrationFullImage,
     MigrationReview,
+    MigrationDiscovery,
+    MigrationDiscoveryReview,
     MigrationAnnotatedEdit,
     MigrationGuideDeleted,
     OverlayAnnotation,
@@ -66,7 +68,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 44] = [
         Self::Annotation,
         Self::Setup,
         Self::About,
@@ -103,6 +105,8 @@ impl InspectorPreset {
         Self::MigrationPass,
         Self::MigrationFullImage,
         Self::MigrationReview,
+        Self::MigrationDiscovery,
+        Self::MigrationDiscoveryReview,
         Self::MigrationAnnotatedEdit,
         Self::MigrationGuideDeleted,
         Self::OverlayAnnotation,
@@ -149,6 +153,8 @@ impl InspectorPreset {
             Self::MigrationPass => "migration-pass",
             Self::MigrationFullImage => "migration-full-image",
             Self::MigrationReview => "migration-review",
+            Self::MigrationDiscovery => "migration-discovery",
+            Self::MigrationDiscoveryReview => "migration-discovery-review",
             Self::MigrationAnnotatedEdit => "migration-annotated-edit",
             Self::MigrationGuideDeleted => "migration-guide-deleted",
             Self::OverlayAnnotation => "overlay-annotation",
@@ -287,6 +293,8 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::MigrationPass => migration_preset(ctx, MigrationPreset::Pass),
         InspectorPreset::MigrationFullImage => migration_preset(ctx, MigrationPreset::FullImage),
         InspectorPreset::MigrationReview => migration_preset(ctx, MigrationPreset::Review),
+        InspectorPreset::MigrationDiscovery => migration_discovery_preset(ctx, false),
+        InspectorPreset::MigrationDiscoveryReview => migration_discovery_preset(ctx, true),
         InspectorPreset::MigrationAnnotatedEdit => migration_preset(ctx, MigrationPreset::Pass),
         InspectorPreset::MigrationGuideDeleted => migration_deleted_guide_preset(ctx),
     }
@@ -838,6 +846,55 @@ fn migration_preset(ctx: &egui::Context, preset: MigrationPreset) -> LabelloApp 
     }
     if matches!(preset, MigrationPreset::Review) {
         app.work.migration.review_index = 1;
+    }
+    app
+}
+
+fn migration_discovery_preset(ctx: &egui::Context, review: bool) -> LabelloApp {
+    let mut app = migration_preset(ctx, MigrationPreset::FullImage);
+    let task_id = app.work.selected_task_id.clone().unwrap();
+    let state = app.work.current_state.as_mut().unwrap();
+    let target = state.migration_target_sets[&task_id].targets[0].clone();
+    let mut skeleton = skeleton_annotation(&target, &task_id);
+    skeleton.annotation_id = AnnotationId::from("discovered-object-1");
+    skeleton.object_group_id = None;
+    let set = state.migration_target_sets.get_mut(&task_id).unwrap();
+    set.targets.clear();
+    set.target_set_hash = migration_target_set_hash(
+        &MigrationHashContext {
+            dataset_id: &app.config.dataset_id,
+            image_id: &state.image_id,
+            guide_task_id: &set.guide_task_id,
+            target_task_id: &task_id,
+        },
+        &[],
+    )
+    .unwrap();
+    state
+        .migration_dispositions
+        .get_mut(&task_id)
+        .unwrap()
+        .clear();
+    state.annotations.clear();
+    state
+        .annotations
+        .insert(skeleton.annotation_id.clone(), vec![skeleton.clone()]);
+    let mut unpositioned = skeleton.clone();
+    unpositioned.annotation_id = AnnotationId::from("discovered-object-2");
+    if let AnnotationGeometry::Skeleton(geometry) = &mut unpositioned.geometry {
+        for keypoint in &mut geometry.keypoints {
+            keypoint.state = labello_domain::KeypointState::Absent;
+            keypoint.point = None;
+        }
+    }
+    state
+        .annotations
+        .insert(unpositioned.annotation_id.clone(), vec![unpositioned]);
+    app.work.annotations = state.active_annotations().cloned().collect();
+    app.work.migration.cursor = Some(labello_domain::MigrationCursor::FullImage);
+    if review {
+        app.view = AppView::Review;
+        app.work.assignment.as_mut().unwrap().kind = AssignmentKind::Review;
     }
     app
 }

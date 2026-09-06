@@ -205,7 +205,8 @@ Available presets are `annotation`, `setup`, `about`, `build-mismatch`,
 `import-server-folder-picker`, `import-server-descriptor-picker`,
 `import-partial-categories`, `import-recovery-blocked`, `migration-object`,
 `migration-single-optional`, `migration-exclusion`, `migration-pass`,
-`migration-full-image`, `migration-review`, `migration-annotated-edit`, and
+`migration-full-image`, `migration-review`, `migration-discovery`,
+`migration-discovery-review`, `migration-annotated-edit`, and
 `migration-guide-deleted`. The `migration-single-optional` preset reproduces a
 pending imported guide with one optional `center` keypoint and no positioned
 draft input, without a server or dataset. Preset actions

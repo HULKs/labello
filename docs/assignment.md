@@ -9,6 +9,26 @@ Labello assigns work per enabled task. Availability and prepared queue results
 are advisory; the storage claim transaction repeats the same eligibility checks
 before creating an assignment.
 
+## Migration companions
+
+An active manual-migration annotation assignment authorizes a compound
+skeleton/box mutation only for that migration's configured guide task and class.
+Dataset configuration and role publication is serialized with migration commands,
+including add, edit, delete, explicit reconciliation and administrator repair.
+A command holds a configuration read guard from metadata capture through commit,
+then the same image lock guards both objects. A competing active guide-task
+assignment rejects the mutation; it is not implicitly cancelled or stolen.
+The box task enters `NeedsCorrection`, clears its previous final outcome and
+retains prior review records as history. Normal box-task claims, corrections,
+review policy and completion projections then apply.
+
+The frozen imported migration target count does not grow when a companion is
+created. Migration review visits canonical dispositions, discovered skeletons
+in stable annotation-ID order, and then full-image confirmation. Each discovery
+decision binds the current exact skeleton version. A box review cannot approve
+its skeleton, and migration approval cannot approve its box.
+
+
 ## Completion balance
 
 Dataset configuration may contain an assignment-balance window. The window has

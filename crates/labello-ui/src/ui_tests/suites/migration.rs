@@ -1657,3 +1657,269 @@ fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
     step_until(&mut harness, 8, |app| !app.work.migration.busy);
     assert_eq!(api.counts().migration_commands, 1);
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn discovered_review_targets_are_exact_and_coordinate_less_history_uses_full_image() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        let mut app = inspector_presets::build(
+            InspectorPreset::MigrationDiscoveryReview,
+            &egui::Context::default(),
+        );
+        app.sync_manual_migration();
+        let first_id = labello_domain::AnnotationId::from("discovered-object-1");
+        assert!(
+            matches!(app.current_migration_review_target(), Some((_, labello_client::MigrationReviewTarget::Discovered { annotation_id, version: 1 })) if annotation_id == first_id)
+        );
+        assert!(app.refocus_annotation().is_some());
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        assert!(harness.state().work.canvas.current_zoom() > 1.0);
+        let user_id = harness.state().config.user_id.clone();
+        harness
+            .state_mut()
+            .work
+            .current_state
+            .as_mut()
+            .unwrap()
+            .reviews
+            .push(labello_domain::ReviewRecord {
+                review_id: labello_domain::ReviewId::from("discovery-review-test"),
+                target: labello_domain::ReviewTarget::AnnotationVersion {
+                    annotation_id: first_id,
+                    version: 1,
+                },
+                reviewer_user_id: user_id,
+                decision: labello_domain::ReviewDecision::Approved,
+                timestamp: labello_domain::now(),
+                comment: None,
+            });
+        harness.step();
+        assert!(
+            matches!(harness.state().current_migration_review_target(), Some((_, labello_client::MigrationReviewTarget::Discovered { annotation_id, version: 1 })) if annotation_id == labello_domain::AnnotationId::from("discovered-object-2"))
+        );
+        assert!(harness.state().refocus_annotation().is_none());
+        assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn companion_reconciliation_success_and_failure_retain_unsaved_skeleton_drafts() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for succeeds in [false, true] {
+        let mut app = inspector_presets::build(
+            InspectorPreset::MigrationDiscovery,
+            &egui::Context::default(),
+        );
+        let annotation_id = labello_domain::AnnotationId::from("discovered-object-1");
+        let geometry = match &app
+            .work
+            .current_state
+            .as_ref()
+            .unwrap()
+            .current_annotation(&annotation_id)
+            .unwrap()
+            .geometry
+        {
+            labello_domain::AnnotationGeometry::Skeleton(geometry) => geometry.clone(),
+            _ => unreachable!(),
+        };
+        app.work.migration.adding_missing_object = true;
+        app.work.migration.editing_missing_annotation_id = Some(annotation_id.clone());
+        app.work.migration.draft = Some(geometry.clone());
+        app.work.migration.draft_dirty = true;
+        app.work.migration.keypoint_index = 1;
+        app.work.migration.next_hidden = true;
+        app.work.migration.preserving_companion_draft = true;
+        app.work.migration.busy = true;
+        let operation_id = 77_700;
+        let request = test_request(&app, operation_id, Some("demo"));
+        app.runtime.active_requests.insert(operation_id);
+        let result = if succeeds {
+            let image_state = app.work.current_state.clone().unwrap();
+            Ok(labello_client::ManualMigrationCommandResult {
+                progress: labello_client::ManualMigrationProgress {
+                    expected: 0,
+                    annotated: 0,
+                    excluded: 0,
+                    pending: 0,
+                },
+                image_state,
+                cursor: Some(labello_domain::MigrationCursor::FullImage),
+                active_pass: None,
+                confirmation: None,
+                assignment: app.work.assignment.clone(),
+                annotation_id: Some(annotation_id.clone()),
+            })
+        } else {
+            Err("The box has another active assignment. Retry after it is released.".to_string().into())
+        };
+        app.runtime
+            .tx
+            .send(UiMessage::MigrationFinished {
+                request,
+                result: Box::new(result),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.work.migration.draft, Some(geometry));
+        assert_eq!(
+            app.work.migration.editing_missing_annotation_id,
+            Some(annotation_id)
+        );
+        assert!(
+            app.work.migration.draft_dirty
+                && app.work.migration.adding_missing_object
+                && app.work.migration.next_hidden
+        );
+        assert_eq!(app.work.migration.keypoint_index, 1);
+        assert!(!app.work.migration.busy);
+        assert_eq!(app.work.migration.error.is_some(), !succeeds);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn companion_reconciliation_modal_blocks_shortcuts_and_cancels_without_mutation() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut app = inspector_presets::build(
+        InspectorPreset::MigrationDiscovery,
+        &egui::Context::default(),
+    );
+    app.work.migration.pending_companion_reconciliation =
+        Some(labello_domain::AnnotationId::from("discovered-object-1"));
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(320.0, 320.0))
+        .build_eframe(|_| app);
+    harness.step();
+    assert!(harness.query_by_label("Reconcile companion box?").is_some());
+    harness.key_press(egui::Key::ArrowRight);
+    harness.step();
+    assert!(!harness.state().work.migration.busy);
+    harness.key_press(egui::Key::Tab);
+    for _ in 0..8 {
+        harness.step();
+    }
+    let regenerate = harness.get_by_label("Regenerate companion box");
+    assert!(regenerate.rect().top() >= 0.0 && regenerate.rect().bottom() <= 320.0);
+    harness.key_press(egui::Key::Tab);
+    for _ in 0..8 {
+        harness.step();
+    }
+    let cancel = harness.get_by_label("Cancel");
+    assert!(cancel.rect().top() >= 0.0 && cancel.rect().bottom() <= 320.0);
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    assert!(
+        harness
+            .state()
+            .work
+            .migration
+            .pending_companion_reconciliation
+            .is_none()
+    );
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn discovery_conflict_reload_retains_draft_and_refuses_changed_source_version() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for source_changed in [false, true] {
+        let mut app = inspector_presets::build(
+            InspectorPreset::MigrationDiscovery,
+            &egui::Context::default(),
+        );
+        let id = labello_domain::AnnotationId::from("discovered-object-1");
+        let draft = match &app
+            .work
+            .current_state
+            .as_ref()
+            .unwrap()
+            .current_annotation(&id)
+            .unwrap()
+            .geometry
+        {
+            labello_domain::AnnotationGeometry::Skeleton(geometry) => geometry.clone(),
+            _ => unreachable!(),
+        };
+        app.work.migration.draft = Some(draft.clone());
+        app.work.migration.draft_dirty = true;
+        app.work.migration.adding_missing_object = true;
+        app.work.migration.editing_missing_annotation_id = Some(id.clone());
+        app.work.migration.reloading_discovery_draft = true;
+        let mut state = app.work.current_state.clone().unwrap();
+        if source_changed {
+            state
+                .annotations
+                .get_mut(&id)
+                .unwrap()
+                .last_mut()
+                .unwrap()
+                .version = 2;
+        }
+        let loaded = crate::live_protocol::LoadedImage {
+            assignment: app.work.assignment.clone().unwrap(),
+            queued: app.work.current.clone().unwrap(),
+            annotations: state.active_annotations().cloned().collect(),
+            state,
+            color_image: None,
+        };
+        let operation_id = 77_800;
+        let request = test_request(&app, operation_id, Some("demo"));
+        app.work.active_load_id = Some(operation_id);
+        app.runtime.active_requests.insert(operation_id);
+        app.runtime
+            .tx
+            .send(UiMessage::ImageLoaded {
+                request,
+                operation_id,
+                assignment: app.work.assignment.clone(),
+                result: Box::new(Ok(Some(loaded))),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.work.migration.draft, Some(draft));
+        assert!(app.work.migration.draft_dirty && app.work.migration.adding_missing_object);
+        assert_eq!(app.work.migration.error.is_some(), source_changed);
+        assert_eq!(
+            app.work
+                .current_state
+                .as_ref()
+                .unwrap()
+                .current_annotation(&id)
+                .unwrap()
+                .version,
+            1
+        );
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn companion_reconciliation_escape_restores_invoking_button_focus() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let app = inspector_presets::build(
+        InspectorPreset::MigrationDiscovery,
+        &egui::Context::default(),
+    );
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|_| app);
+    harness.step();
+    click(&mut harness, "Companion boxes: 0 of 2 paired");
+    click_accesskit_button(&mut harness, "Reconcile box for added object 1");
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    assert!(
+        harness
+            .get_by_label("Reconcile box for added object 1")
+            .is_focused()
+    );
+}

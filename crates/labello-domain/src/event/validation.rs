@@ -53,6 +53,9 @@ impl EventLogEntry {
 
     pub fn task_id(&self) -> Option<&TaskId> {
         match &self.payload {
+            EventPayload::MigrationCompanionLinked { companion } => {
+                Some(&companion.migration_task_id)
+            }
             EventPayload::AnnotationVersionCreated { annotation, .. } => Some(&annotation.task_id),
             EventPayload::TaskStateChanged { task_state } => Some(&task_state.task_id),
             EventPayload::AssignmentUpdated { assignment } => Some(&assignment.task_id),

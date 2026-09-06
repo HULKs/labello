@@ -124,6 +124,33 @@ pub fn migration_state_hash_with_discovered(
     Ok(encoder.finish())
 }
 
+/// Preserve all historical hashes until a discovery receives a companion.
+pub fn migration_state_hash_with_companions(
+    base: &MigrationHash,
+    companions: &[(&AnnotationId, &AnnotationVersion)],
+) -> DomainResult<MigrationHash> {
+    if companions.is_empty() {
+        return Ok(base.clone());
+    }
+    let mut ordered = companions.to_vec();
+    ordered.sort_by_key(|(skeleton_id, _)| *skeleton_id);
+    let mut encoder = CanonicalHashEncoder::new(b"labello:migration-state-companions:v1\0");
+    encoder.raw(&base.bytes()?);
+    encoder.u32(
+        ordered
+            .len()
+            .try_into()
+            .map_err(|_| DomainError::InvalidMigration("too many discovered companions".into()))?,
+    );
+    for (skeleton_id, bounding_box) in ordered {
+        encoder.string(skeleton_id.as_str())?;
+        encoder.string(bounding_box.annotation_id.as_str())?;
+        encoder.u32(bounding_box.version);
+        encoder.tag(u8::from(bounding_box.deleted));
+    }
+    Ok(encoder.finish())
+}
+
 /// Binds the raw 32-byte target-set and state digests under a distinct domain.
 pub fn migration_confirmation_hash(
     target_set_hash: &MigrationHash,

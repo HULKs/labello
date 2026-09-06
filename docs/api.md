@@ -191,6 +191,7 @@ other than comma or semicolon. Responses are
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons` | Annotator | `AddMigrationSkeletonRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/edit` | Annotator | `EditMigrationSkeletonRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/delete` | Annotator | `DeleteMigrationSkeletonRequest` |
+| `POST /datasets/{dataset_id}/images/{image_id}/migration/skeletons/reconcile` | Annotator | `ReconcileMigrationCompanionRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/exclude` | Annotator | `ExcludeMigrationTargetRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/reopen` | Annotator | `ReopenMigrationTargetRequest` |
 | `POST /datasets/{dataset_id}/images/{image_id}/migration/revisit` | Annotator | `RevisitMigrationTargetRequest` |
@@ -210,6 +211,37 @@ HTTP 400 with the safe invalid-assignment message
 `manual migration skeleton requires at least one positioned keypoint`.
 Idempotent replay is checked first, so an identical retry of a successfully
 recorded historical all-absent command still replays without appending events.
+
+Each newly discovered skeleton is saved with one ordinary bounding box in the
+configured guide task, in the same per-image event transaction. The box bounds
+include positioned visible and hidden keypoints and span at least one original
+image pixel per axis. The server chooses its task, class and stable identity;
+clients cannot supply another guide task. The guide task enters `needs_correction`
+with its terminal outcome cleared. Existing history and review records remain.
+
+Still-derived companions follow skeleton edits and deletion. An independent box
+edit or review, active guide-task assignment, stale version, or changed guide
+configuration rejects the whole operation. Explicit reconciliation requires the
+same active migration annotation assignment and full-image cursor. Its request
+contains `assignmentId`, `passId`, `taskId`, `annotationId`, `expectedVersion`,
+and nullable `expectedBoxVersion`. A missing box uses null; regenerating an
+existing box requires its exact current version. Reconciliation creates or
+regenerates one box from the saved skeleton and returns the ordinary migration
+command result. Identical command retries do not append or duplicate objects.
+
+Historical reconciliation requires an active group-less native skeleton with a
+recorded full-image discovery creation event. Ordinary skeletons without that
+provenance, coordinate-less skeletons, inconsistent links and competing work
+remain unresolved with an actionable conflict. Each committed link is a durable
+unit of progress: after interruption, inspect current links and reconcile the
+remaining objects. Reads never perform reconciliation.
+
+Migration review visits canonical dispositions, then every active discovered
+skeleton in annotation-ID order, then the full-image confirmation. A discovered
+review target is `{ "targetType": "discovered", "annotationId": "…", "version": 1 }`;
+it binds the exact current skeleton version. A rejected discovery must receive
+a new version or be removed before submission. Companion boxes retain the
+ordinary guide-task review flow and are never approved by migration review.
 
 ## Dataset Import Routes
 

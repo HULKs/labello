@@ -344,8 +344,8 @@ pub struct MigrationHashStateTarget<'a> {
 mod digest;
 
 pub use digest::{
-    migration_confirmation_hash, migration_state_hash, migration_state_hash_with_discovered,
-    migration_target_set_hash,
+    migration_confirmation_hash, migration_state_hash, migration_state_hash_with_companions,
+    migration_state_hash_with_discovered, migration_target_set_hash,
 };
 
 pub trait SequentialMigration<T> {
@@ -689,3 +689,6 @@ mod tests {
         assert_eq!(target_hash, reversed);
     }
 }
+
+mod companions;
+pub use companions::*;

@@ -270,6 +270,17 @@ impl ImageState {
     }
 
     pub(super) fn validate_migration_terminal(&self, task_id: &TaskId) -> DomainResult<()> {
+        if self
+            .migration_discovered_skeletons(task_id)
+            .into_iter()
+            .any(|annotation| self.migration_discovery_requires_correction(annotation))
+        {
+            return Err(DomainError::InvalidMigration(
+                "a rejected discovered skeleton must be edited or removed before confirmation"
+                    .into(),
+            ));
+        }
+
         self.validate_migration_resolution(task_id)?;
         let set = &self.migration_target_sets[task_id];
         let state_hash = self.current_migration_state_hash(task_id)?;
@@ -423,7 +434,19 @@ impl ImageState {
                 annotation.task_id == *task_id && is_discovered_migration_skeleton(annotation)
             })
             .collect::<Vec<_>>();
-        migration_state_hash_with_discovered(&set.target_set_hash, &values, &discovered)
+        let base =
+            migration_state_hash_with_discovered(&set.target_set_hash, &values, &discovered)?;
+        let companions = discovered
+            .iter()
+            .filter_map(|skeleton| {
+                let link = self.migration_companions.get(&skeleton.annotation_id)?;
+                Some((
+                    &skeleton.annotation_id,
+                    self.current_annotation(&link.box_annotation_id)?,
+                ))
+            })
+            .collect::<Vec<_>>();
+        crate::migration_state_hash_with_companions(&base, &companions)
     }
 }
 
