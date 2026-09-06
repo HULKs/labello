@@ -494,14 +494,17 @@ mod tests {
                     KeypointState::Absent => assert!(circles == 0 && diamonds == 0),
                 }
                 if state != KeypointState::Absent {
-                    for outline in [Color32::WHITE, Color32::BLACK] {
-                        assert!(
-                            output
-                                .shapes
-                                .iter()
-                                .any(|shape| shape_has_color(&shape.shape, outline))
-                        );
-                    }
+                    let outline = overlay_outline(if suggestion {
+                        theme::PRELABEL
+                    } else {
+                        theme::ANNOTATION
+                    });
+                    assert!(
+                        output
+                            .shapes
+                            .iter()
+                            .any(|shape| shape_has_color(&shape.shape, outline))
+                    );
                 }
             }
         }
@@ -518,7 +521,7 @@ mod tests {
     }
 
     #[test]
-    fn every_box_style_and_edge_retains_class_color_and_both_contrast_outlines() {
+    fn every_box_style_and_edge_retains_class_color_and_a_contrasting_halo() {
         for family in 0..5 {
             let context = egui::Context::default();
             let class_color = Color32::from_rgb(37, 84, 153);
@@ -539,8 +542,11 @@ mod tests {
                 }
             });
             for color in [
-                Color32::WHITE,
-                Color32::BLACK,
+                overlay_outline(if family == 3 {
+                    theme::DRAFT
+                } else {
+                    class_color
+                }),
                 if family == 3 {
                     theme::DRAFT
                 } else {
@@ -559,18 +565,30 @@ mod tests {
     }
 
     #[test]
-    fn outline_colors_exceed_nontext_contrast_at_every_image_luminance() {
-        let strokes = overlay_strokes(theme::ANNOTATION, 2.0);
-        assert_eq!(strokes[0].color, Color32::WHITE);
-        assert_eq!(strokes[1].color, Color32::BLACK);
-        assert_eq!(strokes[2].color, theme::ANNOTATION);
-        assert!(strokes[0].width > strokes[1].width && strokes[1].width > strokes[2].width);
-        assert!(((1.0_f32 + 0.05) / 0.05 - 21.0).abs() < 0.00001);
-        for sample in 0..=1000 {
-            let luminance = sample as f32 / 1000.0;
-            let white_contrast = 1.05 / (luminance + 0.05);
-            let black_contrast = (luminance + 0.05) / 0.05;
-            assert!(white_contrast.max(black_contrast) >= 4.5);
+    fn overlay_halo_is_thin_and_contrasts_with_light_and_dark_class_colors() {
+        for color in [
+            Color32::BLACK,
+            Color32::WHITE,
+            Color32::RED,
+            Color32::from_rgb(37, 84, 153),
+            theme::ANNOTATION,
+            theme::PRELABEL,
+        ] {
+            let strokes = overlay_strokes(color, 2.0);
+            assert_eq!(strokes.len(), 2);
+            assert_eq!(strokes[0].width, 4.0, "one point of halo on each side");
+            assert_eq!(strokes[1], Stroke::new(2.0, color));
+            let linear = egui::Rgba::from(color);
+            let luminance = 0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b();
+            let contrast = if strokes[0].color == Color32::WHITE {
+                1.05 / (luminance + 0.05)
+            } else {
+                (luminance + 0.05) / 0.05
+            };
+            assert!(
+                contrast >= 4.5,
+                "class color must remain distinct from its halo"
+            );
         }
     }
 

@@ -117,7 +117,7 @@ fn paint_canvas(
                                 normalized_to_screen(image_rect, pos2(to.x, to.y)),
                             ],
                             color,
-                            if selected { 3.0 } else { 2.0 },
+                            if selected { 2.0 } else { 1.5 },
                         );
                     }
                 }
@@ -238,10 +238,20 @@ fn rounded_corner_mask(viewport: Rect, color: Color32) -> Mesh {
     mesh
 }
 
-// The achromatic outlines retain a visible boundary even when the image
-// matches the class color. Black against white has 21:1 contrast.
-fn overlay_strokes(color: Color32, width: f32) -> [Stroke; 3] {
-    [Stroke::new(width + 4.0, Color32::WHITE), Stroke::new(width + 2.0, Color32::BLACK), Stroke::new(width, color)]
+// A single one-point halo separates the class color from image content without
+// turning small markers and thin edges into concentric black/white bands.
+fn overlay_outline(color: Color32) -> Color32 {
+    let linear = egui::Rgba::from(color);
+    let luminance = 0.2126 * linear.r() + 0.7152 * linear.g() + 0.0722 * linear.b();
+    if luminance > 0.179 {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
+}
+
+fn overlay_strokes(color: Color32, width: f32) -> [Stroke; 2] {
+    [Stroke::new(width + 2.0, overlay_outline(color)), Stroke::new(width, color)]
 }
 
 fn paint_outlined_segment(painter: &egui::Painter, points: [Pos2; 2], color: Color32, width: f32) {
@@ -259,8 +269,7 @@ fn paint_outlined_rect(painter: &egui::Painter, rect: Rect, radius: u8, color: C
 fn paint_keypoint(painter: &egui::Painter, center: Pos2, state: &KeypointState, color: Color32, radius: f32, suggestion: bool) {
     match state {
         KeypointState::Visible if !suggestion => {
-            painter.circle_filled(center, radius + 3.0, Color32::WHITE);
-            painter.circle_filled(center, radius + 2.0, Color32::BLACK);
+            painter.circle_filled(center, radius + 1.0, overlay_outline(color));
             painter.circle_filled(center, radius, color);
         }
         KeypointState::Visible => {
@@ -269,7 +278,7 @@ fn paint_keypoint(painter: &egui::Painter, center: Pos2, state: &KeypointState, 
             }
         }
         KeypointState::Hidden => {
-            let radius = radius + 3.0;
+            let radius = radius + 2.0;
             let points = [center + vec2(0.0, -radius), center + vec2(radius, 0.0), center + vec2(0.0, radius), center + vec2(-radius, 0.0)];
             for stroke in overlay_strokes(color, 2.0) {
                 painter.add(egui::Shape::closed_line(points.to_vec(), stroke));
@@ -325,7 +334,7 @@ fn paint_selected_box(
         CornerRadius::same(5),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 28),
     );
-    paint_outlined_rect(painter, rect, 5, color, 3.0);
+    paint_outlined_rect(painter, rect, 5, color, 2.0);
 
     if editable {
         for (_, center) in resize_handles(rect) {

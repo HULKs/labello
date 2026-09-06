@@ -154,11 +154,13 @@ has been recorded.
   corrections, and migration. Not-present keypoints have no image marker or
   incident edge. Suggestions retain hollow markers and their prelabel color;
   visible suggestions use circles and occluded suggestions use diamonds.
-  Retain class or workflow colors inside black and white secondary outlines
-  on boxes, edges, keypoints, selection handles, and focus indicators. The
-  black/white boundary has 21:1 contrast; against any uniform image luminance,
-  at least one outline exceeds 4.5:1. Keep context guides, drafts, and box
-  suggestions dashed, with gaps wide enough to separate the outlined dashes.
+  Retain class or workflow colors with a single one-point contrasting halo
+  on boxes, edges, keypoints, selection handles, and focus indicators. Choose
+  black for light class colors and white for dark ones, keeping at least 4.5:1
+  between the color and its halo. Inspect legibility on light, dark, and textured
+  images; this does not guarantee contrast against every image pixel. Keep context
+  guides, drafts, and box suggestions dashed, with gaps wide enough to separate
+  the outlined dashes.
   Expose keypoint names, states, and marker descriptions on the canvas's
   accessibility node without encoding image coordinates.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
