@@ -44,7 +44,11 @@ All unsafe methods (`POST`, `PUT`, `PATCH`, and `DELETE`) pass CSRF middleware.
 When a session cookie is present, the request must have an allowed `Origin` and
 exactly one `x-csrf-token` matching the session. `/auth/local-admin` is the
 middleware exception, but independently requires an allowed `Origin`. OAuth
-state and its flow cookie are validated at the callback.
+state and its flow cookie are validated at the callback. The flow cookie is
+created and expired at the parent path of the validated public OAuth callback
+URI, including any proxy prefix. See
+[callback configuration](configuration.md#github-oauth) for the accepted path
+syntax. Internal authentication route paths remain unchanged.
 
 CORS allows only configured origins, credentials, the implemented HTTP method
 set, and these non-simple request headers: `content-type`, `x-csrf-token`,
