@@ -17,6 +17,8 @@ pub(super) struct StatsScanPause {
 pub(crate) struct StatsCache {
     pub(super) generation: AtomicU64,
     pub(super) value: Mutex<Option<CachedStats>>,
+    pub(super) activity: Mutex<Option<super::activity::CachedActivity>>,
+    pub(super) activity_refresh: Mutex<()>,
     refresh: Mutex<()>,
     #[cfg(test)]
     scans: AtomicU64,

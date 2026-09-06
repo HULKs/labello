@@ -209,10 +209,10 @@ impl LabelloApp {
                         && !self.loading.image
                         && self.work.pending_transition.is_none(),
                     egui::Button::new("Skip assignment")
-                        .shortcut_text(self.shortcut_text(
+                        .shortcut_text(crate::theme::button_shortcut(self.shortcut_text(
                             ui.ctx(),
                             labello_domain::UserAction::SkipAssignment,
-                        ))
+                        )))
                         .min_size(egui::vec2(item_width, 44.0)),
                 )
                 .clicked()

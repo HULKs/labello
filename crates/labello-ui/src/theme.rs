@@ -312,6 +312,37 @@ pub fn modal(ctx: &egui::Context, id: Id) -> Modal {
     Modal::new(id).frame(Frame::window(&ctx.style_of(ctx.theme())))
 }
 
+/// Keep shortcut atoms on the button's state-dependent foreground. egui's
+/// shortcut_text marks text weak; an explicit fallback preserves its placement
+/// without borrowing the surrounding supporting-text color.
+pub fn button_shortcut(shortcut: impl Into<String>) -> RichText {
+    RichText::new(shortcut).color(Color32::PLACEHOLDER)
+}
+
+pub fn button(ui: &mut Ui, enabled: bool, button: Button<'_>) -> Response {
+    styled_button(ui, enabled, button, None)
+}
+
+fn styled_button(ui: &mut Ui, enabled: bool, button: Button<'_>, size: Option<Vec2>) -> Response {
+    let original_style = ui.style().clone();
+    let original_opacity = ui.opacity();
+    let foreground = ui.visuals().widgets.inactive.fg_stroke.color;
+    let disabled_alpha = ui.visuals().disabled_alpha;
+    ui.visuals_mut().weak_text_color = Some(foreground);
+    ui.visuals_mut().disabled_alpha = 0.85;
+    if !ui.is_enabled() && disabled_alpha > 0.0 {
+        ui.set_opacity((original_opacity / disabled_alpha * 0.85).min(1.0));
+    }
+    let response = if let Some(size) = size {
+        ui.add_sized(size, button)
+    } else {
+        ui.add_enabled(enabled, button)
+    };
+    ui.set_opacity(original_opacity);
+    ui.set_style(original_style);
+    response
+}
+
 pub fn primary_button(ui: &mut Ui, enabled: bool, button: Button<'_>) -> Response {
     semantic_button(ui, enabled, button, ButtonKind::Primary, None)
 }
@@ -349,7 +380,7 @@ fn semantic_button(
             DANGER.gamma_multiply(0.16),
             DANGER.gamma_multiply(0.24),
             DANGER.gamma_multiply(0.32),
-            DANGER,
+            TEXT,
             DANGER.gamma_multiply(0.55),
         ),
     };
@@ -367,11 +398,7 @@ fn semantic_button(
             visuals.fg_stroke = Stroke::new(1.0, foreground);
         }
     }
-    let response = if let Some(size) = size {
-        ui.add_sized(size, button)
-    } else {
-        ui.add_enabled(enabled, button)
-    };
+    let response = styled_button(ui, enabled, button, size);
     ui.set_style(original_style);
     response
 }
@@ -730,3 +757,6 @@ mod tests {
         assert!(selected.stroke.width > idle.stroke.width);
     }
 }
+
+#[cfg(test)]
+mod shortcut_tests;

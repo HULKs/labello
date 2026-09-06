@@ -242,6 +242,15 @@ impl ImageState {
         {
             affected.push(annotation.task_id.clone());
         }
+        affected.extend(
+            self.migration_companions
+                .values()
+                .filter(|link| {
+                    link.box_annotation_id == *annotation_id
+                        || link.skeleton_annotation_id == *annotation_id
+                })
+                .map(|link| link.migration_task_id.clone()),
+        );
         affected.sort();
         affected.dedup();
         for task_id in affected {
@@ -254,6 +263,7 @@ impl ImageState {
         annotation_id: &AnnotationId,
         event: &EventLogEntry,
     ) {
+        self.invalidate_migration_target_annotation(annotation_id);
         let affected = self
             .migration_target_sets
             .iter()
@@ -378,7 +388,7 @@ impl ImageState {
 
         self.apply_annotation_version(annotation.clone(), Some(correction.previous_version))?;
         self.mark_changed_guide(annotation, event);
-        self.reviews.push(review.clone());
+        self.apply_review_record(review);
         self.reviewer_corrections.push(correction.clone());
         self.task_states
             .insert(task_state.task_id.clone(), task_state.clone());

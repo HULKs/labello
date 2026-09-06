@@ -59,6 +59,10 @@ pub enum HumanRevisionKind {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum RevisionSource {
+    MigrationSkeleton {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Human {
         action: HumanRevisionKind,
     },
@@ -100,7 +104,9 @@ impl From<AnnotationSource> for RevisionSource {
 impl From<&RevisionSource> for AnnotationSource {
     fn from(source: &RevisionSource) -> Self {
         match source {
-            RevisionSource::Human { .. } | RevisionSource::Import { .. } => Self::Human,
+            RevisionSource::Human { .. }
+            | RevisionSource::Import { .. }
+            | RevisionSource::MigrationSkeleton { .. } => Self::Human,
             RevisionSource::PrelabelSuggestion {
                 config_id,
                 model_id,

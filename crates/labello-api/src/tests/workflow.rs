@@ -2173,6 +2173,24 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
     );
     assert_eq!(retry.image_state.current_sequence, sequence);
 
+    let companion = &discovered.image_state.migration_companions[&discovered_id];
+    assert_eq!(companion.guide_task_id, fixture.guide_task_id);
+    assert!(discovered.image_state.migration_companion_is_derived(&discovered_id));
+    let reconcile = labello_client::ReconcileMigrationCompanionRequest {
+        assignment_id: assignment.assignment_id.clone(), pass_id: add_missing.pass_id.clone(),
+        task_id: fixture.task_id.clone(), annotation_id: discovered_id.clone(),
+        expected_version: 1, expected_box_version: Some(1),
+    };
+    assert_eq!(migration_request(&fixture, "annotator", "skeletons/reconcile", None, &reconcile).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(migration_request(&fixture, "reviewer_1", "skeletons/reconcile", Some("reconcile-wrong-owner"), &reconcile).await.0, StatusCode::UNAUTHORIZED);
+    let mut stale_reconcile = reconcile.clone();
+    stale_reconcile.expected_version = 2;
+    assert_eq!(migration_request(&fixture, "annotator", "skeletons/reconcile", Some("reconcile-stale"), &stale_reconcile).await.0, StatusCode::CONFLICT);
+    let reconciled = successful_migration(migration_request(&fixture, "annotator", "skeletons/reconcile", Some("reconcile-box"), &reconcile).await);
+    assert_eq!(reconciled.image_state.migration_companions[&discovered_id].box_version, 2);
+    let retried = successful_migration(migration_request(&fixture, "annotator", "skeletons/reconcile", Some("reconcile-box"), &reconcile).await);
+    assert_eq!(reconciled.image_state.current_sequence, retried.image_state.current_sequence);
+
     let edit_missing = labello_client::EditMigrationSkeletonRequest {
         assignment_id: assignment.assignment_id.clone(),
         pass_id: add_missing.pass_id.clone(),

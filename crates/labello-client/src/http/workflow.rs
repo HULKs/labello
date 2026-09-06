@@ -332,6 +332,22 @@ impl AnnotationApi for HttpLabelloApi {
 }
 
 impl ReviewApi for HttpLabelloApi {
+    fn commit_review_revision<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        assignment: AssignmentActionRequest,
+        replacement: labello_domain::ReviewRevisionCommit,
+    ) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(
+                self.request(Method::POST, &format!(
+                    "/datasets/{dataset_id}/images/{}/review-revisions", assignment.image_id
+                ))?.query(&assignment),
+                &replacement,
+            ).await
+        })
+    }
+
     fn record_review<'a>(
         &'a self,
         dataset_id: &'a DatasetId,
