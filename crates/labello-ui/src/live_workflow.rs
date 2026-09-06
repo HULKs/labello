@@ -49,6 +49,7 @@ impl LabelloApp {
         self.work.edit_generation = 0;
         self.work.review_index = 0;
         self.work.review_rejected = false;
+        self.work.missing_objects = Default::default();
         self.work.staged_review_decisions.clear();
         self.work.review_revision_commit = None;
         self.work.correction_draft = None;
@@ -361,6 +362,7 @@ impl LabelloApp {
                 assignment,
                 review,
                 revision,
+                missing_objects,
                 phase,
             } => self.spawn_message(request.clone(), async move {
                 let assignment_id = assignment.assignment_id.clone();
@@ -370,6 +372,13 @@ impl LabelloApp {
                         &dataset_id,
                         assignment_action(&assignment),
                         replacement,
+                    )
+                    .await
+                } else if let Some(submission) = missing_objects {
+                    api.reject_missing_objects(
+                        &dataset_id,
+                        assignment_action(&assignment),
+                        *submission,
                     )
                     .await
                 } else {
@@ -862,9 +871,33 @@ impl LabelloApp {
         if self.loading.saving || self.runtime.api.is_none() {
             return false;
         }
+        if self.has_missing_object_draft()
+            && (decision != ReviewDecision::Rejected
+                || phase != ReviewPhase::FullImage
+                || !self.missing_objects_final_phase())
+        {
+            self.runtime.error = Some("Remove draft missing-object locations before approving or leaving the final check.".into());
+            return false;
+        }
         if self.review_revision_active() {
             return self.stage_revision_review(assignment, target, decision, phase);
         }
+        let review = ReviewRecord {
+            review_id: ReviewId::generate(),
+            target,
+            reviewer_user_id: self.config.user_id.clone(),
+            decision,
+            timestamp: labello_domain::now(),
+            comment: None,
+        };
+        let missing_objects = if self.has_missing_object_draft() {
+            self.prepare_missing_object_rejection(review.clone())
+        } else {
+            None
+        };
+        let review = missing_objects
+            .as_ref()
+            .map_or(review, |submission| submission.review.clone());
         let operation_id = self.begin_operation();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
         self.queue_command(UiCommand::Review {
@@ -872,14 +905,8 @@ impl LabelloApp {
             operation_id,
             dataset_id: self.config.dataset_id.clone(),
             assignment,
-            review: ReviewRecord {
-                review_id: ReviewId::generate(),
-                target,
-                reviewer_user_id: self.config.user_id.clone(),
-                decision,
-                timestamp: labello_domain::now(),
-                comment: None,
-            },
+            review,
+            missing_objects: missing_objects.map(Box::new),
             phase,
             revision: None,
         })

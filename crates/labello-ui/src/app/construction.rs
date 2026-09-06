@@ -65,6 +65,7 @@ impl LabelloApp {
             offline: false,
             review_index: 0,
             review_rejected: false,
+            missing_objects: Default::default(),
             staged_review_decisions: Vec::new(),
             review_revision_commit: None,
             correction_draft: None,

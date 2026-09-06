@@ -123,6 +123,7 @@ impl LabelloApp {
         let destination = self.transition_label(&pending);
         let discards_migration_draft =
             self.manual_migration_active() && self.migration_has_unsaved_input();
+        let discards_missing = self.has_missing_object_draft();
         let discards_review =
             self.review_revision_active() && !self.work.staged_review_decisions.is_empty();
         let discards_edits = matches!(
@@ -131,10 +132,12 @@ impl LabelloApp {
         ) && self.view == AppView::Annotate
             && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || discards_migration_draft);
-        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review {
+        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review && !discards_missing {
             return;
         }
-        let modal_title = if discards_review {
+        let modal_title = if discards_missing {
+            "Discard missing-object locations?"
+        } else if discards_review {
             "Discard staged review decisions?"
         } else if discards_migration_draft {
             "Unsaved migration draft"
@@ -154,6 +157,7 @@ impl LabelloApp {
                 ui.heading(modal_title);
                 ui.label(format!("Current workflow: {current}"));
                 ui.label(format!("Pending destination: {destination}"));
+                if discards_missing { ui.label("Leaving discards these unsent missing-object locations. Cancel keeps them on this assignment."); }
                 if discards_review {
                     ui.label("Leaving discards staged replacement decisions. The previous effective outcome remains unchanged.");
                 }
@@ -334,6 +338,8 @@ impl LabelloApp {
     fn transition_label(&self, transition: &PendingTransition) -> String {
         match transition {
             PendingTransition::About => "Setup > About".to_string(),
+            PendingTransition::Dataset(_, _) => "Another dataset".to_string(),
+            PendingTransition::Logout => "Sign out".to_string(),
             PendingTransition::NextAssignment => "Next assignment".to_string(),
             PendingTransition::PreviousAssignment(_) => "Previous assignment".to_string(),
             PendingTransition::Workflow(task_id) => self

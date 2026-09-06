@@ -196,6 +196,7 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         self.work.review_index = 0;
         self.work.review_rejected = false;
+        self.work.missing_objects = Default::default();
         self.work.staged_review_decisions.clear();
         self.work.review_revision_commit = None;
         self.work.correction_draft = None;

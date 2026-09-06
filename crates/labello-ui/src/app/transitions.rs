@@ -24,6 +24,14 @@ impl LabelloApp {
                 self.setup.section = SetupSection::About;
                 self.request_build_information();
             }
+            PendingTransition::Dataset(dataset_id, view) => {
+                self.clear_current_image();
+                self.open_dataset(dataset_id, view);
+            }
+            PendingTransition::Logout => {
+                self.clear_current_image();
+                self.request_logout();
+            }
             PendingTransition::NextAssignment => {
                 if self.runtime.api.is_some() {
                     self.clear_current_image();
@@ -73,6 +81,8 @@ impl LabelloApp {
     fn transition_is_current(&self, transition: &PendingTransition) -> bool {
         match transition {
             PendingTransition::About => self.view == AppView::Setup && self.setup.section == SetupSection::About,
+            PendingTransition::Dataset(dataset_id, view) => self.config.dataset_id == *dataset_id && self.view == *view,
+            PendingTransition::Logout => false,
             PendingTransition::NextAssignment => false,
             PendingTransition::PreviousAssignment(_) => false,
             PendingTransition::Workflow(task_id) => {
@@ -132,7 +142,7 @@ impl LabelloApp {
         if self.loading.saving || (self.work.assignment.is_none() && self.runtime.api.is_some()) {
             return;
         }
-        if self.review_revision_active() && !self.work.staged_review_decisions.is_empty() {
+        if self.has_missing_object_draft() || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty()) {
             self.stage_transition(PendingTransition::NextAssignment);
             return;
         }

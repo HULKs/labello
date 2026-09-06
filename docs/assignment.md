@@ -135,3 +135,26 @@ replaces its selection with the applicable correction dependency and stale write
 are rejected. Existing global correction-pass records retain their audit history. The latest
 pass for the current assignment owns outstanding decisions and the completion
 gate; earlier passes do not reopen when later edits change an annotation.
+## Missing-object rejection guidance
+
+Ordinary approval reviewers can mark missing-object locations only during the
+final full-image check. Each marker names an expected task class and annotation
+type. Draft locations can be moved, selected/refocused, and removed; approval
+is disabled while any remain. Sending back atomically records the final review,
+all locations, `NeedsCorrection`, and the exact assignment's completion. The
+server checks the captured task, round, full object review phase, lease, and
+reviewer authority. Guided migration and reviewer correction do not use this
+command.
+
+Switching or skipping with unsent locations requires confirmation. Cancel
+preserves the draft; a failed submission retains its exact retry request. Drafts
+cannot transfer between assignments or submission rounds, and expired ownership
+disables editing and submission. Unsent locations are not durable across reloads
+or crashes; the browser provides its ordinary page-exit warning.
+
+The annotator receives read-only normalized guidance through correction until
+committed task resubmission. No proximity-based auto-resolution occurs. Later
+review can inspect historical locations, and a new rejection without locations
+has no active markers. Completed decision revisions use the same evidence
+policy; superseded records remain auditable. Markers never create annotation
+versions or independently count as completed work.

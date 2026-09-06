@@ -87,7 +87,17 @@ pub(super) fn validate_revision_exclusivity(
         let own_commit = !events.is_empty()
             && matches!(&events[0].payload,
             EventPayload::ReviewRevisionCommitted { assignment, .. } if assignment.assignment_id == context.assignment_id);
-        if own_commit && events.iter().skip(1).all(|event| matches!(&event.payload, EventPayload::ReviewAssignmentFinished { assignment_id, .. } if assignment_id == &context.assignment_id)) {
+        if own_commit
+            && events.iter().skip(1).all(|event| match &event.payload {
+                EventPayload::ReviewAssignmentFinished { assignment_id, .. } => {
+                    assignment_id == &context.assignment_id
+                }
+                EventPayload::MissingObjectEvidenceRecorded { evidence, .. } => {
+                    evidence.assignment_id == context.assignment_id
+                }
+                _ => false,
+            })
+        {
             continue;
         }
         if after.review_target_fingerprint(&context.task) != context.target_fingerprint
@@ -483,12 +493,39 @@ impl DatasetRepository {
         };
         assignment.status = AssignmentStatus::Completed;
         assignment.updated_at = now;
+        let evidence_payload = if replacement.missing_objects.is_empty() {
+            None
+        } else {
+            let submission = labello_domain::MissingObjectRejection {
+                review: replacement
+                    .reviews
+                    .last()
+                    .ok_or_else(|| conflict("final review is missing"))?
+                    .clone(),
+                round: captured.round.clone(),
+                locations: replacement.missing_objects.clone(),
+            };
+            let evidence = state
+                .missing_object_evidence_for_submission(
+                    &metadata.dataset_id,
+                    context.assignment_id,
+                    &submission,
+                    now,
+                )
+                .map_err(|_| conflict("invalid missing-object evidence"))?;
+            Some(EventPayload::MissingObjectEvidenceRecorded {
+                evidence: Box::new(evidence),
+                submission: Box::new(submission),
+            })
+        };
         let payload = EventPayload::ReviewRevisionCommitted {
             assignment,
             superseded_review_ids: captured.superseded_review_ids.clone(),
             replacement,
             task_state,
         };
+        let mut payloads = vec![payload];
+        payloads.extend(evidence_payload);
         let (_, state) = self
             .append_payloads_with_state_unlocked(
                 context.image_id,
@@ -496,13 +533,14 @@ impl DatasetRepository {
                     user_id: user_id.clone(),
                     role: DatasetRole::Reviewer,
                 },
-                vec![payload],
+                payloads,
             )
             .await
             .map_err(|error| match error {
-                StorageError::Domain(labello_domain::DomainError::InvalidReviewRevision(
-                    message,
-                )) => conflict(&message),
+                StorageError::Domain(
+                    labello_domain::DomainError::InvalidReviewRevision(message)
+                    | labello_domain::DomainError::InvalidMissingObjectEvidence(message),
+                ) => conflict(&message),
                 other => other,
             })?;
         Ok(state)

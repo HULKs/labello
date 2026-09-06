@@ -639,6 +639,7 @@ pub(crate) enum UiCommand {
         assignment: Assignment,
         review: ReviewRecord,
         revision: Option<labello_domain::ReviewRevisionCommit>,
+        missing_objects: Option<Box<labello_domain::MissingObjectRejection>>,
         phase: ReviewPhase,
     },
     Correction {

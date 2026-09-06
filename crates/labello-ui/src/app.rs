@@ -128,6 +128,8 @@ pub(crate) enum PendingTransition {
     Workflow(TaskId),
     View(AppView),
     About,
+    Dataset(DatasetId, AppView),
+    Logout,
 }
 
 pub(crate) struct RuntimeState {
@@ -402,6 +404,7 @@ pub struct WorkState {
     pub(crate) offline: bool,
     pub(crate) review_index: usize,
     pub(crate) review_rejected: bool,
+    pub(crate) missing_objects: crate::missing_objects::MissingObjectDraft,
     pub(crate) staged_review_decisions: Vec<labello_domain::ReviewRecord>,
     pub(crate) review_revision_commit: Option<labello_domain::ReviewRevisionCommit>,
     pub(crate) correction_draft: Option<CorrectionDraft>,

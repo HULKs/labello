@@ -84,6 +84,20 @@ pub enum CanvasAction<Edit = Infallible> {
     EditKeypoint(KeypointEdit),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum MissingObjectAction {
+    Add(NormalizedPoint),
+    Select(u32),
+    Move(u32, NormalizedPoint),
+}
+
+pub(crate) struct MissingObjectOverlay<'a> {
+    pub locations: &'a [labello_domain::MissingObjectLocation],
+    pub selected: Option<u32>,
+    pub editable: bool,
+    pub placing: bool,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CanvasInteraction {
     pub editable: bool,
@@ -118,6 +132,7 @@ impl CanvasInteraction {
 #[derive(Clone, Debug)]
 pub struct CanvasState {
     drag: Option<DragOperation>,
+    missing_drag: Option<u32>,
     draft_box: Option<BoundingBox>,
     draft_keypoint: Option<NormalizedPoint>,
     zoom: f32,
@@ -136,6 +151,7 @@ impl Default for CanvasState {
     fn default() -> Self {
         Self {
             drag: None,
+            missing_drag: None,
             draft_box: None,
             draft_keypoint: None,
             zoom: MIN_ZOOM,
@@ -297,6 +313,13 @@ impl CanvasState {
         self.review_target =
             ReviewViewTarget::Annotation(annotation.annotation_id.clone(), annotation.version);
         self.pending_review_view = Some(annotation_focus_rect(annotation));
+    }
+
+    pub(crate) fn focus_missing_object(&mut self, point: NormalizedPoint) {
+        self.pending_review_view = Some(Some(Rect::from_center_size(
+            pos2(point.x, point.y),
+            vec2(0.16, 0.16),
+        )));
     }
 
     /// Stop tracking review targets without changing the current view.

@@ -4282,6 +4282,7 @@ async fn migration_revision_captures_dispositions_discovery_and_confirmation_wit
         );
     }
     let replacement = labello_domain::ReviewRevisionCommit {
+        missing_objects: Vec::new(),
         reviews: targets
             .iter()
             .enumerate()

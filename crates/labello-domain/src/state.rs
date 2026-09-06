@@ -38,6 +38,10 @@ pub struct ImageState {
     pub review_revision_commits: BTreeMap<crate::AssignmentId, crate::ReviewRevisionCommit>,
     #[serde(default)]
     pub review_finished_sequences: BTreeMap<crate::AssignmentId, u64>,
+    #[serde(default)]
+    pub missing_object_evidence: BTreeMap<crate::ReviewId, crate::MissingObjectEvidence>,
+    #[serde(default)]
+    pub missing_object_submissions: BTreeMap<crate::AssignmentId, crate::MissingObjectRejection>,
     pub reviewer_corrections: Vec<ReviewerCorrectionRecord>,
     pub adjudications: Vec<AdjudicationRecord>,
     pub task_states: BTreeMap<TaskId, TaskState>,
@@ -78,6 +82,8 @@ impl ImageState {
             review_assignment_contexts: BTreeMap::new(),
             review_revision_commits: BTreeMap::new(),
             review_finished_sequences: BTreeMap::new(),
+            missing_object_evidence: BTreeMap::new(),
+            missing_object_submissions: BTreeMap::new(),
             reviewer_corrections: Vec::new(),
             adjudications: Vec::new(),
             task_states: BTreeMap::new(),

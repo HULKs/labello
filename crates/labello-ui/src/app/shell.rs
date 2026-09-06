@@ -11,10 +11,12 @@ impl eframe::App for LabelloApp {
         self.process_messages(ui.ctx());
         self.retry_prefetch_if_due(ui.ctx());
         self.sync_review_selection();
+        self.sync_missing_objects();
         self.work.canvas.require_pan_mode(
             self.view == AppView::Review
                 && self.work.current.is_some()
-                && self.work.correction_draft.is_none(),
+                && self.work.correction_draft.is_none()
+                && !(self.missing_objects_editable() && (self.work.missing_objects.placing || self.has_missing_object_draft())),
         );
         self.sync_manual_migration();
         self.start_next_persistence_command();

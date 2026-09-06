@@ -2894,3 +2894,140 @@ fn statistics_opens_without_staging_an_assignment_transition() {
     assert_eq!(harness.state().workspace_epoch, epoch);
     assert_eq!(harness.state().work.assignment, assignment);
 }
+
+fn enter_missing_object_final_check(app: &mut LabelloApp) {
+    enter_test_review_revision(app);
+    let assignment = app.work.assignment.as_ref().unwrap().assignment_id.clone();
+    app.work.current_state.as_mut().unwrap().review_assignment_contexts.get_mut(&assignment).unwrap().decision_revision = false;
+    app.work.review_index = app.work.annotations.len();
+    app.sync_review_selection();
+    app.sync_missing_objects();
+}
+
+#[test]
+fn missing_object_canvas_editor_guards_approval_and_skip_and_retries_exact_submission() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    assert!(harness.query_by_label("Mark missing").is_none());
+    enter_missing_object_final_check(harness.state_mut());
+    harness.step();
+    let geometry = harness.state().work.annotations.clone();
+    click(&mut harness, "Mark missing");
+    harness.step();
+    assert!(!harness.state().work.canvas.pan_mode_required());
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    let first = canvas.center();
+    click_at(&mut harness, first);
+    assert_eq!(harness.state().work.missing_objects.locations.len(), 1);
+    let first_position = harness.state().work.missing_objects.locations[0].position;
+    drag_at(&mut harness, first, first + egui::vec2(45.0,25.0));
+    assert_ne!(harness.state().work.missing_objects.locations[0].position, first_position);
+    click_at(&mut harness, first - egui::vec2(60.0,40.0));
+    assert_eq!(harness.state().work.missing_objects.locations.len(), 2);
+    assert_eq!(harness.state().work.annotations, geometry);
+    assert_eq!(api.counts().annotation_batch, 0);
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Complete review").accesskit_node().is_disabled());
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
+    assert_eq!(api.counts().record_review, 0);
+    assert!(harness.state().work.missing_objects.submission.is_none());
+    harness.state_mut().skip_assignment(); harness.step();
+    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
+    click(&mut harness, "Cancel");
+    assert_eq!(harness.state().work.missing_objects.locations.len(), 2);
+    let reject = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Send back (2)").rect();
+    assert!(reject.bottom() <= 780.0, "primary rejection must precede the scrolling evidence editor: {reject:?}");
+    harness.event(egui::Event::PointerMoved(egui::pos2(1400.0, 600.0)));
+    harness.event(egui::Event::MouseWheel { phase: egui::TouchPhase::Move, unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0.0,-350.0), modifiers: egui::Modifiers::NONE });
+    for _ in 0..15 { harness.step(); }
+    let remove = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Remove missing 1").rect();
+    assert!(remove.bottom() <= 780.0 && remove.top() >= 112.0, "scroll must expose remove: {remove:?}");
+    click(&mut harness, "Remove missing 1");
+    assert_eq!(harness.state().work.missing_objects.locations.len(), 1);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    let submitted = harness.state().work.missing_objects.submission.clone().unwrap();
+    assert_eq!(submitted.locations.len(), 1);
+    assert!(matches!(harness.state().runtime.commands.back(), Some(UiCommand::Review { missing_objects:Some(_), revision:None, .. })));
+    harness.state_mut().runtime.commands.clear();
+    harness.state_mut().runtime.active_requests.clear();
+    harness.state_mut().work.active_operation_id = None;
+    harness.state_mut().loading.saving = false;
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert_eq!(harness.state().work.missing_objects.submission.as_ref(), Some(&submitted));
+    assert_eq!(harness.state().work.annotations, geometry);
+}
+
+#[test]
+fn missing_object_drafts_do_not_transplant_to_other_assignments_or_expired_review() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
+    let mut harness = loaded_review_harness(api);
+    enter_missing_object_final_check(harness.state_mut());
+    harness.state_mut().work.missing_objects.placing = true;
+    harness.state_mut().apply_missing_object_action(crate::canvas::MissingObjectAction::Add(NormalizedPoint { x:0.5,y:0.5 }));
+    assert!(harness.state().has_missing_object_draft());
+    harness.state_mut().work.assignment.as_mut().unwrap().expires_at = Some(now() - chrono::Duration::seconds(1));
+    harness.state_mut().sync_missing_objects();
+    assert!(!harness.state().missing_objects_editable());
+    assert!(harness.state().has_missing_object_draft());
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert!(harness.state().work.missing_objects.submission.is_none());
+    harness.state_mut().work.assignment.as_mut().unwrap().assignment_id = AssignmentId::from("foreign-assignment");
+    harness.state_mut().sync_missing_objects();
+    assert!(!harness.state().has_missing_object_draft());
+}
+
+#[test]
+fn missing_object_history_is_read_only_navigable_and_separate_from_current_review() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    enter_test_review_revision(harness.state_mut());
+    let app = harness.state_mut();
+    let task = app.selected_task().unwrap().clone();
+    let state = app.work.current_state.as_mut().unwrap();
+    let review = state.reviews.last_mut().unwrap();
+    review.decision = labello_domain::ReviewDecision::Rejected;
+    let review_id = review.review_id.clone();
+    let timestamp = review.timestamp;
+    let reviewer = review.reviewer_user_id.clone();
+    let round = state.review_round(&task.task_id).unwrap().clone();
+    let locations = vec![labello_domain::MissingObjectLocation { marker_id:1, class_id:task.class_ids[0].clone(),position:NormalizedPoint { x:0.8,y:0.7 } }];
+    state.missing_object_evidence.insert(review_id.clone(), labello_domain::MissingObjectEvidence {
+        dataset_id:app.config.dataset_id.clone(),image_id:state.image_id.clone(),task_id:task.task_id.clone(),
+        assignment_id:AssignmentId::from("previous_completed_review"),review_id,reviewer_user_id:reviewer.clone(),timestamp,round:round.clone(),annotation_type:task.annotation_type,locations:locations.clone(),
+    });
+    // A new true submission makes retained rejection evidence historical.
+    state.review_rounds.insert(task.task_id, labello_domain::ReviewRound { event_id:EventId::from("resubmitted_round"),event_sequence:round.event_sequence+10,submitted_by:round.submitted_by });
+    harness.step();
+    assert!(harness.state().missing_object_canvas_locations().is_empty());
+    let geometry = harness.state().work.annotations.clone();
+    assert_eq!(harness.state().work.current_state.as_ref().unwrap().missing_object_history(&harness.state().selected_task().unwrap().task_id).len(),1);
+    harness.event(egui::Event::PointerMoved(egui::pos2(1400.0, 600.0)));
+    harness.event(egui::Event::MouseWheel { phase:egui::TouchPhase::Move,unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,-650.0),modifiers:egui::Modifiers::NONE });
+    for _ in 0..15 { harness.step(); }
+    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox,"Missing-object history").click_accesskit();
+    harness.step();
+    let label = format!("{} · {} · 1 locations", timestamp.format("%Y-%m-%d %H:%M UTC"),reviewer);
+    harness.get_by_label(&label).click_accesskit();
+    harness.step();
+    assert_eq!(harness.state().missing_object_canvas_locations(),locations);
+    assert!(harness.query_by_label("Historical missing-object evidence").is_some());
+    assert!(harness.query_by_label("Remove missing 1").is_none());
+    let label = format!("Missing 1 · {} · 80% across, 70% down",harness.state().class_name(&locations[0].class_id));
+    let marker = harness.get_by_role_and_label(egui::accesskit::Role::Button,&label).rect();
+    assert!(marker.height() >= 44.0);
+    harness.get_by_label(&label).click_accesskit();
+    harness.step();
+    assert_eq!(harness.state().work.annotations,geometry);
+    assert!(!harness.state().has_missing_object_draft());
+    assert_eq!(api.counts().annotation_batch,0);
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox,"Missing-object history").click_accesskit();
+    harness.step();
+    harness.get_by_label("Hide historical locations").click_accesskit();
+    harness.step();
+    assert!(harness.state().missing_object_canvas_locations().is_empty());
+    assert_eq!(harness.state().work.current_state.as_ref().unwrap().missing_object_evidence.len(),1);
+}

@@ -56,6 +56,10 @@ impl ImageState {
                 self.apply_task_state(task_state)?;
             }
             EventPayload::ReviewRecorded { review } => self.apply_review_record(review),
+            EventPayload::MissingObjectEvidenceRecorded {
+                evidence,
+                submission,
+            } => self.apply_missing_object_evidence(evidence, submission, event)?,
             EventPayload::ReviewAssignmentOpened {
                 context,
                 assignment,
