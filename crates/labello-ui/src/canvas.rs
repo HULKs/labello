@@ -567,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn unfocused_context_box_gaps_widen_when_zooming_out() {
+    fn unfocused_context_box_dashes_and_gaps_shrink_when_zooming_out() {
         let annotation = test_annotation(AnnotationGeometry::BoundingBox(bbox(0.2, 0.2, 0.5, 0.5)));
         let id = annotation.annotation_id.clone();
         let styles = [(id.clone(), CanvasAnnotationStyle::dashed(theme::ANNOTATION))].into();
@@ -596,7 +596,8 @@ mod tests {
                     ..Default::default()
                 },
             );
-        let mut previous_gap = 0.0;
+        let mut previous_gap = f32::INFINITY;
+        let mut previous_length = f32::INFINITY;
         for zoom in [4.0, 2.0, 1.0] {
             harness.state_mut().canvas.zoom = zoom;
             harness.run();
@@ -615,14 +616,18 @@ mod tests {
                 .collect();
             let gap = dashes[1][0].x - dashes[0][1].x;
             assert!(
-                gap > previous_gap,
-                "zooming out must widen the screen-space gap"
+                gap < previous_gap,
+                "zooming out must shrink the screen-space gap"
             );
+            let length = (dashes[0][1] - dashes[0][0]).length();
             assert!(
-                ((dashes[0][1] - dashes[0][0]).length() - 8.0).abs() < 0.01,
-                "zoom must not shrink the dash itself"
+                length < previous_length,
+                "zooming out must shorten each dash"
             );
+            assert!((length - 8.0 * zoom).abs() < 0.01);
+            assert!((gap - 10.0 * zoom).abs() < 0.01);
             previous_gap = gap;
+            previous_length = length;
         }
         harness.state_mut().selected_annotation = Some(id);
         harness.run();

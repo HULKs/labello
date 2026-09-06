@@ -160,9 +160,9 @@ has been recorded.
   between the color and its halo. Inspect legibility on light, dark, and textured
   images; this does not guarantee contrast against every image pixel. Keep context
   guides, drafts, and box suggestions dashed, with gaps wide enough to separate
-  the outlined dashes. For unfocused migration context boxes, widen the gaps
-  as viewport zoom approaches Fit; keep dash length and stroke width fixed in
-  screen space.
+  the outlined dashes. For unfocused migration context boxes, scale dash length
+  and gap with viewport zoom so both shrink when zooming out. Keep stroke width
+  fixed in screen space.
   Expose keypoint names, states, and marker descriptions on the canvas's
   accessibility node without encoding image coordinates.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected

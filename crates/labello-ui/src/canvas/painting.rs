@@ -317,10 +317,10 @@ fn paint_context_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 7),
     );
-    paint_dashed_segment_with_gap(painter, rect.left_top(), rect.right_top(), color, context_box_dash_gap(zoom));
-    paint_dashed_segment_with_gap(painter, rect.right_top(), rect.right_bottom(), color, context_box_dash_gap(zoom));
-    paint_dashed_segment_with_gap(painter, rect.right_bottom(), rect.left_bottom(), color, context_box_dash_gap(zoom));
-    paint_dashed_segment_with_gap(painter, rect.left_bottom(), rect.left_top(), color, context_box_dash_gap(zoom));
+    paint_dashed_segment_scaled(painter, rect.left_top(), rect.right_top(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
+    paint_dashed_segment_scaled(painter, rect.right_top(), rect.right_bottom(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
+    paint_dashed_segment_scaled(painter, rect.right_bottom(), rect.left_bottom(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
+    paint_dashed_segment_scaled(painter, rect.left_bottom(), rect.left_top(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
 }
 
 fn paint_selected_box(
@@ -361,17 +361,11 @@ fn paint_draft_box(painter: &egui::Painter, image_rect: Rect, bbox: BoundingBox)
     paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
 }
 
-// Screen-space gaps grow toward Fit so background guides stay quiet when
-// several objects are visible. Dash length and stroke width stay readable.
-fn context_box_dash_gap(zoom: f32) -> f32 {
-    10.0 + 14.0 / finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM)
-}
-
 fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32) {
-    paint_dashed_segment_with_gap(painter, start, end, color, 10.0);
+    paint_dashed_segment_scaled(painter, start, end, color, 1.0);
 }
 
-fn paint_dashed_segment_with_gap(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32, gap: f32) {
+fn paint_dashed_segment_scaled(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32, scale: f32) {
     if !start.x.is_finite() || !start.y.is_finite() || !end.x.is_finite() || !end.y.is_finite() {
         return;
     }
@@ -380,13 +374,16 @@ fn paint_dashed_segment_with_gap(painter: &egui::Painter, start: Pos2, end: Pos2
     if !length.is_finite() || length <= f32::EPSILON {
         return;
     }
+    // Scale the whole pattern with the viewport so dashes stay attached to the box.
+    let dash_length = 8.0 * scale;
+    let gap = 10.0 * scale;
     let direction = vector / length;
     let mut offset = 0.0;
     for _ in 0..MAX_DASH_SEGMENTS {
         if offset >= length {
             break;
         }
-        let dash_end = (offset + 8.0).min(length);
+        let dash_end = (offset + dash_length).min(length);
         if !dash_end.is_finite() || dash_end <= offset {
             break;
         }
@@ -396,7 +393,7 @@ fn paint_dashed_segment_with_gap(painter: &egui::Painter, start: Pos2, end: Pos2
             color,
             2.0,
         );
-        let next = offset + 8.0 + gap;
+        let next = offset + dash_length + gap;
         if !next.is_finite() || next <= offset {
             break;
         }
