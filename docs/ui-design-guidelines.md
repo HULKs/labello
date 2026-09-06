@@ -138,9 +138,11 @@ has been recorded.
 
 - **Setup:** feature one valid next dataset action, list all datasets separately,
   and keep connection and creation secondary after sign-in.
-- **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
-  and Fit visible; keep Pan mode active during approval decisions and return
-  primary drag to object editing during reviewer correction; place review phase
+- **Workspace:** preserve tested canvas geometry and gestures; keep Pan and Fit
+  visible, with Refocus for review and migration. Omit explicit zoom buttons and
+  percentage displays; keep configurable zoom actions and wheel, touchpad, and
+  pinch instructions in Settings. Keep Pan mode active during approval decisions
+  and return primary drag to object editing during reviewer correction; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels.
 - **Review context:** the Inspector identifies the workflow, class, geometry type,

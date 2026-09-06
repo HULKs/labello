@@ -127,7 +127,12 @@ impl LabelloApp {
             self.draft_recovery_modal(ctx);
             return;
         }
-        if self.work.migration.pending_companion_reconciliation.is_some() {
+        if self
+            .work
+            .migration
+            .pending_companion_reconciliation
+            .is_some()
+        {
             self.migration_companion_reconciliation_modal(ctx);
             return;
         }
@@ -171,11 +176,9 @@ impl LabelloApp {
             };
             if let Some(drawer) = self.work.drawer {
                 let (title, align, offset) = match drawer {
-                    Drawer::Workflow => (
-                        "Workflow",
-                        egui::Align2::LEFT_CENTER,
-                        egui::vec2(12.0, 0.0),
-                    ),
+                    Drawer::Workflow => {
+                        ("Workflow", egui::Align2::LEFT_CENTER, egui::vec2(12.0, 0.0))
+                    }
                     Drawer::Inspector => (
                         "Inspector",
                         egui::Align2::RIGHT_CENTER,
@@ -421,42 +424,6 @@ impl LabelloApp {
                 self.trigger_user_action(labello_domain::UserAction::TogglePanMode);
             }
 
-            let zoom_out_shortcut =
-                self.shortcut_text(ui.ctx(), labello_domain::UserAction::ZoomOut);
-            let can_zoom_out = self.work.canvas.can_zoom_out();
-            let zoom_out = egui::Button::new("−").min_size(egui::vec2(44.0, 44.0));
-            let zoom_out_response = ui
-                .add_enabled(can_zoom_out, zoom_out)
-                .on_disabled_hover_text("The image is already fitted.")
-                .on_hover_text(format!("Zoom out ({zoom_out_shortcut}). Scroll or pinch."));
-            zoom_out_response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, can_zoom_out, "Zoom out")
-            });
-            if zoom_out_response.clicked() {
-                self.trigger_user_action(labello_domain::UserAction::ZoomOut);
-            }
-
-            if !dense {
-                ui.add_sized(
-                    [48.0, 44.0],
-                    egui::Label::new(format!("{:.0}%", self.work.canvas.current_zoom() * 100.0)),
-                );
-            }
-
-            let zoom_in_shortcut = self.shortcut_text(ui.ctx(), labello_domain::UserAction::ZoomIn);
-            let can_zoom_in = self.work.canvas.can_zoom_in();
-            let zoom_in = egui::Button::new("+").min_size(egui::vec2(44.0, 44.0));
-            let zoom_in_response = ui
-                .add_enabled(can_zoom_in, zoom_in)
-                .on_disabled_hover_text("Maximum zoom reached.")
-                .on_hover_text(format!("Zoom in ({zoom_in_shortcut}). Scroll or pinch."));
-            zoom_in_response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, can_zoom_in, "Zoom in")
-            });
-            if zoom_in_response.clicked() {
-                self.trigger_user_action(labello_domain::UserAction::ZoomIn);
-            }
-
             if show_refocus {
                 let refocus_shortcut =
                     self.shortcut_text(ui.ctx(), labello_domain::UserAction::RefocusObject);
@@ -503,7 +470,6 @@ impl LabelloApp {
             }
         });
     }
-
 }
 
 fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {

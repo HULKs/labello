@@ -1845,3 +1845,32 @@ fn changing_datasets_cancels_an_inflight_stats_request() {
     assert!(app.datasets.active_stats_request.is_none());
     assert_eq!(app.datasets.stats, DatasetStats::default());
 }
+
+#[test]
+fn zoom_help_shows_configured_keys_and_gestures_without_workspace_widgets() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    for (action, key) in [
+        (labello_domain::UserAction::ZoomIn, "F9"),
+        (labello_domain::UserAction::ZoomOut, "F10"),
+    ] {
+        harness.state_mut().work.keybindings.bindings.insert(action, labello_domain::KeyChord::new(key));
+    }
+    harness.key_press(egui::Key::F9);
+    harness.step();
+    assert!(harness.state().work.canvas.current_zoom() > 1.0);
+    harness.key_press(egui::Key::F10);
+    harness.step();
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+    click_application_menu_item(&mut harness, "Settings");
+    harness.state_mut().work.shortcut_settings.search = "zoom".to_string();
+    harness.set_size(egui::vec2(720.0, 700.0));
+    harness.step();
+    harness.step();
+    for label in ["Record shortcut for Zoom in: F9", "Record shortcut for Zoom out: F10"] {
+        let button = harness.get_by_role_and_label(egui::accesskit::Role::Button, label);
+        assert!(!button.accesskit_node().is_disabled());
+        assert!(button.rect().bottom() < 700.0);
+    }
+    assert!(harness.query_by_label("Zoom in with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
+    assert!(harness.query_by_label("Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
+}

@@ -560,8 +560,6 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     );
     for label in [
         "Pan",
-        "Zoom out",
-        "Zoom in",
         "Fit",
         "Submit & next",
         "More actions",
@@ -630,7 +628,7 @@ fn compact_long_work_context_preserves_canvas_and_controls() {
             canvas.height() >= minimum_canvas_height,
             "canvas too short at {width}x{height}: {canvas:?}",
         );
-        for label in ["Pan", "Zoom out", "Zoom in", "Fit"] {
+        for label in ["Pan", "Fit"] {
             assert_control_inside(
                 &harness,
                 label,
@@ -759,15 +757,16 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
             .accesskit_node()
             .is_disabled()
     );
-    click(&mut harness, "Zoom in");
+    harness.key_press(egui::Key::Plus);
+    harness.step();
     assert!(harness.state().work.canvas.current_zoom() > 1.0);
     let pan_before = harness.get_by_label("Pan").rect();
-    let zoom_out_before = harness.get_by_label("Zoom out").rect();
+    let fit_before = harness.get_by_label("Fit").rect();
     harness.key_press(egui::Key::P);
     harness.step();
     assert!(harness.state().work.canvas.pan_mode());
     assert_eq!(harness.get_by_label("Pan").rect(), pan_before);
-    assert_eq!(harness.get_by_label("Zoom out").rect(), zoom_out_before);
+    assert_eq!(harness.get_by_label("Fit").rect(), fit_before);
     harness.key_press(egui::Key::Escape);
     harness.step();
     assert!(harness.state().work.canvas.pan_mode());
@@ -787,7 +786,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
         assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
-        for label in ["Pan", "Zoom out", "Zoom in", "Fit"] {
+        for label in ["Pan", "Fit"] {
             assert_control_inside(
                 &harness,
                 label,
@@ -876,8 +875,6 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.step();
     for label in [
         "Pan",
-        "Zoom out",
-        "Zoom in",
         "Fit",
         "Refocus object R",
         "Accept",
@@ -942,7 +939,8 @@ fn adjudication_primary_decisions_stay_visible_at_supported_viewports() {
     harness.state_mut().work.assignment.as_mut().unwrap().kind = AssignmentKind::Adjudication;
     harness.step();
 
-    click(&mut harness, "Zoom in");
+    harness.key_press(egui::Key::Plus);
+    harness.step();
     assert!(harness.state().work.canvas.current_zoom() > 1.0);
     click(&mut harness, "Fit");
     assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
@@ -950,7 +948,7 @@ fn adjudication_primary_decisions_stay_visible_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        for label in ["Pan", "Zoom out", "Zoom in", "Fit"] {
+        for label in ["Pan", "Fit"] {
             assert_control_inside(
                 &harness,
                 label,
@@ -1344,13 +1342,27 @@ fn wide_inspector_uses_the_toolbar_toggle_and_returns_its_width_to_the_canvas() 
             && inspector_toggle.left() - workflow_toggle.right() <= 12.0,
         "the side-panel controls should form one toolbar group"
     );
-    let more_actions = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "More actions")
-        .rect();
-    assert!(
-        more_actions.right() <= 1288.0,
-        "the paired panel controls must not push workspace actions off-screen: {more_actions:?}"
-    );
+    // Secondary actions may be inline when the remaining toolbar width permits it.
+    let secondary_actions: &[&str] = if harness
+        .query_by_role_and_label(egui::accesskit::Role::Button, "More actions")
+        .is_some()
+    {
+        &["More actions"]
+    } else {
+        &["Undo", "Redo"]
+    };
+    for label in ["Save", "Submit & next", "Skip"]
+        .iter()
+        .chain(secondary_actions)
+    {
+        assert_control_inside(
+            &harness,
+            label,
+            egui::accesskit::Role::Button,
+            1288.0,
+            900.0,
+        );
+    }
     harness
         .get_by_role_and_label(egui::accesskit::Role::Button, "Collapse inspector panel")
         .click_accesskit();
@@ -1610,4 +1622,19 @@ fn automatic_workflow_notice_is_accessible_and_preserves_compact_canvas() {
     harness.key_press(egui::Key::Enter);
     harness.run();
     assert!(harness.state().work.automatic_workflow_change.is_none());
+}
+
+#[test]
+fn workspace_zoom_widgets_are_removed_in_all_layouts() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    for (width, height) in viewport_sizes().into_iter().chain([(320.0, 320.0)]) {
+        harness.set_size(egui::vec2(width, height));
+        harness.step();
+        for label in ["Zoom in", "Zoom out", "100%"] {
+            assert!(harness.query_by_label(label).is_none(), "{label} at {width}x{height}");
+        }
+        for label in ["Pan", "Fit"] {
+            assert_control_inside(&harness, label, egui::accesskit::Role::Button, width, height);
+        }
+    }
 }
