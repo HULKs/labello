@@ -232,6 +232,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::delete_migration_skeleton),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/migration/skeletons/reconcile",
+            post(workflow::reconcile_migration_companion),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/migration/exclude",
             post(workflow::exclude_migration_target),
         )
@@ -272,6 +276,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::record_review),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/review-revisions",
+            post(workflow::commit_review_revision),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/corrections",
             post(workflow::record_correction),
         )
@@ -288,6 +296,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::offline_sync),
         )
         .route("/datasets/{dataset_id}/stats", get(workflow::stats))
+        .route(
+            "/datasets/{dataset_id}/stats/me",
+            get(workflow::current_user_activity),
+        )
         .route(
             "/datasets/{dataset_id}/keybindings",
             get(workflow::get_keybindings).put(workflow::put_keybindings),

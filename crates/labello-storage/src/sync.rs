@@ -361,6 +361,7 @@ impl DatasetRepository {
             next_state.apply_event(&event)?;
             resequenced.push(event);
         }
+        crate::assignment::finalize_review_transaction(state, &mut next_state, &mut resequenced)?;
         self.append_events_atomic(image_id, &resequenced).await?;
         self.observe_completion_transition(image_id, previous_completion, &next_state);
         *state = next_state;

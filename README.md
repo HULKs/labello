@@ -22,7 +22,8 @@ Labello currently supports:
 - atomic new-dataset import for explicit YOLO detection/pose and COCO
   instances/keypoints ground-truth profiles;
 - guided box-to-skeleton migration with audited exclusions, replayed progress,
-  assignment navigation, and read-only browsing of resolved objects;
+  assignment navigation, read-only browsing of resolved objects, and linked
+  box companions for manually discovered objects;
 - loopback-only local administrator login and GitHub OAuth;
 - verified stable GitHub releases and rootless transactional deployment to a
   Debian 12 guest.
@@ -215,7 +216,25 @@ without an extra mode switch. Starting a reviewer correction returns primary
 drag to object editing; the configured modifier plus left-drag and middle-drag
 still pan while correcting. Refocus uses the active object's current correction
 geometry without leaving the assignment. Guided migration review likewise
-refocuses its active canonical guide.
+refocuses its active canonical guide or discovered skeleton. Discovered-object
+focus uses its linked box, positioned-keypoint bounds, or the full image when
+historical data has no positions.
+
+Review Previous, also available through the configured Previous image shortcut,
+returns to the immediately previous eligible skipped or completed review.
+Completed reviews open a decision-only revision on current geometry. Stage the
+replacement decisions and explicitly commit the full-image result; opening or
+cancelling preserves the old outcome. Later work can make the previous review
+ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
+
+Saving a missing migration object also creates a derived box in its configured
+box task and reopens that task for correction and ordinary review. Still-derived
+boxes follow skeleton edits and removal. Independently edited or reviewed boxes
+require explicit reconciliation. The full-image inspector reports pairing
+progress and offers per-object repair for historical discoveries; unresolved
+provenance or coordinate-less objects need action rather than guessed boxes.
+Migration reviews list each discovered skeleton separately before confirmation.
+A failed save or companion refresh retains unsaved skeleton input.
 
 While placing or revising a skeleton, drag any already placed keypoint on the
 selected object to correct its position. This works for ordinary annotation,

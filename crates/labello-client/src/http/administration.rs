@@ -1,4 +1,18 @@
 impl StatsApi for HttpLabelloApi {
+    fn current_user_activity<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+    ) -> crate::ApiFuture<'a, crate::CurrentUserActivity> {
+        Box::pin(async move {
+            Self::json(
+                self.request(Method::GET, &format!("/datasets/{dataset_id}/stats/me"))?
+                    .timeout(STATS_REQUEST_TIMEOUT)
+                    .send()
+                    .await?,
+            ).await
+        })
+    }
+
     fn dataset_stats<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

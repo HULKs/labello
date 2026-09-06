@@ -1,4 +1,28 @@
 impl LabelloApp {
+    pub(crate) fn workflow_identity_label(&self, task: &TaskDefinition) -> String {
+        let class = self
+            .work
+            .classes
+            .iter()
+            .find(|class| Some(&class.class_id) == task.class_ids.first())
+            .map(|class| class.name.as_str())
+            .unwrap_or("Unknown class");
+        format!("{} ({class})", task.name)
+    }
+
+    pub(crate) fn clear_workflow_change_outside_scope(&mut self) {
+        if self
+            .work
+            .automatic_workflow_change
+            .as_ref()
+            .is_some_and(|notice| {
+                notice.dataset_id != self.config.dataset_id || notice.view != self.view
+            })
+        {
+            self.work.automatic_workflow_change = None;
+        }
+    }
+
     pub(crate) fn selected_task(&self) -> Option<&TaskDefinition> {
         let selected = self.work.selected_task_id.as_ref()?;
         self.work
@@ -59,6 +83,7 @@ impl LabelloApp {
             return false;
         }
         let annotation_type = task.annotation_type.clone();
+        self.work.automatic_workflow_change = None;
         self.work.selected_task_id = Some(task_id.clone());
         self.work.tool = tool_for_annotation_type(&annotation_type);
         true
@@ -257,7 +282,10 @@ impl LabelloApp {
         size.y < 480.0
     }
 
-    pub(crate) fn workspace_context_height(&self, layout: LayoutMode, _viewport: egui::Vec2) -> f32 {
+    pub(crate) fn workspace_context_height(&self, ctx: &egui::Context, layout: LayoutMode, viewport: egui::Vec2) -> f32 {
+        if self.view == AppView::Review {
+            return self.review_context_bar_height(ctx, layout, viewport.x);
+        }
         if self.work.current.is_some()
             && (layout == LayoutMode::Compact
                 || (layout == LayoutMode::Medium && self.view != AppView::Annotate))
@@ -280,7 +308,7 @@ impl LabelloApp {
                 60.0
             }
         } else if layout == LayoutMode::Compact && self.manual_migration_active() {
-            112.0
+            if Self::short_viewport(viewport) { 44.0 } else { 112.0 }
         } else if Self::short_viewport(viewport) || layout == LayoutMode::Compact {
             60.0
         } else {

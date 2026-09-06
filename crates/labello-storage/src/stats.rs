@@ -18,6 +18,7 @@ use tokio::sync::Notify;
 
 use crate::{DatasetRepository, StorageResult};
 
+mod activity;
 mod aggregation;
 mod cache;
 mod scan;
@@ -50,7 +51,7 @@ mod tests {
 
     use super::*;
 
-    async fn empty_repository() -> (tempfile::TempDir, DatasetRepository) {
+    pub(super) async fn empty_repository() -> (tempfile::TempDir, DatasetRepository) {
         let temp = tempfile::tempdir().unwrap();
         let repository = DatasetRepository::new(temp.path());
         repository

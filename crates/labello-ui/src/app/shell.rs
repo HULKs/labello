@@ -9,6 +9,9 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
+        if self.view != AppView::Review {
+            self.work.review_details_focus_return = None;
+        }
         self.retry_prefetch_if_due(ui.ctx());
         self.sync_review_selection();
         self.work.canvas.require_pan_mode(
@@ -20,6 +23,7 @@ impl eframe::App for LabelloApp {
         self.start_next_persistence_command();
         self.start_setup_load();
         self.refresh_stats_if_due();
+        self.refresh_activity_if_due(ui.ctx());
         self.refresh_assignment_availability_if_due();
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();
@@ -30,14 +34,21 @@ impl eframe::App for LabelloApp {
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
         let compact_action_height = (self.work_view()
             && (layout != LayoutMode::Wide || self.manual_migration_active()))
-        .then(|| self.workspace_actions_height(layout, viewport));
+        .then(|| {
+            let height = self.workspace_actions_height(layout, viewport);
+            if Self::short_viewport(viewport) && self.activity_available() {
+                height - 2.0 * theme::SPACE_2
+            } else {
+                height
+            }
+        });
         egui::Panel::top("app_bar")
             .exact_size(56.0)
             .frame(theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 6)))
             .show(ui, |ui| self.app_bar(ui, layout));
         if self.work_view() {
             egui::Panel::top("workspace_context")
-                .exact_size(self.workspace_context_height(layout, viewport))
+                .min_size(self.workspace_context_height(ui.ctx(), layout, viewport))
                 .frame(
                     theme::top_bar_frame()
                         .fill(theme::PANEL)
@@ -46,10 +57,33 @@ impl eframe::App for LabelloApp {
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }
         if self.work_view() {
+            if self.activity_available() {
+                egui::Panel::bottom("current_user_activity")
+                    .frame(
+                        egui::Frame::new()
+                            .fill(theme::APP_BG)
+                            .inner_margin(egui::Margin::symmetric(14, 0)),
+                    )
+                    .show(ui, |ui| self.activity_summary(ui));
+            }
             if let Some(action_height) = compact_action_height {
-                egui::Panel::bottom("compact_primary_actions")
+                let allocation = ui.available_rect_before_wrap();
+                let actions_id = egui::Id::new("compact_primary_actions");
+                let previous_height = egui::containers::panel::PanelState::load(ui.ctx(), actions_id)
+                    .map(|state| state.size().y);
+                let actions = egui::Panel::bottom(actions_id)
                     .min_size(action_height)
-                    .frame(theme::top_bar_frame())
+                    .frame(
+                        if Self::short_viewport(viewport)
+                            && (self.activity_available()
+                                || (self.manual_migration_active()
+                                    && self.view == AppView::Annotate))
+                        {
+                            theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
+                        } else {
+                            theme::top_bar_frame()
+                        },
+                    )
                     .show(ui, |ui| {
                         if layout == LayoutMode::Compact {
                             self.compact_workspace_actions(ui);
@@ -57,6 +91,16 @@ impl eframe::App for LabelloApp {
                             ui.horizontal_wrapped(|ui| self.workspace_actions(ui, layout));
                         }
                     });
+                let measured = actions.response.rect;
+                if (measured.bottom() - allocation.bottom()).abs() > 0.5
+                    && measured.height() > 0.5
+                    && measured.height() <= allocation.height() + 0.5
+                    && previous_height.is_none_or(|height| (height - measured.height()).abs() > 0.5)
+                {
+                    // Bottom panels start at their cached height. Settle a changed
+                    // measurement once; an unchanged clipped panel must not repaint forever.
+                    ui.ctx().request_repaint();
+                }
             } else {
                 // Preserve the parent UI's child sequence so later panel widget IDs remain stable.
                 egui::Panel::bottom("compact_primary_actions_placeholder")
@@ -65,9 +109,8 @@ impl eframe::App for LabelloApp {
                     .show(ui, |_| {});
             }
         }
-        let show_wide_inspector = self.work_view()
-            && layout == LayoutMode::Wide
-            && !self.work.inspector_panel_collapsed;
+        let show_wide_inspector =
+            self.work_view() && layout == LayoutMode::Wide && !self.work.inspector_panel_collapsed;
         let inspector_left = show_wide_inspector.then(|| {
             ui.ctx().content_rect().right() - LayoutMode::INSPECTOR_PANEL_WIDTH - theme::SPACE_2
         });
@@ -116,7 +159,18 @@ impl eframe::App for LabelloApp {
         let central_frame = if self.work_view() {
             theme::central_frame()
                 .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin::same(theme::SPACE_2 as i8))
+                .inner_margin(
+                    if self.workflow_change_needs_inline_slot(ui.ctx())
+                        || (Self::short_viewport(viewport)
+                            && self.activity_available()
+                            && self.view == AppView::Annotate
+                            && self.manual_migration_active())
+                    {
+                        egui::Margin::symmetric(theme::SPACE_2 as i8, 0)
+                    } else {
+                        egui::Margin::same(theme::SPACE_2 as i8)
+                    },
+                )
         } else {
             theme::central_frame()
         };
@@ -126,10 +180,7 @@ impl eframe::App for LabelloApp {
                 let mut work_rect = ui.available_rect_before_wrap();
                 if let Some(action_height) = compact_action_height {
                     let action_top = ui.ctx().content_rect().bottom() - action_height;
-                    work_rect.max.y = work_rect
-                        .max
-                        .y
-                        .min(action_top - theme::SPACE_2);
+                    work_rect.max.y = work_rect.max.y.min(action_top - theme::SPACE_2);
                 }
                 if let Some(inspector_left) = inspector_left {
                     work_rect.max.x = work_rect.max.x.min(inspector_left);

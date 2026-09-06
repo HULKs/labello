@@ -5,6 +5,10 @@ impl LabelloApp {
         command: UiCommand,
     ) -> Option<UiCommand> {
         match command {
+            UiCommand::CurrentUserActivity { request, dataset_id } => self.spawn_message(request.clone(), async move {
+                let result = api.current_user_activity(&dataset_id).await.map_err(|error| error.to_string());
+                UiMessage::CurrentUserActivityLoaded { request, result }
+            }),
             UiCommand::Stats {
                 request,
                 dataset_id,

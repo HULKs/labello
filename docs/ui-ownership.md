@@ -54,13 +54,28 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
-- `manual_migration.rs`: migration-specific workflow;
+- `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
+  stable command locations and overflow keyboard focus; workflow owners supply
+  action order, availability and command dispatch;
+- `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
+  interaction and context-row height;
+- `review_context.rs`: immutable exact-target context shared by review presentation;
+  assignment identity and authoritative target order/version reject stale summaries;
+- `review_revision.rs`: local staged replacement decisions and stable commit retries;
+  effective decisions come from the domain review projection, not raw history;
+- `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
+  companion status and explicit reconciliation with retained drafts;
 - `workspace_canvas.rs`: the adapter between app state and the reusable canvas.
 
 The canvas keeps its public state and entry points in `canvas.rs`. Its internal
 implementation is split only into rendering, painting, interaction,
 hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
 the canvas module so these boundaries do not weaken behavioral coverage.
+
+The shared workflow-state reducer retains every persisted annotation ID,
+including deleted versions. Undo/Redo rebases a restored annotation onto that
+latest authoritative version before saving; a failed save keeps the same draft
+available for retry. Visible annotations remain the active projection.
 
 ## Browser persistence
 
@@ -86,3 +101,105 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+## Automatic workflow changes
+
+The work state owns availability-fallback feedback separately from transient
+runtime notices. It snapshots the previous and new task/class names only when
+an accepted availability result changes the committed workflow. The shared
+workspace presents this nonmodal, dismissible status before claiming the next
+assignment. It does not require acknowledgement to continue work.
+
+The shared notice renderer records its current render pass when it is visible.
+The central workspace suppresses its fallback only when another workspace slot
+has already presented that notice in the same pass. A compact short fallback
+owns an inline slot before the canvas; the shell reclaims the vertical canvas
+inset for that slot, preserving the review identity and controls without covering
+the image. Viewport size or presentation in an earlier frame cannot suppress the current fallback or leave a claim deferred.
+
+Image loading, prefetch, retry and unrelated status updates preserve the notice.
+A later fallback replaces it with that transition's identities. Dismissal,
+committed explicit workflow selection, authentication changes, dataset changes
+and leaving the work view clear it. Existing request epochs reject stale
+availability results before they can change selection or feedback.
+
+## Current-user activity
+
+`datasets.activity` owns the current endpoint/account/dataset identity, UTC
+window, loaded counts, request, refresh deadline and local failure state.
+`activity` schedules and renders the work-view bottom summary. Requests use
+ordinary read identities and never begin a workspace epoch or invalidate
+assignment-owned work. Successful annotation, migration and final-review
+completions request a refresh; completion during an existing request schedules
+one follow-up. The active work view polls no more often than every 30 seconds;
+explicit completion, retry and browser visibility-return hints may refresh
+sooner and coalesce while pending. The thin WASM adapter only forwards document
+visibility changes.
+
+The server sample time plus monotonic elapsed time drives UTC rollover. The
+request round trip supplies a conservative transit bound: a reply that may have
+crossed midnight is rejected, and existing values can expire by that bound early
+rather than carry yesterday into today. An
+expired window is cleared before rendering and refreshed; stale endpoint,
+account, dataset or older-day replies cannot replace current counts. Initial
+loading, zero, initial error with Retry, refresh and stale-on-failure states are
+distinct. Loaded values remain during same-day refresh and failures. Counts are
+never optimistically incremented and do not authorize workflow actions.
+
+The shell allocates the actual summary row below primary assignment actions.
+Visible wording condenses using measured text width; full counter names and
+"today in UTC" remain in tooltip and AccessKit text. Retry uses a 44-point
+control. This row leaves lower-right build-warning ownership with the existing
+shell warning layer and requires combined layout verification when that feature
+is present.
+
+At short heights, the activity summary and migration confirmation share the
+compact footer allocation. Its vertical padding stays removed when either the
+activity row is present or manual annotation migration needs the compact
+footer, preserving confirmation targets and canvas space in both states.
+
+A short manual-migration annotation view places failed-activity Retry in the
+existing measured secondary actions. The bottom summary retains unavailable or
+stale text and exposes the Retry location through its full accessible help.
+This keeps the retry target at 44 points without taking another full canvas row;
+Compact short Review follows the same rule below; other views retain the direct
+summary Retry control.
+
+The same short migration/activity combination removes only the canvas's vertical
+outer inset, retaining its horizontal inset. This preserves at least 44 points
+of canvas height at 320×320 with loaded counts or an activity failure, alongside
+44-point confirmation and Retry controls.
+
+At compact short Review sizes, activity failures keep the summary at its normal
+line height. The primary review decisions reserve the actual measured width of
+an ellipsis More trigger; Retry activity and Previous navigation use the shared
+secondary-action owner. The trigger has a named More action and a 44px target.
+Moving a focused Previous control into its menu uses the existing overflow focus
+transfer. Compact revision buttons retain explicit Stage yes/no or Commit yes/no
+labels. Correction mode keeps its own actions, and migration review uses the same
+bounded retry placement. This changes neither review decisions nor assignment
+ownership.
+
+An open Retry activity menu remains in place when an asynchronous refresh
+succeeds. The shared overflow owner records its open menu's commands, so activity
+can retain that presentation until activation or dismissal. The summary updates
+immediately, but refresh completion cannot replace a Retry pointer target with
+the review decision underneath it.
+
+Short review layout uses the shared review-context projection to keep revision
+mode in the existing context identity line. The central workspace omits its
+redundant caption only when valid compact revision details are present; missing
+or stale target context retains the caption fallback. This presentation does not
+change captured targets, staging, or commit policy.
+
+Compact review availability uses a reserved slot in the identity line. Only that
+truncatable line gives up text width; type/phase and canvas allocation remain
+stable while loading. The shared spinner description retains its existing
+progress-indicator name and tooltip across workspace placements.
+
+The shared shell measures the compact action panel against its allocated bottom edge.
+When its height changes after a resize, it requests the next repaint to settle
+growing or shrinking content without waiting for pointer input. It compares the
+existing panel cache with the new measurement, so unchanged clipped content at
+an unsupported tiny size cannot cause a repaint loop. This preserves dynamic
+wrapping and does not discard a pass or replay input commands.

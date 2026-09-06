@@ -1,3 +1,4 @@
+mod activity;
 pub mod admin;
 pub mod app;
 pub mod canvas;
@@ -12,6 +13,8 @@ mod manual_migration;
 pub mod panels;
 mod persistence;
 pub mod queue;
+mod review_context;
+mod review_revision;
 mod review_sequence;
 pub mod setup;
 mod statistics;

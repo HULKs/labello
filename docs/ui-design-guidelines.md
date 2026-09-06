@@ -24,6 +24,13 @@ and history.
 - Use primary, standard secondary, quiet, and danger actions. A region normally
   has one primary action. Preserve native hover, press, focus, open, selected,
   and disabled states instead of applying direct fills.
+- Embedded button shortcuts use `theme::button_shortcut` so their foreground
+  follows the button's visual state. Semantic helpers and selected placement
+  buttons use the shared button renderer, which scopes weak-text styling and
+  disabled opacity to that button and restores the surrounding style. Disabled
+  buttons retain disabled semantics and a faded appearance with enough text
+  contrast; supporting text keeps the normal weak-text token. Danger button
+  labels use the readable text foreground, with danger conveyed by fill/stroke.
 - Use standard `egui` controls. Add a shared helper only for a repeated
   Labello-specific pattern. Add no theme, icon set, widget library, table
   dependency, or screenshot framework without a concrete unmet need.
@@ -138,6 +145,41 @@ has been recorded.
   and return primary drag to object editing during reviewer correction; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels.
+- **Review context:** the Inspector identifies the workflow, class, geometry type,
+  canonical object position and persisted target version. Final checks say
+  "Final check / Full image" and omit object-only fields. Migration distinguishes
+  annotated dispositions, excluded objects, discovered skeletons and confirmation;
+  excluded objects show disposition version without inventing an annotation version.
+  Correction mode shows the base persisted version and whether input is unsaved.
+  Short compact decision revisions keep a visible Revising indication in the
+  existing identity line. The full accessible details explain that geometry is
+  unchanged; no redundant caption row consumes canvas space. If target context
+  is unavailable, retain the revision caption without showing stale target details.
+  Decision revisions distinguish the current effective decision from a staged,
+  uncommitted replacement. Loading, missing/stale targets and lost assignments
+  clear the previous context; a missing image preview is labeled separately while
+  valid authoritative target context remains available. Long values wrap with a
+  complete accessible summary, and compact Inspector drawers scroll.
+  Workspace secondary actions use measured button atoms, including the current
+  font, icons and shortcuts, in the space left after preceding controls and badges.
+  Preserve each workflow's primary controls and secondary order. Show the longest
+  secondary prefix that fits with an overflow trigger for the remaining tail; omit
+  the trigger when everything fits. Required controls wrap and the panel reserves
+  their actual height. Migration Previous object leads its secondary action order;
+  short migration annotation bars remove spare vertical padding so confirmation
+  and the canvas remain visible. Moving a focused action into overflow transfers focus to
+  the trigger without dispatching it; opening the menu returns keyboard access to
+  that action. Long menu labels and shortcuts stack within a scrollable menu.
+  Review bars use that same current target in every layout. Reserve space for the
+  workflow/class identity, full annotation type and canonical phase before optional
+  filename text and secondary controls. Only the identity line may truncate; type
+  and phase wrap at their measured text width and the shell reserves the resulting
+  height. At compact sizes, the summary opens Inspector details by touch or keyboard,
+  a separate Workflow control stays reachable, and canvas controls occupy a second
+  row. Compact availability feedback shares the truncatable identity line; it
+  must not take width from the full type/phase line or add a context row.
+  Short viewports retain identity and phase. Loading or missing targets replace
+  the previous summary rather than pairing old identity with a new phase.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.
@@ -171,3 +213,38 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+## Availability fallback feedback
+
+Automatic workflow selection shows a persistent outlined notice with the old
+and new task/class names. The new identity is emphasized, and the notice has a
+44px dismiss action. Long visible names truncate within the card while tooltips
+and the polite AccessKit status retain complete names. The card floats inside
+the workspace without reducing its canvas layout. On short compact screens it
+uses the existing identity row when that row presents the notice. Otherwise the
+workspace reserves an inline notice above the canvas and reclaims its vertical
+canvas inset to keep a usable image area. The notice must not overlap the canvas,
+and a 320×320 review workspace retains at least 44px of canvas height. Only a
+notice actually presented in the current render pass suppresses that fallback. It is
+nonmodal and leaves ordinary work available after the new identity has been
+presented. Dismissing
+it retains the current workflow identity in the context bar and selector.
+
+## Current workflow marker
+
+The workflow selector reserves a fixed marker slot on every card and paints a
+small bright dot only for the committed selected workflow. The same control
+renders in the expanded panel and compact/medium drawer. Hover, keyboard focus,
+availability and pending transition candidates do not move the dot. An
+unavailable current workflow retains it. Existing selected fill/border and
+AccessKit selection semantics remain; the marker adds no focus stop or name.
+The automatic workflow-change notice remains independent of this visual cue.
+
+Measured workspace action buttons use the same state-dependent shortcut
+foreground both inline and in wrapped overflow menus. Moving an action into
+More changes only its placement; its shortcut contrast and accessible command
+identity remain the same.
+
+Responsive workspace checks must also resize through the viewport matrix while
+running only requested frames. Compact action panels must settle without a later
+pointer or keyboard event; forced extra frames can conceal a cached-height gap.

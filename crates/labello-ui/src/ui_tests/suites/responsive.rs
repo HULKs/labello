@@ -552,7 +552,7 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     );
 
     harness.set_size(egui::vec2(320.0, 320.0));
-    harness.step();
+    harness.run_steps(3);
     let canvas = harness.get_by_label("Annotation canvas").rect();
     assert!(
         canvas.top() >= 0.0 && canvas.bottom() <= 320.0 && canvas.height() >= 80.0,
@@ -785,7 +785,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert_label_inside(&harness, "Object 1 of 1", width, height);
+        assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
         for label in ["Pan", "Fit"] {
             assert_control_inside(
                 &harness,
@@ -845,9 +845,11 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
                  approve={approve_rect:?} reject={reject_rect:?}",
             );
             for label in ["Workflow", "Inspector"] {
-                let panel = harness
-                    .get_by_role_and_label(egui::accesskit::Role::Button, label)
-                    .rect();
+                let panel = if label == "Inspector" {
+                    harness.get_by_label_contains("Review details: Workflow:").rect()
+                } else {
+                    harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect()
+                };
                 assert!(
                     panel.top() >= context.top() && panel.bottom() <= context.bottom(),
                     "{label} must be in the second top bar at {width}x{height}: \
@@ -916,7 +918,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.state_mut().work.review_index = 1;
     harness.set_size(egui::vec2(320.0, 568.0));
     harness.step();
-    assert_label_inside(&harness, "Final check", 320.0, 568.0);
+    assert_review_bar_paints(&harness, "Bounding boxes · Final check");
 }
 
 #[test]
@@ -1546,6 +1548,80 @@ fn command_and_message_budgets_preserve_frame_responsiveness() {
     assert!(!app.loading.uploading);
     assert_ne!(app.runtime.notice.as_deref(), Some("Uploaded stale files"));
     assert_eq!(app.view, AppView::Stats);
+}
+
+#[test]
+fn automatic_workflow_notice_is_accessible_and_preserves_compact_canvas() {
+    let api = Rc::new(SpyApi::new());
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = loaded_work_harness(api);
+    let mut notice = harness
+        .state()
+        .work
+        .automatic_workflow_change
+        .clone()
+        .unwrap();
+    notice.previous =
+        "Previous task with a deliberately very long name (Previous class with a long name)".into();
+    notice.current =
+        "New task with a deliberately very long name (New class with a long name)".into();
+    let label = format!(
+        "Workflow changed automatically. From {} to {}.",
+        notice.previous, notice.current
+    );
+    for (width, height) in [
+        (320.0, 568.0),
+        (390.0, 844.0),
+        (600.0, 800.0),
+        (1288.0, 820.0),
+        (1440.0, 1000.0),
+        (320.0, 320.0),
+    ] {
+        harness.set_size(egui::vec2(width, height));
+        harness.state_mut().work.automatic_workflow_change = None;
+        harness.run();
+        let without_notice = harness.get_by_label("Annotation canvas").rect();
+        harness.state_mut().work.automatic_workflow_change = Some(notice.clone());
+        harness.run();
+        let with_notice = harness.get_by_label("Annotation canvas").rect();
+        assert_eq!(with_notice.left(), without_notice.left());
+        if height >= 480.0 {
+            assert_eq!(with_notice.top(), without_notice.top());
+            assert!(with_notice.height() >= without_notice.height());
+        } else {
+            assert!(with_notice.bottom() >= without_notice.bottom());
+        }
+        assert_eq!(with_notice.width(), without_notice.width());
+        assert!(with_notice.height() >= 44.0);
+        let status = harness.get_by_role_and_label(egui::accesskit::Role::Status, &label);
+        assert_eq!(
+            status.accesskit_node().live(),
+            egui::accesskit::Live::Polite
+        );
+        assert!(!status.accesskit_node().is_modal());
+        assert_control_inside(
+            &harness,
+            "Dismiss workflow change",
+            egui::accesskit::Role::Button,
+            width,
+            height,
+        );
+        let dismiss =
+            harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change");
+        assert!(dismiss.rect().width() >= 44.0 && dismiss.rect().height() >= 44.0);
+        assert!(!dismiss.rect().intersects(status.rect()));
+        if height < 480.0 {
+            assert!(!dismiss.rect().intersects(with_notice));
+            assert!(!status.rect().intersects(with_notice));
+        }
+    }
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change")
+        .focus();
+    harness.step();
+    harness.key_press(egui::Key::Enter);
+    harness.run();
+    assert!(harness.state().work.automatic_workflow_change.is_none());
 }
 
 #[test]

@@ -310,6 +310,7 @@ pub(crate) struct DatasetState {
     pub metadata: Option<DatasetMetadata>,
     pub admin_config: Option<DatasetMetadata>,
     pub admin_baseline: Option<DatasetMetadata>,
+    pub activity: crate::activity::ActivityState,
     pub stats: DatasetStats,
     pub stats_request_id: u64,
     pub active_stats_request: Option<(u64, DatasetId)>,
@@ -329,6 +330,7 @@ impl DatasetState {
             metadata: None,
             admin_config: None,
             admin_baseline: None,
+            activity: Default::default(),
             stats: DatasetStats::default(),
             stats_request_id: 0,
             active_stats_request: None,
@@ -348,13 +350,24 @@ pub(crate) struct NavigationState {
     pub(crate) restore_drawer_trigger_focus: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct AutomaticWorkflowChange {
+    pub(crate) previous: String,
+    pub(crate) current: String,
+    pub(crate) dataset_id: DatasetId,
+    pub(crate) view: AppView,
+    pub(crate) presented: bool,
+    pub(crate) presented_pass: Option<u64>,
+}
+
 pub struct WorkState {
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,
+    pub(crate) automatic_workflow_change: Option<AutomaticWorkflowChange>,
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
-    pub(crate) previous_annotation_assignment: Option<Assignment>,
+    pub(crate) previous_assignment: Option<Assignment>,
     pub(crate) current: Option<QueuedImage>,
     pub(crate) current_state: Option<ImageState>,
     pub(crate) current_texture: Option<TextureHandle>,
@@ -378,10 +391,13 @@ pub struct WorkState {
     pub(crate) offline: bool,
     pub(crate) review_index: usize,
     pub(crate) review_rejected: bool,
+    pub(crate) staged_review_decisions: Vec<labello_domain::ReviewRecord>,
+    pub(crate) review_revision_commit: Option<labello_domain::ReviewRevisionCommit>,
     pub(crate) correction_draft: Option<CorrectionDraft>,
     pub(crate) show_tutorial: bool,
     pub(crate) pending_transition: Option<PendingTransition>,
     pub(crate) drawer: Option<Drawer>,
+    pub(crate) review_details_focus_return: Option<egui::Id>,
     pub(crate) workflow_panel_collapsed: bool,
     pub(crate) inspector_panel_collapsed: bool,
     pub(crate) show_settings: bool,

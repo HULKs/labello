@@ -26,6 +26,7 @@ pub(crate) enum MigrationAction {
     AddSkeleton(labello_client::AddMigrationSkeletonRequest),
     EditSkeleton(labello_client::EditMigrationSkeletonRequest),
     DeleteSkeleton(labello_client::DeleteMigrationSkeletonRequest),
+    ReconcileCompanion(labello_client::ReconcileMigrationCompanionRequest),
     Exclude(labello_client::ExcludeMigrationTargetRequest),
     Reopen(labello_client::ReopenMigrationTargetRequest),
     Revisit(labello_client::RevisitMigrationTargetRequest),
@@ -327,6 +328,11 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         result: Result<IngestJob, String>,
     },
+    ActivityVisibilityRegained,
+    CurrentUserActivityLoaded {
+        request: RequestIdentity,
+        result: Result<labello_client::CurrentUserActivity, String>,
+    },
     StatsLoaded {
         request: RequestIdentity,
         result: Result<DatasetStats, String>,
@@ -514,6 +520,10 @@ pub(crate) enum UiCommand {
         dataset_id: DatasetId,
         job_id: String,
     },
+    CurrentUserActivity {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+    },
     Stats {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -596,6 +606,7 @@ pub(crate) enum UiCommand {
         dataset_id: DatasetId,
         assignment: Assignment,
         review: ReviewRecord,
+        revision: Option<labello_domain::ReviewRevisionCommit>,
         phase: ReviewPhase,
     },
     Correction {
@@ -661,6 +672,7 @@ impl UiCommand {
             | Self::DownloadSnapshot { request, .. }
             | Self::Ingest { request, .. }
             | Self::PollIngest { request, .. }
+            | Self::CurrentUserActivity { request, .. }
             | Self::Stats { request, .. }
             | Self::AssignmentAvailability { request, .. }
             | Self::SaveKeybindings { request, .. }
@@ -759,12 +771,14 @@ impl UiMessage {
             | Self::CorrectionFinished { request, .. }
             | Self::AdjudicationFinished { request, .. }
             | Self::IngestJobLoaded { request, .. }
+            | Self::CurrentUserActivityLoaded { request, .. }
             | Self::StatsLoaded { request, .. }
             | Self::AssignmentAvailabilityLoaded { request, .. }
             | Self::KeybindingsSaved { request, .. }
             | Self::MigrationFinished { request, .. }
             | Self::RequestFailed { request, .. } => Some(request),
             Self::PersistenceFinished(_)
+            | Self::ActivityVisibilityRegained
             | Self::FolderUploadProgress { .. }
             | Self::FolderUploadFinished { .. } => None,
         }

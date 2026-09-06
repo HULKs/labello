@@ -1159,6 +1159,18 @@ pub struct DeleteMigrationSkeletonRequest {
     pub expected_version: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReconcileMigrationCompanionRequest {
+    pub assignment_id: AssignmentId,
+    #[serde(default)]
+    pub pass_id: Option<MigrationPassId>,
+    pub task_id: TaskId,
+    pub annotation_id: AnnotationId,
+    pub expected_version: u32,
+    pub expected_box_version: Option<u32>,
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExcludeMigrationTargetRequest {
@@ -1261,6 +1273,10 @@ impl fmt::Debug for ReviewMigrationRequest {
     deny_unknown_fields
 )]
 pub enum MigrationReviewTarget {
+    Discovered {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Disposition {
         object_group_id: ObjectGroupId,
         disposition_version: u32,

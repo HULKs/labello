@@ -28,24 +28,25 @@ impl LabelloApp {
                 }
             }
             PendingTransition::PreviousAssignment(assignment) => {
-                self.work.previous_annotation_assignment = Some(assignment.clone());
+                self.work.previous_assignment = Some(assignment.clone());
                 self.clear_current_image();
                 self.request_reopen_assignment(assignment);
             }
             PendingTransition::Workflow(task_id) => {
                 if self.select_workflow(&task_id) {
-                    self.clear_previous_annotation_assignment();
+                    self.clear_previous_assignment();
                     self.begin_workspace_epoch();
                     self.clear_current_image();
                     self.request_next_image();
                 }
             }
             PendingTransition::View(view) => {
+                self.work.automatic_workflow_change = None;
                 self.runtime.notice = None;
                 self.work.show_tutorial = false;
                 self.work.drawer = None;
                 self.begin_workspace_epoch();
-                self.clear_previous_annotation_assignment();
+                self.clear_previous_assignment();
                 if view == AppView::Admin {
                     self.clear_current_image();
                     self.request_admin_dataset();
@@ -88,6 +89,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn release_pending_transition(&mut self) {
+        if let Some(PendingTransition::PreviousAssignment(previous)) = self.work.pending_transition.clone() {
+            self.request_reopen_assignment(previous);
+            return;
+        }
         if self.work.pending_transition.is_some() {
             self.request_release();
         }
@@ -122,6 +127,10 @@ impl LabelloApp {
         if self.loading.saving || (self.work.assignment.is_none() && self.runtime.api.is_some()) {
             return;
         }
+        if self.review_revision_active() && !self.work.staged_review_decisions.is_empty() {
+            self.stage_transition(PendingTransition::NextAssignment);
+            return;
+        }
         if self.view == AppView::Annotate
             && self.runtime.api.is_some()
             && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
@@ -139,7 +148,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn return_to_previous_assignment(&mut self) {
-        if self.view != AppView::Annotate
+        if !matches!(self.view, AppView::Annotate | AppView::Review)
             || self.loading.saving
             || self.loading.image
             || self.work.pending_transition.is_some()
@@ -147,11 +156,12 @@ impl LabelloApp {
         {
             return;
         }
-        let Some(previous) = self.work.previous_annotation_assignment.clone() else {
+        let Some(previous) = self.work.previous_assignment.clone() else {
             return;
         };
         if self.work.assignment.is_some()
-            && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
+            && (self.view == AppView::Review
+                || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || (self.manual_migration_active() && self.migration_has_unsaved_input()))
         {
             self.stage_transition(PendingTransition::PreviousAssignment(previous));
@@ -226,6 +236,7 @@ impl LabelloApp {
 
     pub(crate) fn can_correct_review_object(&self) -> bool {
         self.view == AppView::Review
+            && !self.review_revision_active()
             && self
                 .work
                 .assignment

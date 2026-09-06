@@ -1,5 +1,6 @@
 impl LabelloApp {
     pub(crate) fn central(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        self.clear_workflow_change_outside_scope();
         match self.view {
             AppView::Setup => {
                 centered_scroll(ui, 1100.0, |ui| self.setup_view(ui, layout));
@@ -15,12 +16,119 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
         }
+        if self.review_revision_active() && !self.review_revision_in_compact_context(ui.ctx()) {
+            let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";
+            let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
+                "Decision revision; geometry unchanged."
+            } else { explanation };
+            ui.label(caption).on_hover_text(explanation);
+        }
+        if self.workflow_change_needs_inline_slot(ui.ctx()) {
+            let width = ui.available_width();
+            let notice = egui::Frame::new()
+                .inner_margin(egui::Margin::symmetric(6, 0))
+                .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+            ui.painter().rect_stroke(
+                notice.response.rect,
+                6,
+                egui::Stroke::new(2.0, theme::AMBER),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
+        self.automatic_workflow_change_notice(ui.ctx(), canvas_rect);
+    }
+
+    pub(crate) fn workflow_change_needs_inline_slot(&self, ctx: &egui::Context) -> bool {
+        let viewport = ctx.content_rect().size();
+        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
+            && Self::short_viewport(viewport)
+            && self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
+                notice.presented_pass != Some(ctx.cumulative_pass_nr())
+            })
+    }
+
+    fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        if self.work.automatic_workflow_change.as_ref().is_none_or(|notice| {
+            notice.presented_pass == Some(ctx.cumulative_pass_nr())
+        })
+        {
+            return;
+        }
+        let width = (canvas.width() - 16.0).clamp(200.0, 680.0);
+        egui::Area::new(egui::Id::new("automatic-workflow-change"))
+            .order(egui::Order::Middle)
+            .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
+            .show(ctx, |ui| {
+                theme::card_frame()
+                    .inner_margin(egui::Margin::same(6))
+                    .stroke(egui::Stroke::new(2.0, theme::AMBER))
+                    .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+            });
+    }
+
+    fn workflow_change_contents(&mut self, ui: &mut egui::Ui, width: f32) {
+        let Some(notice) = self.work.automatic_workflow_change.clone() else {
+            return;
+        };
+        let label = format!(
+            "Workflow changed automatically. From {} to {}.",
+            notice.previous, notice.current
+        );
+        let presented = ui.is_visible();
+        let mut dismiss = false;
+        ui.set_width(width);
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width((width - 54.0).max(60.0));
+                let response = ui
+                    .add(egui::Label::new(format!("Changed from {}", notice.previous)).truncate());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
+                });
+                ui.ctx().accesskit_node_builder(response.id, |node| {
+                    node.set_role(egui::accesskit::Role::Status);
+                    node.set_label(label.clone());
+                    node.set_live(egui::accesskit::Live::Polite);
+                });
+                response.on_hover_text(&notice.previous);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("Now {}", notice.current))
+                            .strong()
+                            .color(theme::AMBER),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(&notice.current);
+            });
+            let button = ui
+                .add(egui::Button::new("×").min_size(egui::vec2(44.0, 44.0)))
+                .on_hover_text("Dismiss workflow change");
+            button.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dismiss workflow change")
+            });
+            dismiss = button.clicked();
+        });
+        if dismiss {
+            self.work.automatic_workflow_change = None;
+        } else if presented && let Some(notice) = self.work.automatic_workflow_change.as_mut() {
+            notice.presented = true;
+            notice.presented_pass = Some(ui.ctx().cumulative_pass_nr());
+        }
+        if !notice.presented && presented {
+            self.request_next_image();
+        }
     }
 
     pub(crate) fn overlays(&mut self, ctx: &egui::Context, layout: LayoutMode) {
         if self.runtime.persistence.recovery.is_some() {
             self.draft_recovery_modal(ctx);
+            return;
+        }
+        if self.work.migration.pending_companion_reconciliation.is_some() {
+            self.migration_companion_reconciliation_modal(ctx);
             return;
         }
         if self.work.migration.pending_revisit_target.is_some() {
@@ -94,6 +202,12 @@ impl LabelloApp {
                                     format!("Close {title}"),
                                 )
                             });
+                            if drawer == Drawer::Inspector
+                                && let Some(invoker) = self.work.review_details_focus_return
+                                && ui.ctx().memory(|memory| memory.focused()).is_none_or(|focused| focused == invoker)
+                            {
+                                button.request_focus();
+                            }
                             close = button.clicked();
                         });
                     });
@@ -116,26 +230,17 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        self.clear_workflow_change_outside_scope();
+        if self.view == AppView::Review {
+            self.review_context_bar(ui, layout);
+            return;
+        }
         let current = self.work.current.clone();
         let workflow = self.selected_workflow().map(|workflow| workflow.label());
         let view = self.view;
         let loading_image = self.loading.image;
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
-        let review_phase = if view == AppView::Review && current.is_some() {
-            if self.work.correction_draft.is_some() {
-                Some("Correction mode".to_string())
-            } else {
-                let (phase, value, _) = self.review_phase();
-                Some(if phase == "Final check" {
-                    phase.to_string()
-                } else {
-                    format!("Object {value}")
-                })
-            }
-        } else {
-            None
-        };
         let add_summary = |ui: &mut egui::Ui, filename_width: f32| {
             if let Some(current) = current.as_ref() {
                 if filename_width > 0.0 {
@@ -168,9 +273,7 @@ impl LabelloApp {
             }
         };
         let stack_controls = layout == LayoutMode::Compact
-            || (layout == LayoutMode::Medium
-                && view != AppView::Annotate
-                && current.is_some());
+            || (layout == LayoutMode::Medium && view != AppView::Annotate && current.is_some());
         let show_panel_buttons =
             layout != LayoutMode::Wide && matches!(view, AppView::Annotate | AppView::Review);
         let response = if stack_controls {
@@ -178,11 +281,23 @@ impl LabelloApp {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.horizontal(|ui| {
                     ui.set_min_height(44.0);
-                    add_summary(ui, 50.0);
-                    if current.is_some() {
-                        if let Some(phase) = review_phase.as_ref() {
-                            theme::bounded_badge(ui, phase, theme::Intent::Info, 110.0);
-                        } else if let Some(workflow) = workflow.as_ref() {
+                    if short && self.work.automatic_workflow_change.is_some() {
+                        // Reuse the identity row on short screens; leave the small canvas unobscured.
+                        let controls_width = if show_panel_buttons {
+                            88.0 + 2.0 * ui.spacing().item_spacing.x
+                        } else {
+                            0.0
+                        };
+                        let width = (ui.available_width() - controls_width - 4.0).max(120.0);
+                        egui::Frame::new()
+                            .corner_radius(egui::CornerRadius::same(6))
+                            .stroke(egui::Stroke::new(2.0, theme::AMBER))
+                            .show(ui, |ui| self.workflow_change_contents(ui, width));
+                    } else {
+                        add_summary(ui, 50.0);
+                        if current.is_some()
+                            && let Some(workflow) = workflow.as_ref()
+                        {
                             theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
                         }
                     }
@@ -204,7 +319,7 @@ impl LabelloApp {
                 self.assignment_availability_spinner(ui);
             })
         } else {
-            ui.horizontal(|ui| {
+            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 add_summary(
                     ui,
                     if short {
@@ -233,18 +348,6 @@ impl LabelloApp {
                         },
                     );
                 }
-                if let Some(phase) = review_phase.as_ref() {
-                    theme::bounded_badge(
-                        ui,
-                        phase,
-                        theme::Intent::Info,
-                        if layout == LayoutMode::Wide {
-                            120.0
-                        } else {
-                            100.0
-                        },
-                    );
-                }
                 if current.is_some() {
                     self.canvas_controls(ui, layout);
                 }
@@ -255,7 +358,6 @@ impl LabelloApp {
                     ui.separator();
                     self.workspace_actions(ui, layout);
                 }
-                self.assignment_availability_spinner(ui);
             })
         };
         response.response.widget_info(|| {
@@ -272,21 +374,19 @@ impl LabelloApp {
         if !self.work.availability.loading || !self.work.availability.tasks.is_empty() {
             return;
         }
-        ui.with_layout(
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                let spinner = ui
-                    .spinner()
-                    .on_hover_text("Checking assignment availability…");
-                spinner.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::ProgressIndicator,
-                        true,
-                        "Loading workflow assignment availability",
-                    )
-                });
-            },
-        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            Self::describe_assignment_availability_spinner(ui.spinner());
+        });
+    }
+
+    fn describe_assignment_availability_spinner(response: egui::Response) {
+        response.on_hover_text("Checking assignment availability…").widget_info(|| {
+            egui::WidgetInfo::labeled(
+                egui::WidgetType::ProgressIndicator,
+                true,
+                "Loading workflow assignment availability",
+            )
+        });
     }
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -331,7 +431,7 @@ impl LabelloApp {
                         .min_size(egui::vec2(44.0, 44.0))
                 } else {
                     egui::Button::new("Refocus")
-                        .shortcut_text(&refocus_shortcut)
+                        .shortcut_text(crate::theme::button_shortcut(&refocus_shortcut))
                         .min_size(egui::vec2(0.0, 44.0))
                 };
                 let response = theme::quiet_button(ui, can_refocus, button)
@@ -368,4 +468,17 @@ impl LabelloApp {
         });
     }
 
+}
+
+fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {
+    if availability {
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
+            ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), contents);
+            let spinner = ui.spinner().on_hover_text("Checking assignment availability…");
+            spinner.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, "Loading workflow assignment availability"));
+        })
+    } else {
+        ui.horizontal_wrapped(contents)
+    }
 }

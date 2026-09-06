@@ -16,6 +16,9 @@ use super::{
     lease_expiration,
 };
 
+mod companions;
+use companions::*;
+
 const MAX_IDEMPOTENCY_KEY_BYTES: usize = 200;
 const MAX_EXCLUSION_NOTE_BYTES: usize = 2_000;
 const MAX_REVIEW_COMMENT_BYTES: usize = 2_000;
@@ -39,6 +42,10 @@ pub struct ManualMigrationProgress {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MigrationReviewTarget {
+    Discovered {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Disposition {
         object_group_id: ObjectGroupId,
         disposition_version: u32,
@@ -66,7 +73,8 @@ impl DatasetRepository {
         context: AssignmentContext<'_>,
         pass_id: Option<&MigrationPassId>,
     ) -> StorageResult<ManualMigrationCommandResult> {
-        let (metadata, _image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, _image) =
+            self.load_migration_inputs(context.image_id).await?;
         let role = migration_role(&context.kind)?;
         require_role(
             &metadata.role_assignments,
@@ -97,7 +105,8 @@ impl DatasetRepository {
                         .sequence_index,
                     object_group_id,
                 },
-                CanonicalReviewTarget::Confirmation { .. } => MigrationCursor::FullImage,
+                CanonicalReviewTarget::Confirmation { .. }
+                | CanonicalReviewTarget::Discovered { .. } => MigrationCursor::FullImage,
             };
             let mut result = command_result(state, context.task_id, None, None, None)?;
             result.cursor = cursor;
@@ -110,10 +119,22 @@ impl DatasetRepository {
     async fn load_migration_inputs(
         &self,
         image_id: &ImageId,
-    ) -> StorageResult<(DatasetMetadata, ImageRecord)> {
+    ) -> StorageResult<(
+        tokio::sync::RwLockReadGuard<'_, ()>,
+        DatasetMetadata,
+        ImageRecord,
+    )> {
+        // Complete artifact publication before configuration -> image locking.
+        // Callers retain this guard through authorization and the whole append.
+        self.ensure_artifact_migration().await?;
+        let config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset_config().await?;
         let image = self.load_image_record(image_id).await?;
-        Ok((metadata, image))
+        #[cfg(test)]
+        if let Some(notify) = self.migration_config_captured.lock().as_ref() {
+            notify.notify_one();
+        }
+        Ok((config_guard, metadata, image))
     }
 
     #[allow(
@@ -130,7 +151,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, image_dimensions) =
             migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
@@ -336,8 +357,9 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, image_dimensions) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (task, guide, image_dimensions) =
+            migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -444,6 +466,17 @@ impl DatasetRepository {
                 reason: Some("object discovered during full-image migration review".to_string()),
             },
         )?;
+        update_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            image_dimensions,
+            &annotation,
+            user_id,
+            now,
+            &mut payloads,
+            None,
+        )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
         payloads.push(EventPayload::AssignmentUpdated {
@@ -485,8 +518,9 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, image_dimensions) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (task, guide, image_dimensions) =
+            migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -562,6 +596,15 @@ impl DatasetRepository {
             annotation_id,
             expected_version,
         )?;
+        if !state.migration_companions.contains_key(annotation_id) {
+            let events = self.load_events(context.image_id).await?;
+            if !events.iter().any(|event| matches!(&event.payload,
+                EventPayload::AnnotationVersionCreated { annotation, previous_version: None, reason }
+                    if annotation.annotation_id == *annotation_id && annotation.task_id == *context.task_id
+                        && reason.as_deref() == Some("object discovered during full-image migration review"))) {
+                return Err(conflict("this group-less skeleton has no unambiguous migration discovery history; resolve its provenance before pairing"));
+            }
+        }
         let annotation = AnnotationVersion {
             annotation_id: current.annotation_id.clone(),
             version: current
@@ -607,6 +650,17 @@ impl DatasetRepository {
                 reason: Some("edited object discovered during full-image review".to_string()),
             },
         )?;
+        update_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            image_dimensions,
+            &annotation,
+            user_id,
+            now,
+            &mut payloads,
+            None,
+        )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
         payloads.push(EventPayload::AssignmentUpdated {
@@ -647,8 +701,8 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
-        let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (task, guide, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
         let _guard = lock.lock().await;
@@ -735,6 +789,15 @@ impl DatasetRepository {
                 ),
             },
         )?;
+        delete_discovered_companion(
+            &mut state,
+            task,
+            guide,
+            annotation_id,
+            user_id,
+            now,
+            &mut payloads,
+        )?;
         reopen_terminal_migration(&mut state, context.task_id, now, &mut payloads, user_id)?;
         renew(&mut assignment, now);
         payloads.push(EventPayload::AssignmentUpdated {
@@ -777,7 +840,7 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         validate_note(reason, note.as_deref())?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -927,7 +990,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -995,7 +1058,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1125,7 +1188,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1235,7 +1298,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, guide_task, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1316,7 +1379,7 @@ impl DatasetRepository {
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
         require_annotation_context(&metadata, user_id, &context)?;
         let lock = self.image_lock(context.image_id);
@@ -1436,7 +1499,7 @@ impl DatasetRepository {
     ) -> StorageResult<ManualMigrationCommandResult> {
         validate_idempotency_key(idempotency_key)?;
         validate_comment(comment.as_deref())?;
-        let (metadata, image) = self.load_migration_inputs(context.image_id).await?;
+        let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         let (task, _, _) = migration_metadata(&metadata, &image, context.task_id)?;
         if context.kind != AssignmentKind::Review {
             return Err(StorageError::InvalidAssignment(
@@ -1507,6 +1570,21 @@ impl DatasetRepository {
                 review_target
             }
             (
+                CanonicalReviewTarget::Discovered {
+                    annotation_id,
+                    version,
+                },
+                MigrationReviewTarget::Discovered {
+                    annotation_id: requested_id,
+                    version: requested_version,
+                },
+            ) if annotation_id == *requested_id && version == *requested_version => {
+                ReviewTarget::AnnotationVersion {
+                    annotation_id,
+                    version,
+                }
+            }
+            (
                 CanonicalReviewTarget::Confirmation { confirmation_hash },
                 MigrationReviewTarget::Confirmation {
                     confirmation_hash: requested_hash,
@@ -1534,31 +1612,17 @@ impl DatasetRepository {
         }];
         let final_decision = matches!(review_target, ReviewTarget::MigrationConfirmation { .. });
         if decision == ReviewDecision::Rejected {
-            if let ReviewTarget::AnnotationVersion { annotation_id, .. } = &review_target {
-                let group_id = state.migration_target_sets[context.task_id]
-                    .targets
-                    .iter()
-                    .find(|target| &target.reserved_skeleton_annotation_id == annotation_id)
-                    .map(|target| target.object_group_id.clone())
-                    .expect("canonical skeleton review belongs to a migration target");
-                payloads.push(correction_marker_payload(
-                    &state,
-                    context.task_id,
-                    &group_id,
-                    &primary_id,
-                    now,
-                )?);
-            } else if let ReviewTarget::MigrationDisposition {
-                object_group_id, ..
-            } = &review_target
-            {
-                payloads.push(correction_marker_payload(
-                    &state,
-                    context.task_id,
+            if let Some((object_group_id, marker)) = state.migration_review_correction_marker(
+                context.task_id,
+                &review_target,
+                &primary_id,
+                now,
+            )? {
+                payloads.push(EventPayload::MigrationDependencyMarked {
+                    task_id: context.task_id.clone(),
                     object_group_id,
-                    &primary_id,
-                    now,
-                )?);
+                    marker,
+                });
             }
             payloads.push(task_state_payload(
                 context.task_id,
@@ -1647,6 +1711,16 @@ impl DatasetRepository {
         primary_index: usize,
         timestamp: Timestamp,
     ) -> StorageResult<ImageState> {
+        if payloads
+            .iter()
+            .any(|payload| matches!(payload, EventPayload::MigrationCompanionLinked { .. }))
+        {
+            crate::fsjson::write_json_atomic(
+                &self.schema_path(),
+                &labello_domain::labello_schema_bundle(),
+            )
+            .await?;
+        }
         let mut state = self.load_image_state(image_id).await?;
         let events = payloads
             .into_iter()
@@ -1691,7 +1765,7 @@ impl DatasetRepository {
         expected_sequence: u64,
         payload: EventPayload,
     ) -> StorageResult<EventLogEntry> {
-        let metadata = self.load_dataset().await?;
+        let (_config_guard, metadata, _image) = self.load_migration_inputs(image_id).await?;
         require_role(
             &metadata.role_assignments,
             &metadata.dataset_id,
@@ -1756,6 +1830,11 @@ pub(crate) fn append_guide_invalidation_payloads(
                 || set.targets.iter().any(|target| {
                     changed_ids.contains(&&target.guide_annotation_id)
                         || changed_ids.contains(&&target.reserved_skeleton_annotation_id)
+                })
+                || state.migration_companions.values().any(|link| {
+                    &link.migration_task_id == *task_id
+                        && (changed_ids.contains(&&link.box_annotation_id)
+                            || changed_ids.contains(&&link.skeleton_annotation_id))
                 })
         })
         .map(|(task_id, _)| task_id.clone())
@@ -2279,31 +2358,6 @@ fn reopen_terminal_migration(
     Ok(())
 }
 
-fn correction_marker_payload(
-    state: &ImageState,
-    task_id: &TaskId,
-    group_id: &ObjectGroupId,
-    event_id: &EventId,
-    now: Timestamp,
-) -> StorageResult<EventPayload> {
-    let existing = state
-        .migration_dependencies
-        .get(task_id)
-        .and_then(|markers| markers.get(group_id));
-    Ok(EventPayload::MigrationDependencyMarked {
-        task_id: task_id.clone(),
-        object_group_id: group_id.clone(),
-        marker: labello_domain::MigrationDependencyMarker {
-            marker_version: existing.map_or(1, |marker| marker.marker_version + 1),
-            kind: MigrationDependencyKind::CorrectionRequired,
-            required_disposition_version: current_disposition(state, task_id, group_id)?
-                .disposition_version,
-            event_id: event_id.clone(),
-            timestamp: now,
-        },
-    })
-}
-
 fn task_state_payload(
     task_id: &TaskId,
     status: TaskStatus,
@@ -2368,6 +2422,10 @@ fn cancel_competing_reviews(
 
 #[derive(Debug)]
 enum CanonicalReviewTarget {
+    Discovered {
+        annotation_id: AnnotationId,
+        version: u32,
+    },
     Object {
         object_group_id: ObjectGroupId,
         disposition_version: u32,
@@ -2424,6 +2482,22 @@ fn canonical_review_target(
             });
         }
     }
+    for annotation in state.migration_discovered_skeletons(task_id) {
+        let review_target = ReviewTarget::AnnotationVersion {
+            annotation_id: annotation.annotation_id.clone(),
+            version: annotation.version,
+        };
+        if !round.iter().any(|review| {
+            review.reviewer_user_id == *reviewer
+                && review.decision == ReviewDecision::Approved
+                && review.target == review_target
+        }) {
+            return Ok(CanonicalReviewTarget::Discovered {
+                annotation_id: annotation.annotation_id.clone(),
+                version: annotation.version,
+            });
+        }
+    }
     let confirmation = state
         .migration_confirmations
         .get(task_id)
@@ -2437,47 +2511,7 @@ fn current_migration_reviews<'a>(
     events: &'a [EventLogEntry],
     task_id: &TaskId,
 ) -> Vec<&'a ReviewRecord> {
-    let start = events.iter().rposition(|event| {
-        matches!(&event.payload, EventPayload::TaskStateChanged { task_state } if task_state.task_id == *task_id && task_state.status == TaskStatus::Submitted)
-    });
-    if start.is_some_and(|start| {
-        events.iter().skip(start + 1).any(|event| {
-            matches!(&event.payload, EventPayload::TaskStateChanged { task_state }
-                if task_state.task_id == *task_id
-                    && matches!(task_state.status, TaskStatus::Pending | TaskStatus::InProgress | TaskStatus::NeedsCorrection))
-        })
-    }) {
-        return Vec::new();
-    }
-    events
-        .iter()
-        .skip(start.map_or(0, |index| index + 1))
-        .filter_map(|event| match &event.payload {
-            EventPayload::ReviewRecorded { review }
-                if matches!(&review.target,
-                    ReviewTarget::AnnotationVersion { annotation_id, .. }
-                        if events_target_annotation(events, task_id, annotation_id)
-                ) || matches!(&review.target,
-                    ReviewTarget::MigrationDisposition { task_id: reviewed, .. }
-                    | ReviewTarget::MigrationConfirmation { task_id: reviewed, .. }
-                        if reviewed == task_id
-                ) =>
-            {
-                Some(review)
-            }
-            _ => None,
-        })
-        .collect()
-}
-
-fn events_target_annotation(
-    events: &[EventLogEntry],
-    task_id: &TaskId,
-    annotation_id: &labello_domain::AnnotationId,
-) -> bool {
-    events.iter().any(|event| {
-        matches!(&event.payload, EventPayload::AnnotationVersionCreated { annotation, .. } if annotation.task_id == *task_id && annotation.annotation_id == *annotation_id)
-    })
+    labello_domain::current_migration_reviews(events, task_id)
 }
 
 fn current_confirmation_approvals(
@@ -2538,6 +2572,18 @@ fn review_request_matches(
     requested: &MigrationReviewTarget,
 ) -> bool {
     match requested {
+        MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        } => {
+            state
+                .migration_discovered_skeletons(task_id)
+                .iter()
+                .any(|annotation| {
+                    annotation.annotation_id == *annotation_id && annotation.version == *version
+                })
+                && matches!(&review.target, ReviewTarget::AnnotationVersion { annotation_id: reviewed_id, version: reviewed_version } if reviewed_id == annotation_id && reviewed_version == version)
+        }
         MigrationReviewTarget::Disposition {
             object_group_id,
             disposition_version,
