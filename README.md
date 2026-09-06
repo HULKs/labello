@@ -35,14 +35,13 @@ before using it in production.
 ### Prerequisites
 
 - Rust 1.98.0, pinned by `rust-toolchain.toml`, with rustfmt and Clippy
-- Python 3.11 or newer for the toolchain policy audit
 - the `wasm32-unknown-unknown` Rust target
 - [Trunk](https://trunkrs.dev/)
 
 Install the pinned compiler and browser tooling from the repository root:
 
 ```sh
-python3 scripts/rust-toolchain.py install
+rustup show
 cargo install --locked trunk --version 0.21.14
 ```
 

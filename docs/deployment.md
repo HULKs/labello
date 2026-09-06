@@ -80,23 +80,23 @@ GitHub's standard organization runner group, not private infrastructure data.
 
 Build `deployment/release/Containerfile` from the repository root. It pins the
 Rust 1.98.0 Bookworm image by digest and includes rustfmt, Clippy, the
-`wasm32-unknown-unknown` target, Python 3.11, and Trunk 0.21.14. The canonical
-policy audit compares its compiler tag with `rust-toolchain.toml`. The retained
+`wasm32-unknown-unknown` target and Trunk 0.21.14. Keep its compiler tag aligned
+with `rust-toolchain.toml` when updating the baseline. The retained
 `deployment/guest/github-runner-base/Containerfile` is historical upstream
 reproduction input and is not a Labello build entry point.
 
 Before changing `LABELLO_RELEASE_BUILD_IMAGE`, build and publish the replacement
 image using the authorized registry workflow, then test the exact published
-digest in an isolated checkout. Run `python3 scripts/rust-toolchain.py check`,
+digest in an isolated checkout. Run `rustc --version`,
 `./scripts/verify.sh all`, and the locked release server/deployment-tool build
 inside that image. Verify `trunk --version` reports 0.21.14. Record the tested
 source commit, image digest, compiler and tool versions, commands, and results
 in the private rollout record. Keep registry locations and runner details out
 of public evidence. An unavailable or older image is an unmet rollout check.
 
-The release workflow validates a complete SHA-256 image reference and checks
-the effective compiler against the repository policy before verification or
-payload compilation. It does not upgrade an outdated image during release.
+The release workflow validates a complete SHA-256 image reference and runs
+canonical verification before payload compilation. The image rollout checks
+above establish its compiler and tool prerequisites.
 Changing the source Containerfile alone does not update the external image or
 the repository variable; both publication and verified configuration are
 required before rollout. Future baseline changes follow the coordinated

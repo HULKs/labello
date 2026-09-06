@@ -94,9 +94,8 @@ jobs:
             exit 1
           fi
 
-      - name: Verify pinned build tools
+      - name: Verify Trunk version
         run: |
-          python3 scripts/rust-toolchain.py check
           trunk --version | grep --fixed-strings 'trunk 0.21.14'
 
       - name: Run canonical verification

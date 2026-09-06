@@ -72,7 +72,7 @@ Every Cargo command that resolves dependencies and the Trunk build use locked
 mode. A stale tracked lockfile is therefore a failure and is never implicitly
 rewritten by verification.
 
-Prerequisites are Rust 1.98.0, Cargo, `rustfmt`, Clippy, Python 3.11 or newer, the
+Prerequisites are Rust 1.98.0, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the applicable prerequisites per job in
 `.github/workflows/ci.yml`, restores job-scoped dependency build artifacts for
@@ -97,16 +97,14 @@ resolve to the exact 1.98.0 compiler, including rustfmt, Clippy, and the WASM
 target. Install the pinned prerequisites with:
 
 ```sh
-python3 scripts/rust-toolchain.py install
+rustup show
 ```
 
-The canonical audit reads the TOML policies without invoking Cargo or changing
-either lockfile. It rejects missing or mismatched workspace/member declarations,
-nested toolchain pins, CI compiler overrides, release image drift, and bypasses
-of the compiler check. Mutation tests prove those failure paths. Every compiling
-verification stage checks the actual effective compiler in both workspaces;
-`RUSTUP_TOOLCHAIN` or a directory override cannot silently substitute a different
-version. CI installs the shared policy and release builds require it preinstalled.
+Rustup reads the repository toolchain file and installs the declared compiler,
+components, and target. Cargo manifests declare the MSRV for both workspaces.
+CI uses that toolchain to build and test the supported matrix below. Release
+images include the same compiler and build prerequisites. Keep these settings
+aligned when changing the baseline; there is no custom toolchain-policy audit.
 
 | Workspace or target | Required locked compatibility evidence |
 | --- | --- |
