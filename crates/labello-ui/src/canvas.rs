@@ -378,6 +378,49 @@ mod tests {
     use egui::{Event, Modifiers, MouseWheelUnit, TouchDeviceId, TouchId, TouchPhase};
     use egui_kittest::{Harness, kittest::Queryable};
 
+    #[test]
+    fn loaded_image_paint_keeps_texture_without_grid_strokes() {
+        let context = egui::Context::default();
+        let texture = context.load_texture(
+            "synthetic-image-grid-regression",
+            egui::ColorImage::filled([400, 200], Color32::from_rgb(80, 120, 160)),
+            egui::TextureOptions::NEAREST,
+        );
+        for editable in [false, true] {
+            let output = context.run_ui(egui::RawInput::default(), |ui| {
+                paint_canvas(
+                    ui,
+                    Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0)),
+                    Rect::from_min_size(pos2(0.0, 50.0), vec2(400.0, 200.0)),
+                    Some(&texture),
+                    &[],
+                    None,
+                    editable,
+                    None,
+                    None,
+                    None,
+                    None,
+                    &[],
+                    &[],
+                    theme::SELECTION,
+                    &Default::default(),
+                );
+            });
+            assert!(output.shapes.iter().any(|shape| {
+                matches!(&shape.shape, egui::Shape::Mesh(mesh) if mesh.texture_id == texture.id() && mesh.indices.len() == 6)
+            }), "the loaded source image must still be painted");
+            assert_eq!(
+                output
+                    .shapes
+                    .iter()
+                    .filter(|shape| matches!(shape.shape, egui::Shape::LineSegment { .. }))
+                    .count(),
+                0,
+                "an image without annotations must not acquire grid strokes",
+            );
+        }
+    }
+
     struct InteractiveTestState {
         canvas: CanvasState,
         actions: Vec<CanvasAction<BoundingBoxEdit>>,
