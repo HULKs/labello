@@ -189,6 +189,13 @@ before full-image confirmation. Focus uses its current valid companion box,
 then positioned-keypoint bounds, then the full image. The companion box is
 reviewed separately through the ordinary box task.
 
+From full-image confirmation, annotators can reopen any resolved canonical object
+through its overview button, completed skeleton, or excluded guide. Saving that
+object returns directly to the overview if other targets remain fresh; new
+outstanding dependencies take precedence over confirmation. Failed activation or
+saving retains the valid workspace and draft for retry. No global correction pass
+is needed for a direct edit.
+
 ## Persistence And Recovery
 
 Per-image `events.jsonl` remains the authoritative annotation and workflow

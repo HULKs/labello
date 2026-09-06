@@ -77,3 +77,14 @@ denominator, peer, zero-count, and exact-boundary rules above.
 Assignment leases, per-image eligibility, review workflow rules, and exact
 assignment ownership still apply after the dataset-level balance check. See the
 [HTTP API contract](api.md#assignment-and-image-routes) for routes and access.
+
+## Direct Canonical Revisit
+
+Direct canonical revisit records a `ManualSelection` dependency for a valid guide,
+including a previously annotated or excluded target. That selected target remains
+the durable cursor while another target acquires a dependency. Its successful
+save/exclusion clears only its own marker; the next cursor resolves remaining
+pending/dependent work, then full-image confirmation. Guide/disposition versions
+and assignment ownership are revalidated before mutation. A changed selected guide
+replaces its selection with the applicable correction dependency and stale writes
+are rejected. Existing global correction-pass records retain their pass semantics.

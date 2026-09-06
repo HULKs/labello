@@ -54,11 +54,7 @@ impl ImageState {
             ));
         }
         if let Some(target) = targets.iter().copied().find(|target| {
-            matches!(
-                self.migration_dispositions[task_id][&target.object_group_id].status,
-                MigrationDispositionStatus::Pending
-            ) && self
-                .migration_dependencies
+            self.migration_dependencies
                 .get(task_id)
                 .and_then(|markers| markers.get(&target.object_group_id))
                 .is_some_and(|marker| {

@@ -277,3 +277,13 @@ new companion provenance instead of silently discarding it. Old state caches
 without the additive map decode with an empty map and rebuild from events.
 Snapshot states, event logs, generated schemas and offline bundles retain these
 links. Offline mutations cannot forge companion events or derivation provenance.
+
+## Direct Revisit Selection
+
+The existing v3 `ManualSelection` migration dependency also records direct revisit
+of a resolved canonical target. Replay prioritizes that selection until its exact
+save/exclusion clears the marker, then derives the cursor from remaining work.
+This adds no persisted field or event type. Older correction-required revisit
+markers and historical global-pass events retain their original meanings. Revisit
+and save retries reuse the committed command identity and return current replayed
+state without duplicating markers or annotation versions.

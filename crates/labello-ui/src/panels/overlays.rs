@@ -242,13 +242,21 @@ impl LabelloApp {
                 theme::inline_message(
                     ui,
                     theme::Intent::Warning,
-                    "Editing the previous object will discard migration keypoints or exclusion input that has not been saved.",
+                    if self.work.migration.pending_reload_discard {
+                        "Reloading will discard unsaved migration keypoints or exclusion input and load the current server state."
+                    } else {
+                        "Opening the selected object will discard migration keypoints or exclusion input after activation succeeds."
+                    },
                 );
                 ui.horizontal_wrapped(|ui| {
                     if theme::danger_button(
                         ui,
                         !self.work.migration.busy,
-                        egui::Button::new("Discard draft and edit object"),
+                        egui::Button::new(if self.work.migration.pending_reload_discard {
+                            "Discard draft and reload"
+                        } else {
+                            "Discard draft and edit object"
+                        }),
                     )
                     .clicked()
                     {
