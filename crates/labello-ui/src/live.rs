@@ -145,6 +145,11 @@ impl LabelloApp {
         let Some(command) = self.runtime.commands.pop_front() else {
             return;
         };
+        if !self.runtime.commands.is_empty()
+            && let Some(ctx) = &self.runtime.repaint_ctx
+        {
+            ctx.request_repaint();
+        }
         let Some(api) = self.runtime.api.clone() else {
             self.rollback_command(&command, "API is not configured");
             return;

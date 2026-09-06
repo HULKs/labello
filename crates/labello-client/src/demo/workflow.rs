@@ -138,6 +138,20 @@ impl ImageApi for DemoLabelloApi {
         })
     }
 
+    fn get_original_detail<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+    ) -> crate::ApiFuture<'a, ImageFile> {
+        Box::pin(async move {
+            Ok(ImageFile {
+                image_id: image_id.clone(),
+                media_type: "image/webp".into(),
+                bytes: include_bytes!("fixtures/standard.webp").to_vec(),
+            })
+        })
+    }
+
     fn get_image_preview<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

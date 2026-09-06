@@ -78,6 +78,30 @@ pub(super) fn resize(
     max_edge: u32,
     config: &PreviewConfig,
 ) -> Result<RgbaPreview, PreviewError> {
+    let decoder = decoder(source, record, config)?;
+    let (width, height) = decoder.dimensions();
+    let image = image::DynamicImage::from_decoder(decoder).map_err(|error| match error {
+        image::ImageError::Limits(_) => PreviewError::DecoderLimit,
+        _ => PreviewError::Decode,
+    })?;
+    let image = if width.max(height) > max_edge {
+        image.resize(max_edge, max_edge, image::imageops::FilterType::Triangle)
+    } else {
+        image
+    };
+    let rgba = image.to_rgba8();
+    Ok(RgbaPreview {
+        width: rgba.width(),
+        height: rgba.height(),
+        rgba: rgba.into_raw(),
+    })
+}
+
+pub(super) fn decoder<'a>(
+    source: &'a [u8],
+    record: &ImageRecord,
+    config: &PreviewConfig,
+) -> Result<impl ImageDecoder + 'a, PreviewError> {
     // Preserve image::open's extension-based decoder selection and its native
     // channel depth during Triangle resizing. EXIF/ICC are not applied.
     let format =
@@ -100,21 +124,7 @@ pub(super) fn resize(
     if (width, height) != (record.width, record.height) {
         return Err(PreviewError::SourceChanged);
     }
-    let image = image::DynamicImage::from_decoder(decoder).map_err(|error| match error {
-        image::ImageError::Limits(_) => PreviewError::DecoderLimit,
-        _ => PreviewError::Decode,
-    })?;
-    let image = if width.max(height) > max_edge {
-        image.resize(max_edge, max_edge, image::imageops::FilterType::Triangle)
-    } else {
-        image
-    };
-    let rgba = image.to_rgba8();
-    Ok(RgbaPreview {
-        width: rgba.width(),
-        height: rgba.height(),
-        rgba: rgba.into_raw(),
-    })
+    Ok(decoder)
 }
 
 pub(super) fn encode(

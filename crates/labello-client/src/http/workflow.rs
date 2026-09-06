@@ -210,6 +210,38 @@ impl ImageApi for HttpLabelloApi {
         })
     }
 
+    fn get_original_detail<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+    ) -> crate::ApiFuture<'a, ImageFile> {
+        Box::pin(async move {
+            let response = Self::ensure_success(
+                self.request(
+                    Method::GET,
+                    &format!("/datasets/{dataset_id}/images/{image_id}/detail"),
+                )?
+                .send()
+                .await?,
+            )
+            .await?;
+            let media_type = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(crate::preview::invalid_preview)?
+                .to_string();
+            let bytes =
+                crate::preview::bounded_body(response, crate::preview::MAX_ORIGINAL_DETAIL_BYTES)
+                    .await?;
+            Ok(ImageFile {
+                image_id: image_id.clone(),
+                media_type,
+                bytes,
+            })
+        })
+    }
+
     fn get_image_preview<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

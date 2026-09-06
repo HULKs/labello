@@ -158,6 +158,7 @@ blocked by the enforced window.
 | `GET /datasets/{dataset_id}/images/{image_id}/file` | Any role | No input → original image bytes and stored media type |
 | `GET /datasets/{dataset_id}/images/{image_id}/preview` | Any role | `max` query clamped to 256–4096 → raw RGBA bytes (`application/octet-stream`) plus `x-image-width` and `x-image-height`; bounded legacy fallback |
 | `GET /datasets/{dataset_id}/images/{image_id}/encoded-preview` | Any role | `profile=standard_v1` (default) or `data_saver_v1` → bounded `image/webp`, `x-image-width`, `x-image-height`, `x-original-width`, `x-original-height`, `x-preview-profile` |
+| `GET /datasets/{dataset_id}/images/{image_id}/detail` | Any role | Explicit bounded original-detail display; original encoded bytes and decoder-format MIME, `private, no-store` |
 | `POST /datasets/{dataset_id}/images/{image_id}/events` | Assigned annotator; role also derived from allowed payload | `AssignmentActionRequest` query plus `AppendEventRequest` → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/annotation-batch` | Assigned annotator | `AssignmentActionRequest` query plus `AnnotationBatchRequest` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/admin/events` | Data admin | `AppendEventRequest` with permitted repair payload → `EventLogEntry` |
@@ -285,9 +286,28 @@ Errors never include source paths or decoder text.
 `ImageApi::get_encoded_image_preview` returns `EncodedImagePreview`, separate
 from `ImagePreview::rgba`. HTTP clients bound streaming response bytes and
 validate MIME/profile/metadata; native and WASM use the same bounded Rust WebP
-decoder. Standard is the UI load and prefetch default. Generation, transfer, or
-decode failure permits one 1600-pixel legacy RGBA request with the same server
-source/decoder/worker bounds. Data Saver errors propagate without requesting
-RGBA or original bytes. Image assignment, annotation geometry and draft state
-are independent of the representation. Existing request/auth/workspace epochs
-reject stale image replies and clear account-scoped texture/prefetch state.
+decoder. The UI always requests Data Saver v1 for working-image loads, reloads,
+retries and prefetch. Generation, transfer and decode errors propagate without
+requesting Standard, legacy RGBA or original bytes. The encoded route retains
+its Standard v1 default for API callers that omit the profile. Image assignment,
+annotation geometry and draft state are independent of the representation.
+Existing request/auth/workspace epochs reject stale image replies and clear account-scoped texture/prefetch state.
+
+### Explicit original detail
+
+`ImageApi::get_original_detail` and `GET .../detail` remain explicit API
+capabilities; the working UI does not call them or expose an original-detail
+action. Ordinary original-file download keeps its existing separate contract.
+Detail reads share preview source-byte, pixel, decoder-header/allocation
+and worker limits, secure source opening/hash verification, and final
+session/role/index checks. They return original source bytes without a derived
+cache entry. The client bounds streaming bytes to 64 MiB and decoding to
+32 million original pixels / 256 MiB decoder allocation, checks declared MIME
+and authoritative original dimensions, and applies no EXIF/ICC transform. Larger
+server configuration limits do not raise these browser detail limits.
+
+Every working-image load and prefetch uses the encoded Data Saver v1 route.
+Saved browser quality preferences are ignored; preview failure never chooses
+original detail. Aborting superseded image transfers does not abort assignment
+claims: their replies must still be received so obsolete reservations can be released. Server workers already
+started retain their configured bounds through completion/cleanup.

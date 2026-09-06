@@ -38,6 +38,8 @@ impl crate::app::LabelloApp {
     }
 
     pub(crate) fn isolate_browser_workspace(&mut self) {
+        self.work.image_transfers.cancel_all();
+        self.work.image_transfers = Default::default();
         self.runtime.persistence.identity = None;
         self.runtime.persistence.preference = None;
         self.runtime.persistence.preference_encoded = None;

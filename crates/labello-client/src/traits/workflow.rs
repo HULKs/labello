@@ -90,6 +90,8 @@ pub trait ImageApi {
         dataset_id: &'a DatasetId,
         image_id: &'a ImageId,
     ) -> ApiFuture<'a, ImageFile>;
+    fn get_original_detail<'a>(&'a self, dataset_id: &'a DatasetId, image_id: &'a ImageId) -> ApiFuture<'a, ImageFile>;
+
     fn get_image_preview<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

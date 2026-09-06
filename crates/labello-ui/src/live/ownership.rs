@@ -309,6 +309,7 @@ impl LabelloApp {
         self.runtime.active_requests.retain(|request_id| {
             Some(*request_id) == build_request
         });
+        self.work.image_transfers.cancel_all();
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
         self.loading.session = false;

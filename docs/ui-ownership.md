@@ -129,14 +129,21 @@ protections; cancelling leaves work intact. The panel reserves no height without
 a mismatch and leaves room for future activity content to its left without
 implementing activity statistics.
 
-## Working Image Representations
+## Working image previews
 
-`live_workflow::load_working_preview` owns encoded working-image selection and
-bounded fallback for annotation, review, migration and prefetch. Standard v1
-(lossless WebP, max edge 1600, no upscale) is the default. One failed Standard
-encoded load/decode can fall back to the legacy 1600 RGBA capability. Data Saver
-v1 (lossy WebP quality 80, max edge 1280) is an explicit client capability whose
-errors never silently fetch RGBA or originals. The shared client decodes WebP
-under fixed bounds on native and WASM; `ImagePreview::rgba` always means decoded
-RGBA. Existing work/auth epochs own reply rejection and image-reference cleanup;
-representation choice never changes normalized geometry or authoritative state.
+`live_workflow::load_working_preview` always requests the encoded Data Saver v1
+profile for annotation, review, migration, assignment reload/reopen and prefetch.
+It propagates transfer and decode failures without falling back to Standard,
+legacy RGBA or original bytes. The shared client decodes under the same bounds
+and geometry convention on native and WASM.
+
+`image_transfer` owns transfer cancellation. Existing request/auth/workspace
+epochs own stale-response rejection, assignment identity and image-reference
+cleanup. Claims finish independently so obsolete reservations can be released.
+The command dispatcher schedules another frame while commands remain, including
+when it discards a superseded request.
+
+There is no image-quality selection, per-image representation override or saved
+quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
+failure states and retry actions reload the same Data saver profile. Cached
+images never imply an active assignment or offline annotation support.

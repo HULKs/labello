@@ -2191,13 +2191,14 @@ fn skeleton_workflow_places_configured_keypoints_in_order() {
             .all(|keypoint| keypoint.point.is_some())
     );
     assert!(harness.state().work.active_skeleton.is_none());
+    let tail_before_drag = skeleton.keypoints[1].point.unwrap();
     drag_at(&mut harness, tail, tail + egui::vec2(-24.0, 28.0));
     let AnnotationGeometry::Skeleton(completed) = &harness.state().work.annotations[0].geometry
     else {
         panic!("expected completed skeleton annotation");
     };
-    assert!(completed.keypoints[1].point.unwrap().x < 0.65);
-    assert!(completed.keypoints[1].point.unwrap().y > 0.6);
+    assert!(completed.keypoints[1].point.unwrap().x < tail_before_drag.x);
+    assert!(completed.keypoints[1].point.unwrap().y > tail_before_drag.y);
 }
 
 #[test]
@@ -2683,27 +2684,18 @@ fn history_covers_bbox_edits_deletion_and_keypoint_creation() {
 }
 
 #[test]
-fn working_previews_use_encoded_bytes_and_standard_fallback_only_once() {
+fn working_previews_always_use_data_saver_without_larger_fallbacks() {
     let api = SpyApi::new();
     let dataset_id = DatasetId::from("demo");
     let image_id = ImageId::from("img_1");
-    let standard = labello_client::ImagePreviewProfile::StandardV1;
-    let saver = labello_client::ImagePreviewProfile::DataSaverV1;
-    let load = |profile| futures::executor::block_on(crate::live_workflow::load_working_preview(&api, &dataset_id, &image_id, profile));
-    assert_eq!(load(standard).unwrap().rgba, [32, 48, 64, 255].repeat(12));
-    assert_eq!(api.counts().get_encoded_image_preview, 1);
-    assert_eq!(api.counts().get_image_preview, 0);
+    let load = || futures::executor::block_on(crate::live_workflow::load_working_preview(&api, &dataset_id, &image_id));
+    assert_eq!(load().unwrap().rgba.len(), 4 * 3 * 4);
     api.state.borrow_mut().fail_encoded_previews = true;
-    assert!(load(standard).is_ok());
+    assert!(load().is_err());
     assert_eq!(api.counts().get_encoded_image_preview, 2);
-    assert_eq!(api.counts().get_image_preview, 1);
-    assert!(load(saver).is_err());
-    assert_eq!(api.counts().get_encoded_image_preview, 3);
-    assert_eq!(api.counts().get_image_preview, 1);
-    api.fail_next_preview();
-    assert!(load(standard).is_err());
-    assert_eq!(api.counts().get_encoded_image_preview, 4);
-    assert_eq!(api.counts().get_image_preview, 2);
+    assert_eq!(api.state.borrow().preview_profiles, vec![labello_client::ImagePreviewProfile::DataSaverV1; 2]);
+    assert_eq!(api.counts().get_image_preview, 0);
+    assert_eq!(api.counts().get_original_detail, 0);
     assert!(api.state.borrow().active_assignments.is_empty());
     assert!(api.events().is_empty());
 }

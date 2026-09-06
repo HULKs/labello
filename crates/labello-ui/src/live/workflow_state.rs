@@ -155,7 +155,7 @@ impl LabelloApp {
         }
     }
 
-    fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
+    pub(crate) fn apply_loaded_image(&mut self, ctx: &egui::Context, loaded: LoadedImage) {
         let image_id = loaded.queued.image.image_id.clone();
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);

@@ -477,3 +477,16 @@ contract disagreements, and implementation defects are tracked in
 [GitHub issues](https://github.com/HULKs/labello/issues) and organized for
 authorized maintainers in the
 [Labello project](https://github.com/orgs/HULKs/projects/12).
+
+## Working image previews
+
+Annotation, review and migration always use Data saver previews: lossy WebP at
+quality 80, with a maximum edge of 1280 pixels. Upcoming-image prefetch and retries
+use the same profile. There is no image-quality setting or original-detail action;
+previously saved quality preferences are ignored.
+
+Failed loads show **Retry image load** and never automatically fetch larger
+previews or original bytes. Annotation coordinates still use the original image
+dimensions. Preview limits are documented in
+[configuration](docs/configuration.md#image-preview-limits). Cached images do not
+provide an offline annotation workflow.

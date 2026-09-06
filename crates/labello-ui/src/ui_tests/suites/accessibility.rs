@@ -113,9 +113,13 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             .query_by_label_contains("Confirm all guides & finish")
             .is_some()
     );
+    assert_eq!(
+        full_image.query_all_by_role(egui::accesskit::Role::CheckBox).count(),
+        0
+    );
     assert!(
         full_image
-            .query_by_role(egui::accesskit::Role::CheckBox)
+            .query_by_role_and_label(egui::accesskit::Role::CheckBox, "Data saver")
             .is_none()
     );
     assert!(full_image.query_by_label("Start correction pass").is_some());
@@ -153,7 +157,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
     );
     assert!(
         no_guides
-            .query_by_role(egui::accesskit::Role::CheckBox)
+            .query_by_role_and_label(egui::accesskit::Role::CheckBox, "Data saver")
             .is_none()
     );
     assert!(
