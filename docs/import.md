@@ -169,6 +169,26 @@ all-absent skeleton versions remain replayable, but must be redrawn or the
 object excluded before another skeleton version can be saved. A template
 policy creates derived pending seeds, not authoritative skeleton labels.
 
+An object discovered during full-image migration review creates both a manually
+authored skeleton and a bounding-box companion in the configured guide task.
+The companion carries exact skeleton-version provenance, uses visible and hidden
+positions, ignores absent keypoints, and has at least one original pixel of
+width and height. The box task reopens for correction and ordinary review.
+The frozen imported target set and imported object groups do not change.
+
+Still-derived companions update or withdraw with their skeleton. Independent
+box edits or reviews require explicit reconciliation before further automatic
+changes. The full-image workflow lists pairing progress and offers per-object
+reconciliation with confirmation; failed saves and reconciliation preserve the
+unsaved skeleton draft. Historical discoveries without positions remain visible
+at full-image focus and cannot receive fabricated boxes. Repair requires a
+recorded discovery creation event and never runs as a side effect of reading.
+
+Migration reviewers receive each discovered skeleton as an exact-version item
+before full-image confirmation. Focus uses its current valid companion box,
+then positioned-keypoint bounds, then the full image. The companion box is
+reviewed separately through the ordinary box task.
+
 ## Persistence And Recovery
 
 Per-image `events.jsonl` remains the authoritative annotation and workflow

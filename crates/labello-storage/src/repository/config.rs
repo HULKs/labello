@@ -57,6 +57,7 @@ impl DatasetRepository {
 
     pub async fn save_dataset(&self, metadata: &DatasetMetadata) -> StorageResult<()> {
         self.ensure_artifact_migration().await?;
+        let _review_config_guard = self.review_config_lock.write().await;
         labello_domain::validate_schema_version(metadata.schema_version)?;
         write_toml_atomic(
             &self.dataset_path(),

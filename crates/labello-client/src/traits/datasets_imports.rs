@@ -167,6 +167,14 @@ pub trait ImportApi {
         idempotency_key: &'a str,
     ) -> ApiFuture<'a, crate::ManualMigrationCommandResult>;
 
+    fn reconcile_migration_companion<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        request: crate::ReconcileMigrationCompanionRequest,
+        idempotency_key: &'a str,
+    ) -> ApiFuture<'a, crate::ManualMigrationCommandResult>;
+
     fn exclude_migration_target<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

@@ -50,9 +50,11 @@ impl AppBarAction {
 
 include!("panels/app_bar.rs");
 include!("panels/workspace_actions.rs");
+include!("panels/workspace_overflow.rs");
 include!("panels/task_selector.rs");
 include!("panels/inspector.rs");
 include!("panels/workspace.rs");
+include!("panels/review_context_bar.rs");
 include!("panels/overlays.rs");
 include!("panels/prelabels.rs");
 
@@ -82,13 +84,14 @@ pub(crate) fn keypoint_placement_mode(
         let enabled = ui.is_enabled();
         let visible_selected = !*occluded;
         let visible_label = format!("Place {keypoint_name} as visible");
-        let visible = ui
-            .add(
-                egui::Button::new("Visible")
-                    .selected(visible_selected)
-                    .min_size(egui::vec2(88.0, 44.0)),
-            )
-            .on_hover_text("Click the exact keypoint position.");
+        let visible = theme::button(
+            ui,
+            true,
+            egui::Button::new("Visible")
+                .selected(visible_selected)
+                .min_size(egui::vec2(88.0, 44.0)),
+        )
+        .on_hover_text("Click the exact keypoint position.");
         visible.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
@@ -103,14 +106,17 @@ pub(crate) fn keypoint_placement_mode(
 
         let occluded_selected = *occluded;
         let occluded_label = format!("Place {keypoint_name} as occluded");
-        let occluded_response = ui
-            .add(
-                egui::Button::new("Occluded")
-                    .selected(occluded_selected)
-                    .shortcut_text(shortcut)
-                    .min_size(egui::vec2(88.0, 44.0)),
-            )
-            .on_hover_text("Click the estimated keypoint position.");
+        let occluded_response = theme::button(
+            ui,
+            true,
+            egui::Button::new("Occluded")
+                .selected(occluded_selected)
+                .shortcut_text(crate::theme::button_shortcut(shortcut))
+                .min_size(egui::vec2(88.0, 44.0)),
+        )
+        .on_hover_text(format!(
+            "Click the estimated keypoint position. Toggle placement with {shortcut}."
+        ));
         occluded_response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
@@ -119,6 +125,12 @@ pub(crate) fn keypoint_placement_mode(
                 &occluded_label,
             )
         });
+        ui.ctx()
+            .accesskit_node_builder(occluded_response.id, |node| {
+                node.set_description(format!(
+                    "Click the estimated keypoint position. Toggle placement with {shortcut}."
+                ));
+            });
         if occluded_response.clicked() {
             *occluded = true;
         }

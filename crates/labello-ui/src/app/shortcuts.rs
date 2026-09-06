@@ -202,8 +202,8 @@ impl LabelloApp {
             && !self.loading.image
             && self.work.pending_transition.is_none()
             && !self.work.canvas.is_dragging();
-        let previous_ready = self.view == AppView::Annotate
-            && self.work.previous_annotation_assignment.is_some()
+        let previous_ready = matches!(self.view, AppView::Annotate | AppView::Review)
+            && self.work.previous_assignment.is_some()
             && self.runtime.api.is_some()
             && !self.loading.saving
             && !self.loading.image
@@ -362,6 +362,7 @@ impl LabelloApp {
         if !self.work_view()
             || ctx.text_edit_focused()
             || self.work.pending_transition.is_some()
+            || self.work.migration.pending_companion_reconciliation.is_some()
             || self.work.show_settings
             || self.runtime.persistence.recovery.is_some()
             || self.navigation.drawer_open

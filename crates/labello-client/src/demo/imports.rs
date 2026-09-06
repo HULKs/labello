@@ -162,6 +162,16 @@ impl ImportApi for DemoLabelloApi {
         import_unavailable()
     }
 
+    fn reconcile_migration_companion<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _image_id: &'a ImageId,
+        _request: crate::ReconcileMigrationCompanionRequest,
+        _idempotency_key: &'a str,
+    ) -> crate::ApiFuture<'a, crate::ManualMigrationCommandResult> {
+        import_unavailable()
+    }
+
     fn exclude_migration_target<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

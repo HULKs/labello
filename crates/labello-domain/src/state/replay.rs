@@ -17,6 +17,9 @@ impl ImageState {
         }
         event.validate_shape()?;
         match &event.payload {
+            EventPayload::MigrationCompanionLinked { companion } => {
+                self.apply_migration_companion(companion)?
+            }
             EventPayload::AnnotationVersionCreated {
                 annotation,
                 previous_version,
@@ -52,7 +55,50 @@ impl ImageState {
             EventPayload::TaskStateChanged { task_state } => {
                 self.apply_task_state(task_state)?;
             }
-            EventPayload::ReviewRecorded { review } => self.reviews.push(review.clone()),
+            EventPayload::ReviewRecorded { review } => self.apply_review_record(review),
+            EventPayload::ReviewAssignmentOpened {
+                context,
+                assignment,
+            } => {
+                self.apply_review_assignment_opened(context, assignment, event)?;
+            }
+            EventPayload::ReviewAssignmentFinished {
+                assignment_id,
+                task_id,
+            } => {
+                if !self.review_assignment_contexts.contains_key(assignment_id)
+                    || self.review_finished_sequences.contains_key(assignment_id)
+                    || !self.assignments.iter().any(|assignment| {
+                        assignment.assignment_id == *assignment_id
+                            && assignment.task_id == *task_id
+                            && assignment.kind == AssignmentKind::Review
+                            && matches!(
+                                assignment.status,
+                                AssignmentStatus::Completed | AssignmentStatus::Cancelled
+                            )
+                    })
+                {
+                    return Err(DomainError::InvalidReviewRevision(
+                        "terminal assignment boundary is invalid".into(),
+                    ));
+                }
+                self.review_finished_sequences
+                    .insert(assignment_id.clone(), event.event_sequence);
+            }
+            EventPayload::ReviewRevisionCommitted {
+                assignment,
+                superseded_review_ids,
+                replacement,
+                task_state,
+            } => {
+                self.apply_review_revision(
+                    assignment,
+                    superseded_review_ids,
+                    replacement,
+                    task_state,
+                    event,
+                )?;
+            }
             EventPayload::ReviewerCorrectionRecorded {
                 correction,
                 annotation,
@@ -88,12 +134,14 @@ impl ImageState {
                 annotations,
                 task_initializations,
                 migration_target_sets,
-            } => self.apply_import_initialization(
-                import_id,
-                annotations,
-                task_initializations,
-                migration_target_sets,
-            )?,
+            } => {
+                self.apply_import_initialization(
+                    import_id,
+                    annotations,
+                    task_initializations,
+                    migration_target_sets,
+                )?;
+            }
             EventPayload::ImportedTaskReopened { task_state, reason } => {
                 let previous = self.task_states.get(&task_state.task_id).ok_or_else(|| {
                     DomainError::InvalidImport("imported task state is missing".into())
@@ -226,6 +274,9 @@ impl ImageState {
             EventPayload::MigrationFullImageConfirmed { confirmation } => {
                 self.apply_migration_confirmation(confirmation, event)?;
             }
+        }
+        for task_id in crate::review::submitted_review_tasks(event) {
+            self.capture_review_round(task_id, event);
         }
         self.current_sequence = event.event_sequence;
         Ok(())

@@ -11,8 +11,9 @@ use labello_client::{
     AssignmentRevalidation, ConfirmMigrationRequest, CorrectionRequest,
     DeleteMigrationSkeletonRequest, EditMigrationSkeletonRequest, ExcludeMigrationTargetRequest,
     KeepMigrationTargetRequest, ManualMigrationCommandResult, OfflineBundleRequest,
-    PrelabelSuggestionRequest, ReopenMigrationTargetRequest, ReviewMigrationRequest,
-    RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest, StartMigrationPassRequest,
+    PrelabelSuggestionRequest, ReconcileMigrationCompanionRequest, ReopenMigrationTargetRequest,
+    ReviewMigrationRequest, RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest,
+    StartMigrationPassRequest,
 };
 use labello_domain::{
     Actor, AdjudicationDecision, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind,
@@ -241,15 +242,15 @@ pub(crate) async fn reopen_assignment(
     request.assignment_id.validate_path_segment()?;
     request.image_id.validate_path_segment()?;
     request.task_id.validate_path_segment()?;
-    if request.kind != AssignmentKind::Annotation {
+    if request.kind == AssignmentKind::Adjudication {
         return Err(ApiError::BadRequest(
-            "only annotation assignments can be reopened".to_string(),
+            "adjudication assignments cannot be reopened".to_string(),
         ));
     }
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
     let assignment = repo
-        .reopen_annotation_assignment(
+        .reopen_assignment(
             &actor.user_id,
             &request.assignment_id,
             &request.image_id,
@@ -634,6 +635,42 @@ pub(crate) async fn delete_migration_skeleton(
     Ok(Json(client_migration_result(result)))
 }
 
+pub(crate) async fn reconcile_migration_companion(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+    Json(request): Json<ReconcileMigrationCompanionRequest>,
+) -> ApiResult<Json<ManualMigrationCommandResult>> {
+    let key = migration_idempotency_key(&headers)?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let assignment = migration_assignment(
+        &repo,
+        &image_id,
+        &request.assignment_id,
+        &actor,
+        DatasetRole::Annotator,
+    )
+    .await?;
+    let result = repo
+        .reconcile_migration_companion(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &request.task_id,
+                kind: AssignmentKind::Annotation,
+            },
+            request.pass_id.as_ref(),
+            &request.annotation_id,
+            request.expected_version,
+            request.expected_box_version,
+            key,
+        )
+        .await?;
+    Ok(Json(client_migration_result(result)))
+}
+
 pub(crate) async fn exclude_migration_target(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
@@ -839,6 +876,13 @@ pub(crate) async fn review_migration(
     )
     .await?;
     let target = match request.target {
+        labello_client::MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        } => labello_storage::assignment::MigrationReviewTarget::Discovered {
+            annotation_id,
+            version,
+        },
         labello_client::MigrationReviewTarget::Disposition {
             object_group_id,
             disposition_version,
@@ -1033,6 +1077,54 @@ pub(crate) async fn record_review(
     Ok(Json(image_state))
 }
 
+pub(crate) async fn commit_review_revision(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    Query(assignment): Query<AssignmentActionRequest>,
+    headers: HeaderMap,
+    Json(replacement): Json<labello_domain::ReviewRevisionCommit>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    image_id.validate_path_segment()?;
+    validate_assignment_request(&assignment, &image_id, AssignmentKind::Review)?;
+    let actor = actor_from_headers(&state, &headers)?;
+    if replacement.reviews.is_empty() || replacement.reviews.len() > 10_001 {
+        return Err(ApiError::BadRequest(
+            "revision requires between 1 and 10001 decisions".into(),
+        ));
+    }
+    for review in &replacement.reviews {
+        review.review_id.validate_path_segment()?;
+        if review.reviewer_user_id != actor.user_id {
+            return Err(ApiError::Unauthorized(
+                "cannot revise reviews for another user".into(),
+            ));
+        }
+        if review
+            .comment
+            .as_ref()
+            .is_some_and(|comment| comment.len() > 2_000)
+        {
+            return Err(ApiError::BadRequest(
+                "review comment exceeds 2000 bytes".into(),
+            ));
+        }
+    }
+    let repo = state.repo(&dataset_id)?;
+    Ok(Json(
+        repo.commit_review_revision(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &assignment.task_id,
+                kind: AssignmentKind::Review,
+            },
+            replacement,
+        )
+        .await?,
+    ))
+}
+
 pub(crate) async fn record_correction(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
@@ -1195,6 +1287,37 @@ pub(crate) async fn offline_sync(
         "offline synchronization completed"
     );
     Ok(Json(result))
+}
+
+pub(crate) async fn current_user_activity(
+    State(state): State<ApiState>,
+    Path(dataset_id): Path<DatasetId>,
+    headers: HeaderMap,
+) -> ApiResult<impl IntoResponse> {
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_any_dataset_role(&metadata, &actor)?;
+    // A cold scan can cross midnight. Retry once for the new server day instead
+    // of returning an old window with a sample timestamp from the next day.
+    for _ in 0..2 {
+        let window = labello_domain::UtcActivityWindow::containing(labello_domain::now());
+        let counts = repo.daily_activity(&actor.user_id, window).await?;
+        let sampled_at = labello_domain::now();
+        if window.contains(sampled_at) {
+            return Ok((
+                [(axum::http::header::CACHE_CONTROL, "no-store")],
+                Json(labello_client::CurrentUserActivity {
+                    dataset_id,
+                    user_id: actor.user_id,
+                    window,
+                    sampled_at,
+                    counts,
+                }),
+            ));
+        }
+    }
+    Err(ApiError::Conflict("Activity window changed; retry.".into()))
 }
 
 pub(crate) async fn stats(
