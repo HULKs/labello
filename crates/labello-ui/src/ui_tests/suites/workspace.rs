@@ -3171,3 +3171,206 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
     );
     assert!(!app.loading.image);
 }
+
+fn workflow_dot_centers(harness: &Harness<LabelloApp>, rect: egui::Rect) -> Vec<egui::Pos2> {
+    fn collect(shape: &egui::Shape, rect: egui::Rect, dots: &mut Vec<egui::Pos2>) {
+        match shape {
+            egui::Shape::Circle(circle)
+                if circle.radius == 4.0
+                    && circle.fill == crate::theme::TEXT
+                    && rect.contains(circle.center) =>
+            {
+                dots.push(circle.center)
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    collect(shape, rect, dots);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut dots = Vec::new();
+    for shape in &harness.output().shapes {
+        collect(&shape.shape, rect, &mut dots);
+    }
+    dots
+}
+
+#[test]
+fn workflow_dot_marks_only_the_committed_selection() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.set_size(egui::vec2(1500.0, 780.0));
+    harness.run();
+    let person = harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+        .rect();
+    let vehicle = harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .rect();
+    assert_eq!(workflow_dot_centers(&harness, person).len(), 1);
+    assert!(workflow_dot_centers(&harness, vehicle).is_empty());
+}
+
+fn assert_workflow_dot(harness: &Harness<LabelloApp>, name: &str, selected: bool) -> egui::Rect {
+    let node = harness.get_by_role_and_label(egui::accesskit::Role::Button, name);
+    assert_eq!(
+        node.accesskit_node().toggled(),
+        Some(if selected {
+            egui::accesskit::Toggled::True
+        } else {
+            egui::accesskit::Toggled::False
+        })
+    );
+    let rect = node.rect();
+    assert_eq!(
+        workflow_dot_centers(harness, rect).len(),
+        usize::from(selected)
+    );
+    rect
+}
+
+#[test]
+fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.run();
+    let before = assert_workflow_dot(&harness, "Person boxes", true);
+    harness
+        .state_mut()
+        .request_transition(crate::app::PendingTransition::Workflow(TaskId::from(
+            "bounding_box:vehicle",
+        )));
+    harness.run();
+    assert_workflow_dot(&harness, "Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    harness.state_mut().cancel_pending_transition();
+    harness.run();
+    assert_workflow_dot(&harness, "Person boxes", true);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .focus();
+    harness.step();
+    assert_workflow_dot(&harness, "Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    harness
+        .state_mut()
+        .execute_transition(crate::app::PendingTransition::Workflow(TaskId::from(
+            "bounding_box:vehicle",
+        )));
+    step_until(&mut harness, 12, |app| app.work.current.is_some());
+    harness.run();
+    let after = assert_workflow_dot(&harness, "Person boxes", false);
+    assert_eq!(before, after, "selection does not resize or shift cards");
+    let vehicle = assert_workflow_dot(&harness, "Vehicle boxes", true);
+    harness.hover_at(vehicle.center());
+    harness.run();
+    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .focus();
+    harness.step();
+    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    harness
+        .state_mut()
+        .work
+        .availability
+        .tasks
+        .insert(TaskId::from("bounding_box:vehicle"), false);
+    harness.run();
+    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+            .accesskit_node()
+            .is_disabled()
+    );
+    harness.state_mut().work.selected_task_id = None;
+    harness.run();
+    assert_workflow_dot(&harness, "Person boxes", false);
+    assert_workflow_dot(&harness, "Vehicle boxes", false);
+}
+
+#[test]
+fn workflow_dot_and_persistent_fallback_notice_share_the_committed_identity() {
+    let api = Rc::new(SpyApi::new());
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = loaded_work_harness(api);
+    harness.run();
+    assert_workflow_dot(&harness, "Person boxes", false);
+    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert!(harness.state().work.automatic_workflow_change.is_some());
+    click(&mut harness, "Dismiss workflow change");
+    harness.run();
+    assert_workflow_dot(&harness, "Vehicle boxes", true);
+}
+
+#[test]
+fn workflow_dot_uses_the_same_decorative_slot_in_panel_and_drawer() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let long = "Person boxes with a deliberately long workflow label that must truncate";
+    harness
+        .state_mut()
+        .work
+        .tasks
+        .iter_mut()
+        .find(|task| task.task_id == TaskId::from("bounding_box:person"))
+        .unwrap()
+        .name = long.into();
+    for (width, height) in [
+        (320.0, 568.0),
+        (390.0, 844.0),
+        (600.0, 800.0),
+        (1288.0, 820.0),
+        (1440.0, 1000.0),
+        (320.0, 320.0),
+    ] {
+        harness.set_size(egui::vec2(width, height));
+        harness.state_mut().work.drawer = if width < 1288.0 {
+            Some(Drawer::Workflow)
+        } else {
+            None
+        };
+        harness.run();
+        let selected = assert_workflow_dot(&harness, long, true);
+        let other = assert_workflow_dot(&harness, "Vehicle boxes", false);
+        let dot = workflow_dot_centers(&harness, selected)[0];
+        assert!(dot.x - 4.0 >= selected.left() && dot.x + 4.0 <= selected.right());
+        assert_eq!(selected.width(), other.width());
+        assert!(selected.left() >= 0.0 && selected.right() <= width);
+        let buttons = harness
+            .query_all_by_label(long)
+            .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
+            .count();
+        assert_eq!(
+            buttons, 1,
+            "the decorative marker adds no control or accessible name"
+        );
+    }
+}
+
+#[test]
+fn workflow_dot_ignores_stale_availability() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let mut stale = test_request(harness.state(), 99001, Some("demo"));
+    stale.workspace_epoch = stale.workspace_epoch.wrapping_sub(1);
+    harness
+        .state_mut()
+        .runtime
+        .tx
+        .send(UiMessage::AssignmentAvailabilityLoaded {
+            request: stale,
+            result: Ok(labello_client::AssignmentAvailability {
+                kind: AssignmentKind::Annotation,
+                tasks: BTreeMap::from([
+                    (TaskId::from("bounding_box:person"), false),
+                    (TaskId::from("bounding_box:vehicle"), true),
+                ]),
+                related: Vec::new(),
+            }),
+        })
+        .unwrap();
+    harness.run();
+    assert_workflow_dot(&harness, "Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert!(harness.state().work.automatic_workflow_change.is_none());
+}

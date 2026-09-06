@@ -228,6 +228,16 @@ nonmodal and leaves ordinary work available after the new identity has been
 presented. Dismissing
 it retains the current workflow identity in the context bar and selector.
 
+## Current workflow marker
+
+The workflow selector reserves a fixed marker slot on every card and paints a
+small bright dot only for the committed selected workflow. The same control
+renders in the expanded panel and compact/medium drawer. Hover, keyboard focus,
+availability and pending transition candidates do not move the dot. An
+unavailable current workflow retains it. Existing selected fill/border and
+AccessKit selection semantics remain; the marker adds no focus stop or name.
+The automatic workflow-change notice remains independent of this visual cue.
+
 Measured workspace action buttons use the same state-dependent shortcut
 foreground both inline and in wrapped overflow menus. Moving an action into
 More changes only its placement; its shortcut contrast and accessible command
