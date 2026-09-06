@@ -170,9 +170,6 @@ impl LabelloApp {
                 );
                 if response.clicked() {
                     self.open_view(view);
-                    if view == AppView::Stats {
-                        self.navigation.statistics.invoker = Some(response.id);
-                    }
                 }
             }
             for action in actions.iter().rev() {
@@ -206,20 +203,8 @@ impl LabelloApp {
                 egui::Button::selectable(self.view == *view, *label)
                     .min_size(egui::vec2(item_width, 44.0)),
             );
-            if *view == AppView::Stats
-                && self.navigation.statistics.restore_focus == Some(response.id)
-                && ui
-                    .ctx()
-                    .memory(|memory| memory.allows_interaction(response.layer_id))
-            {
-                response.request_focus();
-                self.navigation.statistics.restore_focus = None;
-            }
             if response.clicked() {
                 self.open_view(*view);
-                if *view == AppView::Stats {
-                    self.navigation.statistics.invoker = Some(response.id);
-                }
                 ui.close();
                 action_taken = true;
             }
@@ -245,14 +230,25 @@ impl LabelloApp {
             action_taken = true;
         }
         for action in actions {
-            if ui
+            let response = ui
                 .add_enabled(
                     *action != AppBarAction::SignOut || !self.loading.logout,
                     egui::Button::new(action.label()).min_size(egui::vec2(item_width, 44.0)),
-                )
-                .clicked()
+                );
+            if *action == AppBarAction::Statistics
+                && self.navigation.statistics.restore_focus == Some(response.id)
+                && ui
+                    .ctx()
+                    .memory(|memory| memory.allows_interaction(response.layer_id))
             {
+                response.request_focus();
+                self.navigation.statistics.restore_focus = None;
+            }
+            if response.clicked() {
                 self.perform_app_bar_action(*action);
+                if *action == AppBarAction::Statistics {
+                    self.navigation.statistics.invoker = Some(response.id);
+                }
                 ui.close();
                 action_taken = true;
             }
@@ -276,6 +272,9 @@ impl LabelloApp {
         if self.work_view() && self.selected_task().is_some() {
             actions.insert(1, AppBarAction::Tutorial);
         }
+        if self.datasets.metadata.is_some() {
+            actions.insert(0, AppBarAction::Statistics);
+        }
         if self.auth.account.is_none() {
             actions.retain(|action| *action != AppBarAction::SignOut);
         }
@@ -285,6 +284,7 @@ impl LabelloApp {
     fn app_bar_icon_button(&mut self, ui: &mut egui::Ui, action: AppBarAction) {
         let enabled = action != AppBarAction::SignOut || !self.loading.logout;
         let selected = match action {
+            AppBarAction::Statistics => self.navigation.statistics.open,
             AppBarAction::Setup => self.view == AppView::Setup,
             AppBarAction::Tutorial => self.work.show_tutorial,
             AppBarAction::Settings => self.work.show_settings,
@@ -310,6 +310,9 @@ impl LabelloApp {
         );
         if response.clicked() {
             self.perform_app_bar_action(action);
+            if action == AppBarAction::Statistics {
+                self.navigation.statistics.invoker = Some(response.id);
+            }
         }
     }
 
@@ -398,6 +401,7 @@ impl LabelloApp {
 
     fn perform_app_bar_action(&mut self, action: AppBarAction) {
         match action {
+            AppBarAction::Statistics => self.open_view(AppView::Stats),
             AppBarAction::Setup => self.open_view(AppView::Setup),
             AppBarAction::Tutorial => {
                 self.trigger_user_action(labello_domain::UserAction::OpenTutorial)
@@ -418,6 +422,15 @@ impl LabelloApp {
         let stroke = egui::Stroke::new(1.7, color);
 
         match action {
+            AppBarAction::Statistics => {
+                for (x, height) in [(-6.0, 7.0), (0.0, 15.0), (6.0, 11.0)] {
+                    let bar = egui::Rect::from_min_size(
+                        center + egui::vec2(x - 1.5, 7.5 - height),
+                        egui::vec2(3.0, height),
+                    );
+                    painter.rect_filled(bar, egui::CornerRadius::same(1), color);
+                }
+            }
             AppBarAction::Setup => {
                 painter.add(egui::Shape::line(
                     vec![

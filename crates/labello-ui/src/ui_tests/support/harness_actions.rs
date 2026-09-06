@@ -94,6 +94,7 @@ pub(super) fn click(harness: &mut Harness<'static, LabelloApp>, label: &str) {
 
 pub(super) fn click_application_menu_item(harness: &mut Harness<'static, LabelloApp>, label: &str) {
     let direct_label = match label {
+        "Statistics" => "Open statistics",
         "Setup" => "Open setup",
         "Tutorial" => "Open tutorial",
         "Settings" => "Open settings",

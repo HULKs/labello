@@ -406,7 +406,7 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
     harness.set_size(egui::vec2(1500.0, 780.0));
     harness.step();
 
-    for label in ["Annotate", "Review", "Statistics", "Admin"] {
+    for label in ["Annotate", "Review", "Admin"] {
         assert_control_inside(
             &harness,
             label,
@@ -421,7 +421,7 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
     assert!(harness.query_by_label("Workspace").is_none());
     assert!(harness.query_by_label("Desktop navigation").is_none());
 
-    for label in ["Open setup", "Open tutorial", "Open settings", "Sign out"] {
+    for label in ["Open statistics", "Open setup", "Open tutorial", "Open settings", "Sign out"] {
         let action = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, label)
             .rect();
@@ -431,6 +431,12 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
             "{label} is not square: {action:?}",
         );
     }
+    assert!(harness.query_by_label("Statistics").is_none());
+    let statistics = harness.get_by_label("Open statistics").rect();
+    let dataset = harness.get_by_label("Dataset Demo Dataset").rect();
+    let setup = harness.get_by_label("Open setup").rect();
+    assert!(statistics.left() > dataset.right());
+    assert!(statistics.right() < setup.left());
     assert!(harness.get_by_label("Admin User").rect().width() <= 96.5);
 }
 
@@ -438,8 +444,8 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
 fn app_bar_switches_atomically_to_the_navigation_drawer_when_contents_do_not_fit() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
-    let destinations = ["Annotate", "Review", "Statistics", "Admin"];
-    let actions = ["Open setup", "Open tutorial", "Open settings", "Sign out"];
+    let destinations = ["Annotate", "Review", "Admin"];
+    let actions = ["Open statistics", "Open setup", "Open tutorial", "Open settings", "Sign out"];
     let mut saw_drawer = false;
     let mut saw_direct = false;
 

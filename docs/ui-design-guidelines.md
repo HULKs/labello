@@ -175,7 +175,10 @@ has been recorded.
 - **Admin:** organize by Overview, People, Images, Schema, Automation, and
   Backups; preserve staged edits between destinations; use wide rows and compact
   cards; retain validation and role protections.
-- **Statistics:** open a dataset-scoped modal above the current workspace or
+- **Statistics:** use a bar-chart icon in the app bar's right-side utility group,
+  with a 44-point target, an `Open statistics` accessible name, and a tooltip.
+  Keep a labeled Statistics action in the collapsed navigation drawer.
+  Open a dataset-scoped modal above the current workspace or
   setup. Opening, refreshing, and closing it preserve the assignment, image,
   draft, selection, canvas transform, and workspace epoch. Continue legitimate
   in-flight workflow results and expose recovery when ownership becomes invalid.
