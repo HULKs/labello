@@ -243,6 +243,7 @@ pub(super) struct SpyState {
     pub(super) next_image: usize,
     pub(super) events: Vec<EventPayload>,
     pub(super) fail_next_preview: bool,
+    pub(super) fail_next_release: bool,
     pub(super) fail_encoded_previews: bool,
     pub(super) preview_profiles: Vec<labello_client::ImagePreviewProfile>,
     pub(super) fail_next_revalidation: bool,
@@ -366,6 +367,7 @@ impl SpyState {
             next_image: 0,
             events: Vec::new(),
             fail_next_preview: false,
+            fail_next_release: false,
             fail_encoded_previews: false,
             preview_profiles: Vec::new(),
             fail_next_revalidation: false,
@@ -1540,6 +1542,9 @@ impl ImageApi for SpyApi {
     ) -> ApiFuture<'a, Assignment> {
         let mut state = self.state.borrow_mut();
         state.counts.release_assignment += 1;
+        if std::mem::take(&mut state.fail_next_release) {
+            return ready(Err(ClientError::Demo("release failed".to_string())));
+        }
         let Some(position) = state
             .active_assignments
             .iter()

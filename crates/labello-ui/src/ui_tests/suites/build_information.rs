@@ -269,6 +269,7 @@ fn build_information_warning_keeps_review_and_migration_controls_reachable() {
             (320.0, 320.0),
         ] {
             let mut app = inspector_presets::build(preset, &egui::Context::default());
+            app.work.assignment_touched = true;
             app.builds.web = release_build("v1.2.3", 'a');
             app.builds.server = Some(release_build("v1.2.4", 'b'));
             app.builds.checked = true;

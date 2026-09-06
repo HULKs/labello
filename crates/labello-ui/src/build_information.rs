@@ -244,6 +244,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn open_about(&mut self) {
+        if self.work.pending_transition.is_some() {
+            return;
+        }
         self.open_view(AppView::Setup);
         if self.work.pending_transition == Some(PendingTransition::View(AppView::Setup)) {
             self.work.pending_transition = Some(PendingTransition::About);
