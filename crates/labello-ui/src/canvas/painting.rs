@@ -375,8 +375,8 @@ fn paint_dashed_segment_scaled(painter: &egui::Painter, start: Pos2, end: Pos2, 
         return;
     }
     // Scale the whole pattern with the viewport so dashes stay attached to the box.
-    let dash_length = 8.0 * scale;
-    let gap = 10.0 * scale;
+    let dash_length = 4.0 * scale;
+    let gap = 5.0 * scale;
     let direction = vector / length;
     let mut offset = 0.0;
     for _ in 0..MAX_DASH_SEGMENTS {

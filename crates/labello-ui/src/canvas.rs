@@ -624,8 +624,8 @@ mod tests {
                 length < previous_length,
                 "zooming out must shorten each dash"
             );
-            assert!((length - 8.0 * zoom).abs() < 0.01);
-            assert!((gap - 10.0 * zoom).abs() < 0.01);
+            assert!((length - 4.0 * zoom).abs() < 0.01);
+            assert!((gap - 5.0 * zoom).abs() < 0.01);
             previous_gap = gap;
             previous_length = length;
         }
