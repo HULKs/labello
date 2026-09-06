@@ -44,6 +44,17 @@ impl LabelloApp {
                 break;
             };
             processed += 1;
+            let message = match message {
+                UiMessage::RequestFailed { request, error }
+                    if self.datasets.activity.pending_request == Some(request.request_id) =>
+                {
+                    UiMessage::CurrentUserActivityLoaded {
+                        request,
+                        result: Err(error),
+                    }
+                }
+                message => message,
+            };
             if let Some(request) = message.import_request().cloned()
                 && !self.finish_import_request(&request)
             {

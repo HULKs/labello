@@ -1132,7 +1132,13 @@ impl LabelloApp {
             target,
             labello_client::MigrationReviewTarget::Confirmation { .. }
         );
-        let (approve, reject) = if revision && final_phase {
+        let (approve, reject) = if revision && compact && shortcut_only {
+            if final_phase {
+                ("Commit yes".to_string(), "Commit no".to_string())
+            } else {
+                ("Stage yes".to_string(), "Stage no".to_string())
+            }
+        } else if revision && final_phase {
             (
                 "Commit approval".to_string(),
                 "Commit rejection".to_string(),
@@ -1328,6 +1334,15 @@ impl LabelloApp {
             ready,
             "Release this assignment and claim another.",
         ));
+        if self.activity_retry_in_workspace(ui.ctx()) {
+            actions.push(crate::panels::WorkspaceAction {
+                command: crate::panels::WorkspaceCommand::RetryActivity,
+                label: "Retry activity".into(),
+                shortcut: String::new(),
+                enabled: self.datasets.activity.pending_request.is_none(),
+                help: "Retry activity for today in UTC without changing the assignment.",
+            });
+        }
         self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
             ui, &actions, "More",
         ));

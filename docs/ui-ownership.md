@@ -102,6 +102,70 @@ only when its complete identity and current workspace still match.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
 
+
+## Current-user activity
+
+`datasets.activity` owns the current endpoint/account/dataset identity, UTC
+window, loaded counts, request, refresh deadline and local failure state.
+`activity` schedules and renders the work-view bottom summary. Requests use
+ordinary read identities and never begin a workspace epoch or invalidate
+assignment-owned work. Successful annotation, migration and final-review
+completions request a refresh; completion during an existing request schedules
+one follow-up. The active work view polls no more often than every 30 seconds;
+explicit completion, retry and browser visibility-return hints may refresh
+sooner and coalesce while pending. The thin WASM adapter only forwards document
+visibility changes.
+
+The server sample time plus monotonic elapsed time drives UTC rollover. The
+request round trip supplies a conservative transit bound: a reply that may have
+crossed midnight is rejected, and existing values can expire by that bound early
+rather than carry yesterday into today. An
+expired window is cleared before rendering and refreshed; stale endpoint,
+account, dataset or older-day replies cannot replace current counts. Initial
+loading, zero, initial error with Retry, refresh and stale-on-failure states are
+distinct. Loaded values remain during same-day refresh and failures. Counts are
+never optimistically incremented and do not authorize workflow actions.
+
+The shell allocates the actual summary row below primary assignment actions.
+Visible wording condenses using measured text width; full counter names and
+"today in UTC" remain in tooltip and AccessKit text. Retry uses a 44-point
+control. This row leaves lower-right build-warning ownership with the existing
+shell warning layer and requires combined layout verification when that feature
+is present.
+
+At short heights, the activity summary and migration confirmation share the
+compact footer allocation. Its vertical padding stays removed when either the
+activity row is present or manual annotation migration needs the compact
+footer, preserving confirmation targets and canvas space in both states.
+
+A short manual-migration annotation view places failed-activity Retry in the
+existing measured secondary actions. The bottom summary retains unavailable or
+stale text and exposes the Retry location through its full accessible help.
+This keeps the retry target at 44 points without taking another full canvas row;
+Compact short Review follows the same rule below; other views retain the direct
+summary Retry control.
+
+The same short migration/activity combination removes only the canvas's vertical
+outer inset, retaining its horizontal inset. This preserves at least 44 points
+of canvas height at 320×320 with loaded counts or an activity failure, alongside
+44-point confirmation and Retry controls.
+
+At compact short Review sizes, activity failures keep the summary at its normal
+line height. The primary review decisions reserve the actual measured width of
+an ellipsis More trigger; Retry activity and Previous navigation use the shared
+secondary-action owner. The trigger has a named More action and a 44px target.
+Moving a focused Previous control into its menu uses the existing overflow focus
+transfer. Compact revision buttons retain explicit Stage yes/no or Commit yes/no
+labels. Correction mode keeps its own actions, and migration review uses the same
+bounded retry placement. This changes neither review decisions nor assignment
+ownership.
+
+An open Retry activity menu remains in place when an asynchronous refresh
+succeeds. The shared overflow owner records its open menu's commands, so activity
+can retain that presentation until activation or dismissal. The summary updates
+immediately, but refresh completion cannot replace a Retry pointer target with
+the review decision underneath it.
+
 Short review layout uses the shared review-context projection to keep revision
 mode in the existing context identity line. The central workspace omits its
 redundant caption only when valid compact revision details are present; missing

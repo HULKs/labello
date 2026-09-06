@@ -164,6 +164,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             .is_some()
     );
     no_guides.state_mut().runtime.api = Some(no_guides_api.clone());
+    no_guides.run_steps(3);
     click_accesskit_button(&mut no_guides, "Confirm no guides & finish");
     step_until(&mut no_guides, 8, |app| !app.work.migration.busy);
     assert_eq!(no_guides_api.counts().migration_commands, 1);

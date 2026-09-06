@@ -5,6 +5,8 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+            UiMessage::ActivityVisibilityRegained => self.request_activity(),
+            UiMessage::CurrentUserActivityLoaded { request, result } => self.accept_activity(request, result),
                 UiMessage::StatsLoaded { request, result } => {
                     let dataset_id = request.dataset_id?;
                     if !self.datasets.active_stats_request.as_ref().is_some_and(

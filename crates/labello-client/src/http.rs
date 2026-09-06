@@ -682,4 +682,35 @@ mod tests {
             assert!(!headers.contains("idempotency-key:"));
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn current_user_activity_preserves_api_prefix_and_decodes_window_and_counts() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let request = read_request(&mut reader);
+            write_json_response(
+                &mut stream,
+                r#"{"datasetId":"ds","userId":"alice","window":{"start":"2026-09-05T00:00:00Z","end":"2026-09-06T00:00:00Z"},"sampledAt":"2026-09-05T12:00:00Z","counts":{"annotationTasksSubmitted":7,"finalTaskReviews":2}}"#,
+            );
+            request
+        });
+        let api = HttpLabelloApi::new(format!("http://{address}/api/")).unwrap();
+        let value = api
+            .current_user_activity(&DatasetId::from("ds"))
+            .await
+            .unwrap();
+        assert_eq!(value.user_id, UserId::from("alice"));
+        assert_eq!(value.counts.annotation_tasks_submitted, 7);
+        assert_eq!(value.counts.final_task_reviews, 2);
+        assert_eq!(
+            value.window,
+            labello_domain::UtcActivityWindow::containing(value.sampled_at)
+        );
+        let (headers, body) = server.join().unwrap();
+        assert!(headers.starts_with("GET /api/datasets/ds/stats/me HTTP/1.1"));
+        assert!(body.is_empty());
+    }
 }
