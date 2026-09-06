@@ -232,3 +232,23 @@ browser-only or unsupported in the inspector.
 Use the headless launch recipe with `--live` when no graphical display is
 available. Preset or native live-mode evidence must be accompanied by the
 Chromium checks required by the [verification contract](../../docs/verification.md).
+
+## Shared display controls and browser comparison
+
+Presets use the shared production renderer with synthetic state. They are not
+a supported native client and do not prove browser reachability. Keep preset
+changes distinct from production fixes in review evidence.
+
+Use `--display small|mobile|medium|wide-boundary|wide|short` to select a size
+from [`matrix.json`](../../scripts/browser/matrix.json). For example:
+
+```sh
+cargo run --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml -- --preset dialog-settings --display small --scale 1.5
+```
+
+`--scale` accepts finite values from 0.5 through 3 and sets egui logical zoom.
+It is not browser DPR. Use the existing headless/isolated MCP setup above,
+inspect the resulting layout, and retain the actual viewport and scale with
+evidence. Changing screenshot resolution does not substitute for this control.
+The [browser verification guide](../../docs/browser-verification.md) lists live
+workflow counterparts, intentional fixture differences, and browser-only gaps.

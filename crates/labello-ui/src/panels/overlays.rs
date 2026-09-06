@@ -426,13 +426,9 @@ impl LabelloApp {
                     .trim()
                     .to_ascii_lowercase();
                 let compact_footer = ui.available_width() < 420.0;
-                let scroll_height = if compact_footer {
-                    (screen.height() - 500.0).clamp(64.0, 520.0)
-                } else if screen.height() < 700.0 {
-                    (screen.height() - 380.0).clamp(120.0, 520.0)
-                } else {
-                    (screen.height() - 300.0).clamp(180.0, 520.0)
-                };
+                let footer_height = if compact_footer { 128.0 } else { 76.0 }
+                    + if conflicts.is_empty() { 0.0 } else { 64.0 };
+                let scroll_height = (ui.available_height() - footer_height).clamp(80.0, 520.0);
                 let mut visible_action_count = 0;
                 let mut action_list = |ui: &mut egui::Ui| {
                     let mut current_category = "";
@@ -475,11 +471,11 @@ impl LabelloApp {
                             ui.heading(RichText::new(category).size(16.0));
                         }
                         theme::card_frame().show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(RichText::new(label).strong());
-                                    ui.small(RichText::new(description).color(theme::MUTED));
-                                });
+                            let describe = |ui: &mut egui::Ui| {
+                                ui.label(RichText::new(label).strong());
+                                ui.small(RichText::new(description).color(theme::MUTED));
+                            };
+                            let mut controls = |ui: &mut egui::Ui| {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
@@ -527,7 +523,21 @@ impl LabelloApp {
                                         }
                                     },
                                 );
-                            });
+                            };
+                            if compact_footer {
+                                describe(ui);
+                                ui.horizontal(|ui| controls(ui));
+                            } else {
+                                ui.horizontal(|ui| {
+                                    let text_width = (ui.available_width() - 232.0).max(100.0);
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(text_width, 0.0),
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        describe,
+                                    );
+                                    controls(ui);
+                                });
+                            }
                             if let Some(pan_drag_modifier) = pan_drag_modifier {
                                 let name_and_hint = |ui: &mut egui::Ui| {
                                     ui.horizontal(|ui| {
@@ -678,8 +688,10 @@ impl LabelloApp {
                 if compact_footer {
                     ui.vertical(|ui| {
                         restore_defaults(ui);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            decision_actions(ui);
+                        ui.horizontal(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                decision_actions(ui);
+                            });
                         });
                     });
                 } else {

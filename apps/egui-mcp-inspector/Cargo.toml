@@ -13,4 +13,5 @@ rust-version = "1.98"
 [dependencies]
 eframe = { version = "0.35", default-features = false, features = ["default_fonts", "glow", "inspection", "wayland", "x11"] }
 labello-ui = { path = "../../crates/labello-ui", features = ["inspector-presets"] }
+serde_json = "1"
 tokio = { version = "1", features = ["net", "rt", "time"] }

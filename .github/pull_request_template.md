@@ -8,9 +8,9 @@
 
 ## Acceptance criteria and evidence
 
-| Acceptance criterion | Evidence |
+| Acceptance criterion | Verification surface and evidence |
 | --- | --- |
-| <!-- criterion --> | <!-- test, inspection, or artifact --> |
+| <!-- criterion --> | <!-- egui_kittest, inspector, Chromium, or explicit manual review; test/artifact --> |
 
 ## Regression protection
 
@@ -22,7 +22,7 @@
 
 ## Visual or browser evidence
 
-<!-- For applicable changes, list states, viewports, DPR/zoom, keyboard/accessibility checks, and artifact links. Otherwise explain why this is not applicable. Do not attach sensitive content. -->
+<!-- For applicable changes, list states, viewports, DPR/zoom, keyboard/accessibility checks, and artifact links. Include before/after evidence for reproducible visual defects, an adjacent breakpoint, the exact revision, and known visual/browser limitations. Otherwise explain why this is not applicable. Do not attach sensitive content. -->
 
 ## Documentation
 

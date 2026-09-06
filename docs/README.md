@@ -22,6 +22,7 @@ documents are maintained current references:
 | [Persistence and recovery](persistence.md) | Normative current | Storage maintainers | Operators, maintainers | On-disk authority, schema compatibility, atomicity, snapshots, and repair |
 | [UI and design guidelines](ui-design-guidelines.md) | Normative current | UI maintainers | UI designers and contributors | UI behavior, design, accessibility, and verification acceptance |
 | [UI ownership](ui-ownership.md) | Normative current | UI maintainers | UI maintainers and contributors | UI state, request, persistence, and rendering boundaries |
+| [Browser verification](browser-verification.md) | Normative current | UI maintainers | Contributors, reviewers | Disposable Chromium workflows, display matrix, artifacts, and inspector/workflow parity |
 | [Verification and acceptance](verification.md) | Normative current | Labello maintainers | Maintainers, contributors, reviewers | Canonical checks, risk profiles, evidence, CI, and independent acceptance |
 
 Supporting project material is grouped by purpose:

@@ -11,16 +11,17 @@ enum InspectorMode {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mode = parse_mode(std::env::args().skip(1))
+    let (mode, display) = parse_options(std::env::args().skip(1))
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
     eframe::run_native(
         "Labello MCP Inspector",
         eframe::NativeOptions {
-            viewport: eframe::egui::ViewportBuilder::default().with_inner_size([1440.0, 1000.0]),
+            viewport: eframe::egui::ViewportBuilder::default().with_inner_size(display.size),
             ..Default::default()
         },
         Box::new(move |creation_context| {
             creation_context.egui_ctx.enable_accesskit();
+            creation_context.egui_ctx.set_zoom_factor(display.scale);
             Ok(Box::new(InspectorApp::new(
                 mode,
                 &creation_context.egui_ctx,
@@ -28,6 +29,56 @@ fn main() -> Result<(), Box<dyn Error>> {
         }),
     )?;
     Ok(())
+}
+
+#[derive(Debug, PartialEq)]
+struct DisplayOptions {
+    size: [f32; 2],
+    scale: f32,
+}
+
+fn parse_options(
+    args: impl IntoIterator<Item = String>,
+) -> Result<(InspectorMode, DisplayOptions), String> {
+    let args = args.into_iter().collect::<Vec<_>>();
+    let mut mode_args = Vec::new();
+    let mut display_name = "wide".to_string();
+    let mut scale = 1.0_f32;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--display" | "--scale" => {
+                let value = args.get(index + 1).ok_or_else(usage)?;
+                if args[index] == "--display" {
+                    display_name = value.clone();
+                } else {
+                    scale = value.parse().map_err(|_| usage())?;
+                }
+                index += 2;
+            }
+            _ => {
+                mode_args.push(args[index].clone());
+                index += 1;
+            }
+        }
+    }
+    if !scale.is_finite() || !(0.5..=3.0).contains(&scale) {
+        return Err(usage());
+    }
+    let matrix: serde_json::Value =
+        serde_json::from_str(include_str!("../../../scripts/browser/matrix.json"))
+            .expect("maintained display matrix must be valid");
+    let viewport = matrix["viewports"]
+        .as_array()
+        .expect("matrix viewports")
+        .iter()
+        .find(|view| view["name"].as_str() == Some(&display_name))
+        .ok_or_else(usage)?;
+    let size = [
+        viewport["width"].as_f64().expect("matrix width") as f32,
+        viewport["height"].as_f64().expect("matrix height") as f32,
+    ];
+    Ok((parse_mode(mode_args)?, DisplayOptions { size, scale }))
 }
 
 fn parse_mode(args: impl IntoIterator<Item = String>) -> Result<InspectorMode, String> {
@@ -44,7 +95,7 @@ fn parse_mode(args: impl IntoIterator<Item = String>) -> Result<InspectorMode, S
 
 fn usage() -> String {
     format!(
-        "Usage: labello-egui-mcp-inspector [--live | --preset <{}>]",
+        "Usage: labello-egui-mcp-inspector [--live | --preset <{}>] [--display <matrix-name>] [--scale <0.5..3>]",
         InspectorPreset::ALL
             .into_iter()
             .map(InspectorPreset::name)
@@ -179,6 +230,27 @@ mod tests {
     fn unknown_arguments_are_rejected() {
         let error = parse_mode(["--unknown".to_string()]).unwrap_err();
         assert!(error.contains("Usage:"));
+    }
+
+    #[test]
+    fn shared_matrix_display_and_scale_are_explicit_and_validated() {
+        let (_, display) =
+            parse_options(["--display", "mobile", "--scale", "2"].map(str::to_string)).unwrap();
+        assert_eq!(
+            display,
+            DisplayOptions {
+                size: [390.0, 844.0],
+                scale: 2.0
+            }
+        );
+        for arguments in [
+            vec!["--display", "missing"],
+            vec!["--scale", "NaN"],
+            vec!["--scale", "0"],
+            vec!["--scale"],
+        ] {
+            assert!(parse_options(arguments.into_iter().map(str::to_string)).is_err());
+        }
     }
 
     #[test]

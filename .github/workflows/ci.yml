@@ -252,8 +252,33 @@ jobs:
         with:
           version: v0.21.14
 
-      - name: Build browser release
+      - name: Install Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+
+      - name: Install Chromium system dependencies
+        run: |
+          npm ci --prefix scripts/browser
+          scripts/browser/node_modules/.bin/playwright install-deps chromium
+
+      - name: Verify browser release and workflows
         run: ./scripts/verify.sh ci "$CI_BASE_SHA" browser
+
+      - name: Retain synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: synthetic-browser-evidence
+          path: |
+            scripts/browser/artifacts/report.json
+            scripts/browser/artifacts/annotation-*.png
+            scripts/browser/artifacts/settings-*.png
+            scripts/browser/artifacts/review-*.png
+            scripts/browser/artifacts/migration-*.png
+            scripts/browser/artifacts/matrix-*.png
+          if-no-files-found: error
+          retention-days: 14
 
   testing:
     name: Testing

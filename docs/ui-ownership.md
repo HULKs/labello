@@ -86,3 +86,13 @@ only when its complete identity and current workspace still match.
   engine is justified by the supported annotation tools.
 - Keep the existing browser schemas and adapters; this refactor does not add
   synchronization, offline authority, or a new persistence format.
+
+## Incremental skeleton saves
+
+`app/editing.rs` owns normal skeleton construction as well as later keypoint
+edits. Autosave may persist a partial skeleton while its construction cursor
+remains active. Placing another point on that skeleton must mark a modification
+against the persisted version, with human edit provenance, so the next batch
+and its response retain the later points. Save-response ownership and draft
+rebasing remain in the workflow reducer; a canvas input adapter must not infer
+persistence from whether an object is still being constructed.
