@@ -18,6 +18,7 @@ fn paint_canvas(
     prelabels: &[PrelabelSuggestion],
     annotation_color: Color32,
     annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
+    zoom: f32,
 ) {
     let painter = ui.painter_at(viewport);
     painter.rect_filled(
@@ -89,7 +90,7 @@ fn paint_canvas(
                 if selected {
                     paint_selected_box(&painter, image_rect, bbox, editable, style.color);
                 } else if style.dashed_box {
-                    paint_context_box(&painter, image_rect, bbox, style.color);
+                    paint_context_box(&painter, image_rect, bbox, style.color, zoom);
                 } else {
                     paint_existing_box(&painter, image_rect, bbox, style.color);
                 }
@@ -308,6 +309,7 @@ fn paint_context_box(
     image_rect: Rect,
     bbox: BoundingBox,
     color: Color32,
+    zoom: f32,
 ) {
     let rect = bbox_to_screen_rect(image_rect, bbox);
     painter.rect_filled(
@@ -315,10 +317,10 @@ fn paint_context_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 7),
     );
-    paint_dashed_segment(painter, rect.left_top(), rect.right_top(), color);
-    paint_dashed_segment(painter, rect.right_top(), rect.right_bottom(), color);
-    paint_dashed_segment(painter, rect.right_bottom(), rect.left_bottom(), color);
-    paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
+    paint_dashed_segment_with_gap(painter, rect.left_top(), rect.right_top(), color, context_box_dash_gap(zoom));
+    paint_dashed_segment_with_gap(painter, rect.right_top(), rect.right_bottom(), color, context_box_dash_gap(zoom));
+    paint_dashed_segment_with_gap(painter, rect.right_bottom(), rect.left_bottom(), color, context_box_dash_gap(zoom));
+    paint_dashed_segment_with_gap(painter, rect.left_bottom(), rect.left_top(), color, context_box_dash_gap(zoom));
 }
 
 fn paint_selected_box(
@@ -359,7 +361,17 @@ fn paint_draft_box(painter: &egui::Painter, image_rect: Rect, bbox: BoundingBox)
     paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
 }
 
+// Screen-space gaps grow toward Fit so background guides stay quiet when
+// several objects are visible. Dash length and stroke width stay readable.
+fn context_box_dash_gap(zoom: f32) -> f32 {
+    10.0 + 14.0 / finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM)
+}
+
 fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32) {
+    paint_dashed_segment_with_gap(painter, start, end, color, 10.0);
+}
+
+fn paint_dashed_segment_with_gap(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32, gap: f32) {
     if !start.x.is_finite() || !start.y.is_finite() || !end.x.is_finite() || !end.y.is_finite() {
         return;
     }
@@ -384,7 +396,7 @@ fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: 
             color,
             2.0,
         );
-        let next = offset + 18.0;
+        let next = offset + 8.0 + gap;
         if !next.is_finite() || next <= offset {
             break;
         }

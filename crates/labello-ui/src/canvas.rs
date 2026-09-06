@@ -407,6 +407,7 @@ mod tests {
                     &[],
                     theme::SELECTION,
                     &Default::default(),
+                    1.0,
                 );
             });
             assert!(output.shapes.iter().any(|shape| {
@@ -477,6 +478,7 @@ mod tests {
                         },
                         theme::ANNOTATION,
                         &Default::default(),
+                        1.0,
                     );
                 });
                 let circles = output
@@ -531,7 +533,7 @@ mod tests {
                 match family {
                     0 => paint_existing_box(ui.painter(), rect, bounds, class_color),
                     1 => paint_selected_box(ui.painter(), rect, bounds, true, class_color),
-                    2 => paint_context_box(ui.painter(), rect, bounds, class_color),
+                    2 => paint_context_box(ui.painter(), rect, bounds, class_color, 1.0),
                     3 => paint_draft_box(ui.painter(), rect, bounds),
                     _ => paint_outlined_segment(
                         ui.painter(),
@@ -562,6 +564,77 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn unfocused_context_box_gaps_widen_when_zooming_out() {
+        let annotation = test_annotation(AnnotationGeometry::BoundingBox(bbox(0.2, 0.2, 0.5, 0.5)));
+        let id = annotation.annotation_id.clone();
+        let styles = [(id.clone(), CanvasAnnotationStyle::dashed(theme::ANNOTATION))].into();
+        let mut harness = Harness::builder()
+            .with_size(vec2(600.0, 400.0))
+            .build_ui_state(
+                move |ui, test: &mut InteractiveTestState| {
+                    show_canvas_colored(
+                        ui,
+                        &mut test.canvas,
+                        None,
+                        &test.annotations,
+                        [600, 400],
+                        false,
+                        test.selected_annotation.as_ref(),
+                        CanvasInteraction::annotations(false),
+                        &[],
+                        &[],
+                        theme::ANNOTATION,
+                        &styles,
+                        None,
+                    );
+                },
+                InteractiveTestState {
+                    annotations: vec![annotation],
+                    ..Default::default()
+                },
+            );
+        let mut previous_gap = 0.0;
+        for zoom in [4.0, 2.0, 1.0] {
+            harness.state_mut().canvas.zoom = zoom;
+            harness.run();
+            let dashes: Vec<_> = harness
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::LineSegment { points, stroke }
+                        if stroke.color == theme::ANNOTATION =>
+                    {
+                        Some(*points)
+                    }
+                    _ => None,
+                })
+                .collect();
+            let gap = dashes[1][0].x - dashes[0][1].x;
+            assert!(
+                gap > previous_gap,
+                "zooming out must widen the screen-space gap"
+            );
+            assert!(
+                ((dashes[0][1] - dashes[0][0]).length() - 8.0).abs() < 0.01,
+                "zoom must not shrink the dash itself"
+            );
+            previous_gap = gap;
+        }
+        harness.state_mut().selected_annotation = Some(id);
+        harness.run();
+        assert!(
+            !harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| matches!(shape.shape,
+            egui::Shape::LineSegment { stroke, .. } if stroke.color == theme::ANNOTATION)),
+            "the focused box retains a solid outline"
+        );
     }
 
     #[test]

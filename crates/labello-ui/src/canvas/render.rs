@@ -195,6 +195,7 @@ pub(crate) fn show_canvas_colored(
             prelabels,
             annotation_color,
             annotation_styles,
+            state.current_zoom(),
         );
         return None;
     }
@@ -276,6 +277,7 @@ pub(crate) fn show_canvas_colored(
         prelabels,
         annotation_color,
         annotation_styles,
+        state.current_zoom(),
     );
 
     let action = handle_annotation_pointer(
