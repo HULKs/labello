@@ -1,0 +1,4 @@
+interface:
+  display_name: "Labello Frontend Design"
+  short_description: "Design and refine Labello's Rust/egui UI"
+  default_prompt: "Use $labello-frontend-design to improve this Labello UI within its existing design system and verify the result."
