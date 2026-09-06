@@ -23,7 +23,7 @@ impl WorkspaceAction {
         if self.shortcut.is_empty() {
             button
         } else {
-            button.shortcut_text(self.shortcut.clone())
+            button.shortcut_text(theme::button_shortcut(self.shortcut.clone()))
         }
     }
 }
@@ -159,7 +159,7 @@ pub(crate) fn workspace_secondary_actions(
                 {
                     let text = egui::AtomLayout::new((
                         egui::RichText::new(action.label.as_str()),
-                        egui::RichText::new(action.shortcut.as_str()).weak(),
+                        theme::button_shortcut(action.shortcut.clone()),
                     ))
                     .direction(egui::Direction::TopDown)
                     .gap(4.0)

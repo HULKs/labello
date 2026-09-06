@@ -607,7 +607,9 @@ impl LabelloApp {
                 .add_enabled(
                     guide_valid && !self.work.migration.busy,
                     egui::Button::new("Undo last keypoint").shortcut_text(
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
+                        crate::theme::button_shortcut(
+                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
+                        ),
                     ),
                 )
                 .clicked()
@@ -645,10 +647,10 @@ impl LabelloApp {
                     .add_enabled(
                         !disabled,
                         egui::Button::new(format!("Mark {name} as not present")).shortcut_text(
-                            self.shortcut_text(
+                            crate::theme::button_shortcut(self.shortcut_text(
                                 ui.ctx(),
                                 labello_domain::UserAction::MarkKeypointAbsent,
-                            ),
+                            )),
                         ),
                     )
                     .on_hover_text("Record this optional keypoint without a position.")
@@ -716,10 +718,10 @@ impl LabelloApp {
                 .add_enabled(
                     self.can_edit_previous_migration_object(),
                     egui::Button::new("Previous object").shortcut_text(
-                        self.shortcut_text(
+                        crate::theme::button_shortcut(self.shortcut_text(
                             ui.ctx(),
                             labello_domain::UserAction::SelectPreviousObject,
-                        ),
+                        )),
                     ),
                 )
                 .clicked()
@@ -734,9 +736,9 @@ impl LabelloApp {
                     } else {
                         "Next object"
                     })
-                    .shortcut_text(
+                    .shortcut_text(crate::theme::button_shortcut(
                         self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
-                    ),
+                    )),
                 )
                 .clicked()
             {
@@ -960,7 +962,9 @@ impl LabelloApp {
                 .add_enabled(
                     !self.work.migration.busy,
                     egui::Button::new("Undo last keypoint").shortcut_text(
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
+                        crate::theme::button_shortcut(
+                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
+                        ),
                     ),
                 )
                 .clicked()
@@ -998,10 +1002,10 @@ impl LabelloApp {
                     .add_enabled(
                         !disabled,
                         egui::Button::new(format!("Mark {name} as not present")).shortcut_text(
-                            self.shortcut_text(
+                            crate::theme::button_shortcut(self.shortcut_text(
                                 ui.ctx(),
                                 labello_domain::UserAction::MarkKeypointAbsent,
-                            ),
+                            )),
                         ),
                     )
                     .on_hover_text("Record this optional keypoint without a position.")
@@ -1232,12 +1236,12 @@ impl LabelloApp {
                         } else {
                             "Add missing object"
                         })
-                        .shortcut_text(
+                        .shortcut_text(crate::theme::button_shortcut(
                             self.shortcut_text(
                                 ui.ctx(),
                                 labello_domain::UserAction::AddMissingObject,
                             ),
-                        ),
+                        )),
                     )
                     .on_hover_text(if adding_missing_object {
                         if self.work.migration.editing_missing_annotation_id.is_some() {
@@ -1542,9 +1546,11 @@ impl LabelloApp {
             return;
         }
         if ui
-            .add(egui::Button::new("Previous object").shortcut_text(
-                self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectPreviousObject),
-            ))
+            .add(
+                egui::Button::new("Previous object").shortcut_text(crate::theme::button_shortcut(
+                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectPreviousObject),
+                )),
+            )
             .clicked()
         {
             self.edit_previous_migration_object();
@@ -1563,7 +1569,9 @@ impl LabelloApp {
                 .add_enabled(
                     ready,
                     egui::Button::new("Previous assignment").shortcut_text(
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::PreviousImage),
+                        crate::theme::button_shortcut(
+                            self.shortcut_text(ui.ctx(), labello_domain::UserAction::PreviousImage),
+                        ),
                     ),
                 )
                 .clicked()
@@ -1573,9 +1581,9 @@ impl LabelloApp {
         if ui
             .add_enabled(
                 ready,
-                egui::Button::new("Skip").shortcut_text(
+                egui::Button::new("Skip").shortcut_text(crate::theme::button_shortcut(
                     self.shortcut_text(ui.ctx(), labello_domain::UserAction::SkipAssignment),
-                ),
+                )),
             )
             .clicked()
         {
@@ -1597,8 +1605,9 @@ impl LabelloApp {
         if theme::primary_button(
             ui,
             enabled,
-            egui::Button::new(label)
-                .shortcut_text(self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage)),
+            egui::Button::new(label).shortcut_text(crate::theme::button_shortcut(
+                self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage),
+            )),
         )
         .clicked()
         {
