@@ -95,7 +95,7 @@ profiles_for_path() {
         apps/egui-mcp-inspector/*|opencode.json)
             printf '%s\n' ui
             ;;
-        Cargo.toml|Cargo.lock|.gitignore|scripts/*|.github/workflows/*|deployment/*|tools/*)
+        Cargo.toml|Cargo.lock|rust-toolchain.toml|.gitignore|scripts/*|.github/workflows/*|deployment/*|tools/*)
             printf '%s\n' infrastructure browser
             ;;
         *)
@@ -210,10 +210,13 @@ audit() {
         require_literal docs/verification.md "$baseline_command"
     done <<'EOF'
 cargo fmt --all -- --check
+cargo fmt --manifest-path apps/egui-mcp-inspector/Cargo.toml --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo clippy --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features --exclude labello-ui
 cargo test --locked -p labello-ui --all-features
 cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 trunk build --release --locked
 EOF
@@ -260,10 +263,12 @@ docs_checks() {
 
 format_check() {
     run cargo fmt --all -- --check
+    run cargo fmt --manifest-path apps/egui-mcp-inspector/Cargo.toml --all -- --check
 }
 
 clippy_check() {
     run cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+    run cargo clippy --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-targets --all-features -- -D warnings
 }
 
 workspace_tests() {
@@ -303,6 +308,7 @@ doctests() {
 
 inspector_check() {
     run cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+    run cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 }
 
 wasm_check() {

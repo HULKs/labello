@@ -68,13 +68,39 @@ files or issue text:
 
 | Variable | Contract |
 | --- | --- |
-| `LABELLO_RELEASE_BUILD_IMAGE` | Build image reference pinned with `@sha256:<digest>` |
+| `LABELLO_RELEASE_BUILD_IMAGE` | Verified Rust 1.98.0 Bookworm build image pinned with `@sha256:<64 hexadecimal digits>` |
 | `LABELLO_DEPLOY_RUNNER` | Private label for the runner inside the production guest |
 
 Runner names, custom labels and groups, hostnames, addresses, and private
 registry locations are operational data. Do not put their values in Git,
 release assets, workflow output, issue comments, or screenshots. `Default` is
 GitHub's standard organization runner group, not private infrastructure data.
+
+## Release compiler and image verification
+
+Build `deployment/release/Containerfile` from the repository root. It pins the
+Rust 1.98.0 Bookworm image by digest and includes rustfmt, Clippy, the
+`wasm32-unknown-unknown` target and Trunk 0.21.14. Keep its compiler tag aligned
+with `rust-toolchain.toml` when updating the baseline. The retained
+`deployment/guest/github-runner-base/Containerfile` is historical upstream
+reproduction input and is not a Labello build entry point.
+
+Before changing `LABELLO_RELEASE_BUILD_IMAGE`, build and publish the replacement
+image using the authorized registry workflow, then test the exact published
+digest in an isolated checkout. Run `rustc --version`,
+`./scripts/verify.sh all`, and the locked release server/deployment-tool build
+inside that image. Verify `trunk --version` reports 0.21.14. Record the tested
+source commit, image digest, compiler and tool versions, commands, and results
+in the private rollout record. Keep registry locations and runner details out
+of public evidence. An unavailable or older image is an unmet rollout check.
+
+The release workflow validates a complete SHA-256 image reference and runs
+canonical verification before payload compilation. The image rollout checks
+above establish its compiler and tool prerequisites.
+Changing the source Containerfile alone does not update the external image or
+the repository variable; both publication and verified configuration are
+required before rollout. Future baseline changes follow the coordinated
+[compatibility contract](verification.md#rust-compatibility-contract).
 
 ## Release assets
 

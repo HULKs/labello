@@ -33,10 +33,13 @@ The required baseline is:
 
 ```text
 cargo fmt --all -- --check
+cargo fmt --manifest-path apps/egui-mcp-inspector/Cargo.toml --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo clippy --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features --exclude labello-ui
 cargo test --locked -p labello-ui --all-features
 cargo check --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml
+cargo test --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml --all-features
 cargo check --locked -p labello-wasm --target wasm32-unknown-unknown
 ```
 
@@ -69,7 +72,7 @@ Every Cargo command that resolves dependencies and the Trunk build use locked
 mode. A stale tracked lockfile is therefore a failure and is never implicitly
 rewritten by verification.
 
-Prerequisites are stable Rust, Cargo, `rustfmt`, Clippy, the
+Prerequisites are Rust 1.98.0, Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the applicable prerequisites per job in
 `.github/workflows/ci.yml`, restores job-scoped dependency build artifacts for
@@ -84,6 +87,42 @@ the plan and every selected parallel job succeeded, while requiring an
 unselected conditional job to be skipped. The script's audit checks those
 links, the PR evidence sections, shell syntax, diff whitespace, and complete
 classification of tracked paths.
+
+## Rust compatibility contract
+
+`rust-toolchain.toml` is the compiler source for local commands and CI bootstrap.
+The root workspace and standalone inspector workspace both require Rust 1.98.
+Every maintained package inherits that MSRV. Commands from either directory
+resolve to the exact 1.98.0 compiler, including rustfmt, Clippy, and the WASM
+target. Install the pinned prerequisites with:
+
+```sh
+rustup show
+```
+
+Rustup reads the repository toolchain file and installs the declared compiler,
+components, and target. Cargo manifests declare the MSRV for both workspaces.
+CI uses that toolchain to build and test the supported matrix below. Release
+images include the same compiler and build prerequisites. Keep these settings
+aligned when changing the baseline; there is no custom toolchain-policy audit.
+
+| Workspace or target | Required locked compatibility evidence |
+| --- | --- |
+| Root, native host | All maintained members including server and deployment tool; all targets/features in Clippy and all features in tests, with separate UI and doctest coverage |
+| Standalone inspector, native host | Its own lockfile; formatting, all-target/all-feature Clippy, compiler check, and all-feature tests |
+| Browser, `wasm32-unknown-unknown` | Production WASM app compiler check and release Trunk build with the root lockfile |
+| Release, Linux x86-64 Debian Bookworm | Same baseline and browser build, then locked release server/deployment-tool builds inside the configured immutable image |
+
+The inspector is a native application. Browser-only code is verified through
+`labello-wasm`; inspector-only features do not imply browser support. Native GUI
+and Chromium evidence retain the limits and risk-specific requirements below.
+
+Dependency updates must pass this matrix with both tracked lockfiles on 1.98.0.
+Do not repair lockfiles during verification. An MSRV increase requires an
+explicit coordinated change to workspace policies, the toolchain pin,
+CI/release configuration and images, and current documentation. Optional checks
+on newer compilers do not replace this baseline. The external release image
+must be verified before rollout as described in [deployment](deployment.md).
 
 ## Risk Profiles
 

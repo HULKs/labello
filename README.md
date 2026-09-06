@@ -34,16 +34,20 @@ before using it in production.
 
 ### Prerequisites
 
-- Rust 1.85 or newer
+- Rust 1.98.0, pinned by `rust-toolchain.toml`, with rustfmt and Clippy
 - the `wasm32-unknown-unknown` Rust target
 - [Trunk](https://trunkrs.dev/)
 
-Install the browser tooling:
+Install the pinned compiler and browser tooling from the repository root:
 
 ```sh
-rustup target add wasm32-unknown-unknown
-cargo install trunk
+rustup show
+cargo install --locked trunk --version 0.21.14
 ```
+
+The root and standalone inspector workspaces both require Rust 1.98.
+Dependency updates must retain the locked native, inspector, and WASM
+[compatibility matrix](docs/verification.md#rust-compatibility-contract).
 
 Start the API from the repository root:
 
