@@ -24,6 +24,7 @@ impl SetupSection {
 
 impl LabelloApp {
     pub(crate) fn setup_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        let previous_section = self.setup.section;
         if !self.auth.checked || self.auth.account.is_none() {
             if !matches!(
                 self.setup.section,
@@ -46,8 +47,8 @@ impl LabelloApp {
                     ui.horizontal_wrapped(|ui| {
                         for section in [
                             SetupSection::Login,
-                            SetupSection::About,
                             SetupSection::AdvancedConnection,
+                            SetupSection::About,
                         ] {
                             if section == SetupSection::Login
                                 && self.setup.section == SetupSection::Login
@@ -73,20 +74,16 @@ impl LabelloApp {
                     });
                 });
             });
+            if self.setup.section == SetupSection::About && previous_section != SetupSection::About
+            {
+                self.request_build_information();
+            }
             return;
         }
         let sections = self.setup_sections();
         if !sections.contains(&self.setup.section) {
             self.setup.section = sections[0];
         }
-        ui.vertical_centered(|ui| {
-            let title = "Choose where to work";
-            let subtitle = "Continue with a recommended dataset or choose where to work.";
-            ui.heading(RichText::new(title).size(theme::PAGE_TITLE_SIZE));
-            ui.label(RichText::new(subtitle).color(theme::TEXT_MUTED));
-        });
-        ui.add_space(theme::SPACE_4);
-
         if layout == LayoutMode::Wide {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                 ui.vertical(|ui| {
@@ -110,18 +107,15 @@ impl LabelloApp {
         if self.auth.account.is_none() {
             return vec![
                 SetupSection::Login,
-                SetupSection::About,
                 SetupSection::AdvancedConnection,
+                SetupSection::About,
             ];
         }
-        let mut sections = vec![
-            SetupSection::Datasets,
-            SetupSection::About,
-            SetupSection::AdvancedConnection,
-        ];
+        let mut sections = vec![SetupSection::Datasets, SetupSection::AdvancedConnection];
         if self.auth.can_create_datasets {
             sections.extend([SetupSection::Create, SetupSection::Import]);
         }
+        sections.push(SetupSection::About);
         sections
     }
 
@@ -131,6 +125,7 @@ impl LabelloApp {
         sections: &[SetupSection],
         layout: LayoutMode,
     ) {
+        let previous_section = self.setup.section;
         let response = ui.vertical(|ui| {
             if layout == LayoutMode::Wide {
                 ui.label(
@@ -167,6 +162,9 @@ impl LabelloApp {
                     .labelled_by(label.id);
             }
         });
+        if self.setup.section == SetupSection::About && previous_section != SetupSection::About {
+            self.request_build_information();
+        }
         response.response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Setup navigation")
         });
@@ -177,11 +175,7 @@ impl LabelloApp {
             SetupSection::Datasets => self.datasets_section(ui),
             SetupSection::AdvancedConnection => self.connection_section(ui),
             SetupSection::Login => self.login_section(ui),
-            SetupSection::About => {
-                ui.heading(RichText::new("About Labello").size(theme::PAGE_TITLE_SIZE));
-                ui.add_space(theme::SPACE_3);
-                ui.label("Labello is an image annotation application for bounding boxes and skeleton keypoints.");
-            }
+            SetupSection::About => self.about_section(ui),
             SetupSection::Create if self.auth.can_create_datasets => {
                 ui.heading("Create a dataset");
                 ui.label(

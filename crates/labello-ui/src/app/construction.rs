@@ -83,6 +83,7 @@ impl LabelloApp {
         };
         Self {
             runtime: RuntimeState::new(),
+            builds: Default::default(),
             loading: LoadingState::default(),
             setup,
             import: ImportFlowState::default(),

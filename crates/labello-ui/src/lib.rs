@@ -24,3 +24,6 @@ mod ui_tests;
 pub use app::{AppConfig, IMAGE_QUEUE_SIZE, LabelloApp};
 pub use import_flow::{RawImportChunkRequest, RawImportChunkResponse, RawImportChunkUploader};
 pub use queue::{ImageQueue, QueuedImage};
+
+mod build_information;
+pub use build_information::BuildClipboardWriter;

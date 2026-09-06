@@ -12,6 +12,7 @@ pub trait LabelloApi:
     + PrelabelApi
     + AuthApi
     + UserApi
+    + crate::BuildInformationApi
 {
 }
 
@@ -29,5 +30,6 @@ impl<T> LabelloApi for T where
         + PrelabelApi
         + AuthApi
         + UserApi
+    + crate::BuildInformationApi
 {
 }

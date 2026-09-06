@@ -360,7 +360,8 @@ fn signed_in_setup_sections_label_and_size_inputs() {
     let mut harness = live_harness(api);
     step_until(&mut harness, 8, |app| !app.datasets.summaries.is_empty());
 
-    assert!(harness.query_by_label("Choose where to work").is_some());
+    assert!(harness.query_by_label("Choose where to work").is_none());
+    assert!(harness.query_by_label("Setup navigation").is_some());
     assert!(harness.query_by_label("API URL").is_none());
     assert!(harness.state().setup.create_dataset_id.is_empty());
     assert!(harness.state().setup.create_dataset_name.is_empty());

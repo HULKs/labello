@@ -179,6 +179,15 @@ impl std::fmt::Display for UiRequestError {
 
 #[derive(Debug)]
 pub(crate) enum UiMessage {
+    BuildRefreshRequested,
+    BuildInformationLoaded {
+        request: RequestIdentity,
+        result: Result<labello_client::BuildIdentity, UiRequestError>,
+    },
+    BuildInformationCopied {
+        request: RequestIdentity,
+        succeeded: bool,
+    },
     ImportCapabilitiesLoaded {
         request: ImportRequestIdentity,
         result: Result<ImportCapabilities, UiRequestError>,
@@ -396,6 +405,9 @@ pub(crate) enum UiMessage {
 }
 
 pub(crate) enum UiCommand {
+    BuildInformation {
+        request: RequestIdentity,
+    },
     ImportCapabilities {
         request: ImportRequestIdentity,
     },
@@ -674,7 +686,8 @@ impl UiCommand {
             | Self::ImportDiagnostics { .. }
             | Self::CommitImport { .. }
             | Self::CancelImport { .. } => panic!("import commands use import_request"),
-            Self::AuthOptions { request }
+            Self::BuildInformation { request }
+            | Self::AuthOptions { request }
             | Self::Session { request }
             | Self::LocalAdminLogin { request }
             | Self::Logout { request }
@@ -949,7 +962,9 @@ impl UiMessage {
             | Self::ImportCancelled { .. } => None,
             #[cfg(target_arch = "wasm32")]
             Self::ImportBrowserFilesSelected { .. } => None,
-            Self::AuthOptionsLoaded { request, .. }
+            Self::BuildInformationLoaded { request, .. }
+            | Self::BuildInformationCopied { request, .. }
+            | Self::AuthOptionsLoaded { request, .. }
             | Self::SessionLoaded { request, .. }
             | Self::LogoutFinished { request, .. }
             | Self::GithubLoginUrl { request, .. }
@@ -979,7 +994,8 @@ impl UiMessage {
             | Self::KeybindingsSaved { request, .. }
             | Self::MigrationFinished { request, .. }
             | Self::RequestFailed { request, .. } => Some(request),
-            Self::PersistenceFinished(_)
+            Self::BuildRefreshRequested
+            | Self::PersistenceFinished(_)
             | Self::FolderUploadProgress { .. }
             | Self::FolderUploadFinished { .. } => None,
         }

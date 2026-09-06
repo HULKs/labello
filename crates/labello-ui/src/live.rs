@@ -15,6 +15,11 @@ use crate::app::{
 
 impl LabelloApp {
     pub(crate) fn rebuild_http_api(&mut self) {
+        self.builds.pending_request_id = None;
+        self.builds.loading = false;
+        self.builds.server = None;
+        self.builds.checked = false;
+        self.builds.copy_feedback = None;
         self.begin_auth_epoch();
         self.clear_authenticated_state();
         self.auth.options_checked = false;
@@ -52,6 +57,23 @@ impl LabelloApp {
                 break;
             };
             processed += 1;
+            let message = match message {
+                UiMessage::RequestFailed { request, error }
+                    if self.builds.pending_request_id == Some(request.request_id) =>
+                {
+                    UiMessage::BuildInformationLoaded {
+                        request,
+                        result: Err(error.into()),
+                    }
+                }
+                message => message,
+            };
+            // Public build identity belongs to the endpoint, not an authenticated
+            // workspace. Its owner still rejects obsolete or duplicate completions.
+            if matches!(&message, UiMessage::BuildInformationLoaded { .. }) {
+                self.reduce_build_message(message);
+                continue;
+            }
             if let Some(request) = message.import_request().cloned()
                 && !self.finish_import_request(&request)
             {
@@ -98,6 +120,10 @@ impl LabelloApp {
     }
 
     fn reduce_message(&mut self, ctx: &egui::Context, message: UiMessage) {
+        let message = match self.reduce_build_message(message) {
+            None => return,
+            Some(message) => message,
+        };
         let message = match self.reduce_import_message(ctx, message) {
             None => return,
             Some(message) => message,

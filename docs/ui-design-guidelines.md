@@ -139,7 +139,10 @@ has been recorded.
   After sign-in, feature one valid next dataset
   action, list all datasets separately, and keep creation secondary. Use a home
   glyph for the setup navigation action while retaining its destination-based
-  accessible name and tooltip.
+  accessible name and tooltip. Keep the authenticated section selector visible
+  in every Setup section, with About last. Each section owns its heading;
+  do not repeat a dataset-specific welcome banner above unrelated sections.
+  Signed-out secondary navigation also puts About last.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
   and Fit visible; keep Pan mode active during approval decisions and return
   primary drag to object editing during reviewer correction; place review phase
@@ -178,3 +181,27 @@ has been recorded.
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
   `trunk build --release` when browser or shared rendering changes.
+
+### Build information and mismatch
+
+Setup > About is reachable before and after sign-in. It separates Web app and
+Server identities, shows release tags with twelve-character source commits,
+and gives each row a complete accessible label and full-value tooltip. Missing
+release metadata is explicitly development; missing commits are unavailable.
+About uses a bounded content column and groups each component's release and
+commit together. Web app and Server appear side by side when space permits and
+stack at narrow widths. Copy build information is the primary action; server
+refresh or retry is secondary. Complete selectable text is available in a
+keyboard-accessible manual-copy disclosure that opens automatically when copying
+fails or is unavailable. Server loading, unavailable and retry states are local
+to About. Clipboard feedback is an accessible polite status and success requires
+the platform copy operation to succeed.
+
+Routine identity values stay in About. Only two complete differing release
+identities produce the persistent lower-right bottom-bar warning, `Web app and
+server builds differ`. Use the existing amber warning intent, a small warning
+icon and quiet button interaction/focus states, without a filled alert banner.
+The accessible action name also says it opens About. Keep its 44-point target
+and lower-right position in wide, medium, compact and short layouts; nearby
+future activity content must condense or reflow. Existing assignment transition
+confirmation and cancellation apply to this navigation.

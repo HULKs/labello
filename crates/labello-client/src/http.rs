@@ -41,6 +41,32 @@ pub struct HttpLabelloApi {
 }
 
 impl HttpLabelloApi {
+    pub(crate) fn get_build_information(&self) -> crate::ApiFuture<'_, crate::BuildIdentity> {
+        Box::pin(async move {
+            let response = self
+                .request(Method::GET, "/build-information")?
+                .timeout(std::time::Duration::from_secs(10))
+                .send()
+                .await?;
+            let response = Self::ensure_success(response).await?;
+            let bytes = response.bytes().await?;
+            if bytes.len() > 1024 {
+                return Err(ClientError::Api {
+                    status: 0,
+                    message: "invalid build information".into(),
+                });
+            }
+            let identity: crate::BuildIdentity = serde_json::from_slice(&bytes)?;
+            if !identity.is_valid() {
+                return Err(ClientError::Api {
+                    status: 0,
+                    message: "invalid build information".into(),
+                });
+            }
+            Ok(identity)
+        })
+    }
+
     pub fn new(base_url: impl AsRef<str>) -> ClientResult<Self> {
         #[cfg(not(target_arch = "wasm32"))]
         let client = reqwest::Client::builder().cookie_store(true).build()?;
@@ -225,6 +251,34 @@ mod tests {
             body.len()
         );
         stream.write_all(response.as_bytes()).unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn build_information_uses_prefixed_public_route_and_rejects_invalid_metadata() {
+        use crate::BuildInformationApi;
+        for valid in [true, false] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_request(&mut BufReader::new(stream.try_clone().unwrap()));
+                assert!(request.0.starts_with("GET /api/build-information "));
+                assert!(!request.0.to_lowercase().contains("authorization:"));
+                let body = if valid {
+                    serde_json::json!({"releaseTag":"v1.2.3", "sourceCommit":"a".repeat(40)})
+                } else {
+                    serde_json::json!({"releaseTag":"x".repeat(65), "sourceCommit":"a".repeat(40)})
+                };
+                write_json_response(&mut stream, &body.to_string());
+            });
+            let result = HttpLabelloApi::new(format!("http://{address}/api/"))
+                .unwrap()
+                .build_information()
+                .await;
+            assert_eq!(result.is_ok(), valid);
+            server.join().unwrap();
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -23,6 +23,9 @@ use crate::app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupS
 pub enum InspectorPreset {
     Annotation,
     Setup,
+    About,
+    BuildMismatch,
+    BuildUnavailable,
     Review,
     ReviewCorrection,
     Adjudication,
@@ -59,9 +62,12 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 35] = [
+    pub const ALL: [Self; 38] = [
         Self::Annotation,
         Self::Setup,
+        Self::About,
+        Self::BuildMismatch,
+        Self::BuildUnavailable,
         Self::Review,
         Self::ReviewCorrection,
         Self::Adjudication,
@@ -101,6 +107,9 @@ impl InspectorPreset {
         match self {
             Self::Annotation => "annotation",
             Self::Setup => "setup",
+            Self::About => "about",
+            Self::BuildMismatch => "build-mismatch",
+            Self::BuildUnavailable => "build-unavailable",
             Self::Review => "review",
             Self::ReviewCorrection => "review-correction",
             Self::Adjudication => "adjudication",
@@ -146,6 +155,26 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
     match preset {
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
         InspectorPreset::Setup => setup_preset(),
+        InspectorPreset::About | InspectorPreset::BuildUnavailable => {
+            let mut app = setup_preset();
+            app.setup.section = SetupSection::About;
+            app.builds.web =
+                labello_client::BuildIdentity::from_metadata(Some("v1.2.3"), Some(&"a".repeat(40)));
+            app.builds.server = (preset == InspectorPreset::About).then(|| app.builds.web.clone());
+            app.builds.checked = true;
+            app
+        }
+        InspectorPreset::BuildMismatch => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.builds.web =
+                labello_client::BuildIdentity::from_metadata(Some("v1.2.3"), Some(&"a".repeat(40)));
+            app.builds.server = Some(labello_client::BuildIdentity::from_metadata(
+                Some("v1.2.4"),
+                Some(&"b".repeat(40)),
+            ));
+            app.builds.checked = true;
+            app
+        }
         InspectorPreset::Review => work_preset(AssignmentKind::Review, ctx),
         InspectorPreset::ReviewCorrection => {
             let mut app = work_preset(AssignmentKind::Review, ctx);

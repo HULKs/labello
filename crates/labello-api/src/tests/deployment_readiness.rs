@@ -97,3 +97,21 @@ async fn deployment_readiness_detects_authentication_corruption_after_startup() 
     assert_eq!(body["authentication"], "failed");
     assert!(!body.to_string().contains("not-json"));
 }
+
+#[tokio::test]
+async fn public_build_information_remains_available_when_readiness_fails() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing = temp.path().join("missing");
+    let app = production_router(ApiState::new(&missing));
+    let response = app.clone().oneshot(Request::builder().uri("/deployment/readiness").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let response = app.oneshot(Request::builder().uri("/build-information").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let body = response_json(response).await;
+    assert_eq!(body.as_object().unwrap().len(), 2);
+    assert!(body.to_string().len() < 200);
+    let identity: labello_client::BuildIdentity = serde_json::from_value(body).unwrap();
+    assert_eq!(identity, labello_client::BuildIdentity::from_metadata(option_env!("LABELLO_RELEASE_TAG"), option_env!("LABELLO_SOURCE_COMMIT")));
+    assert!(!missing.exists());
+}

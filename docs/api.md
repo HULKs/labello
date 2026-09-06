@@ -92,6 +92,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | Method and path | Access | Input → output |
 | --- | --- | --- |
 | `GET /health` | Public | No input → `{"ok":true,"service":"labello"}` |
+| `GET /build-information` | Public, no session or CSRF token | No input → compiled artifact `releaseTag` and `sourceCommit`, independently of readiness; `Cache-Control: no-store` |
 | `GET /deployment/readiness` | Public; production API is loopback-bound | No input → bounded release identity, schema version, dataset-root traversal, and authentication-store load state; HTTP 503 when a probe fails |
 | `GET /auth/options` | Public | No input → `AuthOptions` |
 | `POST /auth/local-admin` | Public, allowed origin, feature enabled | No body → `SessionInfo` plus session cookie |
@@ -240,3 +241,18 @@ update this document in the same change. The router and focused API tests are
 the route/access regression suite. The open documentation-automation issue
 still tracks generated inventory or an explicit test that detects omissions in
 this table.
+
+## Public build information
+
+`GET /build-information` returns only `releaseTag` and `sourceCommit`. Each is
+nullable: absent or invalid compiled metadata is `null`, never the shared Cargo
+package version. Tags contain at most 64 ASCII letters, digits, dots, underscores,
+plus signs or hyphens; commits contain exactly 40 or 64 hexadecimal characters.
+The reserved tag `development` represents missing release metadata and is exposed
+as `null`. The response is under 200 bytes, performs no persistence or
+authentication probe, and remains HTTP 200 when `/deployment/readiness` returns
+503. Existing credentialed CORS rules also apply to this public route.
+
+The client uses a ten-second request timeout, validates the two-field DTO and
+rejects responses over 1024 bytes. The response must not expose readiness,
+configuration, authentication state, paths, or other server details.

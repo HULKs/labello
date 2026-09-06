@@ -279,6 +279,7 @@ impl LabelloApp {
 
     fn transition_label(&self, transition: &PendingTransition) -> String {
         match transition {
+            PendingTransition::About => "Setup > About".to_string(),
             PendingTransition::NextAssignment => "Next assignment".to_string(),
             PendingTransition::PreviousAssignment(_) => "Previous assignment".to_string(),
             PendingTransition::Workflow(task_id) => self

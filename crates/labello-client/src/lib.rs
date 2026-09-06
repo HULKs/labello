@@ -16,3 +16,6 @@ pub use error::*;
 pub use http::HttpLabelloApi;
 pub use import::*;
 pub use traits::*;
+
+mod build_information;
+pub use build_information::{BuildIdentity, BuildInformationApi};

@@ -74,3 +74,14 @@ const fn source_commit() -> &'static str {
         None => "development",
     }
 }
+
+/// Compiled identity remains available when deployment admission fails.
+pub(super) async fn build_information() -> impl IntoResponse {
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(labello_client::BuildIdentity::from_metadata(
+            option_env!("LABELLO_RELEASE_TAG"),
+            option_env!("LABELLO_SOURCE_COMMIT"),
+        )),
+    )
+}

@@ -5,6 +5,12 @@ impl LabelloApp {
         command: UiCommand,
     ) -> Option<UiCommand> {
         match command {
+            UiCommand::BuildInformation { request } => self.spawn_message(request.clone(), async move {
+                UiMessage::BuildInformationLoaded {
+                    request,
+                    result: api.build_information().await.map_err(UiRequestError::from),
+                }
+            }),
             UiCommand::AuthOptions { request } => self.spawn_message(request.clone(), async move {
                 UiMessage::AuthOptionsLoaded {
                     request,
