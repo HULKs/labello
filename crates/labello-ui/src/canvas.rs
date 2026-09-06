@@ -567,6 +567,56 @@ mod tests {
     }
 
     #[test]
+    fn dashed_boxes_always_wrap_each_corner_in_one_dash() {
+        for size in [vec2(137.0, 83.0), vec2(4.0, 3.0), vec2(300.0, 2.0)] {
+            for zoom in [1.0, 2.0, 12.0] {
+                let rect = Rect::from_min_size(pos2(20.0, 30.0), size);
+                let context = egui::Context::default();
+                let output = context.run_ui(egui::RawInput::default(), |ui| {
+                    paint_dashed_box(ui.painter(), rect, theme::ANNOTATION, zoom);
+                });
+                let corners = [
+                    rect.left_top(),
+                    rect.right_top(),
+                    rect.right_bottom(),
+                    rect.left_bottom(),
+                ];
+                for corner in corners {
+                    let paths: Vec<_> = output
+                        .shapes
+                        .iter()
+                        .filter_map(|shape| match &shape.shape {
+                            egui::Shape::Path(path)
+                                if path.points.len() == 3
+                                    && path.points[1] == corner
+                                    && path.stroke.color
+                                        == egui::epaint::ColorMode::Solid(theme::ANNOTATION) =>
+                            {
+                                Some(path)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    assert_eq!(
+                        paths.len(),
+                        1,
+                        "each corner needs one continuous colored dash"
+                    );
+                    let first = paths[0].points[0] - corner;
+                    let last = paths[0].points[2] - corner;
+                    assert!(first.length() > 0.0 && last.length() > 0.0);
+                    assert_eq!(
+                        first.dot(last),
+                        0.0,
+                        "corner dash must turn through 90 degrees"
+                    );
+                    assert!(paths[0].points.iter().all(|point| rect.contains(*point)));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn unfocused_context_box_dashes_and_gaps_shrink_when_zooming_out() {
         let annotation = test_annotation(AnnotationGeometry::BoundingBox(bbox(0.2, 0.2, 0.5, 0.5)));
         let id = annotation.annotation_id.clone();
@@ -598,6 +648,7 @@ mod tests {
             );
         let mut previous_gap = f32::INFINITY;
         let mut previous_length = f32::INFINITY;
+        let mut base_gap = None;
         for zoom in [4.0, 2.0, 1.0] {
             harness.state_mut().canvas.zoom = zoom;
             harness.run();
@@ -625,7 +676,9 @@ mod tests {
                 "zooming out must shorten each dash"
             );
             assert!((length - 4.0 * zoom).abs() < 0.01);
-            assert!((gap - 5.0 * zoom).abs() < 0.01);
+            assert!(gap >= 5.0 * zoom - 0.01);
+            let expected = *base_gap.get_or_insert(gap / zoom);
+            assert!((gap / zoom - expected).abs() < 0.01);
             previous_gap = gap;
             previous_length = length;
         }
@@ -1136,11 +1189,11 @@ mod tests {
 
         let context = egui::Context::default();
         let painter = context.layer_painter(egui::LayerId::background());
-        paint_dashed_segment(
+        paint_dashed_box(
             &painter,
-            pos2(f32::NAN, 0.0),
-            pos2(f32::INFINITY, 1.0),
+            Rect::from_min_max(pos2(f32::NAN, 0.0), pos2(f32::INFINITY, 1.0)),
             Color32::WHITE,
+            1.0,
         );
     }
 

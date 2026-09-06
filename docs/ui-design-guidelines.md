@@ -160,7 +160,8 @@ has been recorded.
   between the color and its halo. Inspect legibility on light, dark, and textured
   images; this does not guarantee contrast against every image pixel. Keep context
   guides, drafts, and box suggestions dashed, with gaps wide enough to separate
-  the outlined dashes. For unfocused migration context boxes, scale dash length
+  the outlined dashes. Give every dashed box corner a continuous L-shaped dash
+  and distribute edge gaps evenly between corner dashes. For unfocused migration context boxes, scale dash length
   and gap with viewport zoom so both shrink when zooming out. Keep stroke width
   fixed in screen space.
   Expose keypoint names, states, and marker descriptions on the canvas's

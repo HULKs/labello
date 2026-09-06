@@ -54,10 +54,7 @@ fn paint_canvas(
         match &suggestion.geometry {
             AnnotationGeometry::BoundingBox(bbox) => {
                 let rect = bbox_to_screen_rect(image_rect, *bbox);
-                paint_dashed_segment(&painter, rect.left_top(), rect.right_top(), color);
-                paint_dashed_segment(&painter, rect.right_top(), rect.right_bottom(), color);
-                paint_dashed_segment(&painter, rect.right_bottom(), rect.left_bottom(), color);
-                paint_dashed_segment(&painter, rect.left_bottom(), rect.left_top(), color);
+                paint_dashed_box(&painter, rect, color, 1.0);
             }
             AnnotationGeometry::Skeleton(skeleton) => {
                 for keypoint in &skeleton.keypoints {
@@ -317,10 +314,7 @@ fn paint_context_box(
         CornerRadius::same(4),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 7),
     );
-    paint_dashed_segment_scaled(painter, rect.left_top(), rect.right_top(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
-    paint_dashed_segment_scaled(painter, rect.right_top(), rect.right_bottom(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
-    paint_dashed_segment_scaled(painter, rect.right_bottom(), rect.left_bottom(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
-    paint_dashed_segment_scaled(painter, rect.left_bottom(), rect.left_top(), color, finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM));
+    paint_dashed_box(painter, rect, color, zoom);
 }
 
 fn paint_selected_box(
@@ -355,48 +349,39 @@ fn paint_draft_box(painter: &egui::Painter, image_rect: Rect, bbox: BoundingBox)
         CornerRadius::same(3),
         Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 30),
     );
-    paint_dashed_segment(painter, rect.left_top(), rect.right_top(), color);
-    paint_dashed_segment(painter, rect.right_top(), rect.right_bottom(), color);
-    paint_dashed_segment(painter, rect.right_bottom(), rect.left_bottom(), color);
-    paint_dashed_segment(painter, rect.left_bottom(), rect.left_top(), color);
+    paint_dashed_box(painter, rect, color, 1.0);
 }
 
-fn paint_dashed_segment(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32) {
-    paint_dashed_segment_scaled(painter, start, end, color, 1.0);
-}
-
-fn paint_dashed_segment_scaled(painter: &egui::Painter, start: Pos2, end: Pos2, color: Color32, scale: f32) {
-    if !start.x.is_finite() || !start.y.is_finite() || !end.x.is_finite() || !end.y.is_finite() {
+fn paint_dashed_box(painter: &egui::Painter, rect: Rect, color: Color32, zoom: f32) {
+    if !valid_rect(rect) || !rect.size().length().is_finite() {
         return;
     }
-    let vector = end - start;
-    let length = vector.length();
-    if !length.is_finite() || length <= f32::EPSILON {
-        return;
-    }
-    // Scale the whole pattern with the viewport so dashes stay attached to the box.
+    let scale = finite_or(zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM);
     let dash_length = 4.0 * scale;
-    let gap = 5.0 * scale;
-    let direction = vector / length;
-    let mut offset = 0.0;
-    for _ in 0..MAX_DASH_SEGMENTS {
-        if offset >= length {
-            break;
+    let minimum_gap = 5.0 * scale;
+    // Each corner owns a single bent dash, half on each adjacent edge.
+    // Short boxes keep four distinct corners without overlapping their legs.
+    let leg = (dash_length * 0.5).min(rect.width().min(rect.height()) * 0.25);
+    let corners = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()];
+    for index in 0..4 {
+        let corner = corners[index];
+        let previous = corners[(index + 3) % 4];
+        let next = corners[(index + 1) % 4];
+        let incoming = (previous - corner).normalized();
+        let outgoing = (next - corner).normalized();
+        for stroke in overlay_strokes(color, 2.0) {
+            painter.add(egui::Shape::line(vec![corner + incoming * leg, corner, corner + outgoing * leg], stroke));
         }
-        let dash_end = (offset + dash_length).min(length);
-        if !dash_end.is_finite() || dash_end <= offset {
-            break;
+        let remaining = (next - corner).length() - 2.0 * leg;
+        let count = (((remaining - minimum_gap) / (dash_length + minimum_gap)).floor().max(0.0) as usize)
+            .min(MAX_DASH_SEGMENTS);
+        // Distribute the remainder into equal gaps instead of truncating a dash
+        // at the next corner. Dash length remains proportional to viewport zoom.
+        let gap = (remaining - count as f32 * dash_length) / (count + 1) as f32;
+        for dash in 0..count {
+            let offset = leg + gap + dash as f32 * (dash_length + gap);
+            paint_outlined_segment(painter, [corner + outgoing * offset,
+                corner + outgoing * (offset + dash_length)], color, 2.0);
         }
-        paint_outlined_segment(
-            painter,
-            [start + direction * offset, start + direction * dash_end],
-            color,
-            2.0,
-        );
-        let next = offset + dash_length + gap;
-        if !next.is_finite() || next <= offset {
-            break;
-        }
-        offset = next;
     }
 }
