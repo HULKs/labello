@@ -38,7 +38,7 @@ impl eframe::App for LabelloApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.navigation.statistics.open {
+        if self.navigation.statistics.open || self.work.pending_transition.is_some() {
             ui.disable();
         }
         let viewport = ui.available_size();

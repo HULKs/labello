@@ -515,6 +515,7 @@ impl crate::app::LabelloApp {
                         {
                             self.work.selected_annotation = Some(target);
                         }
+                        self.work.assignment_touched |= draft.correction.is_some();
                         self.work.correction_draft = draft.correction.map(Into::into);
                     }
                 }

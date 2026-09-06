@@ -486,6 +486,7 @@ impl LabelloApp {
     }
 
     fn mark_edited(&mut self) {
+        self.work.assignment_touched = true;
         self.work.edit_generation = self.work.edit_generation.wrapping_add(1);
         self.work.save_status = SaveStatus::Dirty;
         self.work.last_edit_at = Some(Instant::now());

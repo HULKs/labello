@@ -180,12 +180,6 @@ pub(super) fn drag_at(
     harness.step();
 }
 
-pub(super) fn release_and_switch(harness: &mut Harness<'static, LabelloApp>) {
-    assert!(harness.query_by_label("Release and switch").is_some());
-    harness.state_mut().release_pending_transition();
-    harness.step();
-}
-
 pub(super) fn click_accesskit_button(harness: &mut Harness<'static, LabelloApp>, label: &str) {
     harness
         .query_all_by_role_and_label(egui::accesskit::Role::Button, label)

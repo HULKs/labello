@@ -396,6 +396,7 @@ pub struct WorkState {
     pub(crate) canvas: CanvasState,
     pub(crate) save_status: SaveStatus,
     pub(crate) edit_generation: u64,
+    pub(crate) assignment_touched: bool,
     pub(crate) last_edit_at: Option<Instant>,
     pub(crate) undo_stack: Vec<EditSnapshot>,
     pub(crate) redo_stack: Vec<EditSnapshot>,
