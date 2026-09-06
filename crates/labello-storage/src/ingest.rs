@@ -132,7 +132,6 @@ impl DatasetRepository {
                         tracing::warn!(
                             event = "ingest.image.unreadable",
                             error_kind = error.kind(),
-                            diagnostic = error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                             "could not read image"
                         );
                         preserve_paths.insert(relative_path.clone());

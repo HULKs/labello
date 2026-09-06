@@ -198,7 +198,6 @@ async fn create_import(
                         event = "import.create.cleanup_failed",
                         import_id = %job.import_id,
                         error_kind = cancel_error.kind(),
-                        diagnostic = cancel_error.safe_diagnostic().as_deref().unwrap_or("redacted"),
                         "failed to clean up server-directory import"
                     );
                 }
@@ -607,7 +606,9 @@ async fn update_import_plan(
     let preflight = convert_plan_update(current.request, request.clone())?;
     let mut control = load_job_control(&state, &import_id).await?;
     if control.owner_user_id != actor.user_id {
-        return Err(ApiError::NotFound("import job".to_string()));
+        return Err(ApiError::HiddenDenial(Box::new(ApiError::NotFound(
+            "import job".to_string(),
+        ))));
     }
     control.pending_plan_request = Some(request.clone());
     save_job_control(&state, &control).await?;

@@ -421,9 +421,9 @@ pub(crate) async fn apply_annotation_batch(
 
     image_id.validate_path_segment()?;
     if request.payloads.len() > MAX_BATCH_SIZE {
-        return Err(ApiError::BadRequest(format!(
-            "annotation batch exceeds {MAX_BATCH_SIZE} mutations"
-        )));
+        return Err(ApiError::ResourceLimit(Box::new(ApiError::BadRequest(
+            format!("annotation batch exceeds {MAX_BATCH_SIZE} mutations"),
+        ))));
     }
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;

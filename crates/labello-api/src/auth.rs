@@ -15,15 +15,8 @@ pub fn actor_from_headers(state: &ApiState, headers: &HeaderMap) -> ApiResult<Ac
 }
 
 pub fn current_account(state: &ApiState, headers: &HeaderMap) -> ApiResult<UserAccount> {
-    session_account(state, headers)?.ok_or_else(|| {
-        tracing::debug!(
-            event = "auth.denied",
-            auth_mode = "session",
-            reason = "login_required",
-            "authentication required"
-        );
-        ApiError::Unauthorized("login required".to_string())
-    })
+    session_account(state, headers)?
+        .ok_or_else(|| ApiError::Unauthorized("login required".to_string()))
 }
 
 pub(crate) fn session_token(headers: &HeaderMap) -> Option<String> {
@@ -60,13 +53,8 @@ pub fn ensure_dataset_role(
         role.clone(),
     )
     .map_err(|error| {
-        tracing::warn!(
-            event = "authorization.denied",
-            user_id = %actor.user_id,
-            dataset_id = %metadata.dataset_id,
-            required_role = %role,
-            "dataset role required"
-        );
+        crate::logging::record_actor(actor);
+        crate::logging::record_dataset(&metadata.dataset_id);
         ApiError::Unauthorized(error.to_string())
     })
 }
@@ -88,13 +76,8 @@ pub fn ensure_any_dataset_role(metadata: &DatasetMetadata, actor: &Actor) -> Api
     if allowed {
         Ok(())
     } else {
-        tracing::warn!(
-            event = "authorization.denied",
-            user_id = %actor.user_id,
-            dataset_id = %metadata.dataset_id,
-            reason = "no_dataset_role",
-            "dataset access denied"
-        );
+        crate::logging::record_actor(actor);
+        crate::logging::record_dataset(&metadata.dataset_id);
         Err(ApiError::Unauthorized(format!(
             "user {} has no role for dataset {}",
             actor.user_id, metadata.dataset_id
@@ -110,13 +93,7 @@ pub fn ensure_bootstrap_admin(
     if state.is_bootstrap_admin(&actor.user_id) {
         Ok(())
     } else {
-        tracing::warn!(
-            event = "authorization.denied",
-            user_id = %actor.user_id,
-            reason = "bootstrap_admin_required",
-            action,
-            "bootstrap administrator access denied"
-        );
+        crate::logging::record_actor(actor);
         Err(ApiError::Unauthorized(format!(
             "user {} cannot {action}",
             actor.user_id

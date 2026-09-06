@@ -1,8 +1,26 @@
 fn map_storage(error: storage::StorageError) -> ApiError {
+    let resource_limit = matches!(&error, storage::StorageError::Import { code, .. } if matches!(code.as_str(),
+        "annotations_per_image_limit" | "category_limit" | "coverage_limit"
+        | "descriptor_byte_limit" | "generated_event_limit" | "generated_state_limit"
+        | "image_decoded_bytes_limit" | "image_decoded_memory_limit" | "image_encoded_bytes_limit"
+        | "image_pixel_limit" | "json_nesting_limit" | "staging_quota_exceeded"
+        | "structured_data_node_limit" | "structured_data_value_limit" | "task_limit"
+        | "yolo_column_limit" | "yolo_line_limit" | "yolo_yaml_alias_limit"));
+    let rejection = map_storage_rejection(error);
+    if resource_limit {
+        ApiError::ResourceLimit(Box::new(rejection))
+    } else {
+        rejection
+    }
+}
+
+fn map_storage_rejection(error: storage::StorageError) -> ApiError {
     match error {
         storage::StorageError::NotFound(_) => ApiError::NotFound("import job".to_string()),
         storage::StorageError::Import { code, message } => match code.as_str() {
-            "import_owner_mismatch" => ApiError::NotFound("import job".to_string()),
+            "import_owner_mismatch" => {
+                ApiError::HiddenDenial(Box::new(ApiError::NotFound("import job".to_string())))
+            }
             "import_root_forbidden" => ApiError::Forbidden("import root access denied".to_string()),
             "import_id_invalid" | "destination_id_invalid" | "destination_id_reserved" => {
                 ApiError::BadRequest(message)
@@ -25,17 +43,21 @@ fn map_storage(error: storage::StorageError) -> ApiError {
             | "source_changed"
             | "plan_stale"
             | "job_not_cancellable"
-            | "reservation_limit"
+            | "import_unavailable" => ApiError::Conflict(message),
+            "reservation_limit"
             | "upload_concurrency_limit"
             | "build_concurrency_limit"
-            | "descriptor_inspection_busy"
-            | "import_unavailable" => ApiError::Conflict(message),
+            | "descriptor_inspection_busy" => {
+                ApiError::ResourceLimit(Box::new(ApiError::Conflict(message)))
+            }
+            "parser_time_limit" => {
+                ApiError::ResourceLimit(Box::new(ApiError::Unprocessable(message)))
+            }
             "profile_disabled"
             | "destination_name_invalid"
             | "source_incomplete"
             | "ground_truth_attestation_required"
             | "plan_not_committable"
-            | "parser_time_limit"
             | "source_file_missing"
             | "import_root_missing"
             | "upload_chunk_digest_mismatch"

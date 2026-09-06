@@ -34,15 +34,62 @@ console at `DEBUG` and above. Release builds report only warnings and errors.
 
 ## Event Levels
 
-- `ERROR`: internal API failures, corrupt authentication state, failed or
-  panicked background jobs, poisoned-lock recovery.
-- `WARN`: authorization denials, skipped corrupt datasets, unreadable images,
-  cache recovery, browser persistence failures.
+- `ERROR`: dependency and internal API failures, corrupt authentication state,
+  failed or panicked background jobs, poisoned-lock recovery.
+- `WARN`: authorization denials, enforced API resource limits, skipped corrupt
+  datasets, unreadable images, cache recovery, browser persistence failures.
 - `INFO`: server lifecycle, HTTP completion, successful authentication,
   dataset administration, ingest, upload, import lifecycle, snapshots, and
-  offline sync.
+  offline sync, validation and conflict rejections, missing routes and methods.
 - `DEBUG`: assignment, annotation, review, correction, adjudication, and
   expected unauthenticated browser requests.
+
+## Request failure diagnostics
+
+`logging::observe_response` owns the request failure diagnostic and the separate
+`http.request.completed` lifecycle event. Each response emits one INFO completion
+record, including successes, redirects, extractor rejections, and unmatched routes.
+Every 4xx/5xx response also emits at most one diagnostic. `ApiError` attaches a
+bounded category to response extensions; it does not log independently. Responses
+without that extension use the status mapping below, never a body or error string.
+
+Both events share the `http.request` span's request ID, bounded HTTP method and
+matched route template. Unmatched routes use `<unmatched>` and extension methods
+use `<other>`. Dataset-role denials add validated user and dataset IDs to that
+span; bootstrap-administrator denials add a validated user ID. Missing or invalid
+identifiers are omitted. No actor is inferred from a rejected cookie or header.
+
+| Failure path | Diagnostic event and level | Category / logging input owner |
+| --- | --- | --- |
+| Application validation, invalid IDs, invalid assignments/corrections and conflicts | `api.request.rejected`, INFO | `ApiError` variant or bounded `StorageError::kind()` |
+| JSON, path/query, content-type and multipart extractor rejection | `api.request.rejected`, INFO | Status fallback such as `bad_request`, `unprocessable_entity`, `unsupported_media_type` |
+| Authentication, dataset roles, bootstrap administrator, import-root denial, OAuth flow validation, CSRF/origin middleware | `api.request.rejected`, WARN | `unauthorized`, `forbidden`, or `storage_unauthorized`; auth helpers attach safe IDs without a second event |
+| Import ownership denial hidden as HTTP 404 | `api.request.rejected`, WARN | `forbidden`; public not-found status and body are preserved |
+| Body-size and mapped import size limits | `api.request.rejected`, WARN | `payload_too_large`; either extractor fallback or `ApiError` |
+| Multipart body reads and annotation batch count | `api.request.rejected`, WARN | `resource_limit`; public legacy HTTP 400 response is preserved |
+| Import reservation, upload/build concurrency, descriptor inspection and parser-time budgets | `api.request.rejected`, WARN | `resource_limit`; public 409/422 responses are preserved |
+| Import descriptor, parser structure, image decode, annotation/category/task/coverage, generated-artifact and staging budgets | `api.request.rejected`, WARN | `resource_limit`; preserve existing 422 or generic 500 responses, including legacy limit mappings |
+| Expected unauthenticated `GET /me` | `api.request.rejected`, DEBUG | `unauthorized`; the INFO completion remains visible with the default filter |
+| Missing resources/routes and unsupported methods | `api.request.rejected`, INFO | `not_found`, `storage_not_found`, `method_not_allowed`; no raw path fallback |
+| HTTP dependency, serialization, storage or internal application failures | `api.error`, ERROR | `http_client`, `serialization`, bounded storage kind, or `internal` |
+| Readiness 503 or another 502/503/504 without an application category | `api.error`, ERROR | `dependency_unavailable` from status |
+
+There is no request-rate limiter. A future HTTP 429 response uses WARN category
+`rate_limit`; this fallback is not a claim of implemented rate limiting. Other
+4xx responses use INFO `request_rejected`; other 5xx responses use ERROR `internal`.
+CORS preflight responses that omit permission headers can still be HTTP 200, so
+only completion is logged. A browser CORS refusal is not a server error response.
+Disabled import is an expected capability conflict at INFO, not a failed upstream
+request. Import plan diagnostics returned successfully inside job/plan JSON are
+not HTTP failures and receive only the completion record. These exceptions avoid
+treating every 4xx as a warning.
+
+Startup failures, background job failures, poisoned-lock recovery, skipped corrupt
+datasets and failed import cleanup remain separate operational events. They describe
+work or recovery, not another diagnostic for the final HTTP response. API events
+use bounded categories and omit parser/I/O diagnostic text even when a helper calls
+that text "safe". Direct calls to `ApiError::into_response` outside the router do
+not emit request logs because they lack request context.
 
 ## Redaction
 

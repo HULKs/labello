@@ -2,6 +2,7 @@ pub mod auth;
 mod csrf;
 pub mod error;
 pub mod handlers;
+mod logging;
 pub mod oauth;
 mod session;
 pub mod state;
