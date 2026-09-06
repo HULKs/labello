@@ -417,6 +417,15 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_next_image(&mut self) {
+        self.clear_workflow_change_outside_scope();
+        if self
+            .work
+            .automatic_workflow_change
+            .as_ref()
+            .is_some_and(|notice| !notice.presented)
+        {
+            return;
+        }
         let Some(kind) = self.assignment_kind() else {
             return;
         };
@@ -474,11 +483,23 @@ impl LabelloApp {
                 );
                 return;
             };
+            let previous = self.workflow_identity_label(&task);
             self.select_workflow(&next.task_id);
+            let current = self.workflow_identity_label(
+                self.selected_task()
+                    .expect("selected available workflow must remain configured"),
+            );
+            self.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
+                previous,
+                current,
+                dataset_id: self.config.dataset_id.clone(),
+                view: self.view,
+                presented: false,
+                presented_pass: None,
+            });
             self.runtime.persistence.expected_assignment = None;
-            self.selected_task()
-                .cloned()
-                .expect("selected available workflow must remain configured")
+            // Present the changed identity before the next assignment can accept input.
+            return;
         };
         self.work.availability.load_after_resolution = false;
         let operation_id = self.begin_load();

@@ -160,10 +160,11 @@ impl eframe::App for LabelloApp {
             theme::central_frame()
                 .fill(egui::Color32::TRANSPARENT)
                 .inner_margin(
-                    if Self::short_viewport(viewport)
-                        && self.activity_available()
-                        && self.view == AppView::Annotate
-                        && self.manual_migration_active()
+                    if self.workflow_change_needs_inline_slot(ui.ctx())
+                        || (Self::short_viewport(viewport)
+                            && self.activity_available()
+                            && self.view == AppView::Annotate
+                            && self.manual_migration_active())
                     {
                         egui::Margin::symmetric(theme::SPACE_2 as i8, 0)
                     } else {

@@ -323,6 +323,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_auth_epoch(&mut self) {
+        self.work.automatic_workflow_change = None;
         self.auth_epoch = self.auth_epoch.wrapping_add(1);
         self.workspace_epoch = self.workspace_epoch.wrapping_add(1);
         self.invalidate_async_ownership();

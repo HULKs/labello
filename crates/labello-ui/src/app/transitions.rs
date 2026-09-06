@@ -41,6 +41,7 @@ impl LabelloApp {
                 }
             }
             PendingTransition::View(view) => {
+                self.work.automatic_workflow_change = None;
                 self.runtime.notice = None;
                 self.work.show_tutorial = false;
                 self.work.drawer = None;

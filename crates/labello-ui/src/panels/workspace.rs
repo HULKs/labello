@@ -1,5 +1,6 @@
 impl LabelloApp {
     pub(crate) fn central(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        self.clear_workflow_change_outside_scope();
         match self.view {
             AppView::Setup => {
                 centered_scroll(ui, 1100.0, |ui| self.setup_view(ui, layout));
@@ -22,7 +23,103 @@ impl LabelloApp {
             } else { explanation };
             ui.label(caption).on_hover_text(explanation);
         }
+        if self.workflow_change_needs_inline_slot(ui.ctx()) {
+            let width = ui.available_width();
+            let notice = egui::Frame::new()
+                .inner_margin(egui::Margin::symmetric(6, 0))
+                .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+            ui.painter().rect_stroke(
+                notice.response.rect,
+                6,
+                egui::Stroke::new(2.0, theme::AMBER),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
+        self.automatic_workflow_change_notice(ui.ctx(), canvas_rect);
+    }
+
+    pub(crate) fn workflow_change_needs_inline_slot(&self, ctx: &egui::Context) -> bool {
+        let viewport = ctx.content_rect().size();
+        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
+            && Self::short_viewport(viewport)
+            && self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
+                notice.presented_pass != Some(ctx.cumulative_pass_nr())
+            })
+    }
+
+    fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        if self.work.automatic_workflow_change.as_ref().is_none_or(|notice| {
+            notice.presented_pass == Some(ctx.cumulative_pass_nr())
+        })
+        {
+            return;
+        }
+        let width = (canvas.width() - 16.0).clamp(200.0, 680.0);
+        egui::Area::new(egui::Id::new("automatic-workflow-change"))
+            .order(egui::Order::Middle)
+            .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
+            .show(ctx, |ui| {
+                theme::card_frame()
+                    .inner_margin(egui::Margin::same(6))
+                    .stroke(egui::Stroke::new(2.0, theme::AMBER))
+                    .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+            });
+    }
+
+    fn workflow_change_contents(&mut self, ui: &mut egui::Ui, width: f32) {
+        let Some(notice) = self.work.automatic_workflow_change.clone() else {
+            return;
+        };
+        let label = format!(
+            "Workflow changed automatically. From {} to {}.",
+            notice.previous, notice.current
+        );
+        let presented = ui.is_visible();
+        let mut dismiss = false;
+        ui.set_width(width);
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.set_width((width - 54.0).max(60.0));
+                let response = ui
+                    .add(egui::Label::new(format!("Changed from {}", notice.previous)).truncate());
+                response.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
+                });
+                ui.ctx().accesskit_node_builder(response.id, |node| {
+                    node.set_role(egui::accesskit::Role::Status);
+                    node.set_label(label.clone());
+                    node.set_live(egui::accesskit::Live::Polite);
+                });
+                response.on_hover_text(&notice.previous);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("Now {}", notice.current))
+                            .strong()
+                            .color(theme::AMBER),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(&notice.current);
+            });
+            let button = ui
+                .add(egui::Button::new("×").min_size(egui::vec2(44.0, 44.0)))
+                .on_hover_text("Dismiss workflow change");
+            button.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dismiss workflow change")
+            });
+            dismiss = button.clicked();
+        });
+        if dismiss {
+            self.work.automatic_workflow_change = None;
+        } else if presented && let Some(notice) = self.work.automatic_workflow_change.as_mut() {
+            notice.presented = true;
+            notice.presented_pass = Some(ui.ctx().cumulative_pass_nr());
+        }
+        if !notice.presented && presented {
+            self.request_next_image();
+        }
     }
 
     pub(crate) fn overlays(&mut self, ctx: &egui::Context, layout: LayoutMode) {
@@ -133,6 +230,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        self.clear_workflow_change_outside_scope();
         if self.view == AppView::Review {
             self.review_context_bar(ui, layout);
             return;
@@ -175,9 +273,7 @@ impl LabelloApp {
             }
         };
         let stack_controls = layout == LayoutMode::Compact
-            || (layout == LayoutMode::Medium
-                && view != AppView::Annotate
-                && current.is_some());
+            || (layout == LayoutMode::Medium && view != AppView::Annotate && current.is_some());
         let show_panel_buttons =
             layout != LayoutMode::Wide && matches!(view, AppView::Annotate | AppView::Review);
         let response = if stack_controls {
@@ -185,11 +281,25 @@ impl LabelloApp {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.horizontal(|ui| {
                     ui.set_min_height(44.0);
-                    add_summary(ui, 50.0);
-                    if current.is_some()
-                        && let Some(workflow) = workflow.as_ref()
-                    {
-                        theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
+                    if short && self.work.automatic_workflow_change.is_some() {
+                        // Reuse the identity row on short screens; leave the small canvas unobscured.
+                        let controls_width = if show_panel_buttons {
+                            88.0 + 2.0 * ui.spacing().item_spacing.x
+                        } else {
+                            0.0
+                        };
+                        let width = (ui.available_width() - controls_width - 4.0).max(120.0);
+                        egui::Frame::new()
+                            .corner_radius(egui::CornerRadius::same(6))
+                            .stroke(egui::Stroke::new(2.0, theme::AMBER))
+                            .show(ui, |ui| self.workflow_change_contents(ui, width));
+                    } else {
+                        add_summary(ui, 50.0);
+                        if current.is_some()
+                            && let Some(workflow) = workflow.as_ref()
+                        {
+                            theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
+                        }
                     }
                     if show_panel_buttons {
                         self.context_panel_buttons(ui);
