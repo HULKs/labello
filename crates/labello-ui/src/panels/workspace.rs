@@ -127,7 +127,12 @@ impl LabelloApp {
             self.draft_recovery_modal(ctx);
             return;
         }
-        if self.work.migration.pending_companion_reconciliation.is_some() {
+        if self
+            .work
+            .migration
+            .pending_companion_reconciliation
+            .is_some()
+        {
             self.migration_companion_reconciliation_modal(ctx);
             return;
         }
@@ -171,11 +176,9 @@ impl LabelloApp {
             };
             if let Some(drawer) = self.work.drawer {
                 let (title, align, offset) = match drawer {
-                    Drawer::Workflow => (
-                        "Workflow",
-                        egui::Align2::LEFT_CENTER,
-                        egui::vec2(12.0, 0.0),
-                    ),
+                    Drawer::Workflow => {
+                        ("Workflow", egui::Align2::LEFT_CENTER, egui::vec2(12.0, 0.0))
+                    }
                     Drawer::Inspector => (
                         "Inspector",
                         egui::Align2::RIGHT_CENTER,
@@ -467,7 +470,6 @@ impl LabelloApp {
             }
         });
     }
-
 }
 
 fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {
