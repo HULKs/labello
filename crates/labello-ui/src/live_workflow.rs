@@ -964,7 +964,12 @@ async fn load_image(
     let (image, state, preview) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
-        api.get_image_preview(&dataset_id, &assignment.image_id, 1600),
+        load_working_preview(
+            api.as_ref(),
+            &dataset_id,
+            &assignment.image_id,
+            labello_client::ImagePreviewProfile::StandardV1
+        ),
     )?;
     let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
         [preview.width as usize, preview.height as usize],
@@ -993,6 +998,32 @@ async fn load_image(
         state,
         color_image,
     })
+}
+
+pub(crate) async fn load_working_preview(
+    api: &dyn LabelloApi,
+    dataset_id: &labello_domain::DatasetId,
+    image_id: &labello_domain::ImageId,
+    profile: labello_client::ImagePreviewProfile,
+) -> labello_client::ClientResult<labello_client::ImagePreview> {
+    let encoded = api
+        .get_encoded_image_preview(dataset_id, image_id, profile)
+        .await;
+    let decoded = encoded.and_then(|encoded| encoded.decode());
+    match decoded {
+        Ok(preview) => Ok(preview),
+        Err(_) if profile == labello_client::ImagePreviewProfile::StandardV1 => {
+            tracing::warn!(
+                event = "image.preview.fallback",
+                profile = "standard_v1",
+                reason = "encoded_preview_failed",
+                "using bounded RGBA preview"
+            );
+            // One fallback request at the identical working size. Never fetch originals.
+            api.get_image_preview(dataset_id, image_id, 1600).await
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn assignment_action(assignment: &Assignment) -> AssignmentActionRequest {

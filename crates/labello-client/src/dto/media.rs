@@ -1,3 +1,27 @@
+/// Closed, versioned display policies; arbitrary sizes and qualities are not wire input.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImagePreviewProfile {
+    #[default]
+    StandardV1,
+    DataSaverV1,
+}
+impl ImagePreviewProfile {
+    pub fn as_str(self) -> &'static str { match self { Self::StandardV1 => "standard_v1", Self::DataSaverV1 => "data_saver_v1" } }
+    pub fn max_edge(self) -> u32 { match self { Self::StandardV1 => 1600, Self::DataSaverV1 => 1280 } }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EncodedImagePreview {
+    pub image_id: ImageId,
+    pub profile: ImagePreviewProfile,
+    pub width: u32,
+    pub height: u32,
+    pub original_width: u32,
+    pub original_height: u32,
+    pub webp: Vec<u8>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageFile {

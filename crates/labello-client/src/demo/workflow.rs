@@ -154,6 +154,31 @@ impl ImageApi for DemoLabelloApi {
         })
     }
 
+    fn get_encoded_image_preview<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        profile: crate::ImagePreviewProfile,
+    ) -> crate::ApiFuture<'a, crate::EncodedImagePreview> {
+        Box::pin(async move {
+            let webp: &[u8] = match profile {
+                crate::ImagePreviewProfile::StandardV1 => include_bytes!("fixtures/standard.webp"),
+                crate::ImagePreviewProfile::DataSaverV1 => {
+                    include_bytes!("fixtures/data-saver.webp")
+                }
+            };
+            Ok(crate::EncodedImagePreview {
+                image_id: image_id.clone(),
+                profile,
+                width: 1,
+                height: 1,
+                original_width: 1,
+                original_height: 1,
+                webp: webp.to_vec(),
+            })
+        })
+    }
+
     fn rebuild_image<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

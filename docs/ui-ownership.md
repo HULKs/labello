@@ -128,3 +128,15 @@ and `PendingTransition::About`, retaining Admin, assignment and unsaved-draft
 protections; cancelling leaves work intact. The panel reserves no height without
 a mismatch and leaves room for future activity content to its left without
 implementing activity statistics.
+
+## Working Image Representations
+
+`live_workflow::load_working_preview` owns encoded working-image selection and
+bounded fallback for annotation, review, migration and prefetch. Standard v1
+(lossless WebP, max edge 1600, no upscale) is the default. One failed Standard
+encoded load/decode can fall back to the legacy 1600 RGBA capability. Data Saver
+v1 (lossy WebP quality 80, max edge 1280) is an explicit client capability whose
+errors never silently fetch RGBA or originals. The shared client decodes WebP
+under fixed bounds on native and WASM; `ImagePreview::rgba` always means decoded
+RGBA. Existing work/auth epochs own reply rejection and image-reference cleanup;
+representation choice never changes normalized geometry or authoritative state.

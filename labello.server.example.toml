@@ -13,6 +13,18 @@ sessionCookieSecure = false
 [developmentAuth]
 localAdminLogin = true
 
+# Derived image previews are generated lazily. Keep the cache outside datasetsRoot.
+[previews]
+cacheRoot = ".labello-preview-cache"
+
+[previews.limits]
+maxSourceBytes = 67_108_864
+maxPixels = 32_000_000
+maxDecodedBytes = 268_435_456
+workers = 2
+cacheBytes = 2_147_483_648
+cacheEntries = 4096
+
 # Dataset import is disabled when this optional section is absent.
 # [import]
 # enabled = true

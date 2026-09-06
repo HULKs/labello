@@ -8,6 +8,7 @@ pub mod dto;
 pub mod error;
 pub mod http;
 pub mod import;
+pub mod preview;
 pub mod traits;
 
 pub use demo::DemoLabelloApi;

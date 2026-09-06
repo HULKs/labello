@@ -96,6 +96,9 @@ pub trait ImageApi {
         image_id: &'a ImageId,
         max_dimension: u32,
     ) -> ApiFuture<'a, ImagePreview>;
+    fn get_encoded_image_preview<'a>(
+        &'a self, dataset_id: &'a DatasetId, image_id: &'a ImageId, profile: crate::ImagePreviewProfile,
+    ) -> ApiFuture<'a, crate::EncodedImagePreview>;
     fn rebuild_image<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

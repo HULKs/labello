@@ -24,6 +24,7 @@ pub struct ApiState {
     ingest_jobs: Arc<RwLock<BTreeMap<String, IngestJob>>>,
     repositories: Arc<Mutex<BTreeMap<DatasetId, Arc<DatasetRepository>>>>,
     import_service: Option<Arc<ImportService>>,
+    pub(crate) previews: labello_storage::PreviewCache,
     import_root_owners: Arc<BTreeMap<String, BTreeSet<UserId>>>,
     datasets_root_mutation: Arc<AsyncMutex<()>>,
     import_commands: Arc<AsyncMutex<()>>,
@@ -37,6 +38,11 @@ impl ApiState {
         let datasets_root = datasets_root.into();
         Self {
             server_store: ServerStore::new(&datasets_root),
+            previews: labello_storage::PreviewCache::new(
+                datasets_root.join(".labello-server/previews"),
+                Default::default(),
+            )
+            .expect("default preview limits are valid"),
             datasets_root: Arc::new(datasets_root),
             bootstrap_admins: Arc::new(BTreeSet::from([UserId::from("admin")])),
             local_admin_user_id: None,
@@ -113,6 +119,11 @@ impl ApiState {
         config.flow_cookie_path()?;
         self.github_oauth = Some(config);
         Ok(self)
+    }
+
+    pub fn with_preview_cache(mut self, cache: labello_storage::PreviewCache) -> Self {
+        self.previews = cache;
+        self
     }
 
     pub fn with_import_service(mut self, service: ImportService) -> Self {

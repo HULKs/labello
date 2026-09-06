@@ -881,7 +881,7 @@ async fn credentialed_cors_only_allows_configured_origins() {
         .unwrap();
     assert_eq!(
         actual.headers()[header::ACCESS_CONTROL_EXPOSE_HEADERS],
-        "x-image-width,x-image-height,x-request-id"
+        "x-image-width,x-image-height,x-original-width,x-original-height,x-preview-profile,x-request-id"
     );
 
     let denied = app

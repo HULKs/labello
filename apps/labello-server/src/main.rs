@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 mod import_config;
 mod logging;
+mod preview_config;
 
 use import_config::{ImportFileConfig, import_root_owners, storage_import_config};
 
@@ -23,6 +24,8 @@ struct ServerConfig {
     github_oauth: Option<GithubOAuthFileConfig>,
     #[serde(default)]
     import: Option<ImportFileConfig>,
+    #[serde(default)]
+    previews: preview_config::PreviewFileConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +58,7 @@ impl Default for ServerConfig {
             },
             github_oauth: None,
             import: None,
+            previews: Default::default(),
         }
     }
 }
@@ -199,7 +203,12 @@ async fn build_state(config: ServerConfig, bind: SocketAddr) -> anyhow::Result<A
         released_reservations = recovery.released_reservations,
         "dataset import recovery completed"
     );
-    state = state.with_import_service(import_service);
+    state = state
+        .with_import_service(import_service)
+        .with_preview_cache(preview_config::preview_cache(
+            &datasets_root,
+            config.previews,
+        )?);
     Ok(state)
 }
 

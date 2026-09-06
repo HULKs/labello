@@ -5,3 +5,5 @@
 /apps/labello-wasm/labello.client.json
 *.tmp
 .worktrees/
+
+/.labello-preview-cache/

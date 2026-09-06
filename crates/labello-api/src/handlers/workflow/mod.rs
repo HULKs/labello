@@ -333,15 +333,18 @@ pub(crate) async fn get_image_preview(
     let metadata = repo.load_dataset_config().await?;
     ensure_any_dataset_role(&metadata, &actor)?;
     let record = repo.load_image_record(&image_id).await?;
-    let path = repo.image_path(&record.canonical_path)?;
-    let max = query.max.clamp(256, 4096);
-    let (width, height, rgba) = tokio::task::spawn_blocking(move || preview_rgba(path, max))
+    let preview = state
+        .previews
+        .rgba(&repo, &record, query.max)
         .await
-        .map_err(|error| ApiError::BadRequest(error.to_string()))??;
+        .map_err(preview_error)?;
+    revalidate_preview_access(&state, &headers, &repo, &record).await?;
+    let (width, height, rgba) = (preview.width, preview.height, preview.rgba);
     Ok((
         StatusCode::OK,
         [
             (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+            (header::CACHE_CONTROL, "private, no-store".to_string()),
             (
                 header::HeaderName::from_static("x-image-width"),
                 width.to_string(),
@@ -355,18 +358,98 @@ pub(crate) async fn get_image_preview(
     ))
 }
 
-fn preview_rgba(path: std::path::PathBuf, max: u32) -> Result<(u32, u32, Vec<u8>), ApiError> {
-    let image = image::open(&path).map_err(|source| labello_storage::StorageError::Image {
-        path: path.clone(),
-        source,
-    })?;
-    let image = if image.width().max(image.height()) > max {
-        image.resize(max, max, image::imageops::FilterType::Triangle)
-    } else {
-        image
+#[derive(serde::Deserialize)]
+pub(crate) struct EncodedPreviewQuery {
+    #[serde(default)]
+    profile: labello_client::ImagePreviewProfile,
+}
+
+pub(crate) async fn get_encoded_preview(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    Query(query): Query<EncodedPreviewQuery>,
+    headers: HeaderMap,
+) -> ApiResult<impl IntoResponse> {
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    ensure_any_dataset_role(&repo.load_dataset_config().await?, &actor)?;
+    let record = repo.load_image_record(&image_id).await?;
+    let profile = match query.profile {
+        labello_client::ImagePreviewProfile::StandardV1 => {
+            labello_storage::PreviewProfile::StandardV1
+        }
+        labello_client::ImagePreviewProfile::DataSaverV1 => {
+            labello_storage::PreviewProfile::DataSaverV1
+        }
     };
-    let rgba = image.to_rgba8();
-    Ok((rgba.width(), rgba.height(), rgba.into_raw()))
+    let preview = state
+        .previews
+        .get(&repo, &record, profile)
+        .await
+        .map_err(preview_error)?;
+    revalidate_preview_access(&state, &headers, &repo, &record).await?;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "image/webp".to_string()),
+            (header::CACHE_CONTROL, "private, no-store".to_string()),
+            (
+                header::HeaderName::from_static("x-image-width"),
+                preview.width.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-image-height"),
+                preview.height.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-original-width"),
+                preview.original_width.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-original-height"),
+                preview.original_height.to_string(),
+            ),
+            (
+                header::HeaderName::from_static("x-preview-profile"),
+                profile.name().to_string(),
+            ),
+        ],
+        Bytes::from(preview.webp),
+    ))
+}
+
+async fn revalidate_preview_access(
+    state: &ApiState,
+    headers: &HeaderMap,
+    repo: &labello_storage::DatasetRepository,
+    record: &labello_domain::ImageRecord,
+) -> ApiResult<()> {
+    // A worker can outlive a session, permission, or index change.
+    let actor = actor_from_headers(state, headers)?;
+    ensure_any_dataset_role(&repo.load_dataset_config().await?, &actor)?;
+    let current = repo.load_image_record(&record.image_id).await?;
+    if current.blake3 != record.blake3 || current.canonical_path != record.canonical_path {
+        return Err(preview_error(labello_storage::PreviewError::SourceChanged));
+    }
+    Ok(())
+}
+
+fn preview_error(error: labello_storage::PreviewError) -> ApiError {
+    use labello_storage::PreviewError;
+    // These variants have static messages; never attach source paths or decoder text.
+    match error {
+        PreviewError::SourceLimit | PreviewError::DecoderLimit => {
+            ApiError::PayloadTooLarge(error.to_string())
+        }
+        PreviewError::Busy | PreviewError::Quota | PreviewError::SourceChanged => {
+            ApiError::Conflict(error.to_string())
+        }
+        PreviewError::Source | PreviewError::Decode => ApiError::Unprocessable(error.to_string()),
+        PreviewError::Configuration | PreviewError::Cache | PreviewError::Encode => {
+            ApiError::Internal(error.to_string())
+        }
+    }
 }
 
 pub(crate) async fn append_event(
