@@ -131,7 +131,12 @@ has been recorded.
 
 - **Login and setup:** keep sign-in focused and hide methods until session
   discovery completes. Provide About without authentication and put endpoint
-  editing in Advanced connection. After sign-in, feature one valid next dataset
+  editing in Advanced connection. Use a bounded sign-in column with the primary
+  action before secondary navigation. Center the signed-out icon and name
+  vertically in the app bar. Give the sole enabled login method primary emphasis;
+  when both are enabled, keep local development secondary to GitHub. Collapse
+  excess top spacing on short screens and scroll keyboard-focused actions into view.
+  After sign-in, feature one valid next dataset
   action, list all datasets separately, and keep creation secondary.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
   and Fit visible; keep Pan mode active during approval decisions and return

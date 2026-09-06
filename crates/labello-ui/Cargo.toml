@@ -13,6 +13,7 @@ inspector-presets = []
 blake3.workspace = true
 eframe.workspace = true
 egui.workspace = true
+egui_extras = { version = "0.35", default-features = false, features = ["svg"] }
 futures.workspace = true
 labello-client = { path = "../labello-client" }
 labello-domain = { path = "../labello-domain" }

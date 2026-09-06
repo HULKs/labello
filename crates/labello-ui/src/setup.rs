@@ -31,25 +31,48 @@ impl LabelloApp {
             ) {
                 self.setup.section = SetupSection::Login;
             }
-            ui.horizontal_wrapped(|ui| {
-                for section in [
-                    SetupSection::Login,
-                    SetupSection::About,
-                    SetupSection::AdvancedConnection,
-                ] {
-                    if login_action_clicked(theme::quiet_button(
-                        ui,
-                        true,
-                        egui::Button::new(section.label())
-                            .selected(self.setup.section == section)
-                            .min_size(egui::vec2(44.0, 44.0)),
-                    )) {
-                        self.setup.section = section;
-                    }
-                }
+            let width = ui.available_width().min(440.0);
+            let inset = ((ui.available_width() - width) * 0.5).max(0.0);
+            let top_space = ((ui.ctx().content_rect().height() - 560.0) * 0.2).clamp(0.0, 88.0);
+            ui.add_space(top_space);
+            ui.horizontal(|ui| {
+                ui.add_space(inset);
+                ui.vertical(|ui| {
+                    ui.set_width(width);
+                    self.setup_section(ui);
+                    ui.add_space(theme::SPACE_6);
+                    ui.separator();
+                    ui.add_space(theme::SPACE_2);
+                    ui.horizontal_wrapped(|ui| {
+                        for section in [
+                            SetupSection::Login,
+                            SetupSection::About,
+                            SetupSection::AdvancedConnection,
+                        ] {
+                            if section == SetupSection::Login
+                                && self.setup.section == SetupSection::Login
+                            {
+                                continue;
+                            }
+                            let response = ui
+                                .push_id(section.label(), |ui| {
+                                    ui.add(
+                                        egui::Button::new(section.label())
+                                            .frame(false)
+                                            .selected(self.setup.section == section)
+                                            .min_size(egui::vec2(44.0, 44.0)),
+                                    )
+                                })
+                                .inner;
+                            if login_action_clicked(response) && self.setup.section != section {
+                                self.setup.section = section;
+                                ui.ctx()
+                                    .request_discard("show the selected login destination");
+                            }
+                        }
+                    });
+                });
             });
-            ui.add_space(theme::SPACE_4);
-            self.setup_section(ui);
             return;
         }
         let sections = self.setup_sections();
@@ -155,7 +178,8 @@ impl LabelloApp {
             SetupSection::AdvancedConnection => self.connection_section(ui),
             SetupSection::Login => self.login_section(ui),
             SetupSection::About => {
-                ui.heading("About Labello");
+                ui.heading(RichText::new("About Labello").size(theme::PAGE_TITLE_SIZE));
+                ui.add_space(theme::SPACE_3);
                 ui.label("Labello is an image annotation application for bounding boxes and skeleton keypoints.");
             }
             SetupSection::Create if self.auth.can_create_datasets => {
@@ -178,46 +202,64 @@ impl LabelloApp {
     }
 
     fn connection_section(&mut self, ui: &mut egui::Ui) {
-        theme::card_frame().show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.heading("Connection settings");
-            ui.label("The deployed application supplies the API endpoint. Change it here only when connecting to another server.");
-            let response =
-                theme::labeled_text_field(ui, "API URL", &mut self.setup.api_base_url_draft, 24.0)
-                    .on_hover_text("Backend API base URL, for example http://127.0.0.1:8080.");
-            let mut reconnect =
-                response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
-            reconnect |= theme::quiet_button(
-                ui,
-                self.setup.api_base_url_draft != self.config.api_base_url,
-                egui::Button::new("Reconnect").min_size(egui::vec2(96.0, 44.0)),
-            )
-            .clicked();
-            if reconnect && self.setup.api_base_url_draft != self.config.api_base_url {
-                self.config.api_base_url = self.setup.api_base_url_draft.clone();
-                self.rebuild_http_api();
-                self.auth.options_checked = false;
-                self.auth.checked = false;
-            }
-            if self.runtime.api.is_none()
-                && let Some(error) = &self.runtime.error
-            {
-                ui.label(error);
-            }
-        });
+        ui.heading(RichText::new("Connection settings").size(theme::PAGE_TITLE_SIZE));
+        ui.add_space(theme::SPACE_2);
+        ui.label(
+            RichText::new("Use a different Labello server. Changing servers signs you out.")
+                .color(theme::TEXT_MUTED),
+        );
+        ui.add_space(theme::SPACE_5);
+        let response =
+            theme::labeled_text_field(ui, "API URL", &mut self.setup.api_base_url_draft, 44.0)
+                .on_hover_text("Backend API base URL, for example http://127.0.0.1:8080.");
+        if response.has_focus() {
+            response.scroll_to_me(None);
+        }
+        ui.add_space(theme::SPACE_4);
+        let mut reconnect =
+            response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+        reconnect |= login_action_clicked(theme::primary_button(
+            ui,
+            self.setup.api_base_url_draft != self.config.api_base_url,
+            egui::Button::new("Reconnect").min_size(egui::vec2(ui.available_width(), 44.0)),
+        ));
+        if reconnect && self.setup.api_base_url_draft != self.config.api_base_url {
+            self.config.api_base_url = self.setup.api_base_url_draft.clone();
+            self.rebuild_http_api();
+            self.auth.options_checked = false;
+            self.auth.checked = false;
+        }
+        if self.runtime.api.is_none()
+            && let Some(error) = &self.runtime.error
+        {
+            ui.add_space(theme::SPACE_4);
+            theme::inline_message(ui, theme::Intent::Error, error);
+        }
     }
 
     fn login_section(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Sign in to Labello");
-        ui.label("Sign in to choose a dataset available to your account.");
-        ui.add_space(theme::SPACE_4);
+        let short = ui.ctx().content_rect().height() < 480.0;
+        ui.heading(RichText::new("Sign in to Labello").size(theme::PAGE_TITLE_SIZE));
+        ui.add_space(theme::SPACE_2);
+        ui.label(
+            RichText::new("Choose a dataset and continue annotating.").color(theme::TEXT_MUTED),
+        );
+        ui.add_space(if short {
+            theme::SPACE_2
+        } else {
+            theme::SPACE_6
+        });
         if self.auth.recovery.is_some() {
-            ui.label(
+            theme::inline_message(
+                ui,
+                theme::Intent::Warning,
                 "Sign in again to continue. Your draft stays with the account that created it.",
             );
+            ui.add_space(theme::SPACE_4);
         }
         if self.runtime.api.is_none() {
-            ui.label("Connection unavailable. Check the advanced connection settings.");
+            ui.label(RichText::new("Connection unavailable").strong());
+            ui.label("Open Advanced connection below to check the server address.");
         } else if !self.auth.options_checked {
             ui.horizontal(|ui| {
                 ui.spinner();
@@ -225,59 +267,88 @@ impl LabelloApp {
             });
         } else if let Some(error) = self.auth.options_error.clone() {
             ui.label("Could not load sign-in options.");
-            ui.label(error);
+            theme::inline_message(ui, theme::Intent::Error, error);
+            ui.add_space(theme::SPACE_4);
             if login_action_clicked(theme::primary_button(
                 ui,
                 true,
-                egui::Button::new("Retry sign-in options"),
+                egui::Button::new("Retry sign-in options")
+                    .min_size(egui::vec2(ui.available_width(), 44.0)),
             )) {
                 self.request_auth_options();
             }
         } else if !self.auth.checked || self.loading.session {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("Checking your session...");
+                ui.label(if self.auth.local_admin_login_pending {
+                    "Signing in..."
+                } else {
+                    "Checking your session..."
+                });
             });
         } else if let Some(error) = self.auth.session_error.clone() {
             ui.label("Could not check your session.");
-            ui.label(error);
+            theme::inline_message(ui, theme::Intent::Error, error);
+            ui.add_space(theme::SPACE_4);
             if login_action_clicked(theme::primary_button(
                 ui,
                 true,
-                egui::Button::new("Retry session check"),
+                egui::Button::new("Retry session check")
+                    .min_size(egui::vec2(ui.available_width(), 44.0)),
             )) {
                 self.request_session();
             }
         } else {
             if let Some(error) = &self.runtime.error {
-                ui.label(error);
+                theme::inline_message(ui, theme::Intent::Error, error);
+                ui.add_space(theme::SPACE_4);
             }
             if self.auth.options.github_oauth
                 && login_action_clicked(theme::primary_button(
                     ui,
                     true,
-                    egui::Button::new("Sign in with GitHub").min_size(egui::vec2(180.0, 44.0)),
+                    egui::Button::new("Sign in with GitHub")
+                        .min_size(egui::vec2(ui.available_width(), 48.0)),
                 ))
             {
                 self.request_github_login();
             }
             if self.auth.options.local_admin_login {
+                if self.auth.options.github_oauth {
+                    ui.add_space(theme::SPACE_5);
+                    ui.separator();
+                    ui.add_space(theme::SPACE_4);
+                }
+                ui.label(RichText::new("Local development").strong());
                 ui.add_space(theme::SPACE_2);
-                ui.label("Local development");
-                if login_action_clicked(theme::quiet_button(
-                    ui,
-                    true,
-                    egui::Button::new("Continue as local admin").min_size(egui::vec2(180.0, 44.0)),
-                )) {
+                let button = egui::Button::new("Continue as local admin")
+                    .min_size(egui::vec2(ui.available_width(), 48.0));
+                let response = if self.auth.options.github_oauth {
+                    ui.add(button)
+                } else {
+                    theme::primary_button(ui, true, button)
+                };
+                if login_action_clicked(response) {
                     self.request_local_admin_login();
                 }
+                ui.add_space(theme::SPACE_2);
+                ui.label(
+                    RichText::new("Use the administrator account on this device.")
+                        .color(theme::TEXT_MUTED),
+                );
             }
             if !self.auth.options.local_admin_login && !self.auth.options.github_oauth {
                 ui.label("No interactive sign-in method is enabled on this server.");
+                ui.label(
+                    RichText::new("Ask the server administrator to enable sign-in, then retry.")
+                        .color(theme::TEXT_MUTED),
+                );
+                ui.add_space(theme::SPACE_4);
                 if login_action_clicked(theme::quiet_button(
                     ui,
                     true,
-                    egui::Button::new("Retry sign-in options"),
+                    egui::Button::new("Retry sign-in options")
+                        .min_size(egui::vec2(ui.available_width(), 44.0)),
                 )) {
                     self.request_auth_options();
                 }

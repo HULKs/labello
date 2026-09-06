@@ -370,7 +370,7 @@ fn signed_in_setup_sections_label_and_size_inputs() {
         .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "API URL")
         .next()
         .expect("API URL field should have an accessible label");
-    assert!(api_url.rect().height() <= 25.0);
+    assert!((api_url.rect().height() - 44.0).abs() <= 1.0);
     assert!(harness.query_by_label("Development user ID").is_none());
     assert!(harness.query_by_label("Dev token").is_none());
     harness.set_size(egui::vec2(900.0, 1200.0));
@@ -390,7 +390,7 @@ fn signed_in_setup_sections_label_and_size_inputs() {
         .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "API URL")
         .next()
         .expect("compact API URL field should retain its accessible label");
-    assert!(compact_api_url.rect().height() <= 25.0);
+    assert!((compact_api_url.rect().height() - 44.0).abs() <= 1.0);
     assert!(compact_api_url.rect().right() <= 390.5);
 }
 

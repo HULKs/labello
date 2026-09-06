@@ -600,37 +600,60 @@ fn stale_unauthorized_response_cannot_start_session_recovery() {
 }
 
 #[test]
-fn short_login_scrolls_the_keyboard_focused_action_into_view() {
-    let api = Rc::new(SpyApi::new());
-    let mut app = base_live_app(api);
+fn login_primary_action_precedes_navigation_and_header_is_centered() {
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        let mut app = base_live_app(Rc::new(SpyApi::new()));
+        app.auth.checked = true;
+        app.auth.options_checked = true;
+        app.auth.account = None;
+        app.auth.options = AuthOptions {
+            github_oauth: false,
+            local_admin_login: true,
+        };
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.step();
+        let name = harness.get_by_label("Labello").rect();
+        let icon = harness.get_by_label("Labello icon").rect();
+        assert!((name.center().y - 28.0).abs() <= 1.0, "{size:?}: {name:?}");
+        assert!((icon.center().y - name.center().y).abs() <= 1.0);
+        assert!(icon.right() < name.left());
+        let action = harness.get_by_label("Continue as local admin").rect();
+        let about = harness.get_by_role_and_label(egui::accesskit::Role::Button, "About").rect();
+        assert!(action.bottom() < about.top());
+        assert!(action.width() <= 441.0 && action.width() >= size.x.min(440.0) - 50.0);
+        assert!(action.left() >= 0.0 && action.right() <= size.x);
+        assert!(action.bottom() <= size.y, "sign-in is initially below the fold at {size:?}");
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(8);
+        let action = harness.get_by_label("Continue as local admin");
+        assert!(action.is_focused(), "sign-in must be the first keyboard action");
+        assert!(action.rect().top() >= 56.0 && action.rect().bottom() <= size.y);
+    }
+}
+
+#[test]
+fn short_login_scrolls_the_keyboard_focused_retry_into_view() {
+    let mut app = base_live_app(Rc::new(SpyApi::new()));
     app.auth.checked = true;
     app.auth.options_checked = true;
     app.auth.account = None;
-    app.auth.options = AuthOptions {
-        github_oauth: false,
-        local_admin_login: true,
-    };
+    app.auth.options_error = Some("The sign-in service is temporarily unavailable. ".repeat(12));
     let mut harness = Harness::builder()
         .with_size(egui::vec2(320.0, 320.0))
         .build_eframe(|_| app);
     harness.step();
-    assert!(
-        harness
-            .get_by_label("Continue as local admin")
-            .rect()
-            .bottom()
-            > 320.0
-    );
-    for _ in 0..4 {
-        harness.key_press(egui::Key::Tab);
-        harness.step();
-    }
+    assert!(harness.get_by_label("Retry sign-in options").rect().bottom() > 320.0);
+    harness.key_press(egui::Key::Tab);
     harness.run_steps(8);
-    let button = harness.get_by_label("Continue as local admin");
+    let button = harness.get_by_label("Retry sign-in options");
     assert!(button.is_focused());
-    assert!(
-        button.rect().bottom() <= 320.0,
-        "focused login action remains offscreen"
-    );
+    assert!(button.rect().bottom() <= 320.0);
     assert!(button.rect().top() >= 56.0);
 }

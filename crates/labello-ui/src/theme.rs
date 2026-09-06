@@ -85,6 +85,7 @@ enum ButtonKind {
 }
 
 pub fn apply(ctx: &egui::Context) {
+    egui_extras::install_image_loaders(ctx);
     ctx.set_fonts(font_definitions());
     ctx.set_global_style(app_style());
 }
@@ -99,6 +100,7 @@ pub(crate) fn apply_fallback(ctx: &egui::Context) -> bool {
     if fonts_ready {
         ctx.set_global_style(app_style());
     } else {
+        egui_extras::install_image_loaders(ctx);
         ctx.set_fonts(font_definitions());
         ctx.request_discard("install Labello fonts before layout");
     }
