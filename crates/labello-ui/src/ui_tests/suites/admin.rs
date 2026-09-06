@@ -4,7 +4,8 @@ fn setup_create_open_and_admin_workflows_use_live_commands() {
     let mut harness = live_harness(api.clone());
     step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
 
-    assert!(harness.query_by_label("Choose where to work").is_some());
+    assert!(harness.query_by_label("Choose where to work").is_none());
+    assert!(harness.query_by_label("Setup navigation").is_some());
     assert_eq!(api.counts().me, 1);
     assert_eq!(api.counts().auth_options, 1);
     assert!(

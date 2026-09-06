@@ -52,7 +52,10 @@ carried by the root.
 ## Rendering
 
 `setup.rs` owns the dedicated login page, advanced connection view,
-pre-authentication About destination, and authenticated dataset setup. Authentication methods are
+pre-authentication About destination, and authenticated dataset setup. The
+section selector remains available across authenticated Setup destinations and
+puts About last, as does the signed-out secondary navigation. Each section owns
+its heading; there is no shared dataset welcome banner. Authentication methods are
 hidden until both options and session discovery finish. Endpoint replacement
 clears account and dataset state before scheduling requests against the new API.
 
@@ -115,7 +118,9 @@ This metadata does not require a signed-in account or dataset.
 The WASM bootstrap injects its own compiled identity and supplies the clipboard
 promise and visible-focus adapters. It never treats mutable `release.json` as
 the executing artifact. The shared UI announces copying only after success,
-reports rejection or unavailable adapters and retains selectable plain text.
+reports rejection or unavailable adapters and exposes complete selectable text
+in a manual-copy disclosure. Copy failure or an unavailable adapter opens that
+disclosure; egui retains its ordinary expanded state across redraws.
 
 The lower-right mismatch control is rendered in a separate bottom status panel.
 It has no workflow side effects while rendering. Activation uses `open_view`

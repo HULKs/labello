@@ -689,7 +689,8 @@ fn setup_geometry_stays_clamped_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert_label_inside(&harness, "Choose where to work", width, height);
+        assert!(harness.query_by_label("Choose where to work").is_none());
+        assert_label_inside(&harness, "Setup navigation", width, height);
         assert!(harness.query_by_label("Desktop navigation").is_none());
         let setup_control = if harness.query_by_label("Open setup").is_some() {
             "Open setup"

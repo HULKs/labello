@@ -20,6 +20,7 @@ pub(crate) struct BuildInformationState {
     pub clipboard: Option<BuildClipboardWriter>,
     pub copying: bool,
     pub copy_feedback: Option<&'static str>,
+    pub reveal_manual_copy: bool,
 }
 
 impl LabelloApp {
@@ -77,6 +78,7 @@ impl LabelloApp {
             }
             UiMessage::BuildInformationCopied { succeeded, .. } => {
                 self.builds.copying = false;
+                self.builds.reveal_manual_copy = !succeeded;
                 self.builds.copy_feedback = Some(if succeeded {
                     "Build information copied."
                 } else {
@@ -114,6 +116,7 @@ impl LabelloApp {
         }
         self.builds.copy_feedback = None;
         let Some(writer) = self.builds.clipboard.clone() else {
+            self.builds.reveal_manual_copy = true;
             self.builds.copy_feedback =
                 Some("Copy unavailable. Select the build information below and copy it manually.");
             return;
@@ -133,63 +136,111 @@ impl LabelloApp {
     }
 
     pub(crate) fn about_section(&mut self, ui: &mut egui::Ui) {
-        ui.heading("About Labello");
-        ui.label("Image annotation for bounding boxes and skeleton keypoints.");
-        ui.add_space(theme::SPACE_3);
-        identity_row(ui, "Web app", &self.builds.web);
-        ui.add_space(theme::SPACE_2);
-        if self.builds.loading {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label("Server: loading");
+        ui.vertical(|ui| {
+            ui.set_width(ui.available_width().min(680.0));
+            ui.heading(RichText::new("About Labello").size(theme::PAGE_TITLE_SIZE));
+            ui.add_space(theme::SPACE_2);
+            ui.label(
+                RichText::new("Image annotation for bounding boxes and skeleton keypoints.")
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(theme::SPACE_5);
+            ui.heading("Build information");
+            ui.label(
+                RichText::new("Include these details when reporting a problem.")
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(theme::SPACE_4);
+            if ui.available_width() >= 560.0 {
+                ui.columns(2, |columns| {
+                    identity_row(&mut columns[0], "Web app", &self.builds.web);
+                    self.server_identity(&mut columns[1]);
+                });
+            } else {
+                identity_row(ui, "Web app", &self.builds.web);
+                ui.add_space(theme::SPACE_4);
+                self.server_identity(ui);
+            }
+            if self.builds_differ() {
+                ui.add_space(theme::SPACE_3);
+                ui.label(RichText::new("Web app and server builds differ.").color(theme::WARNING));
+            }
+            ui.add_space(theme::SPACE_5);
+            ui.horizontal_wrapped(|ui| {
+                if focus_action(theme::primary_button(
+                    ui,
+                    !self.builds.copying,
+                    egui::Button::new("Copy build information").min_size(egui::vec2(44.0, 44.0)),
+                )) {
+                    self.copy_build_information();
+                }
+                let label = if self.builds.server.is_some() || self.builds.loading {
+                    "Refresh server identity"
+                } else {
+                    "Retry server identity"
+                };
+                if focus_action(theme::quiet_button(
+                    ui,
+                    !self.builds.loading,
+                    egui::Button::new(label).min_size(egui::vec2(44.0, 44.0)),
+                )) {
+                    self.request_build_information();
+                }
             });
-        } else if let Some(server) = &self.builds.server {
+            if let Some(feedback) = self.builds.copy_feedback {
+                let response = ui.label(feedback);
+                ui.ctx().accesskit_node_builder(response.id, |node| {
+                    node.set_live(egui::accesskit::Live::Polite)
+                });
+            }
+            ui.add_space(theme::SPACE_3);
+            ui.separator();
+            ui.scope(|ui| {
+                ui.spacing_mut().interact_size.y = 44.0;
+                let reveal = std::mem::take(&mut self.builds.reveal_manual_copy);
+                let disclosure = egui::CollapsingHeader::new("Copy manually")
+                    .id_salt("manual-build-information")
+                    .open(reveal.then_some(true))
+                    .show(ui, |ui| {
+                        let text = self.build_information_text();
+                        let mut selectable = text.as_str();
+                        let label = ui.label("Complete build information");
+                        let response = ui
+                            .add(
+                                egui::TextEdit::multiline(&mut selectable)
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_rows(3)
+                                    .desired_width(f32::INFINITY),
+                            )
+                            .labelled_by(label.id);
+                        if response.has_focus() {
+                            response.scroll_to_me(None);
+                        }
+                    });
+                if disclosure.header_response.gained_focus() {
+                    disclosure.header_response.scroll_to_me(None);
+                }
+            });
+        });
+    }
+
+    fn server_identity(&self, ui: &mut egui::Ui) {
+        if let Some(server) = &self.builds.server {
             identity_row(ui, "Server", server);
         } else {
-            ui.label("Server: unavailable");
-        }
-        if self.builds_differ() {
-            ui.label(RichText::new("Web app and server builds differ.").color(theme::WARNING));
-        }
-        ui.add_space(theme::SPACE_2);
-        ui.horizontal_wrapped(|ui| {
-            let label = if self.builds.server.is_some() {
-                "Refresh server identity"
+            ui.label(RichText::new("Server").strong());
+            if self.builds.loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Server: loading");
+                });
             } else {
-                "Retry server identity"
-            };
-            if focus_action(theme::quiet_button(
-                ui,
-                !self.builds.loading,
-                egui::Button::new(label).min_size(egui::vec2(44.0, 44.0)),
-            )) {
-                self.request_build_information();
+                ui.label("Server: unavailable");
+                ui.label(
+                    RichText::new("Retry to check the server build.").color(theme::TEXT_MUTED),
+                );
             }
-            if focus_action(theme::quiet_button(
-                ui,
-                !self.builds.copying,
-                egui::Button::new("Copy build information").min_size(egui::vec2(44.0, 44.0)),
-            )) {
-                self.copy_build_information();
-            }
-        });
-        if let Some(feedback) = self.builds.copy_feedback {
-            let response = ui.label(feedback);
-            ui.ctx().accesskit_node_builder(response.id, |node| {
-                node.set_live(egui::accesskit::Live::Polite)
-            });
         }
-        ui.add_space(theme::SPACE_2);
-        let label = ui.label("Build information for manual copying");
-        let text = self.build_information_text();
-        let mut selectable = text.as_str();
-        ui.add(
-            egui::TextEdit::multiline(&mut selectable)
-                .font(egui::TextStyle::Monospace)
-                .desired_rows(5)
-                .desired_width(f32::INFINITY),
-        )
-        .labelled_by(label.id);
     }
 
     pub(crate) fn open_about(&mut self) {
@@ -255,7 +306,7 @@ fn identity_row(ui: &mut egui::Ui, name: &str, identity: &BuildIdentity) {
     let tag = identity
         .release_tag
         .as_deref()
-        .unwrap_or("development (release tag unavailable)");
+        .unwrap_or("Development build");
     let commit = identity
         .source_commit
         .as_deref()
@@ -263,7 +314,7 @@ fn identity_row(ui: &mut egui::Ui, name: &str, identity: &BuildIdentity) {
         .unwrap_or("unavailable");
     let full = identity_text(name, identity);
     let response = ui
-        .label(RichText::new(format!("{tag} · {commit}")).monospace())
+        .add(egui::Label::new(RichText::new(format!("{tag}\nCommit {commit}")).monospace()).wrap())
         .on_hover_text(&full);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, full.clone()));
 }

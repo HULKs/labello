@@ -112,7 +112,7 @@ fn build_information_copy_waits_for_success_and_exposes_failure_and_manual_text(
         harness.run();
         assert!(
             harness
-                .query_by_label("Build information for manual copying")
+                .query_by_label("Copy manually")
                 .is_some()
         );
         let label = if succeeded {
@@ -413,4 +413,151 @@ fn build_information_dispatch_failure_ends_the_endpoint_request_after_auth_chang
     app.request_build_information();
     assert!(app.builds.loading);
     assert_eq!(app.runtime.commands.len(), 1);
+}
+
+#[test]
+fn about_keeps_setup_navigation_and_is_the_last_destination() {
+    for width in [390.0, 1440.0] {
+        for can_create in [false, true] {
+            let mut app = mismatch_app();
+            app.view = AppView::Setup;
+            app.setup.section = SetupSection::About;
+            app.auth.checked = true;
+            app.auth.account = Some(SpyApi::new().state.borrow().users[0].account.clone());
+            app.auth.can_create_datasets = can_create;
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(width, 844.0))
+                .build_eframe(|_| app);
+            harness.run();
+            assert!(harness.query_by_label("Choose where to work").is_none());
+            assert!(harness.query_by_label("About Labello").is_some());
+            if width < 1288.0 {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Setup section")
+                    .click_accesskit();
+                harness.run();
+            }
+            let about = harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "About")
+                .rect();
+            for label in ["Datasets", "Advanced connection"]
+                .into_iter()
+                .chain(can_create.then_some("Create"))
+                .chain(can_create.then_some("Import"))
+            {
+                let destination = harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, label)
+                    .rect();
+                assert!(
+                    destination.bottom() <= about.top(),
+                    "{label} must precede About at {width}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn about_manual_copy_disclosure_exposes_complete_text_and_opens_on_failure() {
+    let mut app = mismatch_app();
+    app.view = AppView::Setup;
+    app.setup.section = SetupSection::About;
+    let expected = app.build_information_text();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(600.0, 800.0))
+        .build_eframe(|_| app);
+    harness.run();
+    assert!(
+        harness
+            .query_by_role_and_label(
+                egui::accesskit::Role::MultilineTextInput,
+                "Complete build information"
+            )
+            .is_none()
+    );
+    click_accesskit_button(&mut harness, "Copy manually");
+    harness.run();
+    let text = harness.get_by_role_and_label(
+        egui::accesskit::Role::MultilineTextInput,
+        "Complete build information",
+    );
+    assert_eq!(text.accesskit_node().value(), Some(expected));
+    click_accesskit_button(&mut harness, "Copy manually");
+    harness.run();
+    harness.state_mut().copy_build_information();
+    harness.run();
+    assert!(
+        harness
+            .query_by_role_and_label(
+                egui::accesskit::Role::MultilineTextInput,
+                "Complete build information"
+            )
+            .is_some()
+    );
+    click_accesskit_button(&mut harness, "Copy manually");
+    harness.run();
+    assert!(
+        harness
+            .query_by_role_and_label(
+                egui::accesskit::Role::MultilineTextInput,
+                "Complete build information"
+            )
+            .is_none()
+    );
+}
+
+#[test]
+fn about_identity_states_reflow_without_horizontal_overflow() {
+    for signed_in in [false, true] {
+        for (width, height) in [
+            (320.0, 320.0),
+            (320.0, 568.0),
+            (390.0, 844.0),
+            (600.0, 800.0),
+            (1288.0, 820.0),
+            (1440.0, 1000.0),
+        ] {
+            for state in 0..4 {
+                let mut app = mismatch_app();
+                app.view = AppView::Setup;
+                app.setup.section = SetupSection::About;
+                app.auth.checked = true;
+                app.auth.account =
+                    signed_in.then(|| SpyApi::new().state.borrow().users[0].account.clone());
+                match state {
+                    0 => app.builds.web = labello_client::BuildIdentity::default(),
+                    1 => {
+                        app.builds.server = None;
+                        app.builds.loading = true;
+                    }
+                    2 => app.builds.server = None,
+                    _ => app.set_web_build_metadata(Some(&"v".repeat(64)), Some(&"a".repeat(64))),
+                }
+                let mut harness = Harness::builder()
+                    .with_size(egui::vec2(width, height))
+                    .build_eframe(|_| app);
+                harness.run_steps(4);
+                for label in ["About Labello", "Copy build information", "Copy manually"] {
+                    let rect = harness.get_by_label(label).rect();
+                    assert!(
+                        rect.left() >= 0.0 && rect.right() <= width,
+                        "{label} at {width}x{height}: {rect:?}"
+                    );
+                }
+                let web = harness.get_by_label_contains("Web app: ").rect();
+                assert!(web.left() >= 0.0 && web.right() <= width);
+                let server = harness.get_by_label_contains("Server: ").rect();
+                assert!(server.left() >= 0.0 && server.right() <= width);
+                if !signed_in {
+                    let about = harness
+                        .get_by_role_and_label(egui::accesskit::Role::Button, "About")
+                        .rect();
+                    let connection = harness
+                        .get_by_role_and_label(egui::accesskit::Role::Button, "Advanced connection")
+                        .rect();
+                    assert!(connection.top() < about.top() || connection.right() <= about.left());
+                }
+            }
+        }
+    }
 }

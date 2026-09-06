@@ -47,8 +47,8 @@ impl LabelloApp {
                     ui.horizontal_wrapped(|ui| {
                         for section in [
                             SetupSection::Login,
-                            SetupSection::About,
                             SetupSection::AdvancedConnection,
+                            SetupSection::About,
                         ] {
                             if section == SetupSection::Login
                                 && self.setup.section == SetupSection::Login
@@ -84,16 +84,6 @@ impl LabelloApp {
         if !sections.contains(&self.setup.section) {
             self.setup.section = sections[0];
         }
-        if self.setup.section != SetupSection::About {
-            ui.vertical_centered(|ui| {
-                let title = "Choose where to work";
-                let subtitle = "Continue with a recommended dataset or choose where to work.";
-                ui.heading(RichText::new(title).size(theme::PAGE_TITLE_SIZE));
-                ui.label(RichText::new(subtitle).color(theme::TEXT_MUTED));
-            });
-            ui.add_space(theme::SPACE_4);
-        }
-
         if layout == LayoutMode::Wide {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                 ui.vertical(|ui| {
@@ -117,18 +107,15 @@ impl LabelloApp {
         if self.auth.account.is_none() {
             return vec![
                 SetupSection::Login,
-                SetupSection::About,
                 SetupSection::AdvancedConnection,
+                SetupSection::About,
             ];
         }
-        let mut sections = vec![
-            SetupSection::Datasets,
-            SetupSection::About,
-            SetupSection::AdvancedConnection,
-        ];
+        let mut sections = vec![SetupSection::Datasets, SetupSection::AdvancedConnection];
         if self.auth.can_create_datasets {
             sections.extend([SetupSection::Create, SetupSection::Import]);
         }
+        sections.push(SetupSection::About);
         sections
     }
 
