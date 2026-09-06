@@ -1965,6 +1965,14 @@ impl LabelloApp {
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
+        // Completion advances the task timestamp past its object approvals. Keep
+        // the outgoing review position until the next assignment is installed.
+        if self.work.assignment.as_ref().is_some_and(|assignment| {
+            assignment.kind == labello_domain::AssignmentKind::Review
+                && assignment.status == labello_domain::AssignmentStatus::Completed
+        }) {
+            return self.work.migration.review_index;
+        }
         let Some((task_id, set, state)) = self.work.current_state.as_ref().and_then(|state| {
             let task_id = self.work.selected_task_id.as_ref()?;
             Some((task_id, state.migration_target_sets.get(task_id)?, state))

@@ -175,6 +175,11 @@ After reconciliation is cancelled or completed, Statistics resumes ahead of
 ordinary revisit/assignment-transition dialogs. Closing Statistics preserves the
 underlying migration assignment and draft.
 
+After a migration review assignment completes, its review position stays fixed
+until the next assignment is installed or the current image is cleared. The
+completion timestamp must not restart object review on the outgoing image.
+Active assignments still recompute their position from current-round approvals.
+
 ## Direct Migration Revisit
 
 At full-image confirmation, the resolved-object overview uses named buttons and

@@ -1516,6 +1516,79 @@ fn annotation_workspace_does_not_offer_refocus() {
 }
 
 #[test]
+fn final_box_review_approval_preserves_overview_until_the_next_image_is_ready() {
+    assert_final_review_preserves_overview(AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2,
+        y: 0.2,
+        width: 0.2,
+        height: 0.2,
+    }));
+}
+
+#[test]
+fn final_skeleton_review_approval_preserves_overview_until_the_next_image_is_ready() {
+    assert_final_review_preserves_overview(AnnotationGeometry::Skeleton(SkeletonGeometry {
+        keypoints: vec![KeypointAnnotation {
+            name: "nose".to_string(),
+            state: KeypointState::Visible,
+            point: Some(NormalizedPoint { x: 0.3, y: 0.3 }),
+        }],
+    }));
+}
+
+fn assert_final_review_preserves_overview(geometry: AnnotationGeometry) {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, geometry, true);
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    assert!(harness.state().work.canvas.current_zoom() > 1.0);
+    harness.key_press(egui::Key::Y);
+    step_until(&mut harness, 12, |app| {
+        !app.loading.saving && app.current_review_annotation().is_none()
+    });
+    harness.step();
+    let original_image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let overview = harness.state().work.canvas.stored_transform();
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+
+    harness.key_press(egui::Key::Y);
+    let mut saw_pending_next_image = false;
+    for _ in 0..16 {
+        harness.step();
+        if harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .is_none_or(|current| current.image.image_id != original_image)
+        {
+            assert!(
+                saw_pending_next_image,
+                "exercise the prepared-review revalidation gap"
+            );
+            assert_eq!(api.counts().record_review, 2);
+            return;
+        }
+        saw_pending_next_image |= harness.state().loading.image;
+        assert_eq!(
+            harness.state().work.canvas.stored_transform(),
+            overview,
+            "final approval must not refocus an object in the outgoing image"
+        );
+        assert!(harness.state().work.selected_annotation.is_none());
+    }
+    panic!("the next review image did not load");
+}
+
+#[test]
 fn review_refocus_restores_the_active_object_view() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(
