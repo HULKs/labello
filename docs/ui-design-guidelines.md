@@ -172,8 +172,8 @@ has been recorded.
   Keep whole-object exclusion in a separate, always-visible **Exclude object**
   section. Explain the keypoint-level versus object-level distinction there,
   and reserve danger styling for the final exclusion action.
-- **Admin:** organize by Overview, People, Images, Schema, Automation, and
-  Backups; preserve staged edits between destinations; use wide rows and compact
+- **Admin:** organize by Overview, People, Images, Schema, Automation, 
+  Backups, and Export; preserve staged edits between destinations; use wide rows and compact
   cards; retain validation and role protections.
 - **Statistics:** open a dataset-scoped modal above the current workspace or
   setup. Opening, refreshing, and closing it preserve the assignment, image,

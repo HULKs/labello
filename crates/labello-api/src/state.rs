@@ -25,6 +25,7 @@ pub struct ApiState {
     repositories: Arc<Mutex<BTreeMap<DatasetId, Arc<DatasetRepository>>>>,
     import_service: Option<Arc<ImportService>>,
     pub(crate) previews: labello_storage::PreviewCache,
+    export_service: Option<Arc<labello_storage::export::ExportService>>,
     import_root_owners: Arc<BTreeMap<String, BTreeSet<UserId>>>,
     datasets_root_mutation: Arc<AsyncMutex<()>>,
     import_commands: Arc<AsyncMutex<()>>,
@@ -51,6 +52,7 @@ impl ApiState {
             ingest_jobs: Arc::new(RwLock::new(BTreeMap::new())),
             repositories: Arc::new(Mutex::new(BTreeMap::new())),
             import_service: None,
+            export_service: None,
             import_root_owners: Arc::new(BTreeMap::new()),
             datasets_root_mutation: Arc::new(AsyncMutex::new(())),
             import_commands: Arc::new(AsyncMutex::new(())),
@@ -129,6 +131,21 @@ impl ApiState {
     pub fn with_import_service(mut self, service: ImportService) -> Self {
         self.import_service = Some(Arc::new(service));
         self
+    }
+
+    pub fn with_export_service(mut self, service: labello_storage::export::ExportService) -> Self {
+        self.export_service = Some(Arc::new(service));
+        self
+    }
+
+    pub(crate) fn export_service(&self) -> Option<&Arc<labello_storage::export::ExportService>> {
+        self.export_service.as_ref()
+    }
+
+    pub async fn shutdown_exports(&self) {
+        if let Some(service) = &self.export_service {
+            service.shutdown().await;
+        }
     }
 
     /// Configures the actor visibility policy for import roots advertised by the API.

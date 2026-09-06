@@ -40,6 +40,7 @@ mod artifact_migration;
 mod cache;
 mod config;
 mod events;
+mod export;
 mod layout;
 mod locks;
 mod snapshots;

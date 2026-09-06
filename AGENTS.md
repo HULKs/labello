@@ -9,9 +9,9 @@ workspace uses Cargo resolver 3 and Rust edition 2024.
 The current product supports bounding-box and skeleton/keypoint annotation,
 approval review and reviewer correction, task/class/tutorial/role/keybinding
 administration, filesystem ingestion, statistics, snapshots, explicit
-YOLO/COCO ground-truth import, and guided box-to-skeleton migration. It remains
-under active development; do not infer support from an enum, route, DTO, UI
-preset, or target requirement alone.
+YOLO/COCO ground-truth import, original-image detection/pose export, and guided
+box-to-skeleton migration. It remains under active development; do not infer
+support from an enum, route, DTO, UI preset, or target requirement alone.
 
 ## Sources Of Truth
 
@@ -26,6 +26,8 @@ Use documentation according to its status:
   recovery, and repair contract.
 - `docs/configuration.md`, `docs/import.md`, and `docs/operations.md` define
   server configuration, import behavior, and operational/security rules.
+- Read `docs/export.md` before changing export selection, capture, delivery,
+  recovery, or round-trip behavior. It defines the preservation/loss contract.
 - `docs/deployment.md` owns release publication, deployment transactions,
   rollback, and rollout verification. Read it before changing release or
   deployment code, workflows, or assets.
@@ -50,7 +52,7 @@ revision-specific records instead of silently rewriting them as current.
   keybinding, and statistics policy.
 - `crates/labello-storage`: filesystem repositories, ingestion, assignment and
   review transactions, completion projections, statistics, snapshots, offline
-  synchronization, keybindings, schema migration, and import.
+  synchronization, keybindings, schema migration, import, and export.
 - `crates/labello-client`: closed `LabelloApi` capability facade, transport
   DTOs, HTTP implementations, and deterministic demo implementations.
 - `crates/labello-api`: Axum router, sessions, OAuth, CSRF/CORS, authorization,
@@ -125,10 +127,12 @@ claim:
 - Persisted schema version 3 is current; version 2 is the only supported legacy
   version. Version 1 is rejected.
 - Snapshots omit images, authentication state, user keybindings, and private
-  import control state and have no native restore operation.
+  import/export control state and have no native restore operation.
 - Import supports only the four documented explicit ground-truth profiles and
   creates a new dataset. It does not merge, import predictions/prelabels,
-  import segmentation, fetch remote/archive sources, or export round trips.
+  import segmentation, or fetch remote/archive sources. Detection and pose
+  export supports the explicit content round trips in `docs/export.md`; native
+  identities and workflow history are not restored.
 - One server process per datasets root is required. Locks and caches are
   process-local.
 

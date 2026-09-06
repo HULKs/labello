@@ -26,6 +26,8 @@ struct ServerConfig {
     import: Option<ImportFileConfig>,
     #[serde(default)]
     previews: preview_config::PreviewFileConfig,
+    #[serde(default)]
+    export: Option<labello_storage::export::ExportLimits>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,6 +61,7 @@ impl Default for ServerConfig {
             github_oauth: None,
             import: None,
             previews: Default::default(),
+            export: None,
         }
     }
 }
@@ -106,8 +109,12 @@ async fn main() -> anyhow::Result<()> {
         bootstrap_admin_count,
         "labello server listening"
     );
+    let shutdown_state = state.clone();
     axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            shutdown_state.shutdown_exports().await;
+        })
         .await?;
     tracing::info!(event = "server.stopped", "labello server stopped");
     Ok(())
@@ -209,6 +216,16 @@ async fn build_state(config: ServerConfig, bind: SocketAddr) -> anyhow::Result<A
             &datasets_root,
             config.previews,
         )?);
+    #[cfg(target_os = "linux")]
+    {
+        let service = labello_storage::export::ExportService::new(
+            &datasets_root,
+            config.export.unwrap_or_default(),
+        )
+        .await
+        .context("cannot initialize dataset export service")?;
+        state = state.with_export_service(service);
+    }
     Ok(state)
 }
 
@@ -260,6 +277,25 @@ localAdminLogin = false
             github.redirect_uri,
             "https://api.example.com/auth/github/callback"
         );
+    }
+
+    #[test]
+    fn export_limits_default_and_reject_invalid_configuration() {
+        let omitted: ServerConfig = toml::from_str(CONFIG).unwrap();
+        assert!(omitted.export.is_none());
+        let partial: ServerConfig =
+            toml::from_str(&format!("{CONFIG}\n[export]\nmaxImages = 12\n")).unwrap();
+        let limits = partial.export.unwrap();
+        assert_eq!(limits.max_images, 12);
+        assert_eq!(limits.max_concurrent_jobs, 1);
+        limits.validate().unwrap();
+        assert!(
+            toml::from_str::<ServerConfig>(&format!("{CONFIG}\n[export]\nunknownLimit = 1\n"))
+                .is_err()
+        );
+        let invalid: ServerConfig =
+            toml::from_str(&format!("{CONFIG}\n[export]\nmaxConcurrentJobs = 0\n")).unwrap();
+        assert!(invalid.export.unwrap().validate().is_err());
     }
 
     #[test]

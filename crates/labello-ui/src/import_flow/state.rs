@@ -216,6 +216,7 @@ enum ImportMappingField {
 enum ImportCompatibilityField {
     YoloMissingLabels,
     YoloDuplicateRows,
+    YoloZeroKeypoints,
     CocoCrowds,
     CocoStructure,
     GeometryBounds,
@@ -317,6 +318,7 @@ pub(crate) struct ImportFlowState {
     pub categories: Vec<ImportCategoryDraft>,
     pub yolo_missing_labels: labello_client::YoloMissingLabelPolicy,
     pub yolo_duplicate_rows: labello_client::YoloDuplicateRowPolicy,
+    pub yolo_zero_keypoints: labello_client::YoloZeroKeypointPolicy,
     pub coco_crowds: labello_client::CocoCrowdPolicy,
     pub coco_structure: labello_client::CocoStructurePolicy,
     pub geometry_bounds: labello_client::GeometryBoundsPolicy,
@@ -374,6 +376,7 @@ impl Default for ImportFlowState {
             categories: Vec::new(),
             yolo_missing_labels: Default::default(),
             yolo_duplicate_rows: Default::default(),
+            yolo_zero_keypoints: Default::default(),
             coco_crowds: Default::default(),
             coco_structure: Default::default(),
             geometry_bounds: Default::default(),
@@ -583,6 +586,7 @@ impl ImportFlowState {
         if let Some(request) = accepted.as_ref() {
             self.yolo_missing_labels = request.compatibility.yolo_missing_labels;
             self.yolo_duplicate_rows = request.compatibility.yolo_duplicate_rows;
+            self.yolo_zero_keypoints = request.compatibility.yolo_zero_keypoints;
             self.coco_crowds = request.compatibility.coco_crowds;
             self.coco_structure = request.compatibility.coco_structure;
             self.geometry_bounds = request.compatibility.geometry_bounds;

@@ -1,4 +1,108 @@
 impl DatasetApi for HttpLabelloApi {
+    fn export_capabilities<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+    ) -> crate::ApiFuture<'a, crate::ExportCapabilities> {
+        Box::pin(async move {
+            Self::json(
+                self.request(Method::GET, &export_path(dataset_id, None, "capabilities")?)?
+                    .send()
+                    .await?,
+            )
+            .await
+        })
+    }
+
+    fn preflight_export<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        options: labello_domain::ExportOptions,
+    ) -> crate::ApiFuture<'a, crate::ExportJob> {
+        Box::pin(async move {
+            Self::send_json(
+                self.request(Method::POST, &export_path(dataset_id, None, "")?)?,
+                &options,
+            )
+            .await
+        })
+    }
+
+    fn list_exports<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+    ) -> crate::ApiFuture<'a, Vec<crate::ExportJob>> {
+        Box::pin(async move {
+            Self::json(
+                self.request(Method::GET, &export_path(dataset_id, None, "")?)?
+                    .send()
+                    .await?,
+            )
+            .await
+        })
+    }
+
+    fn get_export<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        job_id: &'a str,
+    ) -> crate::ApiFuture<'a, crate::ExportJob> {
+        Box::pin(async move {
+            Self::json(
+                self.request(Method::GET, &export_path(dataset_id, Some(job_id), "")?)?
+                    .send()
+                    .await?,
+            )
+            .await
+        })
+    }
+
+    fn start_export<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        job_id: &'a str,
+    ) -> crate::ApiFuture<'a, crate::ExportJob> {
+        Box::pin(async move {
+            Self::json(
+                self.request(
+                    Method::POST,
+                    &export_path(dataset_id, Some(job_id), "start")?,
+                )?
+                .send()
+                .await?,
+            )
+            .await
+        })
+    }
+
+    fn cancel_export<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        job_id: &'a str,
+    ) -> crate::ApiFuture<'a, crate::ExportJob> {
+        Box::pin(async move {
+            Self::json(
+                self.request(
+                    Method::POST,
+                    &export_path(dataset_id, Some(job_id), "cancel")?,
+                )?
+                .send()
+                .await?,
+            )
+            .await
+        })
+    }
+
+    fn export_download_url<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        job_id: &'a str,
+    ) -> crate::ApiFuture<'a, String> {
+        Box::pin(async move {
+            let path = export_path(dataset_id, Some(job_id), "download")?;
+            Self::ensure_success(self.request(Method::HEAD, &path)?.send().await?).await?;
+            Ok(self.endpoint(&path)?.to_string())
+        })
+    }
     fn list_datasets<'a>(&'a self) -> crate::ApiFuture<'a, Vec<DatasetSummary>> {
         Box::pin(
             async move { Self::json(self.request(Method::GET, "/datasets")?.send().await?).await },
@@ -163,4 +267,36 @@ impl DatasetApi for HttpLabelloApi {
             })
         })
     }
+}
+
+fn export_path(dataset: &DatasetId, job: Option<&str>, action: &str) -> ClientResult<String> {
+    dataset
+        .validate_path_segment()
+        .map_err(|_| ClientError::Api {
+            status: 400,
+            message: "invalid dataset ID".into(),
+        })?;
+    let mut path = format!(
+        "/datasets/{}/exports",
+        urlencoding::encode(dataset.as_str())
+    );
+    if let Some(job) = job {
+        if job.len() != 36
+            || !job
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
+        {
+            return Err(ClientError::Api {
+                status: 400,
+                message: "invalid export job ID".into(),
+            });
+        }
+        path.push('/');
+        path.push_str(job);
+    }
+    if !action.is_empty() {
+        path.push('/');
+        path.push_str(action);
+    }
+    Ok(path)
 }

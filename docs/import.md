@@ -155,6 +155,19 @@ as missing YOLO labels, duplicate rows, COCO crowds, out-of-bounds geometry,
 cross-split duplicate images, and missing pose keypoint names. Strict blocking
 behavior is the default.
 
+All-zero YOLO pose rows retain their boxes and make skeleton coverage
+incomplete by default. The explicit `yoloZeroKeypoints = preserve_absent`
+policy instead retains each pose with absent keypoints and requires the
+`yolo_absent_pose_preserved` acknowledgement. This is suitable for the
+explicit all-absent objects in [Labello exports](export.md). It does not
+change COCO zero-keypoint coverage or make derived geometry authoritative.
+Older policy records without this field keep the incomplete default.
+
+Parser version `labello-storage-import-v3` includes this policy. Verified
+sealed sources from parser versions v1 and v2 are resealed with the current
+fingerprint before planning; source mutations still fail validation. This
+parser revision is separate from persisted dataset schema version 3.
+
 Box-to-skeleton conversion can use imported boxes as read-only guides for a
 manual migration workflow. Every expected guide must resolve to exactly one
 human-authored skeleton or an audited exclusion, followed by a full-image
@@ -271,7 +284,8 @@ require a separate performance gate before any official-scale claim.
 
 Import does not currently support merging into an existing dataset, native
 snapshot restore, prediction or prelabel import, segmentation, remote sources,
-archives, round-trip export, or multi-process filesystem coordination.
+archives or multi-process filesystem coordination. Separate [dataset export](export.md)
+supports the documented detection and pose round trips.
 
 ## Historical Design Records
 

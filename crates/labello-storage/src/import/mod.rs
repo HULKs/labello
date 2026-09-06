@@ -452,10 +452,11 @@ fn validate_sealed_source_anchor(job: &ImportJob, index: &SourceIndex) -> Storag
     if index.parser_version.as_deref() == Some(IMPORT_PARSER_VERSION) {
         let mut ordered = index.files.values().collect::<Vec<_>>();
         ordered.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-        let legacy =
-            source::source_fingerprint(&ordered, job.profile.id(), "labello-storage-import-v1")?;
-        if job.source_fingerprint.as_deref() == Some(&legacy) {
-            return Ok(true);
+        for version in ["labello-storage-import-v1", "labello-storage-import-v2"] {
+            let legacy = source::source_fingerprint(&ordered, job.profile.id(), version)?;
+            if job.source_fingerprint.as_deref() == Some(&legacy) {
+                return Ok(true);
+            }
         }
     }
     Err(import_error(

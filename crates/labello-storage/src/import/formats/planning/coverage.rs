@@ -169,6 +169,8 @@ pub(super) fn coverage_for(
         return ImportCoverage::Incomplete;
     }
     if skeleton
+        && request.policies.yolo_zero_keypoints
+            != crate::import::YoloZeroKeypointPolicy::PreserveAbsent
         && objects.iter().any(|object| {
             object.direct_skeleton.as_ref().is_some_and(|points| {
                 points

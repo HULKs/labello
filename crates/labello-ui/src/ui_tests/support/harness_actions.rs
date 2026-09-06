@@ -126,6 +126,7 @@ pub(super) fn select_admin_section(harness: &mut Harness<'static, LabelloApp>, l
         "Schema" => AdminSection::Schema,
         "Automation" => AdminSection::Automation,
         "Backups" => AdminSection::Backups,
+        "Export" => AdminSection::Export,
         _ => panic!("unknown Admin section {label:?}"),
     };
     if harness
@@ -241,12 +242,14 @@ pub(super) fn step_until(
         harness.state().import.capabilities_loading,
         harness
             .state()
-            .work.current
+            .work
+            .current
             .as_ref()
             .map(|current| current.image.image_id.clone()),
         harness
             .state()
-            .work.assignment
+            .work
+            .assignment
             .as_ref()
             .map(|assignment| assignment.assignment_id.clone()),
         harness.state().loading.dataset,

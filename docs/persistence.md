@@ -17,6 +17,7 @@ and incident procedures.
   .labello-server/
     auth.json
     imports/
+    exports/<job-id>/
   <dataset-id>/
     labello.dataset.toml
     labello.schema.json
@@ -50,6 +51,7 @@ or external integrations.
 | --- | --- | --- |
 | `.labello-server/auth.json` | Authoritative secret authentication/session state | Restore only from the matching full-root backup; never log, publish, or merge it |
 | `.labello-server/imports/` | Authoritative private in-progress import, reservation, upload, and API control state | Let startup recovery reconcile it; do not delete apparently stale workspaces manually |
+| `.labello-server/exports/` | Private derived captures, job state, and verified archives | Startup interrupts unpublished jobs and preserves completed artifacts until expiry; never edit job records or publish partial files |
 | `labello.dataset.toml` | Authoritative dataset configuration, workflow definition, and role state | Valid supported schema required; restore rather than hand-edit damaged data |
 | `images-index.json` | Authoritative image identity, hash, path, and metadata index | Valid supported schema required; image-directory contents alone do not reproduce stable identities |
 | `images/` | Authoritative image bytes addressed by the image index | Include in full backups; omitted from Labello snapshots |
@@ -176,7 +178,7 @@ Snapshots omit:
 - image bytes;
 - `.labello-server/auth.json` and all session/authentication state;
 - user keybindings; and
-- private import job/control state.
+- private import/export job and control state.
 
 There is no native snapshot restore. Use the full-root procedure in
 [Backup And Restore](operations.md#backup-and-restore).
@@ -361,3 +363,25 @@ resubmission does. An empty later rejection has no active locations. Superseded
 rejections remain in history, and an effective replacement approval removes
 that review's active guidance. Creating an annotation near a marker neither
 resolves nor deletes evidence. Evidence does not count as an additional completed review.
+
+## Export capture and recovery
+
+Export captures replay exact per-image event cuts under the existing image
+locks and copies original bytes after releasing those locks. Source event
+logs, caches, and configuration are not modified. Fresh configuration and
+index digests, root identity, and original-image hashes are checked before
+artifact publication. Captured event sequences remain fixed if later source
+events are appended.
+
+Private mode-0700 job directories contain `job.json`, staged payloads, and
+an unpublished archive. A verified archive is linked without replacement as
+`dataset.zip`, synced, and then recorded as succeeded. The blocking worker
+holds the shared configuration and image-index read guards from its final
+source verification through the no-replace link and directory sync. It does
+not wait for the job map between verification and publication. Cancellation
+before durable success removes even an already linked archive. Only succeeded jobs
+are downloadable; each download verifies size and BLAKE3. A crash before the
+durable succeeded status makes the job interrupted on restart and removes
+its payload. Completed archives survive restart until retention expiry.
+Orphan reservations and expired entries are cleaned before retained capacity
+is checked. See [export](export.md) for the artifact contract.

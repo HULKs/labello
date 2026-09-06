@@ -29,9 +29,7 @@ impl LabelloApp {
                     ui,
                     !self.loading.snapshots && !self.loading.creating_snapshot,
                     egui::Button::new(
-                        if self.admin.snapshots_error.is_some()
-                            && !self.admin.snapshots_loaded
-                        {
+                        if self.admin.snapshots_error.is_some() && !self.admin.snapshots_loaded {
                             "Retry backup load"
                         } else {
                             "Refresh backups"
@@ -45,9 +43,7 @@ impl LabelloApp {
                 if self.loading.snapshots {
                     ui.spinner();
                     ui.small(
-                        if self.admin.snapshots_loaded
-                            || !self.admin.snapshots.is_empty()
-                        {
+                        if self.admin.snapshots_loaded || !self.admin.snapshots.is_empty() {
                             "Refreshing backups..."
                         } else {
                             "Loading backups..."
@@ -300,7 +296,7 @@ fn admin_snapshot_cards(
     download
 }
 
-fn human_bytes(bytes: u64) -> String {
+pub(crate) fn human_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
     } else if bytes < 1024 * 1024 {
