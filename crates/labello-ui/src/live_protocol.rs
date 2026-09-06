@@ -30,7 +30,6 @@ pub(crate) enum MigrationAction {
     Exclude(labello_client::ExcludeMigrationTargetRequest),
     Reopen(labello_client::ReopenMigrationTargetRequest),
     Revisit(labello_client::RevisitMigrationTargetRequest),
-    StartPass(labello_client::StartMigrationPassRequest),
     Keep(labello_client::KeepMigrationTargetRequest),
     Confirm(labello_client::ConfirmMigrationRequest),
     Review(labello_client::ReviewMigrationRequest),

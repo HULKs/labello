@@ -935,17 +935,6 @@ impl LabelloApp {
             self.migration_object_navigation_button(ui);
             self.migration_assignment_section(ui);
         }
-        if self.work.migration.active_pass_id.is_none()
-            && expected > 0
-            && ui
-                .add_enabled(
-                    !self.work.migration.busy,
-                    egui::Button::new("Start correction pass"),
-                )
-                .clicked()
-        {
-            self.request_start_migration_pass();
-        }
     }
 
     fn migration_missing_object_actions(&mut self, ui: &mut egui::Ui, show_primary_action: bool) {
@@ -2971,35 +2960,6 @@ impl LabelloApp {
                 assignment_id: assignment.assignment_id,
                 pass_id,
                 target,
-            },
-        ));
-    }
-
-    fn request_start_migration_pass(&mut self) {
-        let Some((assignment, task_id, target_hash, state_hash)) =
-            self.work.assignment.clone().and_then(|assignment| {
-                let task_id = self.work.selected_task_id.clone()?;
-                let state = self.work.current_state.as_ref()?;
-                Some((
-                    assignment,
-                    task_id.clone(),
-                    state
-                        .migration_target_sets
-                        .get(&task_id)?
-                        .target_set_hash
-                        .clone(),
-                    state.current_migration_state_hash(&task_id).ok()?,
-                ))
-            })
-        else {
-            return;
-        };
-        self.queue_migration_action(MigrationAction::StartPass(
-            labello_client::StartMigrationPassRequest {
-                assignment_id: assignment.assignment_id,
-                task_id,
-                expected_target_set_hash: target_hash,
-                expected_state_hash: state_hash,
             },
         ));
     }

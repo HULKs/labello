@@ -287,3 +287,19 @@ This adds no persisted field or event type. Older correction-required revisit
 markers and historical global-pass events retain their original meanings. Revisit
 and save retries reuse the committed command identity and return current replayed
 state without duplicating markers or annotation versions.
+
+## Historical Correction Pass Recovery
+
+The current UI creates no global correction passes. Existing pass-start and
+pass-item events still decode and replay without rewriting their audit history.
+An assignment resumes its latest persisted pass, ordered by `started_at`, using
+the existing exact task and assignment selection. Outstanding items require a
+current guide/disposition decision through normal keep, edit or exclude commands.
+Restarting the server or client preserves this work.
+
+Submission requires the latest assignment pass to be complete. Earlier passes
+retain decisions about the revisions that existed when those events were
+recorded; later annotation edits do not make those historical passes new work.
+The ordinary current-resolution, dependency, assignment-ownership and confirmation
+digest checks still apply. A stale current guide or incomplete latest pass cannot
+be bypassed by an older completed pass. No event shape or persisted schema changes.

@@ -194,7 +194,9 @@ through its overview button, completed skeleton, or excluded guide. Saving that
 object returns directly to the overview if other targets remain fresh; new
 outstanding dependencies take precedence over confirmation. Failed activation or
 saving retains the valid workspace and draft for retry. No global correction pass
-is needed for a direct edit.
+is needed for a direct edit, and the UI no longer offers a pass-start control.
+Assignments with a historical active pass resume their remaining objects through
+the normal keep, edit and exclude controls before full-image confirmation.
 
 ## Persistence And Recovery
 
