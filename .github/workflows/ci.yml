@@ -228,7 +228,7 @@ jobs:
         run: ./scripts/verify.sh ci "$CI_BASE_SHA" wasm
 
   browser:
-    name: Browser release build
+    name: Browser workflows and visual checks
     needs: plan
     if: needs.plan.outputs.browser == 'true'
     runs-on: ubuntu-latest
