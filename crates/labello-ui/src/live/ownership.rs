@@ -1,4 +1,107 @@
+#[derive(Default)]
+pub(crate) struct ReservationCleanup {
+    // These owners survive workspace invalidation until their responses arrive.
+    pub loads: std::collections::BTreeMap<u64, Rc<dyn labello_client::LabelloApi>>,
+    releases: std::collections::BTreeSet<u64>,
+    unused: Vec<UnusedReservation>,
+}
+
+struct UnusedReservation {
+    api: Rc<dyn labello_client::LabelloApi>,
+    dataset_id: labello_domain::DatasetId,
+    assignment: labello_domain::Assignment,
+}
+
+impl ReservationCleanup {
+    pub fn has_pending_releases(&self) -> bool {
+        !self.unused.is_empty() || !self.releases.is_empty()
+    }
+}
+
 impl LabelloApp {
+    pub(crate) fn defer_reservation_release(
+        &mut self,
+        api: Rc<dyn labello_client::LabelloApi>,
+        dataset_id: labello_domain::DatasetId,
+        assignment: labello_domain::Assignment,
+    ) {
+        if !self
+            .runtime
+            .reservation_cleanup
+            .unused
+            .iter()
+            .any(|pending| {
+                Rc::ptr_eq(&pending.api, &api)
+                    && pending.dataset_id == dataset_id
+                    && pending.assignment.assignment_id == assignment.assignment_id
+            })
+        {
+            self.runtime
+                .reservation_cleanup
+                .unused
+                .push(UnusedReservation {
+                    api,
+                    dataset_id,
+                    assignment,
+                });
+        }
+    }
+
+    fn flush_reservation_releases(&mut self) {
+        // A newer claim can return the same assignment as an obsolete load.
+        // Wait for every dispatched load to reach its reducer before deciding
+        // whether an assignment is unused, then keep claims behind its release.
+        if !self.runtime.reservation_cleanup.loads.is_empty() {
+            return;
+        }
+        for pending in std::mem::take(&mut self.runtime.reservation_cleanup.unused) {
+            let queued_owner = self.runtime.commands.iter().any(|command| {
+                if command.request().dataset_id.as_ref() != Some(&pending.dataset_id) {
+                    return false;
+                }
+                let assignment_id = match command {
+                    UiCommand::ReloadAssignment { assignment, .. }
+                    | UiCommand::ReopenAssignment { assignment, .. } => {
+                        Some(&assignment.assignment_id)
+                    }
+                    UiCommand::RevalidatePreparedReview { cached, .. } => {
+                        Some(&cached.assignment.assignment_id)
+                    }
+                    UiCommand::ClaimAssignment {
+                        reclaim_assignment_id,
+                        ..
+                    } => reclaim_assignment_id.as_ref(),
+                    _ => None,
+                };
+                assignment_id == Some(&pending.assignment.assignment_id)
+            });
+            let retained = queued_owner
+                || self.config.dataset_id == pending.dataset_id
+                    && (self.work.assignment.as_ref().is_some_and(|current| {
+                        current.assignment_id == pending.assignment.assignment_id
+                            && current.image_id == pending.assignment.image_id
+                    }) || self.work.queue.contains_assignment(&pending.assignment));
+            if retained {
+                continue;
+            }
+            let operation_id = self.next_operation();
+            let request = self.operation_identity(operation_id, pending.dataset_id.clone());
+            self.runtime.active_requests.insert(operation_id);
+            self.runtime
+                .reservation_cleanup
+                .releases
+                .insert(operation_id);
+            self.start_workflow_command(
+                pending.api,
+                UiCommand::ReleaseReservation {
+                    request,
+                    dataset_id: pending.dataset_id,
+                    assignment: pending.assignment,
+                },
+            );
+        }
+    }
+
     pub(crate) fn queue_command(&mut self, command: UiCommand) -> bool {
         if self.auth.recovery.is_some()
             && (!self.auth.checked || self.auth.account.is_none())

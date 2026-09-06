@@ -1124,6 +1124,7 @@ fn stale_prefetch_response_cannot_enter_the_queue() {
         .send(UiMessage::PrefetchLoaded {
             request,
             operation_id,
+            assignment: Some(loaded.assignment.clone()),
             result: Box::new(Ok(Some(loaded))),
         })
         .unwrap();
@@ -1160,6 +1161,7 @@ fn fresh_prefetch_response_does_not_trust_the_local_wall_clock() {
         .send(UiMessage::PrefetchLoaded {
             request,
             operation_id,
+            assignment: Some(loaded.assignment.clone()),
             result: Box::new(Ok(Some(loaded))),
         })
         .unwrap();
@@ -1176,6 +1178,216 @@ fn fresh_prefetch_response_does_not_trust_the_local_wall_clock() {
             .prepared_image_ids()
             .contains(&loaded_image_id)
     );
+}
+
+#[test]
+fn delayed_obsolete_load_does_not_release_the_current_assignment() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    let mut request = test_request(harness.state(), 90_010, Some("demo"));
+    request.workspace_epoch = request.workspace_epoch.wrapping_sub(1);
+    harness
+        .state()
+        .runtime
+        .tx
+        .send(UiMessage::ImageLoaded {
+            request,
+            operation_id: 90_010,
+            assignment: Some(assignment.clone()),
+            result: Box::new(Err("superseded image load".to_string().into())),
+        })
+        .unwrap();
+    harness
+        .state_mut()
+        .process_messages(&egui::Context::default());
+    for _ in 0..8 {
+        harness.step();
+    }
+    assert!(
+        api.has_active_assignment(&assignment.assignment_id),
+        "delayed cleanup cancelled the assignment currently shown for labeling"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn overlapping_claims_remain_saveable_in_both_response_orders() {
+    for obsolete_first in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_work_harness(api.clone());
+        step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+        let original = harness.state().work.assignment.clone().unwrap();
+        let scheduled = Rc::new(RefCell::new(std::collections::VecDeque::new()));
+        let scheduled_for_spawner = scheduled.clone();
+        let app = harness.state_mut();
+        // Existing reservations stay on the server, as during an interrupted load.
+        app.work.queue.clear();
+        app.begin_workspace_epoch();
+        app.clear_current_image();
+        app.set_native_task_spawner(move |future| {
+            scheduled_for_spawner.borrow_mut().push_back(future);
+        });
+        let start_claim = |app: &mut LabelloApp| {
+            let operation_id = app.next_operation();
+            let request = test_request(app, operation_id, Some("demo"));
+            app.work.active_load_id = Some(operation_id);
+            app.loading.image = true;
+            app.runtime.active_requests.insert(operation_id);
+            app.start_workflow_command(
+                api.clone(),
+                UiCommand::ClaimAssignment {
+                    request,
+                    operation_id,
+                    dataset_id: DatasetId::from("demo"),
+                    task_id: original.task_id.clone(),
+                    prelabel_config_ids: Vec::new(),
+                    kind: AssignmentKind::Annotation,
+                    reclaim_assignment_id: Some(original.assignment_id.clone()),
+                    excluded_image_ids: Vec::new(),
+                },
+            );
+        };
+        start_claim(app);
+        poll_ready_task(scheduled.borrow_mut().pop_front().unwrap());
+        let obsolete = app.runtime.rx.try_recv().unwrap();
+        app.begin_workspace_epoch();
+        start_claim(app);
+        if obsolete_first {
+            app.runtime.tx.send(obsolete).unwrap();
+            app.process_messages(&egui::Context::default());
+            assert_eq!(api.counts().release_assignment, 0);
+            poll_ready_task(scheduled.borrow_mut().pop_front().unwrap());
+        } else {
+            poll_ready_task(scheduled.borrow_mut().pop_front().unwrap());
+            app.runtime.tx.send(obsolete).unwrap();
+        }
+        app.process_messages(&egui::Context::default());
+        // Run any cleanup that was scheduled, so an erroneous release cannot hide.
+        while let Some(task) = scheduled.borrow_mut().pop_front() {
+            poll_ready_task(task);
+        }
+        app.runtime.native_task_spawner = None;
+        assert!(api.has_active_assignment(&original.assignment_id));
+        assert_eq!(
+            app.work.assignment.as_ref().unwrap().assignment_id,
+            original.assignment_id
+        );
+        app.create_bbox(BoundingBox {
+            x: 0.1,
+            y: 0.1,
+            width: 0.2,
+            height: 0.2,
+        });
+        app.request_save(false);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert_eq!(
+            harness.state().work.save_status,
+            SaveStatus::Saved,
+            "save failed after overlapping claims: {:?}",
+            harness.state().runtime.error
+        );
+        assert_eq!(api.counts().annotation_batch, 1);
+    }
+}
+
+#[test]
+fn failed_prefetch_keeps_current_and_prepared_reservations() {
+    for prepared in [false, true] {
+        for stale in [false, true] {
+            let api = Rc::new(SpyApi::new());
+            let mut harness = loaded_work_harness(api.clone());
+            step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+            let assignment = if prepared {
+                let loaded = harness.state_mut().work.queue.pop_prepared().unwrap();
+                let assignment = loaded.assignment.clone();
+                harness.state_mut().work.queue.push_prepared(loaded);
+                assignment
+            } else {
+                harness.state().work.assignment.clone().unwrap()
+            };
+            let operation_id = harness.state_mut().next_operation();
+            let mut request = test_request(harness.state(), operation_id, Some("demo"));
+            harness.state_mut().work.active_prefetch_id = Some(operation_id);
+            harness
+                .state_mut()
+                .runtime
+                .active_requests
+                .insert(operation_id);
+            if stale {
+                request.workspace_epoch = request.workspace_epoch.wrapping_sub(1);
+            }
+            harness
+                .state()
+                .runtime
+                .tx
+                .send(UiMessage::PrefetchLoaded {
+                    request,
+                    operation_id,
+                    assignment: Some(assignment.clone()),
+                    result: Box::new(Err("preview failed".to_string().into())),
+                })
+                .unwrap();
+            harness
+                .state_mut()
+                .process_messages(&egui::Context::default());
+            assert!(api.has_active_assignment(&assignment.assignment_id));
+            assert_eq!(api.counts().release_assignment, 0);
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn new_claim_waits_for_unused_reservation_release() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let scheduled = Rc::new(RefCell::new(std::collections::VecDeque::new()));
+    let scheduled_for_spawner = scheduled.clone();
+    let app = harness.state_mut();
+    app.runtime.commands.clear();
+    app.set_native_task_spawner(move |future| {
+        scheduled_for_spawner.borrow_mut().push_back(future);
+    });
+    let unused = app.work.queue.pop_prepared().unwrap().assignment;
+    app.release_reservation(DatasetId::from("demo"), unused.clone());
+    app.process_messages(&egui::Context::default());
+    assert_eq!(scheduled.borrow().len(), 1);
+    let operation_id = app.next_operation();
+    let request = test_request(app, operation_id, Some("demo"));
+    app.runtime.active_requests.insert(operation_id);
+    app.start_workflow_command(
+        api.clone(),
+        UiCommand::ClaimAssignment {
+            request,
+            operation_id,
+            dataset_id: DatasetId::from("demo"),
+            task_id: unused.task_id.clone(),
+            prelabel_config_ids: Vec::new(),
+            kind: AssignmentKind::Annotation,
+            reclaim_assignment_id: None,
+            excluded_image_ids: Vec::new(),
+        },
+    );
+    assert_eq!(
+        scheduled.borrow().len(),
+        1,
+        "claim ran before release finished"
+    );
+    assert_eq!(app.runtime.commands.len(), 1);
+    poll_ready_task(scheduled.borrow_mut().pop_front().unwrap());
+    app.process_messages(&egui::Context::default());
+    assert!(!api.has_active_assignment(&unused.assignment_id));
+    app.start_next_command();
+    assert_eq!(
+        scheduled.borrow().len(),
+        1,
+        "claim did not resume after release"
+    );
+    poll_ready_task(scheduled.borrow_mut().pop_front().unwrap());
+    assert_eq!(api.counts().release_assignment, 1);
 }
 
 #[test]
