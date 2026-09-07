@@ -71,6 +71,8 @@ Workspace rendering is grouped by the reason it changes:
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
 - `missing_objects.rs`: assignment-and-round-scoped missing-object drafts, stable rejection retries, inspector guidance/history, and browser exit warning; canvas rendering owns marker transforms and gestures.
+- `review_context.rs`: immutable exact-target context shared by review presentation;
+  assignment identity and authoritative target order/version reject stale summaries;
 - `review_revision.rs`: local staged replacement decisions and stable commit retries;
   effective decisions come from the domain review projection, not raw history;
 - `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
