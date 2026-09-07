@@ -1586,6 +1586,150 @@ fn migration_review_refocus_restores_the_active_guide_view() {
 
 #[cfg(feature = "inspector-presets")]
 #[test]
+fn final_migration_review_approval_preserves_overview_while_next_review_revalidates() {
+    use crate::inspector_presets::{self, InspectorPreset};
+
+    let api = Rc::new(SpyApi::new());
+    let mut app =
+        inspector_presets::build(InspectorPreset::MigrationReview, &egui::Context::default());
+    let task_id = app.work.selected_task_id.clone().unwrap();
+    let reviewed_at = labello_domain::now();
+    let state = app.work.current_state.as_mut().unwrap();
+    let hash = state.migration_target_sets[&task_id]
+        .target_set_hash
+        .clone();
+    state.migration_confirmations.insert(
+        task_id.clone(),
+        labello_domain::MigrationConfirmation {
+            task_id: task_id.clone(),
+            target_set_hash: hash.clone(),
+            state_hash: hash.clone(),
+            confirmation_hash: hash,
+            actor_user_id: app.config.user_id.clone(),
+            timestamp: reviewed_at,
+        },
+    );
+    for (group_id, disposition) in &state.migration_dispositions[&task_id] {
+        let target = match &disposition.status {
+            labello_domain::MigrationDispositionStatus::Annotated {
+                skeleton_annotation_id,
+                skeleton_version,
+            } => labello_domain::ReviewTarget::AnnotationVersion {
+                annotation_id: skeleton_annotation_id.clone(),
+                version: *skeleton_version,
+            },
+            labello_domain::MigrationDispositionStatus::Excluded { .. } => {
+                labello_domain::ReviewTarget::MigrationDisposition {
+                    task_id: task_id.clone(),
+                    object_group_id: group_id.clone(),
+                    disposition_version: disposition.disposition_version,
+                }
+            }
+            _ => panic!("expected resolved migration target"),
+        };
+        state.reviews.push(labello_domain::ReviewRecord {
+            review_id: labello_domain::ReviewId::generate(),
+            target,
+            reviewer_user_id: app.config.user_id.clone(),
+            decision: labello_domain::ReviewDecision::Approved,
+            timestamp: reviewed_at,
+            comment: None,
+        });
+    }
+    let outgoing = state.clone();
+    let mut completed = outgoing.clone();
+    let completed_at = reviewed_at + chrono::Duration::seconds(1);
+    let task = completed
+        .task_states
+        .entry(task_id.clone())
+        .or_insert_with(|| labello_domain::TaskState::new(task_id.clone(), completed_at));
+    task.status = labello_domain::TaskStatus::Completed;
+    task.outcome = Some(labello_domain::TaskOutcome::Approved);
+    task.updated_at = completed_at;
+    // A new active round must still disregard the preceding round's approvals.
+    app.work.current_state = Some(completed.clone());
+    assert_eq!(app.canonical_migration_review_index(), 0);
+    app.work
+        .current_state
+        .as_mut()
+        .unwrap()
+        .task_states
+        .remove(&task_id);
+    let mut assignment = app.work.assignment.clone().unwrap();
+    assignment.status = labello_domain::AssignmentStatus::Completed;
+    assignment.updated_at = completed_at;
+    completed.assignments = vec![assignment.clone()];
+    api.respond_to_next_migration_with(labello_client::ManualMigrationCommandResult {
+        image_state: completed,
+        cursor: None,
+        progress: Default::default(),
+        active_pass: None,
+        confirmation: None,
+        assignment: Some(assignment),
+        annotation_id: None,
+    });
+    let mut next_assignment = app.work.assignment.clone().unwrap();
+    next_assignment.assignment_id = labello_domain::AssignmentId::from("next-review");
+    next_assignment.image_id = labello_domain::ImageId::from("next-image");
+    let mut next_image = app.work.current.clone().unwrap();
+    next_image.image.image_id = next_assignment.image_id.clone();
+    app.work.queue.clear();
+    assert!(app.work.queue.push_prepared(crate::app::LoadedImage {
+        assignment: next_assignment,
+        queued: next_image,
+        annotations: Vec::new(),
+        state: labello_domain::ImageState::new(labello_domain::ImageId::from("next-image")),
+        color_image: None,
+    }));
+    app.runtime.api = Some(api.clone());
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|_| app);
+    harness.run_steps(3);
+    assert!(matches!(
+        harness.state().current_migration_review_target(),
+        Some((
+            _,
+            labello_client::MigrationReviewTarget::Confirmation { .. }
+        ))
+    ));
+    let original_image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let overview = harness.state().work.canvas.stored_transform();
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+    harness.key_press(egui::Key::Y);
+    let mut saw_pending = false;
+    for _ in 0..8 {
+        harness.step();
+        if harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .is_none_or(|current| current.image.image_id != original_image)
+        {
+            break;
+        }
+        saw_pending |= harness.state().loading.image;
+        assert_eq!(
+            harness.state().work.canvas.stored_transform(),
+            overview,
+            "final migration approval must not refocus an object in the outgoing image"
+        );
+    }
+    assert_eq!(api.counts().migration_commands, 1);
+    assert!(saw_pending, "exercise the prepared-review revalidation gap");
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
 fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
     use crate::inspector_presets::{self, InspectorPreset};
 

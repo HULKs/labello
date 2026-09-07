@@ -61,7 +61,10 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
             assert_eq!(api.counts().record_review, counts.record_review);
             assert!(
                 harness
-                    .get_by_role_and_label(egui::accesskit::Role::Button, "Statistics")
+                    .get_by_role_and_label(
+                        egui::accesskit::Role::Button,
+                        if compact { "Statistics" } else { "Open statistics" },
+                    )
                     .is_focused(),
                 "review={review}, compact={compact}, invoker={:?}",
                 harness.state().navigation.statistics.invoker

@@ -13,6 +13,8 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppBarAction {
+    Statistics,
+    Admin,
     Setup,
     Tutorial,
     Settings,
@@ -22,6 +24,8 @@ enum AppBarAction {
 impl AppBarAction {
     fn label(self) -> &'static str {
         match self {
+            Self::Statistics => "Statistics",
+            Self::Admin => "Admin",
             Self::Setup => "Setup",
             Self::Tutorial => "Tutorial",
             Self::Settings => "Settings",
@@ -31,6 +35,8 @@ impl AppBarAction {
 
     fn accessible_label(self) -> &'static str {
         match self {
+            Self::Statistics => "Open statistics",
+            Self::Admin => "Open admin",
             Self::Setup => "Open setup",
             Self::Tutorial => "Open tutorial",
             Self::Settings => "Open settings",
@@ -40,6 +46,8 @@ impl AppBarAction {
 
     fn tooltip(self) -> &'static str {
         match self {
+            Self::Statistics => "Open dataset statistics.",
+            Self::Admin => "Open dataset administration.",
             Self::Setup => "Open dataset setup.",
             Self::Tutorial => "Show or hide workflow instructions.",
             Self::Settings => "Open keyboard shortcut settings.",
