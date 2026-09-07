@@ -2120,15 +2120,13 @@ async fn previous_review_reopens_before_current_release_and_survives_later_relea
         .unwrap_err();
     assert!(failed.to_string().contains("missing"));
     let current_state = repo.load_image_state(&image_b).await.unwrap();
-    assert_eq!(assignment_status(&current_state, &current), AssignmentStatus::Active);
+    assert_eq!(
+        assignment_status(&current_state, &current),
+        AssignmentStatus::Active
+    );
 
     let reopened = repo
-        .reopen_review_assignment(
-            &reviewers[0],
-            &previous.assignment_id,
-            &image_a,
-            &task_id,
-        )
+        .reopen_review_assignment(&reviewers[0], &previous.assignment_id, &image_a, &task_id)
         .await
         .unwrap();
     assert_ne!(reopened.assignment_id, previous.assignment_id);
@@ -2145,7 +2143,10 @@ async fn previous_review_reopens_before_current_release_and_survives_later_relea
     .await
     .unwrap();
     let reopened_state = repo.load_image_state(&image_a).await.unwrap();
-    assert_eq!(assignment_status(&reopened_state, &reopened), AssignmentStatus::Active);
+    assert_eq!(
+        assignment_status(&reopened_state, &reopened),
+        AssignmentStatus::Active
+    );
     assert_eq!(
         repo.reclaim_assignment(
             &reviewers[0],
