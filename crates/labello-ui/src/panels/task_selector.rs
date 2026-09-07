@@ -1,6 +1,7 @@
 impl LabelloApp {
     const WORKFLOW_ICON_SIZE: f32 = 28.0;
     const WORKFLOW_PILL_HEIGHT: f32 = 52.0;
+    const WORKFLOW_MARKER_WIDTH: f32 = 12.0;
 
     pub(crate) fn workflow_panel_width(&self, ctx: &egui::Context) -> f32 {
         let workflows = self.workflow_choices();
@@ -14,7 +15,9 @@ impl LabelloApp {
                         .layout_no_wrap(workflow.label(), label_font.clone(), theme::TEXT)
                         .size()
                         .x;
-                    Self::WORKFLOW_ICON_SIZE
+                    Self::WORKFLOW_MARKER_WIDTH
+                        + theme::SPACE_2
+                        + Self::WORKFLOW_ICON_SIZE
                         + theme::SPACE_2
                         + label_width
                         + 2.0 * theme::SPACE_3
@@ -94,7 +97,12 @@ impl LabelloApp {
             let unavailable =
                 self.displayed_workflow_availability(&workflow.task_id) == Some(false);
             let icon_id = ui.id().with(("workflow-type", &workflow.task_id));
+            let marker_id = ui.id().with(("workflow-selection", &workflow.task_id));
             let button = egui::Button::new((
+                egui::Atom::custom(
+                    marker_id,
+                    egui::vec2(Self::WORKFLOW_MARKER_WIDTH, Self::WORKFLOW_ICON_SIZE),
+                ),
                 egui::Atom::custom(
                     icon_id,
                     egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
@@ -143,6 +151,11 @@ impl LabelloApp {
             }
             if let Some(icon_rect) = choice.rect(icon_id) {
                 workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
+            }
+            if selected && let Some(marker_rect) = choice.rect(marker_id) {
+                // Paint outside the disabled child UI so an unavailable current
+                // workflow retains the same visible selection cue.
+                ui.painter().circle_filled(marker_rect.center(), 4.0, theme::TEXT);
             }
             let mut hover_text = format!(
                 "{} workflow\nPrevious: {} · Next: {}",
