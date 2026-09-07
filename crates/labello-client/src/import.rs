@@ -942,9 +942,19 @@ pub enum MissingKeypointNamesPolicy {
     GenerateIndexed,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum YoloZeroKeypointPolicy {
+    #[default]
+    Incomplete,
+    PreserveAbsent,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportCompatibilityPolicies {
+    #[serde(default)]
+    pub yolo_zero_keypoints: YoloZeroKeypointPolicy,
     #[serde(default)]
     pub yolo_missing_labels: YoloMissingLabelPolicy,
     #[serde(default)]

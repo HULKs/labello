@@ -459,3 +459,39 @@ space before temporary publication; the zero-byte lock file is not charged.
 The service rejects zero/out-of-range limits and unknown settings. Changing
 limits requires restart. Smaller cache limits trigger eviction on first access.
 See [operations](operations.md#derived-preview-cache) for disposal and recovery.
+
+## Export Limits
+
+Linux servers initialize dataset export when `[export]` is absent. Other
+platforms advertise export as unavailable. The section uses camelCase fields
+and rejects unknown fields.
+
+Export size is unlimited by default. Omit `maxImages`, `maxFiles`,
+`maxSourceBytes`, `maxFileBytes`, `maxDecodedImageBytes`, `maxArchiveBytes`, and
+`maxMetadataBytes` to impose no application quota. JSON capabilities report
+these omitted limits as `null`. Existing explicitly configured numeric limits
+continue to apply; remove those entries to remove their quotas. Numeric limits
+must be positive, and `maxFiles`, when present, must be at least three. There
+are no fixed upper ceilings for these settings. Byte values are bytes.
+
+Concurrency and retention remain independently configurable:
+
+```toml
+[export]
+maxConcurrentJobs = 1
+maxConcurrentDownloads = 2
+maxRetainedJobs = 8
+retentionSeconds = 86_400
+```
+
+Accepted concurrency is one through four jobs and one through eight downloads.
+Retained-job capacity must accommodate configured workers and cannot exceed 64;
+retention is one second through seven days. These settings control simultaneous
+work and cleanup, not how many images one export can contain.
+
+Unlimited size is not a disk reservation or a constant-memory guarantee. Image
+validation decodes one image at a time; dataset metadata, annotation provenance,
+and ZIP directory entries require memory proportional to the captured content.
+See [export operations](operations.md#dataset-export) for disk planning and
+recovery. An optional `maxMetadataBytes` also bounds source configuration,
+image-index and per-image event-log reads, as well as generated metadata.

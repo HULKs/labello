@@ -252,3 +252,54 @@ Revision reviews offer missing-object markers only after every captured object
 has an explicit staged decision. An early object rejection can still commit
 without markers; it does not invent decisions for unvisited objects. The commit
 guard rejects incomplete marker-bearing revisions before freezing retry state.
+
+## Dataset export administration
+
+`admin.export`, implemented in `export_flow`, owns the saved-configuration
+selection, retained job history, current capture, summary acknowledgement and
+one pending export action. The closed `UiCommand::Export` and
+`UiMessage::ExportFinished` delegate to the export dispatcher and reducer.
+The shared request identity checks auth/workspace epochs and dataset ownership
+before applying any reply. Auth or workspace invalidation clears export state.
+Queue and dispatch failures clear pending state and remain in the export region.
+
+The Export section loads capabilities and server history, restores only active
+or Ready captures after reload or refresh, and polls active jobs at most once per second while
+that section is visible. Background polls preserve form appearance, layout, and
+selection controls. An explicit action can supersede a poll; late poll responses
+are rejected by the pending request ID. Explicit requests still coalesce. Failed refreshes retain the last
+loaded job with a stale marker and Retry. An uncertain mutation response retries
+by refreshing history, so it does not blindly create another preflight.
+
+Selection uses saved dataset metadata, explicit task/class identities and a
+versioned detect or pose profile. Train, validation, and test checkboxes are all
+selected by default and filter the output independently of the fallback. At least
+one split is required. Train is the default fallback for images
+without split provenance. Split conflicts offer explicit per-image choices.
+Domain `ExportOptions::class_mapping` supplies local compatibility feedback.
+An empty task/class selection disables preflight without showing a warning.
+Server preflight owns coverage, image, geometry, source consistency and bounds.
+Failed, blocked, cancelled, and succeeded jobs remain inspectable in history but
+are not automatically selected on reload. Editing a new selection or starting a
+preflight clears old terminal-job details. Blocked jobs do not retain a payload
+and do not prevent another preflight. An active or Ready capture must be
+cancelled before another preflight. Start requires
+a Ready job, an explicit summary acknowledgement, unchanged options and saved
+Admin configuration. Captured options and bounded omission/blocker examples
+remain inspectable in history.
+
+Completed exports use the client's authorization check and open the attachment
+URL with the existing browser session. WASM never buffers archive bytes. The UI
+reports only that a download was requested; the browser owns transfer progress
+and completion. Native inspection presets model shared states and do not create
+archives. Real download behavior requires an isolated server and Chromium.
+
+The import plan offers an explicit policy for YOLO pose rows with no placed
+keypoints. The default leaves coverage incomplete. PreserveAbsent is an opt-in
+assertion that all-zero entries explicitly represent absent keypoints on an
+existing object. The plan request and recovery preserve this choice, changing
+it invalidates an accepted plan, and encountered preservation diagnostics still
+require acknowledgement before commit. This choice does not infer labels for
+an unlabelled source.
+
+The explicit all-zero YOLO pose policy section bounds its selector, help, and acknowledgement warning to the visible content width. Earlier import mapping fields may expand their parent layout; that expansion must not push this choice or its warning beyond the viewport.

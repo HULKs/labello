@@ -230,6 +230,7 @@ pub(crate) enum AdminSection {
     Schema,
     Automation,
     Backups,
+    Export,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -246,6 +247,7 @@ pub(crate) enum SetupSection {
 pub(crate) struct AdminToolsState {
     pub dataset_id: Option<DatasetId>,
     pub section: AdminSection,
+    pub export: crate::export_flow::ExportState,
     pub load_error: Option<String>,
     pub upload_error: Option<String>,
     pub people_search: String,
@@ -269,6 +271,7 @@ impl Default for AdminToolsState {
         Self {
             dataset_id: None,
             section: AdminSection::default(),
+            export: Default::default(),
             load_error: None,
             upload_error: None,
             people_search: String::new(),

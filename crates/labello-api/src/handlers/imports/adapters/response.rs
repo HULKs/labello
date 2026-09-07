@@ -462,6 +462,14 @@ fn client_compatibility(
     policies: &storage::CompatibilityPolicies,
 ) -> client::ImportCompatibilityPolicies {
     client::ImportCompatibilityPolicies {
+        yolo_zero_keypoints: match policies.yolo_zero_keypoints {
+            storage::YoloZeroKeypointPolicy::Incomplete => {
+                client::YoloZeroKeypointPolicy::Incomplete
+            }
+            storage::YoloZeroKeypointPolicy::PreserveAbsent => {
+                client::YoloZeroKeypointPolicy::PreserveAbsent
+            }
+        },
         yolo_missing_labels: match policies.yolo_missing_labels {
             storage::YoloMissingLabelPolicy::Block => client::YoloMissingLabelPolicy::Block,
             storage::YoloMissingLabelPolicy::MissingIsBackground => {

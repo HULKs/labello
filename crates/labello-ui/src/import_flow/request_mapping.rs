@@ -236,6 +236,7 @@ impl LabelloApp {
             compatibility: labello_client::ImportCompatibilityPolicies {
                 yolo_missing_labels: self.import.yolo_missing_labels,
                 yolo_duplicate_rows: self.import.yolo_duplicate_rows,
+                yolo_zero_keypoints: self.import.yolo_zero_keypoints,
                 coco_crowds: self.import.coco_crowds,
                 coco_structure: self.import.coco_structure,
                 geometry_bounds: self.import.geometry_bounds,

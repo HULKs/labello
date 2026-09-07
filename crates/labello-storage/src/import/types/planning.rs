@@ -50,9 +50,19 @@ pub enum YoloKeypointNamePolicy {
     GenerateIndexed,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum YoloZeroKeypointPolicy {
+    #[default]
+    Incomplete,
+    PreserveAbsent,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompatibilityPolicies {
+    #[serde(default)]
+    pub yolo_zero_keypoints: YoloZeroKeypointPolicy,
     pub yolo_missing_labels: YoloMissingLabelPolicy,
     pub yolo_duplicate_rows: DuplicateRowPolicy,
     pub coco_crowds: CocoCrowdPolicy,
@@ -65,6 +75,7 @@ pub struct CompatibilityPolicies {
 impl Default for CompatibilityPolicies {
     fn default() -> Self {
         Self {
+            yolo_zero_keypoints: YoloZeroKeypointPolicy::Incomplete,
             yolo_missing_labels: YoloMissingLabelPolicy::Block,
             yolo_duplicate_rows: DuplicateRowPolicy::Block,
             coco_crowds: CocoCrowdPolicy::Block,
