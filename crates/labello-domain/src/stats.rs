@@ -8,6 +8,9 @@ use crate::{
     RevisionSource, TaskId,
 };
 
+mod activity;
+pub use activity::{DailyActivityCounts, UtcActivityWindow, daily_activity_from_events};
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasetStats {

@@ -153,8 +153,7 @@ The lower-right mismatch control is rendered in a separate bottom status panel.
 It has no workflow side effects while rendering. Activation uses `open_view`
 and `PendingTransition::About`, retaining Admin, assignment and unsaved-draft
 protections; cancelling leaves work intact. The panel reserves no height without
-a mismatch and leaves room for future activity content to its left without
-implementing activity statistics.
+a mismatch. Presence belongs in the existing application header.
 
 ## Working image previews
 
@@ -334,3 +333,31 @@ growing or shrinking content without waiting for pointer input. It compares the
 existing panel cache with the new measurement, so unchanged clipped content at
 an unsupported tiny size cannot cause a repaint loop. This preserves dynamic
 wrapping and does not discard a pass or replay input commands.
+
+## Workspace presence and connection status
+
+`runtime.presence` owns endpoint/account identity, the current server-wide
+presence sample, one outstanding request, poll timing and consecutive failures.
+The shared command/reducer path polls authenticated `/presence` every ten
+seconds in annotation and review workspaces. The transport times out after eight
+seconds. Visibility return requests an immediate coalesced refresh. Auth and
+workspace epoch invalidation clears the owner; obsolete replies cannot restore
+another account's names or modify assignments, drafts or save state.
+
+The existing application header shows presence between navigation and a compact
+status dot. The dataset badge shares the header when there is enough room and yields its space to presence on narrower screens. Names form one muted horizontal
+line, falling back to a people count when measured text does not fit. Hover or
+activation exposes the usernames and active dataset names. An empty successful
+sample reads `Labelling alone`; an initial sample reads `Checking presence…`.
+There is no daily-count footer or automatic daily-count polling. The existing
+daily-count API remains available for future Statistics work.
+
+The dot replaces the workspace Idle/status pill. Green means a successful
+connection with no pending problem. Yellow covers initial checking, one or two
+failed polls, saving and unsaved edits. Red covers three consecutive failed
+polls, save failure or application/storage errors. Hover and activation expose
+connection, save and error details; keyboard focus exposes the same accessible
+name. Successful recovery clears connection failures immediately. Last-known
+presence remains during one or two failures; three failures display `Presence
+unavailable` until a successful response arrives. The indicator does not change
+assignment ownership or present unsaved work as saved.

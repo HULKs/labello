@@ -245,6 +245,11 @@ impl LabelloApp {
                 self.loading.ingest_job_id = None;
             }
             UiCommand::PollIngest { .. } => self.loading.ingest_polling = false,
+            UiCommand::Presence { .. } => {
+                self.runtime.presence.pending_request = None;
+                self.runtime.presence.failed(error.to_string());
+                return;
+            }
             UiCommand::Stats { .. } => {
                 self.loading.stats = false;
                 self.datasets.active_stats_request = None;
@@ -404,6 +409,7 @@ impl LabelloApp {
 
     fn invalidate_async_ownership(&mut self) {
         self.navigation.statistics = Default::default();
+        self.runtime.presence = Default::default();
         self.builds.copying = false;
         let build_request = self.builds.pending_request_id;
         self.runtime.commands.retain(|command| {

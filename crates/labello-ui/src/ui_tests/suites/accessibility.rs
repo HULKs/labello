@@ -316,26 +316,28 @@ fn long_status_messages_keep_their_complete_accessible_text() {
     for (width, height) in [(320.0, 568.0), (600.0, 800.0), (1440.0, 900.0)] {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        let dataset = harness.get_by_label("Dataset Demo Dataset").rect();
-        let status_label = format!("Status: Idle. Error: {message}");
+        let presence = harness.get_by_label_contains("Labelling presence:").rect();
+        let status_label = format!("Connection status: {}", harness.state().connection_status().1);
         let status = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, &status_label)
             .rect();
-        let left_action = harness
+        let right_navigation = harness
             .query_by_label("Open navigation")
             .or_else(|| {
                 harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::Button, "Annotate")
+                    .query_all_by_role_and_label(egui::accesskit::Role::Button, "Sign out")
                     .next()
             })
             .expect("top-bar navigation control")
             .rect();
-        assert!((dataset.center().x - width / 2.0).abs() <= 1.0);
-        assert!(left_action.right() <= dataset.left() + 0.5);
-        assert!(dataset.right() <= status.left() + 0.5);
+        assert!(presence.top() >= 0.0 && presence.bottom() <= 56.0);
+        assert!(presence.right() <= status.left() + 0.5);
+        assert!(status.right() <= right_navigation.left() + 0.5);
+        assert!(right_navigation.right() <= width + 0.5);
+        assert!(harness.query_by_label("Admin User").is_none());
         assert_visible_controls_clamped(&harness, width, height);
     }
-    let status_label = format!("Status: Idle. Error: {message}");
+    let status_label = format!("Connection status: {}", harness.state().connection_status().1);
     click_accesskit_button(&mut harness, &status_label);
     assert!(
         harness
@@ -350,7 +352,8 @@ fn long_status_messages_keep_their_complete_accessible_text() {
     harness.state_mut().runtime.notice = Some(notice.to_string());
     harness.step();
     assert!(harness.query_by_label(notice).is_none());
-    click_accesskit_button(&mut harness, &format!("Status: Unsaved. Update: {notice}"));
+    let label = format!("Connection status: {}", harness.state().connection_status().1);
+    click_accesskit_button(&mut harness, &label);
     assert!(
         harness
             .query_all_by_label_contains(notice)
@@ -421,7 +424,15 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
     assert!(harness.query_by_label("Workspace").is_none());
     assert!(harness.query_by_label("Desktop navigation").is_none());
 
-    for label in ["Open statistics", "Open admin", "Open setup", "Open tutorial", "Open settings", "Sign out"] {
+    let action_labels = [
+        "Sign out",
+        "Open setup",
+        "Open admin",
+        "Open settings",
+        "Open statistics",
+    ];
+    let mut previous_left = None;
+    for label in action_labels {
         let action = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, label)
             .rect();
@@ -430,17 +441,28 @@ fn desktop_app_bar_shows_direct_navigation_and_accessible_icon_actions() {
             action.width() <= 45.0 && (action.width() - action.height()).abs() <= 1.0,
             "{label} is not square: {action:?}",
         );
+        if let Some(previous_left) = previous_left {
+            assert!(
+                action.right() < previous_left,
+                "header actions are not ordered right to left: previous left={previous_left}, {label}={action:?}",
+            );
+        }
+        previous_left = Some(action.left());
     }
     assert!(harness.query_by_label("Statistics").is_none());
     let statistics = harness.get_by_label("Open statistics").rect();
     let dataset = harness.get_by_label("Dataset Demo Dataset").rect();
-    let setup = harness.get_by_label("Open setup").rect();
+    let app_bar = harness.get_by_label("Application bar").rect();
+    assert!(
+        (dataset.center().x - app_bar.center().x).abs() <= 1.0,
+        "dataset badge is not horizontally centered: dataset={dataset:?}, app_bar={app_bar:?}",
+    );
     assert!(statistics.left() > dataset.right());
-    let admin = harness.get_by_label("Open admin").rect();
     assert!(harness.query_by_label("Admin").is_none());
-    assert!(statistics.right() < admin.left());
-    assert!(admin.right() < setup.left());
-    assert!(harness.get_by_label("Admin User").rect().width() <= 96.5);
+    assert!(
+        harness.query_by_label("Admin User").is_none(),
+        "the signed-in username must be omitted from the top bar",
+    );
 }
 
 #[test]
@@ -448,7 +470,7 @@ fn app_bar_switches_atomically_to_the_navigation_drawer_when_contents_do_not_fit
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     let destinations = ["Annotate", "Review"];
-    let actions = ["Open statistics", "Open admin", "Open setup", "Open tutorial", "Open settings", "Sign out"];
+    let actions = ["Open statistics", "Open admin", "Open setup", "Open settings", "Sign out"];
     let mut saw_drawer = false;
     let mut saw_direct = false;
 
@@ -470,17 +492,16 @@ fn app_bar_switches_atomically_to_the_navigation_drawer_when_contents_do_not_fit
                 "{label} visibility did not switch atomically at width {width}",
             );
         }
-        assert_eq!(
-            harness.query_by_label("Admin User").is_some(),
-            !drawer_bar,
-            "account visibility did not switch atomically at width {width}",
+        assert!(
+            harness.query_by_label("Admin User").is_none(),
+            "the signed-in username must stay out of the top bar at width {width}",
         );
-        assert!(harness.query_by_label("Dataset Demo Dataset").is_some());
-        assert!(harness.query_by_label("Status: Idle").is_some());
+        assert!(harness.query_by_label_contains("Labelling presence:").is_some());
+        assert!(harness.query_by_label_contains("Connection status:").is_some());
     }
     assert!(saw_drawer && saw_direct);
 
-    harness.set_size(egui::vec2(900.0, 800.0));
+    harness.set_size(egui::vec2(600.0, 800.0));
     harness.step();
     click_accesskit_button(&mut harness, "Open navigation");
     for label in [
@@ -500,7 +521,10 @@ fn app_bar_switches_atomically_to_the_navigation_drawer_when_contents_do_not_fit
             "drawer is missing {label}",
         );
     }
-    assert!(harness.query_by_label("Admin User").is_some());
+    assert!(
+        harness.query_by_label("Admin User").is_some(),
+        "the account remains available in the opened navigation drawer",
+    );
 }
 
 #[test]

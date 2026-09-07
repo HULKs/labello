@@ -13,6 +13,7 @@ pub use labello_domain::{
 };
 
 include!("dto/access.rs");
+include!("dto/activity.rs");
 include!("dto/workflow.rs");
 include!("dto/offline.rs");
 include!("dto/media.rs");

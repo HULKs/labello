@@ -11,6 +11,7 @@ use crate::{DatasetRepository, StorageError, StorageResult};
 
 mod claim;
 mod migration;
+pub(crate) mod presence;
 mod review;
 mod revision;
 mod transaction;

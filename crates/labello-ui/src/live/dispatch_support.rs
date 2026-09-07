@@ -5,6 +5,10 @@ impl LabelloApp {
         command: UiCommand,
     ) -> Option<UiCommand> {
         match command {
+            UiCommand::Presence { request } => self.spawn_message(request.clone(), async move {
+                let result = api.server_presence().await.map_err(UiRequestError::from);
+                UiMessage::PresenceLoaded { request, result }
+            }),
             UiCommand::Stats {
                 request,
                 dataset_id,

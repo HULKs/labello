@@ -133,6 +133,7 @@ pub(crate) enum PendingTransition {
 }
 
 pub(crate) struct RuntimeState {
+    pub presence: crate::presence::PresenceState,
     pub api: Option<Rc<dyn LabelloApi>>,
     pub tx: mpsc::Sender<UiMessage>,
     pub rx: mpsc::Receiver<UiMessage>,
@@ -156,6 +157,7 @@ impl RuntimeState {
     fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
+            presence: Default::default(),
             api: None,
             tx,
             rx,

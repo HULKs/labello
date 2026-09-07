@@ -59,6 +59,14 @@ impl LabelloApp {
             processed += 1;
             let message = match message {
                 UiMessage::RequestFailed { request, error }
+                    if self.runtime.presence.pending_request == Some(request.request_id) =>
+                {
+                    UiMessage::PresenceLoaded {
+                        request,
+                        result: Err(error.into()),
+                    }
+                }
+                UiMessage::RequestFailed { request, error }
                     if self.builds.pending_request_id == Some(request.request_id) =>
                 {
                     UiMessage::BuildInformationLoaded {

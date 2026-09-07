@@ -36,6 +36,7 @@ mod exports;
 mod imports;
 mod ingest;
 mod oauth_routes;
+mod presence;
 mod workflow;
 
 pub fn router(state: ApiState) -> Router {
@@ -90,6 +91,7 @@ pub fn router(state: ApiState) -> Router {
         .option_layer(cors);
     let app = Router::new()
         .route("/health", get(health))
+        .route("/presence", get(presence::server_presence))
         .route("/deployment/readiness", get(deployment::readiness))
         .route("/build-information", get(deployment::build_information))
         .route("/me", get(me))
@@ -282,6 +284,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::offline_sync),
         )
         .route("/datasets/{dataset_id}/stats", get(workflow::stats))
+        .route(
+            "/datasets/{dataset_id}/stats/me",
+            get(workflow::current_user_activity),
+        )
         .route(
             "/datasets/{dataset_id}/keybindings",
             get(workflow::get_keybindings).put(workflow::put_keybindings),

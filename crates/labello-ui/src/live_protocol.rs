@@ -371,6 +371,11 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         result: Result<IngestJob, UiRequestError>,
     },
+    PresenceLoaded {
+        request: RequestIdentity,
+        result: Result<labello_client::ServerPresence, UiRequestError>,
+    },
+    PresenceVisibilityRegained,
     StatsLoaded {
         request: RequestIdentity,
         result: Result<DatasetStats, UiRequestError>,
@@ -566,6 +571,9 @@ pub(crate) enum UiCommand {
         dataset_id: DatasetId,
         job_id: String,
     },
+    Presence {
+        request: RequestIdentity,
+    },
     Stats {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -717,6 +725,7 @@ impl UiCommand {
             | Self::DownloadSnapshot { request, .. }
             | Self::Ingest { request, .. }
             | Self::PollIngest { request, .. }
+            | Self::Presence { request }
             | Self::Stats { request, .. }
             | Self::AssignmentAvailability { request, .. }
             | Self::SaveKeybindings { request, .. }
@@ -940,6 +949,10 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
+            Self::PresenceLoaded { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
             Self::StatsLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -1003,12 +1016,14 @@ impl UiMessage {
             | Self::CorrectionFinished { request, .. }
             | Self::AdjudicationFinished { request, .. }
             | Self::IngestJobLoaded { request, .. }
+            | Self::PresenceLoaded { request, .. }
             | Self::StatsLoaded { request, .. }
             | Self::AssignmentAvailabilityLoaded { request, .. }
             | Self::KeybindingsSaved { request, .. }
             | Self::MigrationFinished { request, .. }
             | Self::RequestFailed { request, .. } => Some(request),
             Self::BuildRefreshRequested
+            | Self::PresenceVisibilityRegained
             | Self::PersistenceFinished(_)
             | Self::FolderUploadProgress { .. }
             | Self::FolderUploadFinished { .. } => None,

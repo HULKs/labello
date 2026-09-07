@@ -4105,3 +4105,55 @@ async fn review_revision_expired_lease_cannot_commit_and_config_publication_wait
         metadata.tasks[0]
     );
 }
+
+#[tokio::test]
+async fn presence_tracks_claim_release_expiry_and_restart_without_renewing_leases() {
+    let (temp, repo, task, users) = annotation_repo(3, &["alice", "bob"]).await;
+    assert!(repo.active_lease_holders().await.unwrap().is_empty());
+    let a = repo
+        .assign_next_image(&users[0], &task, AssignmentKind::Annotation)
+        .await
+        .unwrap()
+        .unwrap();
+    let b = repo
+        .assign_next_image(&users[1], &task, AssignmentKind::Annotation)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(repo.active_lease_holders().await.unwrap().len(), 2);
+    assert_eq!(
+        repo.active_lease_holders().await.unwrap()[&users[0]],
+        a.expires_at.unwrap()
+    );
+    repo.release_assignment(
+        &users[0],
+        &a.assignment_id,
+        &a.image_id,
+        &task,
+        AssignmentKind::Annotation,
+    )
+    .await
+    .unwrap();
+    assert_eq!(repo.active_lease_holders().await.unwrap().len(), 1);
+    expire_assignment(&repo, &b, &users[1]).await;
+    assert!(repo.active_lease_holders().await.unwrap().is_empty());
+    assert!(
+        DatasetRepository::new(temp.path())
+            .active_lease_holders()
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let c = repo
+        .assign_next_image(&users[1], &task, AssignmentKind::Annotation)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        DatasetRepository::new(temp.path())
+            .active_lease_holders()
+            .await
+            .unwrap()[&users[1]],
+        c.expires_at.unwrap()
+    );
+}
