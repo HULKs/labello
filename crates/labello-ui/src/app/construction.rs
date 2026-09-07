@@ -59,6 +59,7 @@ impl LabelloApp {
             canvas: CanvasState::default(),
             save_status: SaveStatus::Idle,
             edit_generation: 0,
+            assignment_touched: false,
             last_edit_at: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),

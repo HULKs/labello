@@ -116,6 +116,10 @@ impl LabelloApp {
         let Some(pending) = self.work.pending_transition.clone() else {
             return;
         };
+        if self.loading.saving && !self.assignment_has_work()
+            && matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_)) {
+            return;
+        }
         let current = self
             .selected_workflow()
             .map(|workflow| workflow.label())

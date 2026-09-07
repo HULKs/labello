@@ -47,6 +47,7 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
+        self.work.assignment_touched = false;
         self.work.review_index = 0;
         self.work.review_rejected = false;
         self.work.correction_draft = None;
@@ -63,7 +64,7 @@ impl LabelloApp {
         self.work.queue.clear();
     }
 
-    pub(crate) fn start_workflow_command(&self, api: Rc<dyn LabelloApi>, command: UiCommand) {
+    pub(crate) fn start_workflow_command(&mut self, api: Rc<dyn LabelloApi>, command: UiCommand) {
         if matches!(&command, UiCommand::PrefetchAssignment { .. })
             && !self
                 .runtime
@@ -71,6 +72,23 @@ impl LabelloApp {
                 .contains(&command.request().request_id)
         {
             return;
+        }
+        if matches!(
+            &command,
+            UiCommand::ClaimAssignment { .. }
+                | UiCommand::PrefetchAssignment { .. }
+                | UiCommand::ReloadAssignment { .. }
+                | UiCommand::ReopenAssignment { .. }
+                | UiCommand::RevalidatePreparedReview { .. }
+        ) {
+            if self.runtime.reservation_cleanup.has_pending_releases() {
+                self.runtime.commands.push_back(command);
+                return;
+            }
+            self.runtime
+                .reservation_cleanup
+                .loads
+                .insert(command.request().request_id, api.clone());
         }
         let transfer = match &command {
             UiCommand::ClaimAssignment { operation_id, .. }
@@ -166,6 +184,7 @@ impl LabelloApp {
                         return UiMessage::PrefetchLoaded {
                             request,
                             operation_id,
+                            assignment: None,
                             result: Box::new(Err(UiRequestError::from(error))),
                         };
                     }
@@ -174,6 +193,7 @@ impl LabelloApp {
                     return UiMessage::PrefetchLoaded {
                         request,
                         operation_id,
+                        assignment: None,
                         result: Box::new(Ok(None)),
                     };
                 };
@@ -188,14 +208,10 @@ impl LabelloApp {
                 .await
                 .map(Some)
                 .map_err(UiRequestError::from);
-                if result.is_err() {
-                    let _ = api
-                        .release_assignment(&dataset_id, assignment_action(&assignment))
-                        .await;
-                }
                 UiMessage::PrefetchLoaded {
                     request,
                     operation_id,
+                    assignment: Some(assignment),
                     result: Box::new(result),
                 }
             }),
@@ -598,17 +614,7 @@ impl LabelloApp {
         let Some(api) = self.runtime.api.clone() else {
             return;
         };
-        let operation_id = self.next_operation();
-        let request = self.operation_identity(operation_id, dataset_id.clone());
-        self.runtime.active_requests.insert(request.request_id);
-        self.start_workflow_command(
-            api,
-            UiCommand::ReleaseReservation {
-                request,
-                dataset_id,
-                assignment,
-            },
-        );
+        self.defer_reservation_release(api, dataset_id, assignment);
     }
 
     pub(crate) fn release_revalidation_assignments(
@@ -852,6 +858,7 @@ impl LabelloApp {
         }
         let operation_id = self.begin_operation();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
+        self.work.assignment_touched = true;
         self.queue_command(UiCommand::Review {
             request,
             operation_id,

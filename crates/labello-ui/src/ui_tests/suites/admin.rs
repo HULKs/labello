@@ -931,7 +931,7 @@ fn entering_admin_clears_the_released_assignment() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
 
     click_application_menu_item(&mut harness, "Admin");
-    release_and_switch(&mut harness);
+    assert!(harness.query_by_label("Release and switch").is_none());
     step_until(&mut harness, 12, |app| app.view == AppView::Admin);
 
     assert!(harness.state().work.assignment.is_none());

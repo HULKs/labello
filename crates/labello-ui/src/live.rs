@@ -80,28 +80,39 @@ impl LabelloApp {
                 continue;
             }
             let requires_current_dataset = !matches!(&message, UiMessage::DatasetCreated { .. });
+            let load_api = message.request().and_then(|request| {
+                self.runtime
+                    .reservation_cleanup
+                    .releases
+                    .remove(&request.request_id);
+                self.runtime
+                    .reservation_cleanup
+                    .loads
+                    .remove(&request.request_id)
+            });
             if let Some(request) = message.request().cloned()
                 && !self.finish_request(&request, requires_current_dataset)
             {
                 if let Some(dataset_id) = request.dataset_id {
-                    match message {
-                        UiMessage::PrefetchLoaded { result, .. } => {
-                            if let Ok(Some(loaded)) = *result {
-                                self.release_reservation(dataset_id, loaded.assignment);
-                            }
-                        }
+                    let unused = match message {
+                        UiMessage::PrefetchLoaded { assignment, .. } => assignment,
                         UiMessage::ImageLoaded {
                             assignment: Some(assignment),
                             ..
-                        } => self.release_reservation(dataset_id, assignment),
+                        } => Some(assignment),
                         UiMessage::PreviousAssignmentLoaded {
                             assignment: Some(assignment),
                             ..
-                        } => self.release_reservation(dataset_id, assignment),
+                        } => Some(assignment),
                         UiMessage::PreparedReviewRevalidated { cached, .. } => {
-                            self.release_reservation(dataset_id, cached.assignment)
+                            Some(cached.assignment)
                         }
-                        _ => {}
+                        _ => None,
+                    };
+                    if let Some(assignment) = unused
+                        && let Some(api) = load_api.or_else(|| self.runtime.api.clone())
+                    {
+                        self.defer_reservation_release(api, dataset_id, assignment);
                     }
                 }
                 continue;
@@ -114,6 +125,7 @@ impl LabelloApp {
                 self.request_session_recovery();
             }
         }
+        self.flush_reservation_releases();
         if processed == 8 {
             ctx.request_repaint();
         }

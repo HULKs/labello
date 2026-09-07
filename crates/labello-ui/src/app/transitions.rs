@@ -1,13 +1,31 @@
 impl LabelloApp {
     pub(crate) fn request_transition(&mut self, transition: PendingTransition) {
-        if self.loading.saving || self.loading.image || self.transition_is_current(&transition) {
+        if self.loading.saving || self.loading.image || self.work.migration.busy
+            || self.work.pending_transition.is_some() || self.transition_is_current(&transition) {
             return;
         }
         if self.work.assignment.is_some() {
-            self.stage_transition(transition);
+            let automatic = matches!(transition, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_))
+                && !self.assignment_has_work();
+            if automatic && self.runtime.api.is_none() {
+                self.execute_transition(transition);
+            } else {
+                self.stage_transition(transition);
+                if automatic {
+                    self.request_release();
+                }
+            }
             return;
         }
         self.execute_transition(transition);
+    }
+
+    pub(crate) fn assignment_has_work(&self) -> bool {
+        self.work.assignment_touched
+            || self.work.edit_generation != 0
+            || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
+            || self.work.correction_draft.is_some()
+            || self.migration_has_unsaved_input()
     }
 
     fn stage_transition(&mut self, transition: PendingTransition) {
@@ -197,6 +215,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn advance_current_image(&mut self) {
+        self.work.assignment_touched = false;
+        self.work.edit_generation = 0;
         self.work.assignment = None;
         self.work.current_texture = None;
         self.work.current_state = None;
@@ -265,6 +285,7 @@ impl LabelloApp {
         let Some(annotation) = self.current_review_annotation().cloned() else {
             return;
         };
+        self.work.assignment_touched = true;
         let annotation_id = annotation.annotation_id.clone();
         self.work.correction_draft = Some(CorrectionDraft {
             correction_id: labello_domain::CorrectionId::generate(),

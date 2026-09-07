@@ -154,6 +154,14 @@ cleanup. Claims finish independently so obsolete reservations can be released.
 The command dispatcher schedules another frame while commands remain, including
 when it discards a superseded request.
 
+Reservation cleanup retains dispatched assignment-load ownership across workspace
+and authentication invalidation. It waits until those responses have been reduced
+before releasing unused assignments, because repeated claims can return the same
+active assignment ID. Current work, prepared work, and queued commands targeting an
+exact assignment retain that reservation. New assignment loads wait for pending
+cleanup releases to finish. Failed prefetches use the same cleanup owner as stale
+responses, and cleanup uses the API instance that performed the original load.
+
 There is no image-quality selection, per-image representation override or saved
 quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
 failure states and retry actions reload the same Data saver profile. Cached
@@ -203,3 +211,24 @@ remain readable. Reloading an assignment resumes its latest persisted pass at th
 first outstanding object. The normal keep, edit and exclude controls record exact
 current decisions until full-image confirmation is available. Resolved overview
 entries then use the same direct revisit path as assignments without a pass.
+
+## Assignment navigation
+
+`app/transitions.rs` owns the gate for view, About, and workflow changes. An
+untouched assignment releases through the existing release command without a
+confirmation dialog. The destination opens only after release succeeds. Release
+failure leaves the current workspace available with the error. Pending navigation
+blocks background editing and further transitions; request and workspace identities
+reject stale completions.
+
+`work.assignment_touched` records input for the current assignment. Annotation
+edits, entering reviewer correction, review decisions, migration keypoint or
+exclusion input, and migration decisions set it. Saving, undoing, discarding a
+correction, or reloading the same assignment does not clear it. Loading a different
+assignment resets it. Existing server annotations and review progress, selection,
+canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
+retain confirmation protection. This state is local to the loaded assignment;
+server leases and persisted workflow history retain their existing authority.
+
+Touched assignments keep the existing confirmation. Next/previous assignment
+rules are unchanged. Statistics continues to use its assignment-preserving overlay.
