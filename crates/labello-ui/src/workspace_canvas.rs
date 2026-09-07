@@ -198,7 +198,10 @@ impl LabelloApp {
                             ui,
                             title,
                             &error,
-                            Some(egui::Button::new(retry).shortcut_text(shortcut)),
+                            Some(
+                                egui::Button::new(retry)
+                                    .shortcut_text(crate::theme::button_shortcut(shortcut)),
+                            ),
                         ) {
                             self.retry_assignment_load();
                         }
@@ -238,7 +241,10 @@ impl LabelloApp {
                             ui,
                             title,
                             "No work is available right now. Retry to check again.",
-                            Some(egui::Button::new("Retry image load").shortcut_text(shortcut)),
+                            Some(
+                                egui::Button::new("Retry image load")
+                                    .shortcut_text(crate::theme::button_shortcut(shortcut)),
+                            ),
                         ) {
                             self.retry_assignment_load();
                         }
