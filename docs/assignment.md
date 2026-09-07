@@ -36,7 +36,9 @@ default, for the immediately previous skipped or completed review in the same
 dataset and task. The client clears that reference when the dataset, task,
 account, or endpoint changes. It is not a history browser. The server validates
 the exact previous assignment and creates a new assignment ID and lease. A
-retry of the same opening returns that fresh active assignment.
+retry of the same opening returns that fresh active assignment. The original
+submitter cannot reopen their own review. The server reports this separation
+requirement distinctly from a changed submission or task configuration.
 
 A skipped normal review resumes its original submission round and preserves
 valid object decisions. A completed review opens a decision-only revision.

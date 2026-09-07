@@ -2162,6 +2162,108 @@ async fn previous_review_reopens_before_current_release_and_survives_later_relea
     );
 }
 
+#[tokio::test]
+async fn previous_review_conflicts_distinguish_context_changes_and_preserve_denial() {
+    let (_temp, repo, image_id, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    repo.release_assignment(
+        &reviewers[0],
+        &original.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let before = repo.load_image_state(&image_id).await.unwrap();
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata.tasks[0].name = "Changed review task".to_string();
+    repo.save_dataset(&metadata).await.unwrap();
+    let error = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::AssignmentConflict(message)
+            if message == "previous review task configuration changed"
+    ));
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
+
+    let (_temp, repo, image_id, task_id, annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let original = claim_review(&repo, &image_id, &task_id, &reviewers[0]).await;
+    repo.release_assignment(
+        &reviewers[0],
+        &original.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let later = claim_review(&repo, &image_id, &task_id, &reviewers[1]).await;
+    finalize_test_review(&repo, &later, ReviewDecision::Rejected).await;
+    let correction = repo
+        .assign_next_image(&annotator, &task_id, AssignmentKind::Annotation)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.complete_assignment(
+        &annotator,
+        &correction.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Annotation,
+    )
+    .await
+    .unwrap();
+    let before = repo.load_image_state(&image_id).await.unwrap();
+    let error = repo
+        .reopen_review_assignment(&reviewers[0], &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::AssignmentConflict(message) if message == "previous review submission changed"
+    ));
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
+
+    let (_temp, repo, image_id, task_id, annotator, _reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata
+        .role_assignments
+        .iter_mut()
+        .find(|assignment| assignment.user_id == annotator)
+        .unwrap()
+        .roles
+        .insert(DatasetRole::Reviewer);
+    repo.save_dataset(&metadata).await.unwrap();
+    let original = claim_review(&repo, &image_id, &task_id, &annotator).await;
+    repo.release_assignment(
+        &annotator,
+        &original.assignment_id,
+        &image_id,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let before = repo.load_image_state(&image_id).await.unwrap();
+    let error = repo
+        .reopen_review_assignment(&annotator, &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::AssignmentConflict(message)
+            if message == "the original submitter cannot reopen this review; another reviewer is required"
+    ));
+    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
+}
+
 fn revision_replacements(
     state: &labello_domain::ImageState,
     assignment: &Assignment,

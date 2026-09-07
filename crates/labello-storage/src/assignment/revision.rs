@@ -235,12 +235,15 @@ impl DatasetRepository {
         }
         let original_context = state.review_assignment_contexts.get(assignment_id)
             .ok_or_else(|| conflict("this historical review has no captured revision context; claim current work instead"))?;
-        if original_context.task != *task
-            || state.review_round(task_id) != Some(&original_context.round)
-            || original_context.round.submitted_by == *user_id
-        {
+        if original_context.task != *task {
+            return Err(conflict("previous review task configuration changed"));
+        }
+        if state.review_round(task_id) != Some(&original_context.round) {
+            return Err(conflict("previous review submission changed"));
+        }
+        if original_context.round.submitted_by == *user_id {
             return Err(conflict(
-                "previous review submission or task configuration changed",
+                "the original submitter cannot reopen this review; another reviewer is required",
             ));
         }
         let now = labello_domain::now();
