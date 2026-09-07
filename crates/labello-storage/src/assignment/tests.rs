@@ -2620,39 +2620,6 @@ async fn previous_review_conflicts_distinguish_context_changes_and_preserve_deni
         StorageError::AssignmentConflict(message) if message == "previous review submission changed"
     ));
     assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
-
-    let (_temp, repo, image_id, task_id, annotator, _reviewers) =
-        correction_repo(AnnotationType::BoundingBox, false).await;
-    let mut metadata = repo.load_dataset_config().await.unwrap();
-    metadata
-        .role_assignments
-        .iter_mut()
-        .find(|assignment| assignment.user_id == annotator)
-        .unwrap()
-        .roles
-        .insert(DatasetRole::Reviewer);
-    repo.save_dataset(&metadata).await.unwrap();
-    let original = claim_review(&repo, &image_id, &task_id, &annotator).await;
-    repo.release_assignment(
-        &annotator,
-        &original.assignment_id,
-        &image_id,
-        &task_id,
-        AssignmentKind::Review,
-    )
-    .await
-    .unwrap();
-    let before = repo.load_image_state(&image_id).await.unwrap();
-    let error = repo
-        .reopen_review_assignment(&annotator, &original.assignment_id, &image_id, &task_id)
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        StorageError::AssignmentConflict(message)
-            if message == "the original submitter cannot reopen this review; another reviewer is required"
-    ));
-    assert_eq!(repo.load_image_state(&image_id).await.unwrap(), before);
 }
 
 fn revision_replacements(
@@ -2713,6 +2680,58 @@ async fn finalize_test_review(
     )
     .await
     .unwrap()
+}
+
+#[tokio::test]
+async fn original_submitter_can_reopen_previous_review_and_commit_idempotently() {
+    let (_temp, repo, image_id, task_id, annotator, _reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata
+        .role_assignments
+        .iter_mut()
+        .find(|assignment| assignment.user_id == annotator)
+        .unwrap()
+        .roles
+        .insert(DatasetRole::Reviewer);
+    repo.save_dataset(&metadata).await.unwrap();
+
+    let original = claim_review(&repo, &image_id, &task_id, &annotator).await;
+    let completed = finalize_test_review(&repo, &original, ReviewDecision::Approved).await;
+    assert_eq!(
+        completed.task_states[&task_id].status,
+        TaskStatus::Completed
+    );
+    assert_eq!(completed.reviews[0].reviewer_user_id, annotator);
+
+    let revision = repo
+        .reopen_review_assignment(&annotator, &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    let retry = repo
+        .reopen_review_assignment(&annotator, &original.assignment_id, &image_id, &task_id)
+        .await
+        .unwrap();
+    assert_ne!(revision.assignment_id, original.assignment_id);
+    assert_eq!(revision, retry);
+
+    let opened = repo.load_image_state(&image_id).await.unwrap();
+    let replacement = revision_replacements(&opened, &revision, ReviewDecision::Rejected);
+    let committed = repo
+        .commit_review_revision(&annotator, review_context(&revision), replacement.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        committed.task_states[&task_id].status,
+        TaskStatus::NeedsCorrection
+    );
+    let events = repo.load_events(&image_id).await.unwrap();
+    let retried = repo
+        .commit_review_revision(&annotator, review_context(&revision), replacement)
+        .await
+        .unwrap();
+    assert_eq!(retried, committed);
+    assert_eq!(repo.load_events(&image_id).await.unwrap(), events);
 }
 
 #[tokio::test]

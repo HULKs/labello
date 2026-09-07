@@ -242,11 +242,6 @@ impl DatasetRepository {
         if state.review_round(task_id) != Some(&original_context.round) {
             return Err(conflict("previous review submission changed"));
         }
-        if original_context.round.submitted_by == *user_id {
-            return Err(conflict(
-                "the original submitter cannot reopen this review; another reviewer is required",
-            ));
-        }
         let now = labello_domain::now();
         let later = state
             .assignments
