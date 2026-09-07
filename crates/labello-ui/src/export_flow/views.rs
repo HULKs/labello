@@ -139,7 +139,8 @@ impl LabelloApp {
                 }
             }
             let validation = self.admin.export.options.class_mapping(&metadata);
-            if let Err(error) = validation {
+            if !self.admin.export.options.classes.is_empty()
+                && let Err(error) = validation {
                 theme::inline_message(ui, theme::Intent::Warning, error.to_string());
             }
             let retained = self

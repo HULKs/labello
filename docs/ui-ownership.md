@@ -276,8 +276,9 @@ versioned detect or pose profile. Train, validation, and test checkboxes are all
 selected by default and filter the output independently of the fallback. At least
 one split is required. Train is the default fallback for images
 without split provenance. Split conflicts offer explicit per-image choices.
-Domain `ExportOptions::class_mapping` supplies local compatibility feedback;
-server preflight owns coverage, image, geometry, source consistency and bounds.
+Domain `ExportOptions::class_mapping` supplies local compatibility feedback.
+An empty task/class selection disables preflight without showing a warning.
+Server preflight owns coverage, image, geometry, source consistency and bounds.
 Failed, blocked, cancelled, and succeeded jobs remain inspectable in history but
 are not automatically selected on reload. Editing a new selection or starting a
 preflight clears old terminal-job details. Blocked jobs do not retain a payload
