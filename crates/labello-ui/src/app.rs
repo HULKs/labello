@@ -380,11 +380,22 @@ pub(crate) struct StatisticsOverlayState {
     pub(crate) restore_focus: Option<egui::Id>,
 }
 
+#[derive(Clone)]
+pub(crate) struct AutomaticWorkflowChange {
+    pub(crate) previous: String,
+    pub(crate) current: String,
+    pub(crate) dataset_id: DatasetId,
+    pub(crate) view: AppView,
+    pub(crate) presented: bool,
+    pub(crate) presented_pass: Option<u64>,
+}
+
 pub struct WorkState {
     pub(crate) image_transfers: crate::image_transfer::ImageTransfers,
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,
+    pub(crate) automatic_workflow_change: Option<AutomaticWorkflowChange>,
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
     pub(crate) previous_assignment: Option<Assignment>,
