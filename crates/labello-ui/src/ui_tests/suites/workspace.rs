@@ -2430,12 +2430,18 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     assert!(harness.state().work.correction_draft.is_some());
 
     api.fail_next_correction();
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 8, |app| !app.loading.saving);
     assert_eq!(api.counts().record_correction, 1);
     assert!(harness.state().work.correction_draft.is_some());
     assert!(harness.state().work.current.is_some());
 
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.run_steps(8);
+    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
     click(&mut harness, "Correct & finalize");
     step_until(&mut harness, 12, |app| {
         api.counts().record_correction == 2
@@ -2963,11 +2969,10 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
     ] {
         let action = labels
             .into_iter()
-            .find_map(|label| harness.query_by_role_and_label(egui::accesskit::Role::Button, label))
-            .expect("review decision action");
+            .find_map(|label| harness.query_by_role_and_label(egui::accesskit::Role::Button, label));
         assert!(
-            action.accesskit_node().is_disabled(),
-            "review action must be disabled while Previous is pending"
+            action.is_none_or(|action| action.accesskit_node().is_disabled()),
+            "review action must be hidden or disabled while Previous is pending"
         );
     }
 
@@ -3123,9 +3128,8 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
     );
     assert!(
         harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize")
-            .accesskit_node()
-            .is_disabled()
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize")
+            .is_none_or(|action| action.accesskit_node().is_disabled())
     );
 
     while let Some(task) = scheduled.borrow_mut().pop() {

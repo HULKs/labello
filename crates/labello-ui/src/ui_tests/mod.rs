@@ -78,3 +78,4 @@ include!("suites/build_information.rs");
 include!("suites/data_saver.rs");
 
 include!("suites/statistics_overlay.rs");
+include!("suites/review_context.rs");
