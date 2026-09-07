@@ -123,6 +123,7 @@ impl DatasetRepository {
         labello_domain::validate_schema_version(index.schema_version)?;
         let mut index = index.clone();
         index.image_count = index.images_by_hash.len();
+        let _history_membership = self.review_history_cache.membership.write().await;
         let mut cached = self.images_index_cache.write().await;
         let previous = if let Some(previous) = cached.as_ref() {
             previous.clone()
@@ -144,6 +145,11 @@ impl DatasetRepository {
             .values()
             .map(|record| record.image_id.clone())
             .collect::<BTreeSet<_>>();
+        // Publication may rename the index before failing or being cancelled.
+        // Invalidate while membership is locked, before crossing that boundary.
+        if previous_image_ids != next_image_ids {
+            self.review_history_cache.invalidate();
+        }
         *cached = None;
         write_json_atomic(&self.images_index_path(), &index).await?;
         *cached = Some(Arc::new(index));

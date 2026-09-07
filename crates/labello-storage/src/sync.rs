@@ -361,7 +361,10 @@ impl DatasetRepository {
             next_state.apply_event(&event)?;
             resequenced.push(event);
         }
+        crate::assignment::finalize_review_transaction(state, &mut next_state, &mut resequenced)?;
+        let history_commit = self.review_history_commit(state, &next_state, None).await?;
         self.append_events_atomic(image_id, &resequenced).await?;
+        history_commit.observe();
         self.observe_completion_transition(image_id, previous_completion, &next_state);
         *state = next_state;
         crate::fsjson::write_json_atomic(&self.state_path(image_id), state).await?;

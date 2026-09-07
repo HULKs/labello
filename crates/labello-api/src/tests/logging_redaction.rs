@@ -186,6 +186,7 @@ fn assert_failure_logs(
     let logs = serde_json::to_string(events).unwrap();
     for prohibited in [
         "private-sentinel",
+        "private-conflict-sentinel",
         "sentinel.invalid",
         "upload-name.png",
         "secret-source",
@@ -502,6 +503,22 @@ async fn diagnostic_overrides_preserve_public_responses_and_dependency_errors_ar
             }),
         )
         .route(
+            "/known-review-conflict",
+            get(|| async {
+                ApiError::Storage(labello_storage::StorageError::AssignmentConflict(
+                    "previous review submission changed".into(),
+                ))
+            }),
+        )
+        .route(
+            "/unknown-review-conflict",
+            get(|| async {
+                ApiError::Storage(labello_storage::StorageError::AssignmentConflict(
+                    "private-conflict-sentinel".into(),
+                ))
+            }),
+        )
+        .route(
             "/unavailable",
             get(|| async { StatusCode::SERVICE_UNAVAILABLE.into_response() }),
         )
@@ -545,6 +562,20 @@ async fn diagnostic_overrides_preserve_public_responses_and_dependency_errors_ar
             "ERROR",
             "http_client",
             Some("internal server error"),
+        ),
+        (
+            "/known-review-conflict",
+            StatusCode::CONFLICT,
+            "INFO",
+            "storage_review_submission_changed",
+            Some("previous review submission changed"),
+        ),
+        (
+            "/unknown-review-conflict",
+            StatusCode::CONFLICT,
+            "INFO",
+            "storage_assignment_conflict",
+            Some("private-conflict-sentinel"),
         ),
         (
             "/unavailable",

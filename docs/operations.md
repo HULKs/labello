@@ -74,6 +74,12 @@ identifiers are omitted. No actor is inferred from a rejected cookie or header.
 | HTTP dependency, serialization, storage or internal application failures | `api.error`, ERROR | `http_client`, `serialization`, bounded storage kind, or `internal` |
 | Readiness 503 or another 502/503/504 without an application category | `api.error`, ERROR | `dependency_unavailable` from status |
 
+Review reopening and revision conflicts use fixed `storage_review_*` error
+categories for known rejection reasons, including changed submission, task,
+targets, later work, and a no-longer-previous assignment. Unknown conflict
+messages retain `storage_assignment_conflict`. Diagnostics never include the
+conflict message itself; HTTP status and response text are unchanged.
+
 There is no request-rate limiter. A future HTTP 429 response uses WARN category
 `rate_limit`; this fallback is not a claim of implemented rate limiting. Other
 4xx responses use INFO `request_rejected`; other 5xx responses use ERROR `internal`.

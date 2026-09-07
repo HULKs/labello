@@ -80,7 +80,7 @@ impl StorageError {
             Self::Unauthorized(_) => "storage_unauthorized",
             Self::InvalidAssignment(_) => "storage_invalid_assignment",
             Self::InvalidCorrection(_) => "storage_invalid_correction",
-            Self::AssignmentConflict(_) => "storage_assignment_conflict",
+            Self::AssignmentConflict(message) => review_conflict_kind(message),
             Self::BackgroundTask(_) => "storage_background_task",
             Self::Import { .. } => "storage_import",
         }
@@ -96,6 +96,46 @@ impl StorageError {
             Self::Import { code, .. } => Some(code.clone()),
             _ => None,
         }
+    }
+}
+
+// Only exact known messages receive specific codes. Never expose arbitrary
+// conflict text through diagnostics, including domain validation messages.
+fn review_conflict_kind(message: &str) -> &'static str {
+    match message {
+        "approval review is no longer enabled for this task" => "storage_review_disabled",
+        "previous review assignment is missing" => "storage_review_assignment_missing",
+        "previous review is not a skipped or completed assignment for this task" => {
+            "storage_review_assignment_unfinished"
+        }
+        "this historical review has no captured revision context; claim current work instead" => {
+            "storage_review_context_missing"
+        }
+        "previous review task configuration changed" => "storage_review_task_changed",
+        "previous review submission changed" => "storage_review_submission_changed",
+        "a later assignment attempt superseded this previous review" => {
+            "storage_review_later_assignment"
+        }
+        "another assignment still owns this task" => "storage_review_task_owned",
+        "previous assignment terminal boundary is missing" => "storage_review_boundary_missing",
+        "later work superseded the previous review" => "storage_review_later_work",
+        "previous review targets or migration confirmation changed" => {
+            "storage_review_targets_changed"
+        }
+        "skipped review is no longer eligible" => "storage_review_skip_ineligible",
+        "review revision context is missing" => "storage_review_context_missing",
+        "review revision targets or task configuration changed" => {
+            "storage_review_revision_context_changed"
+        }
+        "review revision opening event is missing" => "storage_review_opening_missing",
+        "later work invalidated this review revision" => "storage_review_later_work",
+        "revision retry contains different decisions" => "storage_review_retry_changed",
+        "review history is refreshing; retry Previous" => "storage_review_history_refreshing",
+        "previous review image is no longer in the dataset" => "storage_review_image_removed",
+        "this is no longer the immediately previous review assignment" => {
+            "storage_review_not_previous"
+        }
+        _ => "storage_assignment_conflict",
     }
 }
 
@@ -150,5 +190,22 @@ impl<T> PathTomlEncode<T> for Result<T, toml::ser::Error> {
             path: path.into(),
             source,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn review_conflict_diagnostics_use_allowlisted_kinds_and_hide_text() {
+        let known = StorageError::AssignmentConflict("previous review submission changed".into());
+        assert_eq!(known.kind(), "storage_review_submission_changed");
+        assert_eq!(known.safe_diagnostic(), None);
+
+        let untrusted =
+            StorageError::AssignmentConflict("private-conflict-sentinel: /secret/path".into());
+        assert_eq!(untrusted.kind(), "storage_assignment_conflict");
+        assert_eq!(untrusted.safe_diagnostic(), None);
     }
 }

@@ -135,7 +135,10 @@ impl LabelloApp {
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
         let review_phase = if view == AppView::Review && current.is_some() {
-            if self.work.correction_draft.is_some() {
+            if self.loading.image
+                && matches!(self.work.pending_transition, Some(PendingTransition::PreviousAssignment(_))) {
+                Some("Opening previous review…".to_string())
+            } else if self.work.correction_draft.is_some() {
                 Some("Correction mode".to_string())
             } else {
                 let (phase, value, _) = self.review_phase();
@@ -199,6 +202,7 @@ impl LabelloApp {
                     if show_panel_buttons {
                         self.context_panel_buttons(ui);
                     }
+                    self.previous_review_action(ui);
                     self.assignment_availability_spinner(ui);
                 });
                 if current.is_some() {
@@ -211,6 +215,7 @@ impl LabelloApp {
                 if show_panel_buttons {
                     self.context_panel_buttons(ui);
                 }
+                self.previous_review_action(ui);
                 self.assignment_availability_spinner(ui);
             })
         } else {
@@ -265,6 +270,7 @@ impl LabelloApp {
                     ui.separator();
                     self.workspace_actions(ui, layout);
                 }
+                self.previous_review_action(ui);
                 self.assignment_availability_spinner(ui);
             })
         };

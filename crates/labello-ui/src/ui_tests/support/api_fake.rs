@@ -14,6 +14,10 @@ impl SpyApi {
         self.state.borrow().counts.clone()
     }
 
+    pub(super) fn assignment_actions(&self) -> Vec<&'static str> {
+        self.state.borrow().assignment_actions.clone()
+    }
+
     pub(super) fn metadata(&self) -> DatasetMetadata {
         self.state.borrow().metadata.clone()
     }
@@ -240,6 +244,7 @@ pub(super) struct SpyState {
     pub(super) metadata: DatasetMetadata,
     pub(super) states: BTreeMap<ImageId, ImageState>,
     pub(super) counts: CallCounts,
+    pub(super) assignment_actions: Vec<&'static str>,
     pub(super) next_image: usize,
     pub(super) events: Vec<EventPayload>,
     pub(super) fail_next_preview: bool,
@@ -364,6 +369,7 @@ impl SpyState {
             metadata,
             states,
             counts: CallCounts::default(),
+            assignment_actions: Vec::new(),
             next_image: 0,
             events: Vec::new(),
             fail_next_preview: false,
@@ -1541,6 +1547,7 @@ impl ImageApi for SpyApi {
         request: AssignmentActionRequest,
     ) -> ApiFuture<'a, Assignment> {
         let mut state = self.state.borrow_mut();
+        state.assignment_actions.push("release");
         state.counts.release_assignment += 1;
         if std::mem::take(&mut state.fail_next_release) {
             return ready(Err(ClientError::Demo("release failed".to_string())));
@@ -1586,6 +1593,7 @@ impl ImageApi for SpyApi {
         request: AssignmentActionRequest,
     ) -> ApiFuture<'a, Assignment> {
         let mut state = self.state.borrow_mut();
+        state.assignment_actions.push("reopen");
         state.counts.reopen_assignment += 1;
         let Some(previous) = state
             .reopenable_assignments

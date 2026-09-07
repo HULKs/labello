@@ -70,6 +70,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `review_revision.rs`: local staged replacement decisions and stable commit retries;
+  effective decisions come from the domain review projection, not raw history;
 - `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
   companion status and explicit reconciliation with retained drafts;
 - `workspace_canvas.rs`: the adapter between app state and the reusable canvas.
@@ -230,5 +232,16 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
-Touched assignments keep the existing confirmation. Next/previous assignment
-rules are unchanged. Statistics continues to use its assignment-preserving overlay.
+Touched assignments keep the existing confirmation. Review Previous uses the
+same touched-work check: untouched reviews switch directly, while changed
+reviews require confirmation. It first reopens and loads the previous review,
+then releases the displaced assignment. Releasing first would make the current
+review the newest terminal assignment and invalidate the previous target. Failed
+reopening preserves the current workspace and reports the error. While reopening,
+the current image and texture stay visible with an Opening previous review status.
+After confirmation the transition modal closes, but its pending transition remains
+to block conflicting actions and correction edits until loading finishes. Runtime failures
+show Error in the workspace status control, with the full error and annotation
+save status in its details, rather than retaining a success label. The
+Previous review control belongs to the workspace context toolbar, including
+migration and compact layouts. Statistics continues to use its assignment-preserving overlay.

@@ -1669,7 +1669,7 @@ fn previous_assignment_reopens_the_exact_skipped_image_from_compact_actions() {
         app.work.assignment
             .as_ref()
             .is_some_and(|assignment| assignment.image_id != original.image_id)
-            && app.work.previous_annotation_assignment.is_some()
+            && app.work.previous_assignment.is_some()
     });
     assert!(harness.query_by_label("Previous").is_some());
 
@@ -1694,7 +1694,7 @@ fn previous_assignment_reopens_the_exact_skipped_image_from_compact_actions() {
         harness.state().work.assignment.as_ref().unwrap().assignment_id,
         original.assignment_id
     );
-    assert!(harness.state().work.previous_annotation_assignment.is_none());
+    assert!(harness.state().work.previous_assignment.is_none());
 }
 
 #[test]
@@ -1711,7 +1711,7 @@ fn previous_assignment_reopens_the_exact_submitted_image() {
         app.work.assignment
             .as_ref()
             .is_some_and(|assignment| assignment.image_id != original.image_id)
-            && app.work.previous_annotation_assignment.is_some()
+            && app.work.previous_assignment.is_some()
     });
     click(&mut harness, "Previous");
     step_until(&mut harness, 20, |app| {
@@ -1736,7 +1736,7 @@ fn locally_expired_previous_assignment_is_left_for_the_server_to_validate() {
     previous.assignment_id = AssignmentId::generate();
     previous.expires_at = Some(now() - chrono::Duration::seconds(1));
     let previous_id = previous.assignment_id.clone();
-    harness.state_mut().work.previous_annotation_assignment = Some(previous);
+    harness.state_mut().work.previous_assignment = Some(previous);
 
     harness.state_mut().return_to_previous_assignment();
     step_until(&mut harness, 12, |app| {
@@ -1747,7 +1747,7 @@ fn locally_expired_previous_assignment_is_left_for_the_server_to_validate() {
             && !app.loading.image
     });
 
-    assert!(harness.state().work.previous_annotation_assignment.is_none());
+    assert!(harness.state().work.previous_assignment.is_none());
     assert_eq!(api.counts().reopen_assignment, 0);
     assert!(harness.state().runtime.error.is_none());
 }
@@ -2547,6 +2547,633 @@ fn review_target_is_canonical_and_full_image_phase_cannot_correct() {
     assert!(!harness.state().can_correct_review_object());
     harness.state_mut().start_correction();
     assert!(harness.state().work.correction_draft.is_none());
+}
+
+fn enter_test_review_revision(app: &mut LabelloApp) {
+    let task = app.selected_task().unwrap().clone();
+    let assignment = app.work.assignment.clone().unwrap();
+    let mut source = assignment.clone();
+    source.assignment_id = AssignmentId::from("previous_completed_review");
+    source.status = AssignmentStatus::Completed;
+    let state = app.work.current_state.as_mut().unwrap();
+    let round = labello_domain::ReviewRound { event_id: EventId::from("submitted_round"), event_sequence: 1,
+        submitted_by: UserId::from("annotator") };
+    state.review_rounds.insert(task.task_id.clone(), round.clone());
+    let old_review = ReviewRecord { review_id: ReviewId::from("previous_approval"),
+        target: ReviewTarget::Task { task_id: task.task_id.clone() }, reviewer_user_id: app.config.user_id.clone(),
+        decision: labello_domain::ReviewDecision::Approved, timestamp: now(), comment: None };
+    state.review_record_rounds.insert(old_review.review_id.clone(), round.event_id.clone());
+    state.reviews.push(old_review.clone());
+    state.assignments.insert(0, source.clone());
+    let context = labello_domain::ReviewAssignmentContext { assignment_id: assignment.assignment_id.clone(),
+        source_assignment_id: Some(source.assignment_id), round,
+        target_fingerprint: state.review_target_fingerprint(&task), targets: state.review_targets(&task).unwrap(),
+        task, superseded_review_ids: vec![old_review.review_id], decision_revision: true };
+    state.review_assignment_contexts.insert(assignment.assignment_id, context);
+    app.work.review_index = 0;
+    app.work.staged_review_decisions.clear();
+    app.work.review_revision_commit = None;
+    app.work.correction_draft = None;
+    app.sync_review_selection();
+}
+
+#[test]
+fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_identical_commit() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    harness.state_mut().work.tasks[0].name = "Synthetic review workflow with a deliberately long shared task name".into();
+    enter_test_review_revision(harness.state_mut());
+    harness.step();
+    assert!(harness.state().review_revision_active());
+    assert!(!harness.state().can_correct_review_object());
+    assert!(harness.query_by_label("Correct object").is_none());
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.step();
+    harness.step();
+    harness.step();
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    assert!(canvas.height() >= 44.0, "short revision canvas: {canvas:?}");
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    let before = harness.state().work.current_state.clone().unwrap();
+    let geometry = harness.state().work.annotations.clone();
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    harness.step();
+    assert_eq!(api.counts().record_review, 0);
+    assert_eq!(harness.state().work.current_state.as_ref().unwrap(), &before);
+    assert_eq!(harness.state().work.staged_review_decisions.len(), 1);
+    assert!(harness.state().current_review_annotation().is_none());
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit approval").accesskit_node().is_disabled());
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.step(); harness.step(); harness.step();
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit yes").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit no").accesskit_node().is_disabled());
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    assert!(canvas.height() >= 44.0, "short final revision canvas: {canvas:?}");
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.step();
+    harness.state_mut().skip_assignment();
+    harness.step();
+    assert!(harness.query_by_label("Discard staged review decisions?").is_some());
+    harness.set_size(egui::vec2(320.0, 320.0));
+    harness.step();
+    harness.step(); harness.step();
+    assert!(harness.get_by_label("Assignment transition dialog").rect().height() <= 304.0);
+    let cancel = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Cancel").rect();
+    assert!(cancel.bottom() <= 312.0 && cancel.top() >= 8.0, "short modal action outside viewport: {cancel:?}");
+    harness.key_press(egui::Key::Tab);
+    harness.key_press(egui::Key::Tab);
+    harness.step();
+    let cancel = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Cancel").rect();
+    assert!(harness.get_by_label("Assignment transition dialog").rect().contains_rect(cancel), "focused cancel is outside modal: {cancel:?}");
+    click(&mut harness, "Cancel");
+    assert_eq!(harness.state().work.staged_review_decisions.len(), 1);
+    assert_eq!(harness.state().work.annotations, geometry);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    let committed = harness.state().work.review_revision_commit.clone().unwrap();
+    assert_eq!(committed.reviews.len(), 2);
+    assert!(matches!(harness.state().runtime.commands.back(), Some(UiCommand::Review { revision: Some(_), .. })));
+    harness.state_mut().runtime.commands.clear();
+    harness.state_mut().runtime.active_requests.clear();
+    harness.state_mut().work.active_operation_id = None;
+    harness.state_mut().loading.saving = false;
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert_eq!(harness.state().work.review_revision_commit.as_ref(), Some(&committed));
+}
+
+#[test]
+fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cancel() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+    let mut harness = loaded_review_harness(api);
+    let mut previous = harness.state().work.assignment.clone().unwrap();
+    previous.assignment_id = AssignmentId::from("previous_review");
+    previous.image_id = ImageId::from("previous_image");
+    previous.status = AssignmentStatus::Cancelled;
+    harness.state_mut().work.previous_assignment = Some(previous);
+    for (width, height) in [(1440.0, 1000.0), (1288.0, 820.0), (600.0, 800.0), (390.0, 844.0), (320.0, 568.0), (320.0, 320.0)] {
+        harness.set_size(egui::vec2(width, height));
+        harness.step();
+        harness.step();
+        harness.step();
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous");
+        let context = harness.get_by_label("Workspace context bar").rect();
+        assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
+        assert!(context.contains_rect(previous.rect()), "Previous must remain in the context bar at {width}x{height}: context={context:?}, previous={:?}", previous.rect());
+        assert!(!previous.accesskit_node().is_disabled());
+    }
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.step();
+    harness.state_mut().start_correction();
+    let draft = harness.state().work.correction_draft.clone().unwrap();
+    click(&mut harness, "Previous");
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    click(&mut harness, "Cancel");
+    assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
+    assert!(harness.state().work.pending_transition.is_none());
+    harness.key_press(egui::Key::ArrowLeft);
+    harness.step();
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    click(&mut harness, "Cancel");
+    assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
+}
+
+#[test]
+fn previous_review_button_reopens_before_releasing_the_current_assignment() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let original_image = harness.state().work.assignment.as_ref().unwrap().image_id.clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id != original_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    assert!(harness.query_by_label("Switch active assignment?").is_none());
+    let released_before_previous = api.counts().release_assignment;
+    let reopened_before_previous = api.counts().reopen_assignment;
+    let assignment_actions_before = api.assignment_actions().len();
+    let previous_assignment_id = harness.state().work.previous_assignment.as_ref().unwrap().assignment_id.clone();
+
+    click(&mut harness, "Previous");
+    let assignment_actions = api.assignment_actions();
+    let assignment_actions = &assignment_actions[assignment_actions_before..];
+    assert_eq!(assignment_actions.first(), Some(&"reopen"));
+    assert!(assignment_actions.iter().skip(1).any(|action| *action == "release"));
+    assert!(harness.query_by_label("Switch active assignment?").is_none());
+    step_until(&mut harness, 20, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id == original_image)
+            && !app.loading.image
+            && !app.loading.saving
+    });
+
+    assert_eq!(api.counts().reopen_assignment, reopened_before_previous + 1);
+    assert!(api.counts().release_assignment > released_before_previous);
+    assert_ne!(harness.state().work.assignment.as_ref().unwrap().assignment_id, previous_assignment_id);
+    assert!(harness.state().work.previous_assignment.is_none());
+}
+
+#[test]
+fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(
+        &api,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.3,
+            height: 0.3,
+        }),
+        true,
+    );
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let first_image = harness
+        .state()
+        .work
+        .assignment
+        .as_ref()
+        .unwrap()
+        .image_id
+        .clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|assignment| assignment.image_id != first_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    let current_image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let current_texture = harness.state().work.current_texture.as_ref().unwrap().id();
+
+    let scheduled = Rc::new(RefCell::new(Vec::new()));
+    let scheduled_for_spawner = scheduled.clone();
+    harness
+        .state_mut()
+        .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
+    click(&mut harness, "Previous");
+    assert!(
+        !scheduled.borrow().is_empty(),
+        "Previous should have a delayed request"
+    );
+    harness.step();
+
+    assert!(harness.state().loading.image);
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .unwrap()
+            .image
+            .image_id,
+        current_image
+    );
+    assert_eq!(
+        harness.state().work.current_texture.as_ref().unwrap().id(),
+        current_texture
+    );
+    assert!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Previous")
+            .accesskit_node()
+            .is_disabled()
+    );
+    for labels in [
+        ["Approve object", "Complete review"],
+        ["Reject object & finish", "Send back"],
+    ] {
+        let action = labels
+            .into_iter()
+            .find_map(|label| harness.query_by_role_and_label(egui::accesskit::Role::Button, label))
+            .expect("review decision action");
+        assert!(
+            action.accesskit_node().is_disabled(),
+            "review action must be disabled while Previous is pending"
+        );
+    }
+
+    fn has_texture(shape: &egui::epaint::Shape, texture_id: egui::TextureId) -> bool {
+        match shape {
+            egui::epaint::Shape::Mesh(mesh) => mesh.texture_id == texture_id,
+            egui::epaint::Shape::Vec(shapes) => {
+                shapes.iter().any(|shape| has_texture(shape, texture_id))
+            }
+            _ => false,
+        }
+    }
+    let canvas_still_painted = harness
+        .output()
+        .shapes
+        .iter()
+        .any(|clipped| has_texture(&clipped.shape, current_texture));
+    assert!(
+        canvas_still_painted,
+        "the current image texture must remain painted while Previous is pending"
+    );
+
+    let mut rendered_text = Vec::new();
+    fn collect_text(shape: &egui::epaint::Shape, texts: &mut Vec<String>) {
+        match shape {
+            egui::epaint::Shape::Text(text) => texts.push(text.galley.text().to_string()),
+            egui::epaint::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    collect_text(shape, texts);
+                }
+            }
+            _ => {}
+        }
+    }
+    for clipped in &harness.output().shapes {
+        collect_text(&clipped.shape, &mut rendered_text);
+    }
+    let opening_status_visible = rendered_text
+        .iter()
+        .any(|text| text.contains("Opening previous review…"));
+
+    while let Some(task) = scheduled.borrow_mut().pop() {
+        poll_ready_task(task);
+    }
+    harness.state_mut().runtime.native_task_spawner = None;
+    harness.step();
+    step_until(&mut harness, 20, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|assignment| assignment.image_id == first_image)
+            && !app.loading.image
+            && !app.loading.saving
+    });
+    assert_ne!(
+        harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .unwrap()
+            .image
+            .image_id,
+        current_image
+    );
+    assert!(
+        opening_status_visible,
+        "a delayed Previous request must render an opening status, got {rendered_text:?}"
+    );
+}
+
+#[test]
+fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(
+        &api,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.3,
+            height: 0.3,
+        }),
+        true,
+    );
+    let mut harness = loaded_review_harness(api.clone());
+    let first_image = ImageId::from("img_1");
+    let second_image = ImageId::from("img_2");
+    let mut second_state = api.state.borrow().states[&first_image].clone();
+    second_state.image_id = second_image.clone();
+    api.state
+        .borrow_mut()
+        .states
+        .insert(second_image, second_state);
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|assignment| assignment.image_id == ImageId::from("img_2"))
+            && app.work.previous_assignment.is_some()
+            && app.current_review_annotation().is_some()
+    });
+    harness.state_mut().start_correction();
+    let current_image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let current_texture = harness.state().work.current_texture.as_ref().unwrap().id();
+
+    let scheduled = Rc::new(RefCell::new(Vec::new()));
+    let scheduled_for_spawner = scheduled.clone();
+    harness
+        .state_mut()
+        .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
+    click(&mut harness, "Previous");
+    assert!(
+        harness
+            .query_by_label("Switch active assignment?")
+            .is_some()
+    );
+    click(&mut harness, "Release and switch");
+    harness.step();
+
+    assert!(harness.state().loading.image);
+    assert!(harness.state().work.correction_draft.is_some());
+    assert!(
+        harness
+            .query_by_label("Assignment transition dialog")
+            .is_none()
+    );
+    assert!(harness.query_by_label("Opening previous review…").is_some());
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .unwrap()
+            .image
+            .image_id,
+        current_image
+    );
+    assert_eq!(
+        harness.state().work.current_texture.as_ref().unwrap().id(),
+        current_texture
+    );
+    assert!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize")
+            .accesskit_node()
+            .is_disabled()
+    );
+
+    while let Some(task) = scheduled.borrow_mut().pop() {
+        poll_ready_task(task);
+    }
+    harness.state_mut().runtime.native_task_spawner = None;
+    harness.step();
+    step_until(&mut harness, 20, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|assignment| assignment.image_id == first_image)
+            && !app.loading.image
+            && !app.loading.saving
+    });
+}
+
+#[test]
+fn delayed_previous_review_failure_preserves_current_canvas() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(
+        &api,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.3,
+            height: 0.3,
+        }),
+        true,
+    );
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let first_image = harness
+        .state()
+        .work
+        .assignment
+        .as_ref()
+        .unwrap()
+        .image_id
+        .clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|assignment| assignment.image_id != first_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    let current_image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let current_texture = harness.state().work.current_texture.as_ref().unwrap().id();
+    let released_before_previous = api.counts().release_assignment;
+
+    let scheduled = Rc::new(RefCell::new(Vec::new()));
+    let scheduled_for_spawner = scheduled.clone();
+    harness
+        .state_mut()
+        .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
+    click(&mut harness, "Previous");
+    harness.step();
+    assert!(harness.state().loading.image);
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .unwrap()
+            .image
+            .image_id,
+        current_image
+    );
+    api.state.borrow_mut().reopenable_assignments.clear();
+    while let Some(task) = scheduled.borrow_mut().pop() {
+        poll_ready_task(task);
+    }
+    harness.state_mut().runtime.native_task_spawner = None;
+    harness.step();
+    step_until(&mut harness, 12, |app| {
+        !app.loading.image
+            && app
+                .runtime
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("assignment cannot be reopened"))
+    });
+
+    assert_eq!(api.counts().release_assignment, released_before_previous);
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .current
+            .as_ref()
+            .unwrap()
+            .image
+            .image_id,
+        current_image
+    );
+    assert_eq!(
+        harness.state().work.current_texture.as_ref().unwrap().id(),
+        current_texture
+    );
+    assert!(harness.state().work.pending_transition.is_none());
+}
+
+#[test]
+fn failed_review_previous_load_preserves_correction_and_does_not_release() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    let first_image = ImageId::from("img_1");
+    let second_image = ImageId::from("img_2");
+    let mut second_state = api.state.borrow().states[&first_image].clone();
+    second_state.image_id = second_image.clone();
+    api.state.borrow_mut().states.insert(second_image, second_state);
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id == ImageId::from("img_2"))
+            && app.work.previous_assignment.is_some()
+            && app.current_review_annotation().is_some()
+    });
+    harness.state_mut().start_correction();
+    let draft = harness.state().work.correction_draft.clone().unwrap();
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    let previous = harness.state().work.previous_assignment.clone();
+    let released_before_previous = api.counts().release_assignment;
+    api.fail_next_preview();
+
+    click(&mut harness, "Previous");
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    click(&mut harness, "Release and switch");
+    step_until(&mut harness, 12, |app| !app.loading.saving && !app.loading.image);
+
+    assert_eq!(api.counts().reopen_assignment, 1);
+    assert_eq!(api.counts().release_assignment, released_before_previous);
+    assert_eq!(harness.state().work.assignment.as_ref(), Some(&assignment));
+    assert_eq!(
+        harness.state().work.previous_assignment.as_ref().map(|assignment| &assignment.image_id),
+        previous.as_ref().map(|assignment| &assignment.image_id),
+    );
+    assert_eq!(harness.state().work.correction_draft, Some(draft));
+    assert!(harness.state().runtime.error.as_deref().is_some_and(|error| error.contains("preview failed")));
+    assert!(harness.state().work.pending_transition.is_none());
+}
+
+#[test]
+fn failed_untouched_previous_request_renders_error_with_current_assignment() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let original_image = harness.state().work.assignment.as_ref().unwrap().image_id.clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id != original_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    api.state.borrow_mut().reopenable_assignments.clear();
+
+    click(&mut harness, "Previous");
+    step_until(&mut harness, 12, |app| {
+        !app.loading.image
+            && app.runtime.error.as_deref().is_some_and(|error| {
+                error.contains("assignment cannot be reopened")
+            })
+    });
+
+    assert_eq!(api.counts().reopen_assignment, 1);
+    assert!(harness.state().work.assignment.as_ref().is_some_and(|assignment| {
+        assignment.image_id != original_image
+    }));
+    fn collect_rendered_text(shape: &egui::epaint::Shape, texts: &mut Vec<String>) {
+        match shape {
+            egui::epaint::Shape::Text(text) => texts.push(text.galley.text().to_string()),
+            egui::epaint::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    collect_rendered_text(shape, texts);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut rendered_text = Vec::new();
+    for clipped in &harness.output().shapes {
+        collect_rendered_text(&clipped.shape, &mut rendered_text);
+    }
+    assert!(
+        rendered_text.iter().any(|text| text == "Error"),
+        "the failed Previous request must render an Error status, got {rendered_text:?}"
+    );
 }
 
 #[test]

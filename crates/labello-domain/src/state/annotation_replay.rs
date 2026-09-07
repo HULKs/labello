@@ -388,7 +388,7 @@ impl ImageState {
 
         self.apply_annotation_version(annotation.clone(), Some(correction.previous_version))?;
         self.mark_changed_guide(annotation, event);
-        self.reviews.push(review.clone());
+        self.apply_review_record(review);
         self.reviewer_corrections.push(correction.clone());
         self.task_states
             .insert(task_state.task_id.clone(), task_state.clone());
