@@ -315,6 +315,7 @@ pub(crate) enum UiMessage {
     PrefetchLoaded {
         request: RequestIdentity,
         operation_id: u64,
+        assignment: Option<Assignment>,
         result: Box<Result<Option<LoadedImage>, UiRequestError>>,
     },
     PreparedReviewRevalidated {

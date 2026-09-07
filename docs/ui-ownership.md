@@ -154,6 +154,14 @@ cleanup. Claims finish independently so obsolete reservations can be released.
 The command dispatcher schedules another frame while commands remain, including
 when it discards a superseded request.
 
+Reservation cleanup retains dispatched assignment-load ownership across workspace
+and authentication invalidation. It waits until those responses have been reduced
+before releasing unused assignments, because repeated claims can return the same
+active assignment ID. Current work, prepared work, and queued commands targeting an
+exact assignment retain that reservation. New assignment loads wait for pending
+cleanup releases to finish. Failed prefetches use the same cleanup owner as stale
+responses, and cleanup uses the API instance that performed the original load.
+
 There is no image-quality selection, per-image representation override or saved
 quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
 failure states and retry actions reload the same Data saver profile. Cached

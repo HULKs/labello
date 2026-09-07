@@ -185,6 +185,7 @@ impl LabelloApp {
                 UiMessage::PrefetchLoaded {
                     request: _,
                     operation_id,
+                    assignment,
                     result,
                 } => {
                     if self.work.active_prefetch_id != Some(operation_id) {
@@ -229,6 +230,9 @@ impl LabelloApp {
                             ctx.request_repaint_after(retry_delay);
                         }
                         Err(_) => {
+                            if let Some(assignment) = assignment {
+                                self.release_reservation(self.config.dataset_id.clone(), assignment);
+                            }
                             self.work.queue.mark_failed();
                             ctx.request_repaint_after(Duration::from_secs(1));
                         }

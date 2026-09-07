@@ -117,6 +117,13 @@ impl ImageQueue {
         self.prepared.pop_front()
     }
 
+    pub(crate) fn contains_assignment(&self, assignment: &labello_domain::Assignment) -> bool {
+        self.prepared.iter().any(|loaded| {
+            loaded.assignment.assignment_id == assignment.assignment_id
+                && loaded.assignment.image_id == assignment.image_id
+        })
+    }
+
     pub(crate) fn remove_prepared_image(
         &mut self,
         image_id: &labello_domain::ImageId,
