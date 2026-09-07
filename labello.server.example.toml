@@ -79,13 +79,9 @@ cacheEntries = 4096
 
 # Optional Linux dataset-export limits; omitted fields use these defaults.
 # [export]
-# maxImages = 10_000
-# maxFiles = 30_010
-# maxSourceBytes = 10_737_418_240
-# maxFileBytes = 536_870_912
-# maxDecodedImageBytes = 268_435_456
-# maxArchiveBytes = 12_884_901_888
-# maxMetadataBytes = 33_554_432
+# No image-count or size quotas apply by default. Optional operator quotas:
+# maxImages, maxFiles, maxSourceBytes, maxFileBytes, maxDecodedImageBytes,
+# maxArchiveBytes, maxMetadataBytes. Omit these settings for unlimited size.
 # maxConcurrentJobs = 1
 # maxConcurrentDownloads = 2
 # maxRetainedJobs = 8

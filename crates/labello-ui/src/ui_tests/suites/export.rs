@@ -404,6 +404,10 @@ fn export_controls_and_long_task_labels_reflow_at_supported_sizes() {
         harness.run_steps(3);
         for name in [
             "Export profile".to_string(),
+            "Train".into(),
+            "Validation".into(),
+            "Test".into(),
+            "Assign images without a split to".into(),
             format!("{long_name} / Person [bounding_box:person · person]"),
             "Run export preflight".into(),
         ] {
@@ -534,4 +538,46 @@ fn export_pose_import_policy_stays_within_the_visible_compact_page() {
             );
         }
     }
+}
+
+#[test]
+fn export_split_checkboxes_default_to_all_and_allow_a_subset() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = export_harness(api.clone());
+    assert_eq!(harness.state().admin.export.options.splits, ExportSplit::all());
+    click(&mut harness, "Test");
+    export_select_and_preflight(&mut harness);
+    assert_eq!(harness.state().admin.export.selected_job().unwrap().options.splits,
+        BTreeSet::from([ExportSplit::Train, ExportSplit::Val]));
+}
+
+#[test]
+fn export_poll_preserves_layout_controls_and_can_be_superseded_by_cancel() {
+    let mut harness = export_harness(Rc::new(SpyApi::new()));
+    export_select_and_preflight(&mut harness);
+    harness.state_mut().admin.export.jobs[0].phase = ExportPhase::Building;
+    harness.state_mut().admin.export.last_poll = Some(Instant::now());
+    harness.run_steps(2);
+    let before = harness.get_by_label("Cancel export").rect();
+    let app = harness.state_mut();
+    let id = app.admin.export.selected.clone().unwrap();
+    app.request_export(ExportAction::Poll(id.clone()));
+    let poll_request = app.runtime.commands.back().unwrap().request().clone();
+    app.runtime.commands.clear();
+    harness.run_steps(2);
+    assert_eq!(harness.get_by_label("Cancel export").rect(), before);
+    assert!(!harness.get_by_label("Cancel export").accesskit_node().is_disabled());
+    assert!(!harness.get_by_label("Train").accesskit_node().is_disabled());
+    assert!(harness.query_by_label("Refreshing export data...").is_none());
+    let app = harness.state_mut();
+    app.request_export(ExportAction::Cancel(id.clone()));
+    assert!(matches!(&app.admin.export.pending, Some((_, ExportAction::Cancel(job))) if *job == id));
+    let cancel_request = app.admin.export.pending.clone();
+    let mut stale = app.admin.export.selected_job().unwrap().clone();
+    stale.phase = ExportPhase::Succeeded;
+    app.runtime.tx.send(UiMessage::ExportFinished { request: poll_request,
+        result: Box::new(Ok(ExportReply::Job(Box::new(stale)))) }).unwrap();
+    app.process_messages(&egui::Context::default());
+    assert_eq!(app.admin.export.pending, cancel_request);
+    assert_eq!(app.admin.export.selected_job().unwrap().phase, ExportPhase::Building);
 }

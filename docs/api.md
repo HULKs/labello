@@ -400,8 +400,10 @@ jobs too. Transport DTOs live in `labello-client/src/export.rs`.
 | `GET /datasets/{dataset_id}/exports/{job_id}/download` | Verified streamed ZIP attachment |
 | `HEAD /datasets/{dataset_id}/exports/{job_id}/download` | Same authorization and integrity checks, without a body |
 
-Options include profile, task/class identities, required fallback split, and
-optional per-image split choices. Completed downloads send `application/zip`,
+Options include profile, task/class identities, a nonempty `splits` filter, a
+required fallback split, and optional per-image split choices. Omitting `splits`
+preserves the previous all-splits behavior. Capabilities advertise absent size
+quotas as `null`; explicitly configured numeric limits remain supported. Completed downloads send `application/zip`,
 a safe generated filename, content length, `private, no-store`, and `nosniff`.
 Download checks authorization again after checksum I/O. The browser client
 uses HEAD before returning the attachment URL and does not buffer the archive.

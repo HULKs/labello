@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{File, OpenOptions},
-    io::Write,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -100,6 +100,49 @@ struct PayloadWriter {
     manifest_bytes: u64,
 }
 
+struct JsonOutput<'a> {
+    writer: BufWriter<File>,
+    bytes: u64,
+    maximum: u64,
+    cancel: &'a AtomicBool,
+    failure: Option<ExportFailure>,
+    digest: blake3::Hasher,
+}
+
+impl Write for JsonOutput<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let failure = if self.cancel.load(Ordering::Acquire) {
+            Some(ExportFailure::Cancelled)
+        } else if self
+            .bytes
+            .checked_add(bytes.len() as u64)
+            .is_none_or(|n| n > self.maximum)
+        {
+            Some(ExportFailure::Limit)
+        } else {
+            None
+        };
+        if let Some(failure) = failure {
+            self.failure = Some(failure);
+            return Err(std::io::Error::other("export metadata write stopped"));
+        }
+        match self.writer.write(bytes) {
+            Ok(count) => {
+                self.bytes += count as u64;
+                self.digest.update(&bytes[..count]);
+                Ok(count)
+            }
+            Err(error) => {
+                self.failure = Some(ExportFailure::Storage);
+                Err(error)
+            }
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer.flush()
+    }
+}
+
 impl PayloadWriter {
     fn metadata(
         &mut self,
@@ -111,14 +154,13 @@ impl PayloadWriter {
             .metadata_bytes
             .checked_add(bytes.len() as u64)
             .ok_or(ExportFailure::Limit)?;
-        if self.metadata_bytes > limits.max_metadata_bytes
-            || bytes.len() as u64 > limits.max_file_bytes
+        if self.metadata_bytes > limits.max_metadata_bytes.unwrap_or(u64::MAX)
+            || bytes.len() as u64 > limits.max_file_bytes.unwrap_or(u64::MAX)
         {
             return Err(ExportFailure::Limit);
         }
         let mut file = private_file(&self.root, name)?;
         file.write_all(bytes).map_err(|_| ExportFailure::Storage)?;
-        file.sync_all().map_err(|_| ExportFailure::Storage)?;
         self.record(
             CapturedFile {
                 path: name.into(),
@@ -129,8 +171,46 @@ impl PayloadWriter {
         )
     }
 
+    fn json(
+        &mut self,
+        name: &str,
+        value: &impl Serialize,
+        limits: &ExportLimits,
+        cancel: &AtomicBool,
+    ) -> Result<(), ExportFailure> {
+        let maximum = limits
+            .max_metadata_bytes
+            .unwrap_or(u64::MAX)
+            .saturating_sub(self.metadata_bytes)
+            .min(limits.max_file_bytes.unwrap_or(u64::MAX));
+        let mut output = JsonOutput {
+            writer: BufWriter::new(private_file(&self.root, name)?),
+            bytes: 0,
+            maximum,
+            cancel,
+            failure: None,
+            digest: blake3::Hasher::new(),
+        };
+        if serde_json::to_writer(&mut output, value).is_err() {
+            return Err(output.failure.unwrap_or(ExportFailure::InvalidInput));
+        }
+        output.writer.flush().map_err(|_| ExportFailure::Storage)?;
+        self.metadata_bytes = self
+            .metadata_bytes
+            .checked_add(output.bytes)
+            .ok_or(ExportFailure::Limit)?;
+        self.record(
+            CapturedFile {
+                path: name.into(),
+                bytes: output.bytes,
+                blake3: output.digest.finalize().to_hex().to_string(),
+            },
+            limits,
+        )
+    }
+
     fn record(&mut self, file: CapturedFile, limits: &ExportLimits) -> Result<(), ExportFailure> {
-        if self.files.len() >= limits.max_files {
+        if self.files.len() >= limits.max_files.unwrap_or(usize::MAX) {
             return Err(ExportFailure::Limit);
         }
         self.files.push(file);
@@ -142,6 +222,9 @@ impl PayloadWriter {
         value: &impl Serialize,
         limits: &ExportLimits,
     ) -> Result<(), ExportFailure> {
+        if limits.max_metadata_bytes.is_none() {
+            return Ok(());
+        }
         self.manifest_bytes = self
             .manifest_bytes
             .checked_add(
@@ -150,7 +233,7 @@ impl PayloadWriter {
                     .len() as u64,
             )
             .ok_or(ExportFailure::Limit)?;
-        if self.manifest_bytes > limits.max_metadata_bytes {
+        if self.manifest_bytes > limits.max_metadata_bytes.unwrap_or(u64::MAX) {
             return Err(ExportFailure::Limit);
         }
         Ok(())
@@ -176,7 +259,7 @@ pub(super) async fn prepare(
     let mapping = options
         .class_mapping(&source.metadata)
         .map_err(ExportFailure::Policy)?;
-    if options.split_choices.len() > limits.max_images
+    if options.split_choices.len() > limits.max_images.unwrap_or(usize::MAX)
         || options
             .split_choices
             .keys()
@@ -208,9 +291,43 @@ pub(super) async fn prepare(
         if cancel.load(Ordering::Acquire) {
             return Err(ExportFailure::Cancelled);
         }
-        source.verify_configuration(&limits)?;
+        let split = match options.image_split(
+            &record.image_id,
+            record.source_memberships.as_deref().unwrap_or_default(),
+        ) {
+            Ok(split) => split,
+            Err(reason) => {
+                block(
+                    &mut summary,
+                    &record.image_id,
+                    ExportFailure::Policy(reason),
+                );
+                continue;
+            }
+        };
+        if !options.splits.contains(&split) {
+            let reason = labello_domain::ExportOmissionReason::UnselectedSplit;
+            let value = ExportOmittedImage {
+                image_id: record.image_id.clone(),
+                reason,
+            };
+            writer.account_manifest(&value, &limits)?;
+            summary.omitted_images += 1;
+            *summary.omission_counts.entry(reason).or_default() += 1;
+            if summary.omitted_samples.len() < 100 {
+                summary.omitted_samples.push(value.clone());
+            }
+            omitted.push(value);
+            continue;
+        }
+        // Check directory identity per image without rereading the entire index.
+        // Full configuration/index hashes are checked after capture and at publication.
+        source.verify_directory()?;
         let (state, events) = repository
-            .export_image_cut(&record.image_id, limits.max_metadata_bytes)
+            .export_image_cut(
+                &record.image_id,
+                limits.max_metadata_bytes.unwrap_or(u64::MAX),
+            )
             .await?;
         if let Some(reason) = tasks.iter().find_map(|task_id| {
             state.export_task_omission(
@@ -236,12 +353,6 @@ pub(super) async fn prepare(
             .filter(|annotation| tasks.contains(&annotation.task_id))
             .collect::<Vec<_>>();
         let projection = (|| {
-            let split = options
-                .image_split(
-                    &record.image_id,
-                    record.source_memberships.as_deref().unwrap_or_default(),
-                )
-                .map_err(ExportFailure::Policy)?;
             let mut rows = Vec::new();
             let mut provenance = Vec::new();
             for annotation in selected {
@@ -303,7 +414,7 @@ pub(super) async fn prepare(
         attempted_source_bytes = attempted_source_bytes
             .checked_add(record.byte_size)
             .ok_or(ExportFailure::Limit)?;
-        if attempted_source_bytes > limits.max_source_bytes {
+        if attempted_source_bytes > limits.max_source_bytes.unwrap_or(u64::MAX) {
             return Err(ExportFailure::Limit);
         }
         let temporary_name = format!("original-{}.tmp", record.blake3);
@@ -399,16 +510,9 @@ pub(super) async fn prepare(
         omitted,
         files: writer.files.clone(),
     };
-    writer.metadata(
-        "labello-export.json",
-        &serde_json::to_vec(&manifest).map_err(|_| ExportFailure::InvalidInput)?,
-        &limits,
-    )?;
-    writer.metadata(
-        "checksums.json",
-        &serde_json::to_vec(&writer.files).map_err(|_| ExportFailure::InvalidInput)?,
-        &limits,
-    )?;
+    writer.json("labello-export.json", &manifest, &limits, &cancel)?;
+    let files = writer.files.clone();
+    writer.json("checksums.json", &files, &limits, &cancel)?;
     let capture = Capture {
         repository,
         source,

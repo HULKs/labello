@@ -110,7 +110,7 @@ impl ExportService {
             .map_err(|_| ExportFailure::InvalidInput)?;
         if options.classes.is_empty()
             || options.classes.len() > 256
-            || options.split_choices.len() > self.inner.limits.max_images
+            || options.split_choices.len() > self.inner.limits.max_images.unwrap_or(usize::MAX)
         {
             return Err(ExportFailure::InvalidInput);
         }
@@ -288,8 +288,11 @@ impl ExportService {
         let file = tokio::task::spawn_blocking(move || {
             let root = File::open(path).map_err(|_| ExportFailure::Storage)?;
             let mut file = archive::open_regular(&root, "dataset.zip")?;
-            let (bytes, hash) =
-                hash_file(&mut file, limits.max_archive_bytes, &AtomicBool::new(false))?;
+            let (bytes, hash) = hash_file(
+                &mut file,
+                limits.max_archive_bytes.unwrap_or(u64::MAX),
+                &AtomicBool::new(false),
+            )?;
             if Some(bytes) != expected.archive_bytes || Some(hash) != expected.archive_blake3 {
                 return Err(ExportFailure::Verification);
             }
@@ -415,7 +418,11 @@ impl ExportService {
             &self.inner.limits,
             cancel,
         )?;
-        let artifact = hash_file(&mut output, self.inner.limits.max_archive_bytes, cancel)?;
+        let artifact = hash_file(
+            &mut output,
+            self.inner.limits.max_archive_bytes.unwrap_or(u64::MAX),
+            cancel,
+        )?;
         // Serialize managed configuration and index writers only for the final
         // source check and atomic archive publication. Slow archive work never
         // holds the job map, so polling and cancellation remain available.
@@ -551,16 +558,22 @@ impl ExportService {
                 .metadata()
                 .map_err(|_| ExportFailure::Storage)?
                 .len()
-                > self.inner.limits.max_metadata_bytes
+                > self.inner.limits.max_metadata_bytes.unwrap_or(u64::MAX)
             {
                 return Err(ExportFailure::Limit);
             }
             let mut text = Vec::new();
             job_file
-                .take(self.inner.limits.max_metadata_bytes + 1)
+                .take(
+                    self.inner
+                        .limits
+                        .max_metadata_bytes
+                        .unwrap_or(u64::MAX)
+                        .saturating_add(1),
+                )
                 .read_to_end(&mut text)
                 .map_err(|_| ExportFailure::Storage)?;
-            if text.len() as u64 > self.inner.limits.max_metadata_bytes {
+            if text.len() as u64 > self.inner.limits.max_metadata_bytes.unwrap_or(u64::MAX) {
                 return Err(ExportFailure::Limit);
             }
             let mut job: ExportJob =

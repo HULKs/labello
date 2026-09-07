@@ -37,6 +37,10 @@ pub enum ExportSplit {
 }
 
 impl ExportSplit {
+    pub fn all() -> BTreeSet<Self> {
+        BTreeSet::from([Self::Train, Self::Val, Self::Test])
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Train => "train",
@@ -60,6 +64,8 @@ pub struct ExportOptions {
     pub classes: BTreeSet<ExportClassSelection>,
     /// Required even when every current image already has split provenance.
     pub fallback_split: ExportSplit,
+    #[serde(default = "ExportSplit::all")]
+    pub splits: BTreeSet<ExportSplit>,
     #[serde(default)]
     pub split_choices: BTreeMap<ImageId, ExportSplit>,
 }
@@ -80,6 +86,8 @@ pub struct ExportClassMapping {
 pub enum ExportPolicyError {
     #[error("choose between one and 256 task/class mappings")]
     SelectionSize,
+    #[error("select at least one export split")]
+    NoSplits,
     #[error("a selected task or class is missing or incompatible with the profile")]
     IncompatibleSelection,
     #[error("one class cannot be exported through multiple task identities")]
@@ -101,6 +109,7 @@ pub enum ExportPolicyError {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum ExportOmissionReason {
+    UnselectedSplit,
     Unfinished,
     ExcludedCoverage,
     IncompleteCoverage,
@@ -123,6 +132,9 @@ impl ExportOptions {
         &self,
         dataset: &DatasetMetadata,
     ) -> Result<Vec<ExportClassMapping>, ExportPolicyError> {
+        if self.splits.is_empty() {
+            return Err(ExportPolicyError::NoSplits);
+        }
         if self.classes.is_empty() || self.classes.len() > 256 {
             return Err(ExportPolicyError::SelectionSize);
         }

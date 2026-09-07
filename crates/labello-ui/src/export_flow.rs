@@ -52,6 +52,7 @@ impl Default for ExportState {
                 profile: ExportProfile::UltralyticsYoloDetectV1,
                 classes: BTreeSet::new(),
                 fallback_split: ExportSplit::Train,
+                splits: labello_domain::ExportSplit::all(),
                 split_choices: BTreeMap::new(),
             },
             capabilities: None,
@@ -155,7 +156,15 @@ impl LabelloApp {
 
     pub(crate) fn request_export(&mut self, action: ExportAction) {
         if self.runtime.api.is_none()
-            || self.admin.export.pending.is_some()
+            || self
+                .admin
+                .export
+                .pending
+                .as_ref()
+                .is_some_and(|(_, pending)| {
+                    !matches!(pending, ExportAction::Poll(_))
+                        || matches!(action, ExportAction::Poll(_))
+                })
             || !self.export_visible()
         {
             return;

@@ -129,6 +129,34 @@ async fn cancellation_waits_for_the_capture_lock_then_removes_private_payload_an
 }
 
 #[tokio::test]
+async fn capture_limit_failure_is_terminal_and_removes_private_payload() {
+    let (source, repository, options) = fixture().await;
+    let limits = ExportLimits {
+        max_files: Some(3),
+        ..ExportLimits::default()
+    };
+    let service = ExportService::new(source.path(), limits).await.unwrap();
+    let dataset = DatasetId::from("export");
+    let job = service
+        .preflight(&dataset, repository, options)
+        .await
+        .unwrap();
+
+    let failed = settled(&service, &job.job_id).await;
+    assert_eq!(failed.phase, ExportPhase::Failed);
+    assert_eq!(failed.failure, Some(ExportFailure::Limit));
+    assert!(failed.summary.is_none());
+    let directory = service.job_dir(&job.job_id).unwrap();
+    assert!(!directory.join("spool").exists());
+    assert!(!directory.join("building.zip").exists());
+    assert!(!directory.join("dataset.zip").exists());
+    assert_eq!(
+        service.download(&dataset, &job.job_id).await.unwrap_err(),
+        ExportFailure::NotReady
+    );
+}
+
+#[tokio::test]
 async fn source_changes_and_atomic_publication_collisions_are_terminal_failures_without_downloads()
 {
     let (source, repository, options) = fixture().await;

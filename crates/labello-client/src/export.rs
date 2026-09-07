@@ -115,13 +115,13 @@ pub enum ExportFailure {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExportLimits {
-    pub max_images: usize,
-    pub max_files: usize,
-    pub max_source_bytes: u64,
-    pub max_file_bytes: u64,
-    pub max_decoded_image_bytes: u64,
-    pub max_archive_bytes: u64,
-    pub max_metadata_bytes: u64,
+    pub max_images: Option<usize>,
+    pub max_files: Option<usize>,
+    pub max_source_bytes: Option<u64>,
+    pub max_file_bytes: Option<u64>,
+    pub max_decoded_image_bytes: Option<u64>,
+    pub max_archive_bytes: Option<u64>,
+    pub max_metadata_bytes: Option<u64>,
     pub max_concurrent_jobs: usize,
     pub max_concurrent_downloads: usize,
     pub max_retained_jobs: usize,
@@ -131,13 +131,13 @@ pub struct ExportLimits {
 impl Default for ExportLimits {
     fn default() -> Self {
         Self {
-            max_images: 10_000,
-            max_files: 30_010,
-            max_source_bytes: 10 * 1024 * 1024 * 1024,
-            max_file_bytes: 512 * 1024 * 1024,
-            max_decoded_image_bytes: 256 * 1024 * 1024,
-            max_archive_bytes: 12 * 1024 * 1024 * 1024,
-            max_metadata_bytes: 32 * 1024 * 1024,
+            max_images: None,
+            max_files: None,
+            max_source_bytes: None,
+            max_file_bytes: None,
+            max_decoded_image_bytes: None,
+            max_archive_bytes: None,
+            max_metadata_bytes: None,
             max_concurrent_jobs: 1,
             max_concurrent_downloads: 2,
             max_retained_jobs: 8,

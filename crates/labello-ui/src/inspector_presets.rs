@@ -1467,6 +1467,7 @@ fn export_preset(preset: InspectorPreset) -> LabelloApp {
             class_id: class.class_id.clone(),
         }]),
         fallback_split: ExportSplit::Train,
+        splits: labello_domain::ExportSplit::all(),
         split_choices: Default::default(),
     };
     let mut summary = ExportSummary {

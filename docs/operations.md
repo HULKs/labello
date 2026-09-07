@@ -492,9 +492,14 @@ not add offline annotation or conflict resolution.
 Exports use private `.labello-server/exports` storage on Linux and require
 one server process per datasets root. Monitor free disk for retained archives
 plus each active job's copied originals, metadata, and archive being built.
-A conservative bound is retained jobs times `maxArchiveBytes`, plus active
-workers times `maxSourceBytes + maxMetadataBytes + maxArchiveBytes`.
-Limits bound allocations; they do not reserve disk space.
+Exports have no default image-count or size quotas. Allow room for each active
+capture plus its archive and all retained archives. If explicit quotas are set,
+a conservative disk bound is retained jobs times `maxArchiveBytes`, plus active
+workers times `maxSourceBytes + maxMetadataBytes + maxArchiveBytes`. Without
+those quotas, plan against actual dataset sizes. Disk is not reserved. Memory
+usage includes one decoded image and dataset/provenance/ZIP metadata; unlimited
+size does not mean constant memory. An operator may configure optional quotas
+under `[export]` when deployment capacity requires them.
 
 Cleanup runs on export requests and every 60 seconds. Startup removes expired
 jobs and orphan reservations, marks unpublished jobs interrupted, and retains

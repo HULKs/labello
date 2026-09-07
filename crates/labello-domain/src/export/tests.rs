@@ -9,6 +9,7 @@ fn options(profile: ExportProfile) -> ExportOptions {
         profile,
         classes: BTreeSet::new(),
         fallback_split: ExportSplit::Train,
+        splits: ExportSplit::all(),
         split_choices: BTreeMap::new(),
     }
 }
@@ -176,5 +177,19 @@ fn mapping_preserves_distinct_class_identities_and_per_class_keypoint_order() {
     assert_eq!(
         options.class_mapping(&dataset),
         Err(ExportPolicyError::IncompatibleSelection)
+    );
+}
+
+#[test]
+fn legacy_export_options_select_all_splits_and_empty_selection_is_invalid() {
+    let mut value = serde_json::to_value(options(ExportProfile::UltralyticsYoloDetectV1)).unwrap();
+    value.as_object_mut().unwrap().remove("splits");
+    let mut restored: ExportOptions = serde_json::from_value(value).unwrap();
+    assert_eq!(restored.splits, ExportSplit::all());
+    restored.splits.clear();
+    let dataset = DatasetMetadata::new("dataset".into(), "Dataset", crate::now());
+    assert_eq!(
+        restored.class_mapping(&dataset),
+        Err(ExportPolicyError::NoSplits)
     );
 }

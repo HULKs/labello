@@ -13,7 +13,11 @@ and a streamed ZIP download. Export does not modify the source dataset.
 ## Selection and completeness
 
 Select task/class identities compatible with the profile and an explicit
-fallback split. Class indices follow stable task/class ID order. Distinct
+fallback split. Train, validation, and test are all selected by default; any
+subset can be exported. At least one split must be selected. Images assigned to
+unselected splits are omitted before reading their event logs or copying originals,
+and the manifest records `unselected_split`. Older saved options without a split
+filter retain the all-splits behavior. Class indices follow stable task/class ID order. Distinct
 class IDs with equal display names remain separate; selecting one class ID
 through multiple tasks blocks the export. Pose classes must have equal,
 nonempty keypoint counts and unique names within each class. Per-class names
@@ -58,7 +62,7 @@ and stale migration companions block the affected artifact.
 The archive includes original image bytes, labels, `data.yaml`, split lists,
 `labello-export.json`, and `checksums.json`. Portable hash-based paths avoid
 source-name collisions and platform-specific filenames. Images are decoded
-under memory limits and checked against their indexed dimensions and BLAKE3
+with an optional configured memory limit and checked against their indexed dimensions and BLAKE3
 hashes. Supported original encodings are static PNG, JPEG, WebP, and BMP;
 animated images and nonidentity EXIF orientation are rejected. Export never
 resizes or reencodes an image. YAML uses relative split lists, records class
@@ -92,6 +96,11 @@ package.
 Preflight reloads configuration and the image index from disk. Each image's
 state and event sequence are captured together under the existing image lock.
 Image copying and archive construction happen after releasing that lock.
+Capture checks directory identity per image and hashes the complete configuration
+and index at phase boundaries, avoiding a full index read for every image.
+Private spool files are flushed for subsequent reads but are not individually
+synchronized to durable storage: interrupted jobs discard them. The final archive
+and publication directory retain their durability syncs.
 Later event edits do not change the capture. Configuration, index, root
 identity, or original-image changes detected at the final source check abort
 publication. The atomic no-replace archive link defines the publication cut.
@@ -109,8 +118,12 @@ the worker releases them. Retry creates a new preflight and a new capture.
 Only succeeded jobs are downloadable. Cancellation or restart after the archive
 link but before durable success removes that still-unavailable artifact.
 
-The writer bounds source, metadata, file counts, decoded memory, and archive
-bytes. It verifies ZIP entry paths, sizes, CRCs, and hashes before atomic
+Export has no default image-count, file-count, source-size, single-file, decoded
+image, metadata, or archive-size quota. Operators may explicitly configure these
+limits. Disk space and memory remain finite: image validation decodes one original
+at a time, while the index, captured row provenance, and ZIP directory still grow
+with the dataset. Original and archive I/O use fixed-size buffers; manifest and
+checksum JSON stream directly to disk. Export does not reserve disk capacity. It verifies ZIP entry paths, sizes, CRCs, and hashes before atomic
 no-replace publication. Downloads verify the completed archive hash and hold
 a concurrency permit for the stream. Authentication and dataset DataAdmin
 access are checked on every route and again after download checksum I/O.

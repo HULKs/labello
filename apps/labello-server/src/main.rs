@@ -286,7 +286,7 @@ localAdminLogin = false
         let partial: ServerConfig =
             toml::from_str(&format!("{CONFIG}\n[export]\nmaxImages = 12\n")).unwrap();
         let limits = partial.export.unwrap();
-        assert_eq!(limits.max_images, 12);
+        assert_eq!(limits.max_images, Some(12));
         assert_eq!(limits.max_concurrent_jobs, 1);
         limits.validate().unwrap();
         assert!(

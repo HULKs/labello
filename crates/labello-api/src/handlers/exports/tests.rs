@@ -102,6 +102,7 @@ async fn fixture() -> (
             class_id: "person".into(),
         }]),
         fallback_split: ExportSplit::Train,
+        splits: labello_domain::ExportSplit::all(),
         split_choices: BTreeMap::new(),
     };
     let app = crate::router(state.clone());

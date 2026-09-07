@@ -462,31 +462,36 @@ See [operations](operations.md#derived-preview-cache) for disposal and recovery.
 
 ## Export Limits
 
-Linux servers initialize dataset export with defaults when `[export]` is
-absent. Other platforms advertise export as unavailable. Initialization fails
-if secure private storage cannot be established or limits are invalid. The
-section uses camelCase fields and rejects unknown fields.
+Linux servers initialize dataset export when `[export]` is absent. Other
+platforms advertise export as unavailable. The section uses camelCase fields
+and rejects unknown fields.
+
+Export size is unlimited by default. Omit `maxImages`, `maxFiles`,
+`maxSourceBytes`, `maxFileBytes`, `maxDecodedImageBytes`, `maxArchiveBytes`, and
+`maxMetadataBytes` to impose no application quota. JSON capabilities report
+these omitted limits as `null`. Existing explicitly configured numeric limits
+continue to apply; remove those entries to remove their quotas. Numeric limits
+must be positive, and `maxFiles`, when present, must be at least three. There
+are no fixed upper ceilings for these settings. Byte values are bytes.
+
+Concurrency and retention remain independently configurable:
 
 ```toml
 [export]
-maxImages = 10_000
-maxFiles = 30_010
-maxSourceBytes = 10_737_418_240
-maxFileBytes = 536_870_912
-maxDecodedImageBytes = 268_435_456
-maxArchiveBytes = 12_884_901_888
-maxMetadataBytes = 33_554_432
 maxConcurrentJobs = 1
 maxConcurrentDownloads = 2
 maxRetainedJobs = 8
 retentionSeconds = 86_400
 ```
 
-All byte limits are bytes. Metadata accounting includes bounded event reads
-and generated metadata. Source bytes cannot exceed archive bytes; one file
-cannot exceed source bytes. Hard ceilings are 100,000 images, 300,010 files,
-1 TiB archive bytes, 1 GiB decoded bytes, 256 MiB metadata, four workers,
-eight concurrent downloads, 64 retained jobs, and seven days retention.
-Retained capacity must accommodate configured workers. Limits advertised by
-capabilities are the effective server values. See [export operations](operations.md#dataset-export)
-for disk planning and recovery.
+Accepted concurrency is one through four jobs and one through eight downloads.
+Retained-job capacity must accommodate configured workers and cannot exceed 64;
+retention is one second through seven days. These settings control simultaneous
+work and cleanup, not how many images one export can contain.
+
+Unlimited size is not a disk reservation or a constant-memory guarantee. Image
+validation decodes one image at a time; dataset metadata, annotation provenance,
+and ZIP directory entries require memory proportional to the captured content.
+See [export operations](operations.md#dataset-export) for disk planning and
+recovery. An optional `maxMetadataBytes` also bounds source configuration,
+image-index and per-image event-log reads, as well as generated metadata.

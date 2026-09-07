@@ -72,7 +72,7 @@ fn invalid_small_changed_and_excessive_images_cannot_be_published() {
             &data,
             &image,
             &ExportLimits {
-                max_decoded_image_bytes: 32,
+                max_decoded_image_bytes: Some(32),
                 ..ExportLimits::default()
             }
         )

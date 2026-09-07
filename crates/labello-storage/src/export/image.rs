@@ -34,7 +34,7 @@ pub(super) fn validate(
         _ => return Err(ExportFailure::UnsupportedImage),
     };
     let mut decoder_limits = image::Limits::default();
-    decoder_limits.max_alloc = Some(limits.max_decoded_image_bytes);
+    decoder_limits.max_alloc = limits.max_decoded_image_bytes;
     reader.limits(decoder_limits.clone());
     let mut decoder = reader
         .into_decoder()
@@ -45,7 +45,7 @@ pub(super) fn validate(
     if decoder.dimensions() != (record.width, record.height) {
         return Err(ExportFailure::SourceChanged);
     }
-    if decoder.total_bytes() > limits.max_decoded_image_bytes {
+    if decoder.total_bytes() > limits.max_decoded_image_bytes.unwrap_or(u64::MAX) {
         return Err(ExportFailure::Limit);
     }
     if decoder
@@ -55,7 +55,7 @@ pub(super) fn validate(
     {
         return Err(ExportFailure::UnsupportedImage);
     }
-    // Fully decode with the same finite allocation limit, so truncated payloads
+    // Fully decode with the configured allocation policy, so truncated payloads
     // cannot be published merely because their image header is readable.
     image::DynamicImage::from_decoder(decoder).map_err(|_| ExportFailure::UnsupportedImage)?;
     file.seek(SeekFrom::Start(0))

@@ -463,6 +463,7 @@ async fn both_profiles_round_trip_through_production_import_with_explicit_losses
                 })
                 .collect(),
             fallback_split: ExportSplit::Train,
+            splits: labello_domain::ExportSplit::all(),
             split_choices: BTreeMap::new(),
         };
         let job = export

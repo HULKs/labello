@@ -102,6 +102,7 @@ pub(crate) async fn fixture() -> (tempfile::TempDir, DatasetRepository, ExportOp
             class_id: "person".into(),
         }]),
         fallback_split: ExportSplit::Train,
+        splits: labello_domain::ExportSplit::all(),
         split_choices: BTreeMap::new(),
     };
     (dir, repository, options)
@@ -174,7 +175,10 @@ async fn immutable_capture_preserves_verified_empty_split_hash_and_exact_event_c
     // Source annotations can advance after capture without changing the spool.
     let event_path = repository.events_path(&ImageId::from("object"));
     let mut events = repository
-        .export_image_cut(&ImageId::from("object"), limits.max_metadata_bytes)
+        .export_image_cut(
+            &ImageId::from("object"),
+            limits.max_metadata_bytes.unwrap_or(u64::MAX),
+        )
         .await
         .unwrap()
         .1;
@@ -319,4 +323,93 @@ async fn split_conflicts_and_unmapped_known_objects_block_the_entire_artifact() 
         ExportFailure::UnmappedObjects
     );
     assert!(!capture.summary.can_start());
+}
+
+#[tokio::test]
+async fn split_filter_skips_unselected_images_before_reading_their_events() {
+    let (_source, repository, mut options) = fixture().await;
+    let mut index = repository.load_images_index().await.unwrap();
+    for record in index.images_by_hash.values_mut() {
+        record.source_memberships = Some(vec![
+            match record.image_id.as_str() {
+                "object" => "train",
+                "empty" => "val",
+                _ => "test",
+            }
+            .into(),
+        ]);
+    }
+    repository.save_images_index(&index).await.unwrap();
+    std::fs::create_dir_all(repository.annotations_dir(&ImageId::from("pending"))).unwrap();
+    std::fs::write(
+        repository.events_path(&ImageId::from("pending")),
+        "invalid event log",
+    )
+    .unwrap();
+    options.splits = BTreeSet::from([ExportSplit::Train, ExportSplit::Val]);
+    let spool = tempfile::tempdir().unwrap();
+    let capture = prepare(
+        repository,
+        spool.path().into(),
+        "job".into(),
+        options,
+        ExportLimits::default(),
+        Arc::new(AtomicBool::new(false)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(capture.summary.included_images, 2);
+    assert_eq!(
+        capture.summary.omission_counts[&labello_domain::ExportOmissionReason::UnselectedSplit],
+        1
+    );
+    assert_eq!(capture.summary.blocking_images, 0);
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(spool.path().join("labello-export.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        manifest["options"]["splits"],
+        serde_json::json!(["train", "val"])
+    );
+    assert_eq!(manifest["images"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        std::fs::read_to_string(spool.path().join("test.txt")).unwrap(),
+        "\n"
+    );
+}
+
+#[test]
+fn streamed_metadata_preserves_checksum_and_respects_explicit_quota_and_cancel() {
+    let root = tempfile::tempdir().unwrap();
+    let mut writer = PayloadWriter {
+        root: root.path().into(),
+        files: vec![],
+        metadata_bytes: 0,
+        manifest_bytes: 0,
+    };
+    let limits = ExportLimits::default();
+    let value = serde_json::json!({"names": ["one", "two"], "count": 2});
+    writer
+        .json("manifest.json", &value, &limits, &AtomicBool::new(false))
+        .unwrap();
+    let bytes = std::fs::read(root.path().join("manifest.json")).unwrap();
+    assert_eq!(bytes, serde_json::to_vec(&value).unwrap());
+    assert_eq!(writer.files[0].bytes, bytes.len() as u64);
+    assert_eq!(
+        writer.files[0].blake3,
+        blake3::hash(&bytes).to_hex().to_string()
+    );
+    let limited = ExportLimits {
+        max_metadata_bytes: Some(bytes.len() as u64 + 1),
+        ..limits.clone()
+    };
+    assert_eq!(
+        writer.json("limited.json", &value, &limited, &AtomicBool::new(false)),
+        Err(ExportFailure::Limit)
+    );
+    assert_eq!(
+        writer.json("cancelled.json", &value, &limits, &AtomicBool::new(true)),
+        Err(ExportFailure::Cancelled)
+    );
+    assert_eq!(writer.files.len(), 1);
 }

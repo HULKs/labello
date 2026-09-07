@@ -105,7 +105,7 @@ pub(super) fn build(
     cancel: &AtomicBool,
 ) -> Result<File, ExportFailure> {
     limits.validate()?;
-    if files.len() > limits.max_files {
+    if files.len() > limits.max_files.unwrap_or(usize::MAX) {
         return Err(ExportFailure::Limit);
     }
     let root = File::open(root).map_err(|_| ExportFailure::Storage)?;
@@ -116,22 +116,26 @@ pub(super) fn build(
         if !names.insert(file.path.to_ascii_lowercase()) {
             return Err(ExportFailure::InvalidInput);
         }
-        if file.bytes > limits.max_file_bytes {
+        if file.bytes > limits.max_file_bytes.unwrap_or(u64::MAX) {
             return Err(ExportFailure::Limit);
         }
         total = total.checked_add(file.bytes).ok_or(ExportFailure::Limit)?;
     }
     // Stored members need only bounded ZIP headers plus central directory records.
-    let overhead = u64::try_from(files.len()).map_err(|_| ExportFailure::Limit)? * 1024 + 1024;
+    let overhead = u64::try_from(files.len())
+        .ok()
+        .and_then(|n| n.checked_mul(1024))
+        .and_then(|n| n.checked_add(1024))
+        .ok_or(ExportFailure::Limit)?;
     if total
         .checked_add(overhead)
-        .is_none_or(|bytes| bytes > limits.max_archive_bytes)
+        .is_none_or(|bytes| bytes > limits.max_archive_bytes.unwrap_or(u64::MAX))
     {
         return Err(ExportFailure::Limit);
     }
     let mut zip = ZipWriter::new(BoundedFile {
         inner: output,
-        maximum: limits.max_archive_bytes,
+        maximum: limits.max_archive_bytes.unwrap_or(u64::MAX),
     });
     let mut buffer = [0_u8; BUFFER_BYTES];
     for entry in files {
@@ -311,9 +315,9 @@ mod tests {
             ExportFailure::Cancelled
         );
         let limits = ExportLimits {
-            max_archive_bytes: 20,
-            max_source_bytes: 20,
-            max_file_bytes: 20,
+            max_archive_bytes: Some(20),
+            max_source_bytes: Some(20),
+            max_file_bytes: Some(20),
             ..ExportLimits::default()
         };
         assert_eq!(

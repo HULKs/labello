@@ -89,7 +89,7 @@ async fn capture_reads_fresh_index_and_refuses_bounds_cancel_and_symlinks() {
             &image,
             &mut output,
             &ExportLimits {
-                max_file_bytes: 1,
+                max_file_bytes: Some(1),
                 ..limits.clone()
             },
             &AtomicBool::new(false)
@@ -100,7 +100,7 @@ async fn capture_reads_fresh_index_and_refuses_bounds_cancel_and_symlinks() {
         Source::open(
             dir.path(),
             &ExportLimits {
-                max_metadata_bytes: 1,
+                max_metadata_bytes: Some(1),
                 ..limits.clone()
             }
         ),
@@ -137,6 +137,23 @@ async fn capture_reads_fresh_index_and_refuses_bounds_cancel_and_symlinks() {
 }
 
 #[tokio::test]
+async fn directory_identity_check_does_not_reread_configuration_or_index() {
+    let (dir, _repository, _) = fixture().await;
+    let limits = ExportLimits::default();
+    let source = Source::open(dir.path(), &limits).unwrap();
+
+    // Per-image capture checks only the pinned directory identity. Full
+    // configuration/index hashes remain the explicit final validation step.
+    std::fs::write(dir.path().join(crate::paths::DATASET_FILE), b"changed").unwrap();
+    std::fs::write(dir.path().join(crate::paths::IMAGES_INDEX_FILE), b"changed").unwrap();
+    assert!(source.verify_directory().is_ok());
+    assert_eq!(
+        source.verify_configuration(&limits),
+        Err(ExportFailure::SourceChanged)
+    );
+}
+
+#[tokio::test]
 async fn identical_configuration_in_a_replaced_root_does_not_validate_the_old_capture() {
     let (directory, repository, _) = fixture().await;
     let limits = ExportLimits::default();
@@ -152,4 +169,34 @@ async fn identical_configuration_in_a_replaced_root_does_not_validate_the_old_ca
         Err(ExportFailure::SourceChanged)
     );
     std::fs::remove_dir_all(moved).unwrap();
+}
+
+#[tokio::test]
+async fn default_export_accepts_an_index_above_the_former_image_limit() {
+    let (dir, repository, record) = fixture().await;
+    let mut index = ImagesIndex::default();
+    for n in 0..10_001 {
+        let mut image = record.clone();
+        image.image_id = format!("image-{n}").into();
+        image.blake3 = blake3::hash(n.to_string().as_bytes()).to_hex().to_string();
+        index.images_by_hash.insert(image.blake3.clone(), image);
+    }
+    repository.save_images_index(&index).await.unwrap();
+    let limits = ExportLimits::default();
+    assert_eq!(
+        Source::open(dir.path(), &limits)
+            .unwrap()
+            .metadata
+            .images
+            .len(),
+        10_001
+    );
+    let explicitly_limited = ExportLimits {
+        max_images: Some(10_000),
+        ..limits
+    };
+    assert!(matches!(
+        Source::open(dir.path(), &explicitly_limited),
+        Err(ExportFailure::Limit)
+    ));
 }

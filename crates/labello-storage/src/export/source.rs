@@ -23,13 +23,17 @@ impl Source {
     pub fn open(path: &Path, limits: &ExportLimits) -> Result<Self, ExportFailure> {
         limits.validate()?;
         let root = File::open(path).map_err(|_| ExportFailure::Storage)?;
-        let config_bytes =
-            bounded_read(&root, crate::paths::DATASET_FILE, limits.max_metadata_bytes)?;
+        let config_bytes = bounded_read(
+            &root,
+            crate::paths::DATASET_FILE,
+            limits.max_metadata_bytes.unwrap_or(u64::MAX),
+        )?;
         let index_bytes = bounded_read(
             &root,
             crate::paths::IMAGES_INDEX_FILE,
             limits
                 .max_metadata_bytes
+                .unwrap_or(u64::MAX)
                 .saturating_sub(config_bytes.len() as u64),
         )?;
         let config: DatasetConfig = toml::from_str(
@@ -42,7 +46,7 @@ impl Source {
             .map_err(|_| ExportFailure::InvalidInput)?;
         labello_domain::validate_schema_version(index.schema_version)
             .map_err(|_| ExportFailure::InvalidInput)?;
-        if index.images_by_hash.len() > limits.max_images {
+        if index.images_by_hash.len() > limits.max_images.unwrap_or(usize::MAX) {
             return Err(ExportFailure::Limit);
         }
         config
@@ -78,7 +82,7 @@ impl Source {
         })
     }
 
-    pub fn verify_configuration(&self, limits: &ExportLimits) -> Result<(), ExportFailure> {
+    pub fn verify_directory(&self) -> Result<(), ExportFailure> {
         // Event capture uses repository paths. A replaced dataset directory cannot
         // be combined with configuration read through the earlier root descriptor.
         let current =
@@ -94,11 +98,20 @@ impl Source {
                 return Err(ExportFailure::SourceChanged);
             }
         }
+        Ok(())
+    }
+
+    pub fn verify_configuration(&self, limits: &ExportLimits) -> Result<(), ExportFailure> {
+        self.verify_directory()?;
         for (name, expected) in [
             (crate::paths::DATASET_FILE, &self.configuration_digest),
             (crate::paths::IMAGES_INDEX_FILE, &self.index_digest),
         ] {
-            let bytes = bounded_read(&self.root, name, limits.max_metadata_bytes)?;
+            let bytes = bounded_read(
+                &self.root,
+                name,
+                limits.max_metadata_bytes.unwrap_or(u64::MAX),
+            )?;
             if blake3::hash(&bytes).to_hex().as_str() != expected {
                 return Err(ExportFailure::SourceChanged);
             }
@@ -114,8 +127,9 @@ impl Source {
         limits: &ExportLimits,
         cancelled: &AtomicBool,
     ) -> Result<(), ExportFailure> {
-        self.read_original(image, output, limits, cancelled)?;
-        output.sync_all().map_err(|_| ExportFailure::Storage)
+        // Private spools are discarded after interruption; only the published
+        // archive needs durable synchronization.
+        self.read_original(image, output, limits, cancelled)
     }
 
     /// Revalidate selected originals before publication; annotations may meanwhile advance.
@@ -135,7 +149,7 @@ impl Source {
         limits: &ExportLimits,
         cancelled: &AtomicBool,
     ) -> Result<(), ExportFailure> {
-        if image.byte_size > limits.max_file_bytes {
+        if image.byte_size > limits.max_file_bytes.unwrap_or(u64::MAX) {
             return Err(ExportFailure::Limit);
         }
         let mut input = open_regular(&self.root, &image.canonical_path)?;

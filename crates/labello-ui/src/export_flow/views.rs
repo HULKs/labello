@@ -2,7 +2,7 @@ impl LabelloApp {
     pub(crate) fn export_section(&mut self, ui: &mut egui::Ui) {
         ui.heading("Export dataset");
         ui.label("Download verified ground truth and original images for Ultralytics. Native review history and IDs are not restored on re-import.");
-        let busy = self.admin.export.pending.is_some();
+        let busy = self.admin.export.pending.as_ref().is_some_and(|(_, action)| !matches!(action, ExportAction::Poll(_)));
         let mut action = None;
         ui.horizontal_wrapped(|ui| {
             if theme::quiet_button(
@@ -93,7 +93,18 @@ impl LabelloApp {
                     self.admin.export.options.classes.clear();
                     self.admin.export.options.split_choices.clear();
                 }
-                let label = ui.label("Split for images without split provenance");
+                ui.label(egui::RichText::new("Splits to export").strong());
+                ui.horizontal_wrapped(|ui| {
+                    for (split, name) in [(ExportSplit::Train, "Train"), (ExportSplit::Val, "Validation"), (ExportSplit::Test, "Test")] {
+                        let mut selected = self.admin.export.options.splits.contains(&split);
+                        if ui.checkbox(&mut selected, name).changed() {
+                            if selected { self.admin.export.options.splits.insert(split); }
+                            else { self.admin.export.options.splits.remove(&split); }
+                        }
+                    }
+                });
+                ui.small("All splits are selected by default. Uncheck a split to leave its images out of this export.");
+                let label = ui.label("Assign images without a split to");
                 egui::ComboBox::from_id_salt("export-fallback-split").width(ui.available_width().min(360.0))
                     .selected_text(self.admin.export.options.fallback_split.as_str())
                     .show_ui(ui, |ui| {
@@ -199,7 +210,7 @@ impl LabelloApp {
                     });
             }
             if let Some(capabilities) = &self.admin.export.capabilities {
-                ui.small(format!("Up to {} images and {} of original images per export; retained for {} hours. Limits are checked by the server.", capabilities.limits.max_images, crate::admin::human_bytes(capabilities.limits.max_source_bytes), capabilities.limits.retention_seconds / 3600));
+                ui.small(format!("Completed archives are retained for {} hours.", capabilities.limits.retention_seconds / 3600));
             }
         }
         if let Some(action) = action {
@@ -358,6 +369,7 @@ fn phase_label(phase: ExportPhase) -> &'static str {
 fn omission_label(reason: labello_domain::ExportOmissionReason) -> &'static str {
     use labello_domain::ExportOmissionReason::*;
     match reason {
+        UnselectedSplit => "split not selected",
         Unfinished => "unfinished task",
         ExcludedCoverage => "excluded coverage",
         IncompleteCoverage => "incomplete coverage",

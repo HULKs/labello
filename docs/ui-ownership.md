@@ -265,12 +265,16 @@ Queue and dispatch failures clear pending state and remain in the export region.
 
 The Export section loads capabilities and server history, restores the latest
 retained job after reload, and polls active jobs at most once per second while
-that section is visible. Requests coalesce. Failed refreshes retain the last
+that section is visible. Background polls preserve form appearance, layout, and
+selection controls. An explicit action can supersede a poll; late poll responses
+are rejected by the pending request ID. Explicit requests still coalesce. Failed refreshes retain the last
 loaded job with a stale marker and Retry. An uncertain mutation response retries
 by refreshing history, so it does not blindly create another preflight.
 
 Selection uses saved dataset metadata, explicit task/class identities and a
-versioned detect or pose profile. Train is the default fallback for images
+versioned detect or pose profile. Train, validation, and test checkboxes are all
+selected by default and filter the output independently of the fallback. At least
+one split is required. Train is the default fallback for images
 without split provenance. Split conflicts offer explicit per-image choices.
 Domain `ExportOptions::class_mapping` supplies local compatibility feedback;
 server preflight owns coverage, image, geometry, source consistency and bounds.
