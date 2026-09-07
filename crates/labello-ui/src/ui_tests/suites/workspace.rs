@@ -3693,6 +3693,58 @@ fn missing_object_drafts_do_not_transplant_to_other_assignments_or_expired_revie
 }
 
 #[test]
+fn missing_object_draft_counts_as_work_for_normal_and_previous_navigation() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(
+        &api,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.3,
+            height: 0.3,
+        }),
+        true,
+    );
+    let mut harness = loaded_review_harness(api);
+    enter_missing_object_final_check(harness.state_mut());
+    harness.state_mut().work.missing_objects.placing = true;
+    harness
+        .state_mut()
+        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
+            NormalizedPoint { x: 0.5, y: 0.5 },
+        ));
+    harness.state_mut().work.assignment_touched = false;
+
+    assert!(harness.state().has_missing_object_draft());
+    assert!(harness.state().assignment_has_work());
+
+    harness.state_mut().open_view(AppView::Setup);
+    harness.step();
+    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
+    assert!(matches!(
+        harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::View(AppView::Setup))
+    ));
+    click(&mut harness, "Cancel");
+    assert!(harness.state().has_missing_object_draft());
+
+    let mut previous = harness.state().work.assignment.clone().unwrap();
+    previous.assignment_id = AssignmentId::from("previous_review");
+    previous.image_id = ImageId::from("previous_image");
+    previous.status = AssignmentStatus::Cancelled;
+    harness.state_mut().work.previous_assignment = Some(previous);
+    harness.step();
+    click(&mut harness, "Previous");
+    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
+    assert!(matches!(
+        harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::PreviousAssignment(_))
+    ));
+    click(&mut harness, "Cancel");
+    assert!(harness.state().has_missing_object_draft());
+}
+
+#[test]
 fn missing_object_history_is_read_only_navigable_and_separate_from_current_review() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);

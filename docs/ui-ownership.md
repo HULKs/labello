@@ -233,6 +233,7 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
+Unsent missing-object locations count as work for the navigation gate.
 Touched assignments keep the existing confirmation. Review Previous uses the
 same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,

@@ -27,6 +27,7 @@ impl LabelloApp {
             || self.work.correction_draft.is_some()
             || self.migration_has_unsaved_input()
             || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty())
+            || self.has_missing_object_draft()
     }
 
     fn stage_transition(&mut self, transition: PendingTransition) {
