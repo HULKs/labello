@@ -116,7 +116,7 @@ impl LabelloApp {
         let Some(pending) = self.work.pending_transition.clone() else {
             return;
         };
-        if self.loading.saving && !self.assignment_has_work()
+        if (self.loading.saving || self.loading.image) && !self.assignment_has_work()
             && (matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_))
                 || (self.view == AppView::Review && matches!(pending, PendingTransition::PreviousAssignment(_)))) {
             return;
@@ -170,13 +170,17 @@ impl LabelloApp {
                     });
                 }
                 });
+                if self.loading.image && matches!(pending, PendingTransition::PreviousAssignment(_)) {
+                    ui.spinner();
+                    ui.label("Opening previous assignment...");
+                }
                 ui.add_space(8.0);
                 ui.horizontal_wrapped(|ui| {
                     if self.view == AppView::Annotate
                         && !discards_migration_draft
                         && theme::primary_button(
                             ui,
-                            !self.loading.saving,
+                            !self.loading.saving && !self.loading.image,
                             egui::Button::new("Submit and switch"),
                         )
                         .clicked()
@@ -185,7 +189,7 @@ impl LabelloApp {
                     }
                     let release = theme::danger_button(
                         ui,
-                        !self.loading.saving,
+                        !self.loading.saving && !self.loading.image,
                         egui::Button::new(if discards_review {
                             "Discard revision and switch"
                         } else if discards_edits {
@@ -201,7 +205,7 @@ impl LabelloApp {
                     if release.clicked() {
                         self.release_pending_transition();
                     }
-                    let cancel = theme::quiet_button(ui, !self.loading.saving, egui::Button::new("Cancel"));
+                    let cancel = theme::quiet_button(ui, !self.loading.saving && !self.loading.image, egui::Button::new("Cancel"));
                     if cancel.clicked() {
                         self.cancel_pending_transition();
                     }

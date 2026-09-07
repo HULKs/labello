@@ -68,9 +68,10 @@ decision-only revision; it needs the normal migration correction workflow.
 Historical assignments created before captured review contexts were introduced
 remain replayable but cannot be reopened through Previous.
 
-Switching from current review work uses a confirmation that preserves its
-correction or staged decisions when cancelled. The previous assignment is
-validated before releasing current work. Skipping or leaving a revision discards
+Switching from changed review work uses a confirmation that preserves its
+correction or staged decisions when cancelled. Untouched reviews switch directly.
+The previous assignment is validated and loaded before releasing current work;
+a failed opening leaves the current workspace intact. Skipping or leaving a revision discards
 its local staged decisions only after confirmation; server decisions remain
 unchanged. Staged decisions are not persisted for browser reload recovery.
 

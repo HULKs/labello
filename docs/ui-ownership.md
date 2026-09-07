@@ -233,8 +233,10 @@ retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
 Touched assignments keep the existing confirmation. Review Previous uses the
-same touched-work check: untouched reviews release directly, while changed
-reviews require confirmation. After a successful release, it reopens the previous
-review. Release failure preserves the current work and reports the error. The
+same touched-work check: untouched reviews switch directly, while changed
+reviews require confirmation. It first reopens and loads the previous review,
+then releases the displaced assignment. Releasing first would make the current
+review the newest terminal assignment and invalidate the previous target. Failed
+reopening preserves the current workspace and reports the error. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.

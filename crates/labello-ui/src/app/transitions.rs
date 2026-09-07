@@ -113,8 +113,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn release_pending_transition(&mut self) {
-        if self.view != AppView::Review
-            && let Some(PendingTransition::PreviousAssignment(previous)) = self.work.pending_transition.clone() {
+        if let Some(PendingTransition::PreviousAssignment(previous)) = self.work.pending_transition.clone() {
             self.request_reopen_assignment(previous);
             return;
         }
@@ -124,7 +123,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn cancel_pending_transition(&mut self) {
-        if !self.loading.saving {
+        if !self.loading.saving && !self.loading.image {
             self.work.pending_transition = None;
         }
     }
@@ -186,9 +185,9 @@ impl LabelloApp {
         };
         if self.view == AppView::Review && self.work.assignment.is_some() {
             let needs_confirmation = self.assignment_has_work();
-            self.stage_transition(PendingTransition::PreviousAssignment(previous));
+            self.stage_transition(PendingTransition::PreviousAssignment(previous.clone()));
             if !needs_confirmation {
-                self.request_release();
+                self.request_reopen_assignment(previous);
             }
             return;
         }

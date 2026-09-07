@@ -2680,7 +2680,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
 }
 
 #[test]
-fn previous_review_button_releases_then_reopens_the_previous_assignment() {
+fn previous_review_button_reopens_before_releasing_the_current_assignment() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
         x: 0.2, y: 0.2, width: 0.3, height: 0.3,
@@ -2698,12 +2698,14 @@ fn previous_review_button_releases_then_reopens_the_previous_assignment() {
     assert!(harness.query_by_label("Switch active assignment?").is_none());
     let released_before_previous = api.counts().release_assignment;
     let reopened_before_previous = api.counts().reopen_assignment;
-    let current_assignment_id = harness.state().work.assignment.as_ref().unwrap().assignment_id.clone();
+    let assignment_actions_before = api.assignment_actions().len();
     let previous_assignment_id = harness.state().work.previous_assignment.as_ref().unwrap().assignment_id.clone();
 
     click(&mut harness, "Previous");
-    assert!(api.counts().release_assignment > released_before_previous);
-    assert!(!api.has_active_assignment(&current_assignment_id));
+    let assignment_actions = api.assignment_actions();
+    let assignment_actions = &assignment_actions[assignment_actions_before..];
+    assert_eq!(assignment_actions.first(), Some(&"reopen"));
+    assert!(assignment_actions.iter().skip(1).any(|action| *action == "release"));
     assert!(harness.query_by_label("Switch active assignment?").is_none());
     step_until(&mut harness, 20, |app| {
         app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id == original_image)
@@ -2712,12 +2714,13 @@ fn previous_review_button_releases_then_reopens_the_previous_assignment() {
     });
 
     assert_eq!(api.counts().reopen_assignment, reopened_before_previous + 1);
+    assert!(api.counts().release_assignment > released_before_previous);
     assert_ne!(harness.state().work.assignment.as_ref().unwrap().assignment_id, previous_assignment_id);
     assert!(harness.state().work.previous_assignment.is_none());
 }
 
 #[test]
-fn failed_review_previous_release_preserves_correction_and_does_not_reopen() {
+fn failed_review_previous_load_preserves_correction_and_does_not_release() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
         x: 0.2, y: 0.2, width: 0.3, height: 0.3,
@@ -2740,18 +2743,23 @@ fn failed_review_previous_release_preserves_correction_and_does_not_reopen() {
     let draft = harness.state().work.correction_draft.clone().unwrap();
     let assignment = harness.state().work.assignment.clone().unwrap();
     let previous = harness.state().work.previous_assignment.clone();
-    api.state.borrow_mut().fail_next_release = true;
+    let released_before_previous = api.counts().release_assignment;
+    api.fail_next_preview();
 
     click(&mut harness, "Previous");
     assert!(harness.query_by_label("Switch active assignment?").is_some());
     click(&mut harness, "Release and switch");
-    step_until(&mut harness, 12, |app| !app.loading.saving);
+    step_until(&mut harness, 12, |app| !app.loading.saving && !app.loading.image);
 
-    assert_eq!(api.counts().reopen_assignment, 0);
+    assert_eq!(api.counts().reopen_assignment, 1);
+    assert_eq!(api.counts().release_assignment, released_before_previous);
     assert_eq!(harness.state().work.assignment.as_ref(), Some(&assignment));
-    assert_eq!(harness.state().work.previous_assignment, previous);
+    assert_eq!(
+        harness.state().work.previous_assignment.as_ref().map(|assignment| &assignment.image_id),
+        previous.as_ref().map(|assignment| &assignment.image_id),
+    );
     assert_eq!(harness.state().work.correction_draft, Some(draft));
-    assert!(harness.state().runtime.error.as_deref().is_some_and(|error| error.contains("release failed")));
+    assert!(harness.state().runtime.error.as_deref().is_some_and(|error| error.contains("preview failed")));
     assert!(harness.state().work.pending_transition.is_none());
 }
 

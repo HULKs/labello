@@ -2049,6 +2049,118 @@ async fn skipped_review_reopens_with_fresh_identity_and_preserves_round() {
     assert_eq!(after.reviews, before.reviews);
 }
 
+#[tokio::test]
+async fn previous_review_reopens_before_current_release_and_survives_later_release() {
+    let (_temp, repo, image_a, task_id, _annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let index = repo.load_images_index().await.unwrap();
+    let image_b = ImageId::from("img_2");
+    let mut image_index = index;
+    image_index.images_by_hash.insert(
+        "hash_2".to_string(),
+        ImageRecord {
+            image_id: image_b.clone(),
+            blake3: "hash_2".to_string(),
+            canonical_path: "images/two.png".to_string(),
+            known_paths: vec!["images/two.png".to_string()],
+            duplicate_paths: Vec::new(),
+            file_name: "two.png".to_string(),
+            byte_size: 4,
+            width: 100,
+            height: 100,
+            media_type: "image/png".to_string(),
+            source_memberships: None,
+        },
+    );
+    image_index.image_count = 2;
+    repo.save_images_index(&image_index).await.unwrap();
+    for event in repo.load_events(&image_a).await.unwrap() {
+        repo.append_payload(
+            &image_b,
+            &Actor {
+                user_id: UserId::from("annotator"),
+                role: DatasetRole::Annotator,
+            },
+            event.payload,
+        )
+        .await
+        .unwrap();
+    }
+
+    let previous = claim_review(&repo, &image_a, &task_id, &reviewers[0]).await;
+    repo.release_assignment(
+        &reviewers[0],
+        &previous.assignment_id,
+        &image_a,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let current = repo
+        .assign_next_image_excluding(
+            &reviewers[0],
+            &task_id,
+            AssignmentKind::Review,
+            std::slice::from_ref(&image_a),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.image_id, image_b);
+
+    let failed = repo
+        .reopen_review_assignment(
+            &reviewers[0],
+            &AssignmentId::from("missing_previous_review"),
+            &image_a,
+            &task_id,
+        )
+        .await
+        .unwrap_err();
+    assert!(failed.to_string().contains("missing"));
+    let current_state = repo.load_image_state(&image_b).await.unwrap();
+    assert_eq!(assignment_status(&current_state, &current), AssignmentStatus::Active);
+
+    let reopened = repo
+        .reopen_review_assignment(
+            &reviewers[0],
+            &previous.assignment_id,
+            &image_a,
+            &task_id,
+        )
+        .await
+        .unwrap();
+    assert_ne!(reopened.assignment_id, previous.assignment_id);
+    assert_eq!(reopened.image_id, image_a);
+    assert_eq!(reopened.status, AssignmentStatus::Active);
+
+    repo.release_assignment(
+        &reviewers[0],
+        &current.assignment_id,
+        &image_b,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let reopened_state = repo.load_image_state(&image_a).await.unwrap();
+    assert_eq!(assignment_status(&reopened_state, &reopened), AssignmentStatus::Active);
+    assert_eq!(
+        repo.reclaim_assignment(
+            &reviewers[0],
+            &reopened.assignment_id,
+            &task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .assignment_id,
+        reopened.assignment_id
+    );
+}
+
 fn revision_replacements(
     state: &labello_domain::ImageState,
     assignment: &Assignment,
