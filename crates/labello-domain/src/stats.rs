@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AnnotationOrigin, AnnotationVersion, ClassId, HumanRevisionKind, ImportGeometryProvenance,
-    RevisionSource, TaskId,
+    RevisionSource, TaskId, UserId,
 };
 
 mod activity;
@@ -34,6 +34,27 @@ pub struct DatasetStats {
     pub import_coverage: ImportCoverageStats,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignment_balance: Option<AssignmentBalanceStats>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contributors: Option<BTreeMap<UserId, ContributorStats>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributorStats {
+    pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_user_id: Option<String>,
+    pub history: Vec<ContributorDay>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContributorDay {
+    pub day: String,
+    pub labeled: usize,
+    pub reviewed: usize,
+    pub accepted: usize,
+    pub rejected: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -132,4 +153,22 @@ pub struct ThroughputPoint {
     pub day: String,
     pub annotations: usize,
     pub reviews: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn statistics_from_older_servers_decode_without_contributor_support() {
+        let legacy = serde_json::to_value(DatasetStats::default()).unwrap();
+        assert!(legacy.get("contributors").is_none());
+        let decoded: DatasetStats = serde_json::from_value(legacy).unwrap();
+        assert!(decoded.contributors.is_none());
+        let contributor: ContributorStats = serde_json::from_value(serde_json::json!({
+            "displayName": "Older server", "history": []
+        }))
+        .unwrap();
+        assert!(contributor.github_user_id.is_none());
+    }
 }

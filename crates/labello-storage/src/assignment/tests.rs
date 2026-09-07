@@ -2005,6 +2005,22 @@ async fn bbox_correction_is_terminal_idempotent_and_updates_quality_stats() {
     assert_eq!(stats.per_task[&task_id].rejected, 1);
     assert_eq!(stats.per_task[&task_id].reviewer_corrected, 1);
     assert_eq!(stats.per_task[&task_id].finalized, 1);
+    let contributors = stats.contributors.unwrap();
+    let history = &contributors[&annotator].history;
+    assert_eq!(history.iter().map(|day| day.labeled).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.rejected).sum::<usize>(), 1);
+    for reviewer in reviewers {
+        let history = &contributors[&reviewer].history;
+        assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 1);
+        assert_eq!(
+            history
+                .iter()
+                .map(|day| day.labeled + day.accepted + day.rejected)
+                .sum::<usize>(),
+            0
+        );
+    }
 }
 
 #[tokio::test]

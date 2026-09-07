@@ -5,6 +5,7 @@ pub(super) struct StatsAggregation {
     throughput: BTreeMap<String, (usize, usize)>,
     imbalance: Option<labello_domain::ImbalanceConfig>,
     enabled_task_ids: Vec<TaskId>,
+    pub(super) contributors: super::contributors::ContributorAggregation,
 }
 
 impl StatsAggregation {
@@ -25,6 +26,7 @@ impl StatsAggregation {
             ..DatasetStats::default()
         };
         Self {
+            contributors: Default::default(),
             stats,
             throughput: BTreeMap::new(),
             imbalance: metadata.imbalance.clone(),
@@ -176,6 +178,7 @@ impl StatsAggregation {
     }
 
     pub(super) fn finish(mut self) -> DatasetStats {
+        self.stats.contributors = Some(self.contributors.finish());
         self.stats.throughput = self
             .throughput
             .into_iter()

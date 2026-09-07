@@ -37,6 +37,15 @@ impl DatasetRepository {
     }
 
     pub async fn load_image_state(&self, image_id: &ImageId) -> StorageResult<ImageState> {
+        self.load_image_state_with_events(image_id)
+            .await
+            .map(|(state, _)| state)
+    }
+
+    pub(crate) async fn load_image_state_with_events(
+        &self,
+        image_id: &ImageId,
+    ) -> StorageResult<(ImageState, Vec<EventLogEntry>)> {
         #[cfg(test)]
         self.image_state_loads.fetch_add(1, Ordering::Relaxed);
         self.ensure_artifact_migration().await?;
@@ -63,7 +72,7 @@ impl DatasetRepository {
             && state.current_sequence == event_sequence
             && state.review_projection_version == 1
         {
-            return Ok(state.clone());
+            return Ok((state.clone(), events));
         }
         let state = rebuild_state(image_id.clone(), &events)?;
         if cache_exists || !events.is_empty() {
@@ -76,7 +85,7 @@ impl DatasetRepository {
             );
             write_json_atomic(&path, &state).await?;
         }
-        Ok(state)
+        Ok((state, events))
     }
 
     #[cfg(test)]

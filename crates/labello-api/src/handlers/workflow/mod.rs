@@ -1490,7 +1490,16 @@ pub(crate) async fn stats(
     let repo = state.repo(&dataset_id)?;
     let metadata = repo.load_dataset_config().await?;
     ensure_any_dataset_role(&metadata, &actor)?;
-    Ok(Json(repo.dataset_stats().await?))
+    let mut stats = repo.dataset_stats().await?;
+    if let Some(contributors) = &mut stats.contributors {
+        for account in state.server_store.users()? {
+            if let Some(contributor) = contributors.get_mut(&account.user_id) {
+                contributor.display_name = account.display_name;
+                contributor.github_user_id = account.github_user_id;
+            }
+        }
+    }
+    Ok(Json(stats))
 }
 
 pub(crate) async fn get_keybindings(

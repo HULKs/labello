@@ -689,7 +689,8 @@ async fn annotation_completion_without_review_completes_task() {
 #[tokio::test]
 async fn correction_starts_a_new_review_round() {
     let temp = tempfile::tempdir().unwrap();
-    let app = router(ApiState::new(temp.path()));
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
     create_dataset(&app).await;
     configure_pixel_task_review(&app, 2, "approval").await;
     let png = png_bytes(4, 2);
@@ -755,6 +756,20 @@ async fn correction_starts_a_new_review_round() {
         load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
         "completed"
     );
+    let reviewer_id = UserId::from("reviewer_2");
+    let mut reviewer = state.server_store.user(&reviewer_id).unwrap().unwrap();
+    reviewer.github_user_id = Some("583231".into());
+    state.server_store.upsert_user(reviewer).unwrap();
+    let stats: labello_domain::DatasetStats =
+        serde_json::from_value(get_test_stats(&app).await).unwrap();
+    let contributors = stats.contributors.unwrap();
+    assert_eq!(contributors[&reviewer_id].github_user_id.as_deref(), Some("583231"));
+    assert!(contributors[&UserId::from("admin")].github_user_id.is_none());
+    let history = &contributors[&UserId::from("admin")].history;
+    assert_eq!(history.iter().map(|day| day.labeled).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 3);
+    assert_eq!(history.iter().map(|day| day.rejected).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 2);
 }
 
 #[tokio::test]

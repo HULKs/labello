@@ -21,6 +21,7 @@ use crate::{DatasetRepository, StorageResult};
 mod activity;
 mod aggregation;
 mod cache;
+mod contributors;
 mod scan;
 
 use aggregation::StatsAggregation;
@@ -75,9 +76,13 @@ mod tests {
             repository.dataset_stats()
         );
 
-        assert_eq!(first.unwrap(), DatasetStats::default());
-        assert_eq!(second.unwrap(), DatasetStats::default());
-        assert_eq!(third.unwrap(), DatasetStats::default());
+        let expected = DatasetStats {
+            contributors: Some(BTreeMap::new()),
+            ..Default::default()
+        };
+        assert_eq!(first.unwrap(), expected);
+        assert_eq!(second.unwrap(), expected);
+        assert_eq!(third.unwrap(), expected);
         assert_eq!(repository.stats_scan_count(), 1);
 
         repository.dataset_stats().await.unwrap();
@@ -223,6 +228,8 @@ mod tests {
             1
         );
         assert_eq!(repository.stats_scan_count(), 3);
+        // Importing geometry does not award the uploader human contribution credit.
+        assert!(stats.contributors.unwrap().is_empty());
     }
 
     #[tokio::test]
