@@ -1,4 +1,15 @@
 impl StatsApi for DemoLabelloApi {
+    fn server_presence(&self) -> crate::ApiFuture<'_, crate::ServerPresence> { Box::pin(async { Ok(crate::ServerPresence { users: Vec::new() }) }) }
+
+    fn current_user_activity<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+    ) -> crate::ApiFuture<'a, crate::CurrentUserActivity> {
+        Box::pin(async {
+            Err(crate::ClientError::Demo("Daily activity requires an authenticated server session.".into()))
+        })
+    }
+
     fn dataset_stats<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

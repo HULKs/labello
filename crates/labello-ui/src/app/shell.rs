@@ -28,6 +28,7 @@ impl eframe::App for LabelloApp {
             self.request_build_information();
         }
         self.refresh_stats_if_due();
+        self.refresh_presence_if_due(ui.ctx());
         self.refresh_assignment_availability_if_due();
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();

@@ -1001,3 +1001,7 @@ include!("tests/previews.rs");
 include!("tests/review_revisions.rs");
 
 include!("tests/missing_objects.rs");
+
+include!("tests/activity.rs");
+
+include!("tests/presence.rs");

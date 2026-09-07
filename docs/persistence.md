@@ -413,3 +413,39 @@ durable succeeded status makes the job interrupted on restart and removes
 its payload. Completed archives survive restart until retention expiry.
 Orphan reservations and expired entries are cleaned before retained capacity
 is checked. See [export](export.md) for the artifact contract.
+
+
+## Daily activity projection
+
+Current-user daily activity replays authoritative per-image event history.
+The domain projection counts one submission or final review per image/task/user
+within a supplied UTC day. It includes `TaskStateChanged` submission and
+no-review annotation completion, final `ReviewRecorded` records, and final
+records in `ReviewRevisionCommitted`. It uses event commit timestamps and keeps
+historical work counted after later task or review changes.
+
+The storage owner caches one day and one statistics generation per repository,
+with all users sharing the same coalesced scan. The scan has at most 32 image
+workers, validates replay, and never derives activity from `state.json` or
+current task status alone. Existing commit/index/config cache invalidation also
+invalidates daily activity; restart recomputes it from events. No new persisted
+artifact or schema is introduced. A malformed log fails the request rather than
+silently omitting work. Atomic event-log replacement prevents partially appended
+reads. A commit concurrent with a scan makes its generation stale for the next
+request; the result is a bounded scan, not a global instantaneous snapshot.
+
+## Lease-based presence
+
+Server presence derives from replayed assignment state for indexed images.
+Only `Active` annotation and review assignments with an expiry strictly later
+than the server time count. Legacy assignments without `expiresAt` use the
+existing `updatedAt` plus 30-minute lease duration. Multiple leases for a user
+in one dataset reduce to their latest expiry. No presence artifact is persisted.
+
+Repository clones share a presence cache and a single refresh lock. A cold scan
+loads at most 32 image states concurrently. Existing assignment-availability
+commit, configuration, index and rebuild invalidation also invalidates this
+projection. Expiry is filtered on every cache read, independent of writes, and
+restart reconstructs the projection. A concurrent invalidation prevents a scan
+from publishing its cached result. Presence is a sampled view, not a transaction
+snapshot across datasets, and reading it never renews leases.

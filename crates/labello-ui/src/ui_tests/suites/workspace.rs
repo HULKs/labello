@@ -2170,7 +2170,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.query_by_label("Reject object & finish").is_none());
     assert!(harness.query_by_label("Accept all annotations").is_none());
 
-    click_application_menu_item(&mut harness, "Tutorial");
+    harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Questionmark);
     harness.step();
     assert!(
         harness
@@ -3403,25 +3403,11 @@ fn failed_untouched_previous_request_renders_error_with_current_assignment() {
     assert!(harness.state().work.assignment.as_ref().is_some_and(|assignment| {
         assignment.image_id != original_image
     }));
-    fn collect_rendered_text(shape: &egui::epaint::Shape, texts: &mut Vec<String>) {
-        match shape {
-            egui::epaint::Shape::Text(text) => texts.push(text.galley.text().to_string()),
-            egui::epaint::Shape::Vec(shapes) => {
-                for shape in shapes {
-                    collect_rendered_text(shape, texts);
-                }
-            }
-            _ => {}
-        }
-    }
-    let mut rendered_text = Vec::new();
-    for clipped in &harness.output().shapes {
-        collect_rendered_text(&clipped.shape, &mut rendered_text);
-    }
-    assert!(
-        rendered_text.iter().any(|text| text == "Error"),
-        "the failed Previous request must render an Error status, got {rendered_text:?}"
-    );
+    assert_eq!(harness.state().connection_status().0, theme::DANGER);
+    let detail = harness.state().connection_status().1;
+    assert!(detail.contains("assignment cannot be reopened"));
+    harness.get_by_label(&format!("Connection status: {detail}"));
+
 }
 
 #[test]

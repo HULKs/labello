@@ -354,29 +354,31 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
         harness.step();
         assert!(harness.query_all_by_label(&image_name).next().is_some());
         assert!(harness.query_all_by_label(&workflow_label).next().is_some());
-        let dataset_badge = harness.get_by_label("Dataset Demo Dataset").rect();
-        let status_badge = harness.get_by_label("Status: Idle").rect();
+        let presence = harness.get_by_label_contains("Labelling presence:").rect();
+        let status_badge = harness.get_by_label_contains("Connection status:").rect();
         assert!(
-            dataset_badge.height() > 0.0,
-            "dataset badge is missing at {width}x{height}",
+            presence.height() > 0.0,
+            "presence label is missing at {width}x{height}",
         );
         assert!(status_badge.height() > 0.0);
         let layout = LayoutMode::for_width(width);
-        let menu = harness
+        let right_navigation = harness
             .query_by_label("Open navigation")
             .or_else(|| {
-                harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::Button, "Annotate")
-                    .next()
+                harness.query_all_by_role_and_label(egui::accesskit::Role::Button, "Sign out").next()
             })
             .expect("top-bar navigation control")
             .rect();
-        assert!((dataset_badge.center().x - width / 2.0).abs() <= 1.0);
-        assert!(menu.right() <= dataset_badge.left() + 0.5);
-        assert!(dataset_badge.right() <= status_badge.left() + 0.5);
+        assert!(presence.top() >= 0.0 && presence.bottom() <= 56.0);
+        assert!(presence.right() <= status_badge.left() + 0.5);
+        assert!(status_badge.right() <= right_navigation.left() + 0.5);
         assert!(
-            menu.left() <= 25.0,
-            "application menu is not left-aligned at {width}x{height}: {menu:?}",
+            right_navigation.left() >= -0.5 && right_navigation.right() <= width + 0.5,
+            "top-bar navigation control is outside the viewport at {width}x{height}: {right_navigation:?}",
+        );
+        assert!(
+            harness.query_by_label("Admin User").is_none(),
+            "the signed-in username must be omitted from the work top bar at {width}x{height}",
         );
         if layout == LayoutMode::Wide {
             let sign_out = harness.get_by_label("Sign out").rect();
@@ -476,7 +478,7 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     assert!((boundary_widths[0] - boundary_widths[1]).abs() <= 2.0);
 
     harness.set_size(egui::vec2(320.0, 568.0));
-    for (status, label) in [
+    for (status, _label) in [
         (SaveStatus::Dirty, "Unsaved"),
         (SaveStatus::Saved, "Saved"),
         (SaveStatus::Saving, "Saving"),
@@ -484,7 +486,7 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     ] {
         harness.state_mut().work.save_status = status;
         harness.step();
-        let status_label = format!("Status: {label}");
+        let status_label = format!("Connection status: {}", harness.state().connection_status().1);
         assert!(harness.query_by_label(&status_label).is_some());
         assert_visible_controls_clamped(&harness, 320.0, 568.0);
     }

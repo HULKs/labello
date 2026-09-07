@@ -274,3 +274,23 @@ confirmation and cancellation apply to this navigation.
 Responsive workspace checks must also resize through the viewport matrix while
 running only requested frames. Compact action panels must settle without a later
 pointer or keyboard event; forced extra frames can conceal a cached-height gap.
+
+## Workspace presence
+
+Presence belongs in the existing top header, with muted body text and a small
+semantic-color connection dot. Right-align the presence text and dot immediately
+before the navigation action icons. The signed-in username is omitted from the
+top bar. Navigation icons run right to left: Logout, Home/Setup, authorized
+Admin, shortcut settings, and statistics. Keep the dataset pill centered in the
+header when space permits. A successful empty presence sample reads "You are alone :(". Do not add a presence bar, daily-count footer or
+extra row. Reserve a 44-point focusable target for the dot while painting only a
+9-point circle. Names use measured horizontal space and collapse to a people
+count; full usernames and active datasets remain available on hover, activation
+and through accessible names. On narrow screens, presence takes precedence over
+the header's dataset badge.
+
+Check alone, multiple/long names, initial loading, temporary connection loss,
+disconnection, saving/unsaved work and application errors. Color is accompanied
+by textual status in the dot's accessible name and details. No lease-duration
+explanation is added to the presence tooltip. Preserve a single header row,
+primary action targets, canvas space and keyboard focus through resizing.

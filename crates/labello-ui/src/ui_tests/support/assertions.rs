@@ -51,7 +51,7 @@ pub(super) fn assert_canvas_geometry(
     height: f32,
 ) {
     let canvas = harness.get_by_label("Annotation canvas").rect();
-    let dataset = harness.get_by_label_contains("Dataset ").rect();
+    let dataset = harness.get_by_label("Application bar").rect();
     assert!(
         canvas.top() >= dataset.bottom(),
         "canvas overlaps the top shell"

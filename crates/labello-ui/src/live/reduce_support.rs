@@ -5,6 +5,8 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+            UiMessage::PresenceLoaded { request, result } => self.accept_presence(request, result),
+            UiMessage::PresenceVisibilityRegained => self.request_presence(),
                 UiMessage::StatsLoaded { request, result } => {
                     let dataset_id = request.dataset_id?;
                     if !self.datasets.active_stats_request.as_ref().is_some_and(

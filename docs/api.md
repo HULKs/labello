@@ -94,6 +94,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
+| `GET /presence` | Authenticated, server-wide | No input → other active lease holders and their dataset IDs/names; `ServerPresence`, `Cache-Control: no-store` |
 | `GET /health` | Public | No input → `{"ok":true,"service":"labello"}` |
 | `GET /build-information` | Public, no session or CSRF token | No input → compiled artifact `releaseTag` and `sourceCommit`, independently of readiness; `Cache-Control: no-store` |
 | `GET /deployment/readiness` | Public; production API is loopback-bound | No input → bounded release identity, schema version, dataset-root traversal, and authentication-store load state; HTTP 503 when a probe fails |
@@ -123,6 +124,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `POST /datasets/{dataset_id}/prelabels` | Data admin | `PrelabelConfig` → `PrelabelConfig` |
 | `GET /datasets/{dataset_id}/images` | Data admin | `ImageExplorerQuery` → `ImageExplorerPage` |
 | `GET /datasets/{dataset_id}/stats` | Any role | No input → `DatasetStats` |
+| `GET /datasets/{dataset_id}/stats/me` | Any role | No user selector → `CurrentUserActivity` for the authenticated account and server UTC day; `Cache-Control: no-store` |
 | `GET /datasets/{dataset_id}/keybindings` | Any role | No input → authenticated user's `KeybindingSet` |
 | `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | `KeybindingSet` → normalized `KeybindingSet` |
 | `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest` → `PrelabelSuggestion[]` |
@@ -413,3 +415,44 @@ operations return 409; limits return 413; incompatible selections and invalid
 source geometry return 422; storage and verification failures return a safe
 500 category. Error messages exclude source paths and geometry. Preflight
 blockers and omissions are recorded in the job summary; see [export](export.md).
+
+
+## Current-user daily activity
+
+`CurrentUserActivity` identifies `datasetId`, authenticated `userId`, the inclusive
+UTC `window.start`, exclusive `window.end`, server `sampledAt`, and two integer
+counts: `annotationTasksSubmitted` and `finalTaskReviews`. The route has no
+client-selected user or time window. It requires a current dataset role and
+returns a fixed-size aggregate, never another user's history. A scan crossing
+midnight retries once for the new day, then returns a retryable error if the
+window changes again. The HTTP client
+uses the existing 20-second statistics timeout and credentialed session.
+
+Annotation activity counts committed normal or guided-migration submissions,
+including completion with no review stage. Review activity counts committed
+final task or migration-confirmation decisions, approved or rejected. Each
+counter deduplicates dataset/image/task/user within that UTC day. Saves, imports,
+skips, object decisions and reviewer corrections alone do not count. Reopening,
+later rejection and superseding a decision do not retract historical activity.
+Same-day replacement commits count once; a later-day submission or final-review
+replacement counts on its new commit day. Compound review revisions use the
+event's server commit time, not timestamps of locally staged review records.
+Dataset-wide `DatasetStats` semantics remain unchanged.
+
+## Server presence
+
+Authenticated `GET /presence` returns `ServerPresence` with `Cache-Control:
+no-store`. Each `PresentUser` contains a username (`userId`) and the IDs/names of
+datasets where that user holds an unexpired active annotation or review lease.
+Migration uses those same assignment kinds. The requesting user is excluded;
+other users are deduplicated and sorted by username, with datasets sorted by ID.
+
+This endpoint deliberately exposes active usernames and dataset names across
+server dataset-role boundaries to authenticated users. It grants no dataset
+access and returns no assignment IDs, image identities, geometry or session
+information. Query parameters cannot select a different requesting user.
+Unauthenticated requests fail. An unreadable registered dataset fails the
+request instead of reporting a potentially false empty presence list.
+
+Presence reads never claim, renew or release leases. Closing a browser does not
+release its leases automatically; the existing lease-expiry policy applies.

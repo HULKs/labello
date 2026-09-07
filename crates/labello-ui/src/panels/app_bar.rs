@@ -38,69 +38,11 @@ impl LabelloApp {
                 .map(|notice| ("Update", notice, theme::Intent::Success))
         };
         let dataset_label = format!("Dataset {dataset_name}");
-        let account = self
-            .auth
-            .account
-            .as_ref()
-            .map(|account| account.display_name.clone());
-
         let bar_rect = ui.available_rect_before_wrap();
         let response = ui.allocate_rect(bar_rect, egui::Sense::hover());
-        let dataset_width = if layout == LayoutMode::Compact {
-            46.0
-        } else {
-            142.0
-        };
-        let dataset_rect = egui::Rect::from_center_size(
-            bar_rect.center(),
-            egui::vec2(dataset_width + 18.0, bar_rect.height()),
-        );
-        let mut center_ui = ui.new_child(egui::UiBuilder::new().max_rect(dataset_rect).layout(
-            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-        ));
-        let dataset_response = theme::bounded_badge(
-            &mut center_ui,
-            &dataset_name,
-            theme::Intent::Info,
-            dataset_width,
-        )
-        .on_hover_text("Current dataset");
-        dataset_response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, dataset_label.clone())
-        });
-
-        let side_gap = theme::SPACE_2;
-        let left_rect = egui::Rect::from_min_max(
-            bar_rect.min,
-            egui::pos2(dataset_rect.left() - side_gap, bar_rect.bottom()),
-        );
-        let mut left_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(left_rect)
-                .layout(egui::Layout::left_to_right(egui::Align::Center)),
-        );
-
-        let right_rect = egui::Rect::from_min_max(
-            egui::pos2(dataset_rect.right() + side_gap, bar_rect.top()),
-            bar_rect.max,
-        );
-        let mut right_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(right_rect)
-                .layout(egui::Layout::right_to_left(egui::Align::Center)),
-        );
-
         let actions = self.app_bar_actions();
-
-        let status_width = if layout == LayoutMode::Compact {
-            64.0
-        } else {
-            76.0
-        };
         let spacing = ui.spacing().item_spacing.x;
-        let review_actions_in_drawer =
-            layout != LayoutMode::Wide && self.view == AppView::Review;
-
+        let side_gap = theme::SPACE_2;
         let destinations = self.primary_navigation_destinations();
         let navigation_width = |label: &str| 30.0 + label.chars().count() as f32 * 7.5;
         let total_navigation_width = destinations
@@ -108,18 +50,73 @@ impl LabelloApp {
             .map(|(_, label)| navigation_width(label))
             .sum::<f32>()
             + spacing * destinations.len().saturating_sub(1) as f32;
-        let required_right_width = status_width
-            + actions.len() as f32 * (44.0 + spacing)
-            + account
-                .as_ref()
-                .map_or(0.0, |_| 96.0 + spacing);
-        let drawer_navigation = review_actions_in_drawer
-            || total_navigation_width > left_rect.width() + 0.5
-            || required_right_width > right_rect.width() + 0.5;
+        let status_width = if self.work_view() {
+            44.0
+        } else if layout == LayoutMode::Compact {
+            64.0
+        } else {
+            76.0
+        };
+        let dataset_width = if layout == LayoutMode::Compact { 46.0 } else { 142.0 };
+        let dataset_rect = egui::Rect::from_center_size(
+            bar_rect.center(),
+            egui::vec2(dataset_width + 18.0, bar_rect.height()),
+        );
+        let required_right_width = status_width + actions.len() as f32 * (44.0 + spacing);
+        let drawer_navigation = (layout != LayoutMode::Wide && self.view == AppView::Review)
+            || if self.work_view() {
+                total_navigation_width + required_right_width + 180.0 + 2.0 * side_gap
+                    > bar_rect.width()
+            } else {
+                total_navigation_width > dataset_rect.left() - bar_rect.left() - side_gap
+                    || required_right_width > bar_rect.right() - dataset_rect.right() - side_gap
+            };
+        let show_workspace_dataset = self.work_view()
+            && layout == LayoutMode::Wide
+            && !drawer_navigation
+            && total_navigation_width <= dataset_rect.left() - bar_rect.left() - side_gap
+            && required_right_width + 180.0 <= bar_rect.right() - dataset_rect.right() - side_gap;
+        let left_width = if self.work_view() {
+            if drawer_navigation { 0.0 } else { total_navigation_width }
+        } else {
+            dataset_rect.left() - side_gap - bar_rect.left()
+        };
+        let left_rect = egui::Rect::from_min_size(
+            bar_rect.min,
+            egui::vec2(left_width, bar_rect.height()),
+        );
+        if !self.work_view() || show_workspace_dataset {
+            let mut center_ui = ui.new_child(egui::UiBuilder::new().max_rect(dataset_rect).layout(
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+            ));
+            let dataset_response = theme::bounded_badge(
+                &mut center_ui, &dataset_name, theme::Intent::Info, dataset_width,
+            ).on_hover_text("Current dataset");
+            dataset_response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::WidgetType::Label, true, dataset_label.clone())
+            });
+        }
+        let right_start = if self.work_view() && !show_workspace_dataset {
+            left_rect.right() + side_gap
+        } else {
+            dataset_rect.right() + side_gap
+        };
+        let mut left_ui = ui.new_child(
+            egui::UiBuilder::new().max_rect(left_rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        let mut right_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(egui::Rect::from_min_max(
+                    egui::pos2(right_start, bar_rect.top()), bar_rect.max,
+                ))
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
 
         if drawer_navigation {
             let drawer_open = self.navigation.drawer_open;
-            let trigger = left_ui
+            let navigation_ui = if self.work_view() { &mut right_ui } else { &mut left_ui };
+            let trigger = navigation_ui
                 .push_id("application-navigation-trigger", |ui| {
                     ui.add_sized(
                         [44.0, 44.0],
@@ -145,9 +142,9 @@ impl LabelloApp {
                 )
             });
             Self::paint_navigation_icon(
-                &left_ui,
+                navigation_ui,
                 trigger.rect,
-                left_ui.style().interact(&trigger).fg_stroke.color,
+                navigation_ui.style().interact(&trigger).fg_stroke.color,
             );
             if !drawer_open
                 && std::mem::take(&mut self.navigation.restore_drawer_trigger_focus)
@@ -172,16 +169,16 @@ impl LabelloApp {
                     self.open_view(view);
                 }
             }
-            for action in actions.iter().rev() {
+            for action in &actions {
                 self.app_bar_icon_button(&mut right_ui, *action);
             }
-            if let Some(account) = account.as_ref() {
-                right_ui
-                    .add_sized([96.0, 44.0], egui::Label::new(account).truncate())
-                    .on_hover_text(account);
-            }
         }
-        self.status_pill(&mut right_ui, runtime_status, status_width, layout);
+        if self.work_view() {
+            self.connection_indicator(&mut right_ui);
+            self.presence_summary(&mut right_ui);
+        } else {
+            self.status_pill(&mut right_ui, runtime_status, status_width, layout);
+        }
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Application bar")
         });
@@ -264,22 +261,17 @@ impl LabelloApp {
     }
 
     fn app_bar_actions(&self) -> Vec<AppBarAction> {
-        let mut actions = vec![
-            AppBarAction::Setup,
-            AppBarAction::Settings,
-            AppBarAction::SignOut,
-        ];
-        if self.work_view() && self.selected_task().is_some() {
-            actions.insert(1, AppBarAction::Tutorial);
+        let mut actions = Vec::new();
+        if self.auth.account.is_some() {
+            actions.push(AppBarAction::SignOut);
         }
+        actions.push(AppBarAction::Setup);
         if self.can_admin() {
-            actions.insert(0, AppBarAction::Admin);
+            actions.push(AppBarAction::Admin);
         }
+        actions.push(AppBarAction::Settings);
         if self.datasets.metadata.is_some() {
-            actions.insert(0, AppBarAction::Statistics);
-        }
-        if self.auth.account.is_none() {
-            actions.retain(|action| *action != AppBarAction::SignOut);
+            actions.push(AppBarAction::Statistics);
         }
         actions
     }
@@ -349,7 +341,10 @@ impl LabelloApp {
         let mut close = false;
         let mut action_taken = false;
         let destinations = self.primary_navigation_destinations();
-        let actions = self.app_bar_actions();
+        let mut actions = self.app_bar_actions();
+        if self.work_view() && self.selected_task().is_some() {
+            actions.push(AppBarAction::Tutorial);
+        }
         let account = self
             .auth
             .account
