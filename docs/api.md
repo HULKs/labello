@@ -135,32 +135,17 @@ defaults to `control`. Middle-button drag is always available. Older requests
 that omit `panDragModifier` remain valid and receive the default during
 deserialization.
 
-`DatasetStats.contributors` is an additive, optional map keyed by contributor
-user ID. Each entry contains `displayName`, optional `githubUserId`, and chronologically ordered
-`history` rows (`day`, `labeled`, `reviewed`, `accepted`, `rejected`). Days are
-UTC dates. Current servers return an empty map when no contributions exist;
-older servers omit the field, which the UI presents as unavailable. Existing
-statistics fields and the dataset-role requirement are unchanged. Contributor
-names are resolved only for IDs present in this dataset's activity; unavailable
-names fall back to the user ID. This does not expose the account directory.
-`githubUserId` comes from the existing account record and lets the UI load a
-public GitHub avatar. Older responses without it retain initials placeholders.
+Optional `DatasetStats.contributors` maps user IDs to `displayName`, optional
+`githubUserId` for avatars, and chronological UTC `history` rows containing
+`day`, `labeled`, `reviewed`, `accepted`, and `rejected`. An empty map means no
+activity; an absent field means contributor statistics are unavailable.
 
-Labeling credit counts each person's first submission of an image–task pair,
-including empty submissions and tasks completed without review. Later edits,
-resubmissions, imports and automatic revisions add no labeling credit. All
-historical tasks participate, including subsequently disabled tasks. Review
-credit counts recorded decisions, including the single rejection embedded in
-a reviewer correction. Acceptance counts approvals/rejections received on the
-reviewed human annotation version, task submission round, migration disposition
-version or full-image confirmation. Imported/automatic annotation versions and
-unattributable image-wide reviews receive no human acceptance attribution.
-Activity is dated when submitted/reviewed, not retroactively on labeling day.
-Repeated review IDs in an image are counted once.
-
-These are derived statistics evaluated from existing events in the normal cached
-statistics scan. No persisted schema, event, annotation, configuration or snapshot
-format changes are required. Clients evaluate periods and ranks locally.
+Counts derive from existing events: labeling counts first image–task submissions
+per person; reviews count distinct decisions; accepted/rejected counts belong to
+the reviewed human work. Corrections count as rejections; imports and automatic
+work earn no human credit. Activity uses the submission/review date. Clients
+calculate periods, ranks, and acceptance percentages. Existing response fields,
+authorization, and persisted formats remain unchanged.
 
 Role mutation retains bootstrap-administrator protections implemented by the
 handler; a data administrator cannot use this route to bypass those rules.
