@@ -33,7 +33,9 @@ its skeleton, and migration approval cannot approve its box.
 
 Review offers Previous and the configured Previous image shortcut, Arrow Left by
 default, for the immediately previous skipped or completed review in the same
-dataset and task. The client clears that reference when the dataset, task,
+dataset and task. Background cleanup of an expired reservation does not count
+as a skipped review and does not replace the immediately previous review.
+The client clears that reference when the dataset, task,
 account, or endpoint changes. It is not a history browser. The server validates
 the exact previous assignment and creates a new assignment ID and lease. A
 retry of the same opening returns that fresh active assignment. The original

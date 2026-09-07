@@ -237,6 +237,8 @@ same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,
 then releases the displaced assignment. Releasing first would make the current
 review the newest terminal assignment and invalidate the previous target. Failed
-reopening preserves the current workspace and reports the error. The
+reopening preserves the current workspace and reports the error. Runtime failures
+show Error in the workspace status control, with the full error and annotation
+save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.

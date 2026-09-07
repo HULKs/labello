@@ -2764,6 +2764,57 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
 }
 
 #[test]
+fn failed_untouched_previous_request_renders_error_with_current_assignment() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let original_image = harness.state().work.assignment.as_ref().unwrap().image_id.clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id != original_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    api.state.borrow_mut().reopenable_assignments.clear();
+
+    click(&mut harness, "Previous");
+    step_until(&mut harness, 12, |app| {
+        !app.loading.image
+            && app.runtime.error.as_deref().is_some_and(|error| {
+                error.contains("assignment cannot be reopened")
+            })
+    });
+
+    assert_eq!(api.counts().reopen_assignment, 1);
+    assert!(harness.state().work.assignment.as_ref().is_some_and(|assignment| {
+        assignment.image_id != original_image
+    }));
+    fn collect_rendered_text(shape: &egui::epaint::Shape, texts: &mut Vec<String>) {
+        match shape {
+            egui::epaint::Shape::Text(text) => texts.push(text.galley.text().to_string()),
+            egui::epaint::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    collect_rendered_text(shape, texts);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut rendered_text = Vec::new();
+    for clipped in &harness.output().shapes {
+        collect_rendered_text(&clipped.shape, &mut rendered_text);
+    }
+    assert!(
+        rendered_text.iter().any(|text| text == "Error"),
+        "the failed Previous request must render an Error status, got {rendered_text:?}"
+    );
+}
+
+#[test]
 fn review_and_save_responses_propagate_renewed_assignments_without_refetching_state() {
     let review_api = Rc::new(SpyApi::new());
     seed_review_annotation(

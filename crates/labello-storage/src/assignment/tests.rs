@@ -2163,6 +2163,125 @@ async fn previous_review_reopens_before_current_release_and_survives_later_relea
 }
 
 #[tokio::test]
+async fn previous_completed_review_ignores_expiry_cleanup_on_another_image() {
+    let (_temp, repo, image_a, task_id, annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let image_b = ImageId::from("img_2");
+    let mut image_index = repo.load_images_index().await.unwrap();
+    let mut image_b_record = image_index.images_by_hash.values().next().unwrap().clone();
+    image_b_record.image_id = image_b.clone();
+    image_b_record.blake3 = "hash_2".to_string();
+    image_b_record.canonical_path = "images/two.png".to_string();
+    image_b_record.known_paths = vec!["images/two.png".to_string()];
+    image_b_record.file_name = "two.png".to_string();
+    image_index
+        .images_by_hash
+        .insert("hash_2".to_string(), image_b_record);
+    image_index.image_count = 2;
+    repo.save_images_index(&image_index).await.unwrap();
+    for event in repo.load_events(&image_a).await.unwrap() {
+        repo.append_payload(
+            &image_b,
+            &Actor {
+                user_id: annotator.clone(),
+                role: DatasetRole::Annotator,
+            },
+            event.payload,
+        )
+        .await
+        .unwrap();
+    }
+
+    let completed = claim_review(&repo, &image_a, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &completed, ReviewDecision::Approved).await;
+
+    let expired = claim_review(&repo, &image_b, &task_id, &reviewers[0]).await;
+    expire_assignment(&repo, &expired, &reviewers[0]).await;
+    let successor = claim_review(&repo, &image_b, &task_id, &reviewers[0]).await;
+    assert_ne!(successor.assignment_id, expired.assignment_id);
+    let state_b = repo.load_image_state(&image_b).await.unwrap();
+    let cancelled = state_b
+        .assignments
+        .iter()
+        .find(|assignment| assignment.assignment_id == expired.assignment_id)
+        .unwrap();
+    assert_eq!(cancelled.status, AssignmentStatus::Cancelled);
+    assert!(
+        cancelled
+            .expires_at
+            .is_some_and(|expires_at| expires_at < cancelled.updated_at)
+    );
+    assert!(
+        state_b
+            .review_finished_sequences
+            .contains_key(&expired.assignment_id)
+    );
+    assert_eq!(
+        assignment_status(&state_b, &successor),
+        AssignmentStatus::Active
+    );
+
+    let reopened = repo
+        .reopen_review_assignment(&reviewers[0], &completed.assignment_id, &image_a, &task_id)
+        .await;
+    assert!(
+        reopened.is_ok(),
+        "maintenance cancellation on another image must not supersede a completed review: {reopened:?}"
+    );
+
+    let (_temp, repo, image_a, task_id, annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let image_b = ImageId::from("img_2");
+    let mut image_index = repo.load_images_index().await.unwrap();
+    let mut image_b_record = image_index.images_by_hash.values().next().unwrap().clone();
+    image_b_record.image_id = image_b.clone();
+    image_b_record.blake3 = "hash_2".to_string();
+    image_b_record.canonical_path = "images/two.png".to_string();
+    image_b_record.known_paths = vec!["images/two.png".to_string()];
+    image_b_record.file_name = "two.png".to_string();
+    image_index
+        .images_by_hash
+        .insert("hash_2".to_string(), image_b_record);
+    image_index.image_count = 2;
+    repo.save_images_index(&image_index).await.unwrap();
+    for event in repo.load_events(&image_a).await.unwrap() {
+        repo.append_payload(
+            &image_b,
+            &Actor {
+                user_id: annotator.clone(),
+                role: DatasetRole::Annotator,
+            },
+            event.payload,
+        )
+        .await
+        .unwrap();
+    }
+    let completed = claim_review(&repo, &image_a, &task_id, &reviewers[0]).await;
+    finalize_test_review(&repo, &completed, ReviewDecision::Approved).await;
+    let expired = claim_review(&repo, &image_b, &task_id, &reviewers[0]).await;
+    expire_assignment(&repo, &expired, &reviewers[0]).await;
+    let successor = claim_review(&repo, &image_b, &task_id, &reviewers[0]).await;
+    repo.release_assignment(
+        &reviewers[0],
+        &successor.assignment_id,
+        &image_b,
+        &task_id,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let error = repo
+        .reopen_review_assignment(&reviewers[0], &completed.assignment_id, &image_a, &task_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        StorageError::AssignmentConflict(message)
+            if message == "this is no longer the immediately previous review assignment"
+    ));
+}
+
+#[tokio::test]
 async fn previous_review_conflicts_distinguish_context_changes_and_preserve_denial() {
     let (_temp, repo, image_id, task_id, _annotator, reviewers) =
         correction_repo(AnnotationType::BoundingBox, false).await;

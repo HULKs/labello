@@ -327,10 +327,10 @@ impl DatasetRepository {
                 assignment.task_id == *task_id
                     && assignment.kind == AssignmentKind::Review
                     && assignment.assigned_to == *user_id
-                    && matches!(
-                        assignment.status,
-                        AssignmentStatus::Cancelled | AssignmentStatus::Completed
-                    )
+                    // Expiry cleanup is maintenance, not a reviewer skipping work.
+                    && (assignment.status == AssignmentStatus::Completed
+                        || (assignment.status == AssignmentStatus::Cancelled
+                            && !assignment_is_expired(assignment, assignment.updated_at)))
                     && assignment.updated_at > source.updated_at
             }) {
                 return Err(conflict(

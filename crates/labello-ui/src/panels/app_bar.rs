@@ -547,7 +547,7 @@ impl LabelloApp {
     ) {
         let (text, detail, intent, accessible_label) = if self.work_view() {
             let full = status_text(self.work.save_status);
-            let text = if layout == LayoutMode::Compact {
+            let mut text = if layout == LayoutMode::Compact {
                 compact_status_text(self.work.save_status)
             } else {
                 full
@@ -564,6 +564,7 @@ impl LabelloApp {
                 detail.push_str(&format!("\n{prefix}: {runtime_detail}"));
                 accessible_label.push_str(&format!(". {prefix}: {runtime_detail}"));
                 if matches!(runtime_intent, theme::Intent::Error) {
+                    text = "Error";
                     intent = theme::Intent::Error;
                 }
             }
