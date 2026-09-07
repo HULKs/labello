@@ -135,7 +135,10 @@ impl LabelloApp {
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
         let review_phase = if view == AppView::Review && current.is_some() {
-            if self.work.correction_draft.is_some() {
+            if self.loading.image
+                && matches!(self.work.pending_transition, Some(PendingTransition::PreviousAssignment(_))) {
+                Some("Opening previous review…".to_string())
+            } else if self.work.correction_draft.is_some() {
                 Some("Correction mode".to_string())
             } else {
                 let (phase, value, _) = self.review_phase();

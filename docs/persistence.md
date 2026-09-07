@@ -335,3 +335,31 @@ publication racing review-context capture or revision commit. Per-image locks
 still guard event validation, exclusive revision ownership, and publication.
 A live revision excludes relevant annotation, review, migration, and assignment
 mutations, including mutation paths used by offline synchronization.
+
+## Previous-review history index
+
+Each repository and its clones share an in-memory index derived from per-image
+assignment history. It stores the latest completed or intentionally cancelled
+review per image, reviewer and task, plus event sequences and aggregate latest
+candidates. Cancellation at or after lease expiry is maintenance and does not
+advance this history. The index is not an authority or a persisted artifact.
+
+Initialization reads replay-validated states with at most 32 concurrent workers.
+Review claims warm the index before returning an assignment. Concurrent committed
+observations supersede older scan results by image event sequence. A membership
+generation prevents publishing a scan against an obsolete image index. Restart,
+explicit state repair, and image membership changes require rebuilding; the first
+review operation can therefore incur initialization cost.
+
+Ordinary event transactions and offline synchronization observe committed history
+synchronously after event publication and before derived state-cache publication.
+A failure or interruption during a history-changing publication invalidates the
+index because the event log may already have been renamed. Failed state-cache
+publication after observation does not lose the committed history.
+
+Lock order is configuration guards where applicable, image lock, history
+membership read guard, then sorted reviewer/task guards. No history guard holder
+acquires another image lock or initializes the index. Membership publication and
+explicit repair take the history membership write guard. Reopening checks the
+latest candidate under the same reviewer/task guard used by terminal review
+publication and retains it through event publication and index observation.

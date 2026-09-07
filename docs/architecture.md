@@ -61,6 +61,14 @@ load and authorize
   -> invalidate derived caches
 ```
 
+`review_history` owns the shared process-local previous-review projection,
+bounded initialization, sequence-aware observations, and reviewer/task commit
+guards. Assignment transactions and offline synchronization publish observations
+at the durable event boundary. Image-index membership changes invalidate the projection;
+explicit repair invalidates the projection. The assignment reopening transaction
+uses this projection only for the cross-image latest-review check and validates
+the target image exactly.
+
 Per-image `events.jsonl` remains authoritative. `state.json` and statistics are
 derived caches. The complete on-disk authority, compatibility, and repair
 contract is documented in [`persistence.md`](persistence.md).

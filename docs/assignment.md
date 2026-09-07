@@ -35,6 +35,15 @@ Review offers Previous and the configured Previous image shortcut, Arrow Left by
 default, for the immediately previous skipped or completed review in the same
 dataset and task. Background cleanup of an expired reservation does not count
 as a skipped review and does not replace the immediately previous review.
+A shared process-local index tracks terminal review history per reviewer and task.
+It is initialized with a bounded parallel scan before the first review claim and
+maintained from committed image state. Warm Previous checks read the index and
+the target image only; they do not load every other image's state or event log.
+The index tracks the latest finished review even when that review later becomes
+ineligible, so it cannot authorize falling back to an older review. Equal terminal
+timestamps retain the strict newer-than comparison. Per-image event sequences
+order observations, not events on different images.
+
 The client clears that reference when the dataset, task,
 account, or endpoint changes. It is not a history browser. The server validates
 the exact previous assignment and creates a new assignment ID and lease. A

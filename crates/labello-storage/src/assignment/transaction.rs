@@ -36,7 +36,18 @@ impl DatasetRepository {
         &self,
         image_id: &ImageId,
         actor: &Actor,
+        payloads: Vec<EventPayload>,
+    ) -> StorageResult<(Vec<EventLogEntry>, ImageState)> {
+        self.append_payloads_checking_previous_unlocked(image_id, actor, payloads, None)
+            .await
+    }
+
+    pub(super) async fn append_payloads_checking_previous_unlocked(
+        &self,
+        image_id: &ImageId,
+        actor: &Actor,
         mut payloads: Vec<EventPayload>,
+        previous: Option<&Assignment>,
     ) -> StorageResult<(Vec<EventLogEntry>, ImageState)> {
         // 1. Load the replay-validated cache base from the authoritative event log.
         let mut next_state = self.load_image_state(image_id).await?;
@@ -78,10 +89,14 @@ impl DatasetRepository {
             &mut next_state,
             &mut events,
         )?;
+        let history_commit = self
+            .review_history_commit(&previous_state, &next_state, previous)
+            .await?;
         // 4. Atomically publish events.jsonl, the authoritative state transition.
         self.append_events_atomic(image_id, &events).await?;
         // 5. Observe the authoritative transition synchronously. There must be no
         // cancellation point between durable event publication and this update.
+        history_commit.observe();
         self.observe_completion_transition(image_id, previous_completion, &next_state);
         #[cfg(test)]
         self.completion_post_observation_test_hook().await?;

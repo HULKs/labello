@@ -11,6 +11,7 @@ pub mod keybindings;
 pub mod paths;
 pub mod preview;
 pub mod repository;
+mod review_history;
 pub mod stats;
 pub mod sync;
 

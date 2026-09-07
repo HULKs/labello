@@ -47,7 +47,9 @@ impl LabelloApp {
                 self.view == AppView::Annotate && self.work.pending_transition.is_none();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
                 let mut interaction = CanvasInteraction::correction(draft.selected_keypoint);
-                interaction.editable = !self.loading.saving;
+                interaction.editable = !self.loading.saving
+                    && !self.loading.image
+                    && self.work.pending_transition.is_none();
                 interaction
             });
             let mut interaction = correction_interaction

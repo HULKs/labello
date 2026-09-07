@@ -237,7 +237,10 @@ same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,
 then releases the displaced assignment. Releasing first would make the current
 review the newest terminal assignment and invalidate the previous target. Failed
-reopening preserves the current workspace and reports the error. Runtime failures
+reopening preserves the current workspace and reports the error. While reopening,
+the current image and texture stay visible with an Opening previous review status.
+After confirmation the transition modal closes, but its pending transition remains
+to block conflicting actions and correction edits until loading finishes. Runtime failures
 show Error in the workspace status control, with the full error and annotation
 save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including

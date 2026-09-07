@@ -771,6 +771,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_review(&mut self, decision: ReviewDecision) {
+        if self.loading.image || self.work.pending_transition.is_some() {
+            return;
+        }
         if decision == ReviewDecision::Approved && self.work.correction_draft.is_some() {
             self.runtime.error =
                 Some("Discard correction mode before approving this object.".to_string());

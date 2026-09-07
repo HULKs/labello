@@ -250,7 +250,8 @@ impl LabelloApp {
     }
 
     fn review_actions(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
-        let ready = self.work.assignment.is_some() && !self.loading.saving;
+        let ready = self.work.assignment.is_some() && !self.loading.saving
+            && !self.loading.image && self.work.pending_transition.is_none();
         if self.work.correction_draft.is_some() {
             self.correction_actions(ui, ready);
             return;
@@ -279,7 +280,8 @@ impl LabelloApp {
         shortcut_only: bool,
         fill_width: bool,
     ) {
-        let ready = self.work.assignment.is_some() && !self.loading.saving;
+        let ready = self.work.assignment.is_some() && !self.loading.saving
+            && !self.loading.image && self.work.pending_transition.is_none();
         let compact =
             LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Compact;
         let approve_shortcut = self.shortcut_text(
@@ -524,7 +526,8 @@ impl LabelloApp {
         let has_candidates = self.work.annotations.iter().any(|annotation| {
             !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
         });
-        let ready = self.work.assignment.is_some() && !self.loading.saving;
+        let ready = self.work.assignment.is_some() && !self.loading.saving
+            && !self.loading.image && self.work.pending_transition.is_none();
         let (accept, correct) = if compact {
             ("Accept all", "Send back")
         } else {

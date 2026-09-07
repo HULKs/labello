@@ -440,6 +440,9 @@ impl DatasetRepository {
             return Ok(None);
         }
 
+        if kind == AssignmentKind::Review {
+            self.prepare_review_history().await?;
+        }
         let image_ids = metadata.images.keys().cloned().collect::<Vec<_>>();
         if image_ids.is_empty() {
             return Ok(None);

@@ -21,6 +21,10 @@ impl DatasetRepository {
     }
 
     pub async fn rebuild_image_state(&self, image_id: &ImageId) -> StorageResult<ImageState> {
+        let lock = self.image_lock(image_id);
+        let _guard = lock.lock().await;
+        let _history_membership = self.review_history_cache.membership.write().await;
+        self.review_history_cache.invalidate();
         let events = self.load_events(image_id).await?;
         let state = rebuild_state(image_id.clone(), &events)?;
         self.observe_authoritative_completion(&state);

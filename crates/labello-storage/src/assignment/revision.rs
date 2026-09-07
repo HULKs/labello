@@ -203,6 +203,7 @@ impl DatasetRepository {
                 "approval review is no longer enabled for this task",
             ));
         }
+        self.prepare_review_history().await?;
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
@@ -319,25 +320,6 @@ impl DatasetRepository {
         {
             return Err(conflict("skipped review is no longer eligible"));
         }
-        // The client supplies the exact previous ID, but cannot choose an older
-        // terminal item from another image in this dataset/task.
-        for other_id in metadata.images.keys().filter(|other| *other != image_id) {
-            let other = self.load_image_state(other_id).await?;
-            if other.assignments.iter().any(|assignment| {
-                assignment.task_id == *task_id
-                    && assignment.kind == AssignmentKind::Review
-                    && assignment.assigned_to == *user_id
-                    // Expiry cleanup is maintenance, not a reviewer skipping work.
-                    && (assignment.status == AssignmentStatus::Completed
-                        || (assignment.status == AssignmentStatus::Cancelled
-                            && !assignment_is_expired(assignment, assignment.updated_at)))
-                    && assignment.updated_at > source.updated_at
-            }) {
-                return Err(conflict(
-                    "this is no longer the immediately previous review assignment",
-                ));
-            }
-        }
         let assignment = Assignment {
             assignment_id: AssignmentId::generate(),
             image_id: image_id.clone(),
@@ -350,13 +332,14 @@ impl DatasetRepository {
             updated_at: now,
         };
         let payload = capture_review_assignment(&state, task, &assignment, Some(source))?;
-        self.append_payloads_unlocked(
+        self.append_payloads_checking_previous_unlocked(
             image_id,
             &Actor {
                 user_id: user_id.clone(),
                 role: DatasetRole::Reviewer,
             },
             vec![payload],
+            Some(source),
         )
         .await?;
         Ok(assignment)
