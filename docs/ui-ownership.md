@@ -70,6 +70,7 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
+- `missing_objects.rs`: assignment-and-round-scoped missing-object drafts, stable rejection retries, inspector guidance/history, and browser exit warning; canvas rendering owns marker transforms and gestures.
 - `review_revision.rs`: local staged replacement decisions and stable commit retries;
   effective decisions come from the domain review projection, not raw history;
 - `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
@@ -232,6 +233,7 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
+Unsent missing-object locations count as work for the navigation gate.
 Touched assignments keep the existing confirmation. Review Previous uses the
 same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,
@@ -245,3 +247,8 @@ show Error in the workspace status control, with the full error and annotation
 save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
+
+Revision reviews offer missing-object markers only after every captured object
+has an explicit staged decision. An early object rejection can still commit
+without markers; it does not invent decisions for unvisited objects. The commit
+guard rejects incomplete marker-bearing revisions before freezing retry state.

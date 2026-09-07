@@ -146,6 +146,15 @@ pub trait AnnotationApi {
 }
 
 pub trait ReviewApi {
+    fn reject_missing_objects<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _assignment: AssignmentActionRequest,
+        _submission: labello_domain::MissingObjectRejection,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Demo("missing-object review evidence is not supported by this client".into())) })
+    }
+
     fn commit_review_revision<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

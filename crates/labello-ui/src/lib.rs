@@ -10,6 +10,7 @@ pub mod live;
 mod live_protocol;
 pub mod live_workflow;
 mod manual_migration;
+mod missing_objects;
 pub mod panels;
 mod persistence;
 pub mod queue;

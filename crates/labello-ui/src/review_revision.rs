@@ -17,6 +17,31 @@ impl LabelloApp {
             .is_some_and(|context| context.decision_revision)
     }
 
+    pub(crate) fn review_revision_object_decisions_complete(&self) -> bool {
+        self.work
+            .assignment
+            .as_ref()
+            .and_then(|assignment| {
+                self.work
+                    .current_state
+                    .as_ref()?
+                    .review_assignment_contexts
+                    .get(&assignment.assignment_id)
+            })
+            .is_some_and(|context| {
+                context
+                    .targets
+                    .iter()
+                    .filter(|target| {
+                        !matches!(
+                            target,
+                            ReviewTarget::Task { .. } | ReviewTarget::MigrationConfirmation { .. }
+                        )
+                    })
+                    .all(|target| self.staged_review_decision(target).is_some())
+            })
+    }
+
     pub(crate) fn staged_review_decision(&self, target: &ReviewTarget) -> Option<&ReviewRecord> {
         self.review_revision_active()
             .then(|| {
@@ -47,6 +72,14 @@ impl LabelloApp {
                 return false;
             }
         } else {
+            if phase == ReviewPhase::FullImage
+                && !self.work.missing_objects.locations.is_empty()
+                && !self.review_revision_object_decisions_complete()
+            {
+                self.runtime.error =
+                    Some("Review every object before adding missing-object locations.".into());
+                return false;
+            }
             let review = ReviewRecord {
                 review_id: ReviewId::generate(),
                 target: target.clone(),
@@ -95,6 +128,7 @@ impl LabelloApp {
                 return false;
             }
             self.work.review_revision_commit = Some(labello_domain::ReviewRevisionCommit {
+                missing_objects: self.work.missing_objects.locations.clone(),
                 reviews: self.work.staged_review_decisions.clone(),
             });
         }
@@ -117,6 +151,7 @@ impl LabelloApp {
             assignment,
             review,
             revision: Some(replacement),
+            missing_objects: None,
             phase: ReviewPhase::FullImage,
         })
     }

@@ -161,6 +161,29 @@ pub(crate) fn show_canvas_colored(
     annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
     selectable_annotations: Option<&std::collections::BTreeSet<AnnotationId>>,
 ) -> Option<CanvasAction<BoundingBoxEdit>> {
+    show_canvas_with_evidence(ui, state, texture, annotations, image_size, bounding_box_tool,
+        selected_annotation, interaction, skeleton_edges, prelabels, annotation_color,
+        annotation_styles, selectable_annotations, None, &mut None)
+}
+
+#[allow(clippy::too_many_arguments, reason = "the canvas receives explicit rendering and interaction policies")]
+pub(crate) fn show_canvas_with_evidence(
+    ui: &mut Ui,
+    state: &mut CanvasState,
+    texture: Option<&egui::TextureHandle>,
+    annotations: &[AnnotationVersion],
+    image_size: [u32; 2],
+    bounding_box_tool: bool,
+    selected_annotation: Option<&AnnotationId>,
+    interaction: CanvasInteraction,
+    skeleton_edges: &[(String, String)],
+    prelabels: &[PrelabelSuggestion],
+    annotation_color: Color32,
+    annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
+    selectable_annotations: Option<&std::collections::BTreeSet<AnnotationId>>,
+    missing: Option<MissingObjectOverlay<'_>>,
+    missing_action: &mut Option<MissingObjectAction>,
+) -> Option<CanvasAction<BoundingBoxEdit>> {
     let editable = interaction.editable;
     let available = ui.available_size().max(vec2(1.0, 1.0));
     let (viewport, _) = ui.allocate_exact_size(available, Sense::hover());
@@ -279,6 +302,45 @@ pub(crate) fn show_canvas_colored(
         annotation_styles,
         state.current_zoom(),
     );
+
+    if let Some(missing) = missing {
+        let painter = ui.painter().with_clip_rect(viewport.intersect(image_rect));
+        for marker in missing.locations {
+            let point = normalized_to_screen(image_rect, pos2(marker.position.x, marker.position.y));
+            let color = if missing.editable { Color32::from_rgb(255, 166, 70) } else { Color32::from_rgb(255, 205, 110) };
+            let radius = if missing.selected == Some(marker.marker_id) { 13.0 } else { 10.0 };
+            let diamond = vec![point+vec2(0.0,-radius),point+vec2(radius,0.0),point+vec2(0.0,radius),point+vec2(-radius,0.0)];
+            painter.add(egui::Shape::convex_polygon(diamond, Color32::from_rgb(40,25,12), Stroke::new(2.5,color)));
+            painter.text(point, egui::Align2::CENTER_CENTER, "!", egui::FontId::proportional(14.0), color);
+            let label = painter.layout_no_wrap(format!("Missing {}", marker.marker_id), egui::FontId::proportional(14.0), color);
+            let visible = viewport.intersect(image_rect);
+            if !visible.contains(point) { continue; }
+            let label_x = if point.x + 18.0 + label.size().x <= visible.right() { point.x + 15.0 } else { point.x - 15.0 - label.size().x };
+            let label_position = pos2(label_x.max(visible.left() + 3.0),
+                (point.y - label.size().y * 0.5).clamp(visible.top() + 3.0, (visible.bottom() - label.size().y - 3.0).max(visible.top() + 3.0)));
+            let label_rect = Rect::from_min_size(label_position, label.size()).expand(3.0);
+            painter.rect_filled(label_rect, 3.0, Color32::from_rgb(25, 20, 16));
+            painter.galley(label_rect.min + vec2(3.0,3.0), label, color);
+        }
+        if missing.editable && !view_consumed && !state.pan_mode() {
+            let hit = |point: Pos2| missing.locations.iter().rev().find(|marker|
+                normalized_to_screen(image_rect,pos2(marker.position.x,marker.position.y)).distance(point) <= 22.0).map(|marker| marker.marker_id);
+            if response.drag_started_by(PointerButton::Primary) {
+                state.missing_drag = ui.input(|input| input.pointer.press_origin()).and_then(hit);
+            }
+            if response.dragged_by(PointerButton::Primary) && let Some(id) = state.missing_drag
+                && let Some(point) = response.interact_pointer_pos() {
+                let point = screen_to_normalized(image_rect, point);
+                *missing_action = Some(MissingObjectAction::Move(id, NormalizedPoint { x: point.x.clamp(0.0,1.0), y: point.y.clamp(0.0,1.0) }));
+            } else if response.clicked_by(PointerButton::Primary) && let Some(point) = response.interact_pointer_pos()
+                && image_rect.contains(point) {
+                *missing_action = if let Some(id) = hit(point) { Some(MissingObjectAction::Select(id)) }
+                    else if missing.placing { let point = screen_to_normalized(image_rect,point); Some(MissingObjectAction::Add(NormalizedPoint { x: point.x, y: point.y })) }
+                    else { None };
+            }
+        }
+        if !primary_down || !missing.editable || view_consumed { state.missing_drag = None; }
+    } else { state.missing_drag = None; }
 
     let action = handle_annotation_pointer(
         ui,

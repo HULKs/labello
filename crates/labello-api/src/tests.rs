@@ -999,3 +999,5 @@ include!("tests/deployment_readiness.rs");
 include!("tests/previews.rs");
 
 include!("tests/review_revisions.rs");
+
+include!("tests/missing_objects.rs");
