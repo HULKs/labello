@@ -143,7 +143,8 @@ activity; an absent field means contributor statistics are unavailable.
 Counts derive from existing events: labeling counts first image–task submissions
 per person; reviews count distinct decisions; accepted/rejected counts belong to
 the reviewed human work. Corrections count as rejections; imports and automatic
-work earn no human credit. Activity uses the submission/review date. Clients
+work earn no human credit. Activity uses the submission/review date; revised
+decisions count on commit and retain earlier activity. Clients
 calculate periods, ranks, and acceptance percentages. Existing response fields,
 authorization, and persisted formats remain unchanged.
 
