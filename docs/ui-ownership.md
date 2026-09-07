@@ -263,8 +263,8 @@ The shared request identity checks auth/workspace epochs and dataset ownership
 before applying any reply. Auth or workspace invalidation clears export state.
 Queue and dispatch failures clear pending state and remain in the export region.
 
-The Export section loads capabilities and server history, restores the latest
-retained job after reload, and polls active jobs at most once per second while
+The Export section loads capabilities and server history, restores only active
+or Ready captures after reload or refresh, and polls active jobs at most once per second while
 that section is visible. Background polls preserve form appearance, layout, and
 selection controls. An explicit action can supersede a poll; late poll responses
 are rejected by the pending request ID. Explicit requests still coalesce. Failed refreshes retain the last
@@ -278,7 +278,11 @@ one split is required. Train is the default fallback for images
 without split provenance. Split conflicts offer explicit per-image choices.
 Domain `ExportOptions::class_mapping` supplies local compatibility feedback;
 server preflight owns coverage, image, geometry, source consistency and bounds.
-A retained capture must be cancelled before another preflight. Start requires
+Failed, blocked, cancelled, and succeeded jobs remain inspectable in history but
+are not automatically selected on reload. Editing a new selection or starting a
+preflight clears old terminal-job details. Blocked jobs do not retain a payload
+and do not prevent another preflight. An active or Ready capture must be
+cancelled before another preflight. Start requires
 a Ready job, an explicit summary acknowledgement, unchanged options and saved
 Admin configuration. Captured options and bounded omission/blocker examples
 remain inspectable in history.

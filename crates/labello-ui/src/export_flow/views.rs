@@ -134,6 +134,9 @@ impl LabelloApp {
             });
             if before != self.admin.export.options {
                 self.admin.export.reviewed = false;
+                if self.admin.export.selected_job().is_some_and(|job| !job.phase.is_active() && job.phase != ExportPhase::Ready) {
+                    self.admin.export.selected = None;
+                }
             }
             let validation = self.admin.export.options.class_mapping(&metadata);
             if let Err(error) = validation {
@@ -253,7 +256,7 @@ impl LabelloApp {
                 theme::inline_message(
                     ui,
                     theme::Intent::Warning,
-                    "This preflight cannot start. Resolve blockers or choose complete ground-truth coverage, then cancel this capture and run a new preflight.",
+                    "This preflight cannot start. Resolve blockers or choose complete ground-truth coverage, then run a new preflight.",
                 );
             }
             egui::CollapsingHeader::new("Class mapping and omissions").show(ui, |ui| {
@@ -308,7 +311,7 @@ impl LabelloApp {
                 ui.small("Only the first 100 blockers are shown. A new preflight may reveal further blockers.");
             }
         }
-        if job.options != self.admin.export.options {
+        if job.phase == ExportPhase::Ready && job.options != self.admin.export.options {
             self.admin.export.reviewed = false;
             theme::inline_message(
                 ui,

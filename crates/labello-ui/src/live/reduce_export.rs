@@ -45,21 +45,19 @@ impl LabelloApp {
                         .cmp(&a.created_at)
                         .then_with(|| b.job_id.cmp(&a.job_id))
                 });
-                let restore = !state.loaded;
                 state.capabilities = Some(capabilities);
                 state.jobs = jobs;
                 state.loaded = true;
-                if restore {
-                    if let Some(id) = state.jobs.first().map(|job| job.job_id.clone()) {
-                        state.select_job(&id);
-                    }
-                } else if !state
-                    .jobs
-                    .iter()
-                    .any(|job| Some(&job.job_id) == state.selected.as_ref())
-                {
+                state.notice = None;
+                // Restore resumable work, not diagnostics from finished jobs.
+                // Terminal results remain available through explicit history selection.
+                let retained = state.retained_capture().map(|job| job.job_id.clone());
+                if state.selected != retained {
                     state.selected = None;
                     state.reviewed = false;
+                    if let Some(id) = retained {
+                        state.select_job(&id);
+                    }
                 }
             }
             ExportReply::Job(job) => {

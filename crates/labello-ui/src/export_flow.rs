@@ -82,7 +82,6 @@ impl ExportState {
                 job.phase,
                 ExportPhase::Capturing
                     | ExportPhase::Ready
-                    | ExportPhase::Blocked
                     | ExportPhase::Building
                     | ExportPhase::Cancelling
             )
@@ -206,6 +205,12 @@ impl LabelloApp {
         }
         let dataset_id = self.config.dataset_id.clone();
         let request = self.request_identity(Some(dataset_id.clone()));
+        if matches!(action, ExportAction::Preflight(_)) {
+            self.admin.export.selected = None;
+            self.admin.export.reviewed = false;
+            self.admin.export.error = None;
+            self.admin.export.retry = None;
+        }
         self.admin.export.pending = Some((request.request_id, action.clone()));
         self.admin.export.last_poll = Some(Instant::now());
         self.admin.export.notice = None;

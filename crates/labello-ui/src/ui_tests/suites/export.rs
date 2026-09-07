@@ -121,7 +121,10 @@ fn export_start_poll_download_failure_retry_and_history_use_live_commands() {
             .unwrap()
             .contains("Download requested")
     );
-    let restored = export_harness(api.clone());
+    let mut restored = export_harness(api.clone());
+    assert!(restored.state().admin.export.selected_job().is_none());
+    assert_eq!(restored.state().admin.export.options.classes.len(), 0);
+    click(&mut restored, "Export export-0: Archive ready");
     assert_eq!(
         restored.state().admin.export.selected_job().unwrap().phase,
         ExportPhase::Succeeded
@@ -144,6 +147,90 @@ fn export_start_poll_download_failure_retry_and_history_use_live_commands() {
             .filter(|c| *c == "download")
             .count(),
         2
+    );
+}
+
+#[test]
+fn export_reload_hides_terminal_diagnostics_restores_ready_history_and_allows_retry() {
+    let api = Rc::new(SpyApi::new());
+    let mut seed = export_harness(api.clone());
+    export_select_and_preflight(&mut seed);
+    let template = seed.state().admin.export.selected_job().unwrap().clone();
+
+    let mut failed = template.clone();
+    failed.job_id = "failed-export".into();
+    failed.phase = ExportPhase::Failed;
+    failed.failure = Some(labello_client::ExportFailure::Interrupted);
+    failed.created_at -= chrono::Duration::hours(2);
+    failed.updated_at = failed.created_at;
+
+    let mut blocked = template.clone();
+    blocked.job_id = "blocked-export".into();
+    blocked.phase = ExportPhase::Blocked;
+    blocked.failure = None;
+    blocked.created_at -= chrono::Duration::hours(1);
+    blocked.updated_at = blocked.created_at;
+
+    {
+        let mut state = api.state.borrow_mut();
+        state.export_jobs = vec![failed.clone(), blocked.clone()];
+    }
+    let mut fresh = export_harness(api.clone());
+    assert!(fresh.state().admin.export.selected_job().is_none());
+    assert_eq!(fresh.state().admin.export.jobs.len(), 2);
+    assert!(fresh
+        .query_by_label_contains("export was interrupted by a server restart")
+        .is_none());
+    assert!(fresh.query_by_label("This preflight cannot start").is_none());
+
+    click(&mut fresh, "Export failed-export: Failed");
+    assert_eq!(fresh.state().admin.export.selected.as_deref(), Some("failed-export"));
+    fresh.run_steps(3);
+    assert!(fresh
+        .query_by_label_contains("export was interrupted by a server restart")
+        .is_some());
+
+    {
+        let state = fresh.state_mut();
+        state.admin.export.error = Some("stale refresh error".into());
+        state.admin.export.notice = Some("stale export notice".into());
+    }
+    fresh.run_steps(2);
+    click(&mut fresh, "Retry export status");
+    step_until(&mut fresh, 12, |app| app.admin.export.pending.is_none());
+    assert!(fresh.state().admin.export.error.is_none());
+    assert!(fresh.state().admin.export.notice.is_none());
+    assert!(fresh.state().admin.export.selected_job().is_none());
+    assert!(fresh
+        .query_by_label_contains("export was interrupted by a server restart")
+        .is_none());
+
+    fresh.state_mut().admin.export.options.classes.clear();
+    export_select_and_preflight(&mut fresh);
+    assert_eq!(fresh.state().admin.export.selected_job().unwrap().phase, ExportPhase::Ready);
+
+    let mut active_ready = template;
+    active_ready.job_id = "active-ready".into();
+    active_ready.phase = ExportPhase::Ready;
+    active_ready.failure = None;
+    active_ready.created_at -= chrono::Duration::hours(3);
+    active_ready.updated_at = active_ready.created_at;
+    failed.created_at += chrono::Duration::hours(2);
+    failed.updated_at = failed.created_at;
+    blocked.created_at += chrono::Duration::hours(3);
+    blocked.updated_at = blocked.created_at;
+    {
+        let mut state = api.state.borrow_mut();
+        state.export_jobs = vec![active_ready, failed, blocked];
+    }
+    let restored = export_harness(api);
+    assert_eq!(
+        restored.state().admin.export.selected.as_deref(),
+        Some("active-ready")
+    );
+    assert_eq!(
+        restored.state().admin.export.selected_job().unwrap().phase,
+        ExportPhase::Ready
     );
 }
 
