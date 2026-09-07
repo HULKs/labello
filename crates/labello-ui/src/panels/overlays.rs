@@ -13,7 +13,7 @@ impl LabelloApp {
         };
         let screen = ctx.content_rect();
         let layout = LayoutMode::for_width(screen.width());
-        let shell_height = 56.0 + self.workspace_context_height(layout, screen.size());
+        let shell_height = 56.0 + self.workspace_context_height(ctx, layout, screen.size());
         let action_height = if layout == LayoutMode::Wide {
             0.0
         } else {
