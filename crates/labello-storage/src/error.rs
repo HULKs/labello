@@ -184,6 +184,15 @@ pub(crate) trait PathTomlEncode<T> {
     fn with_toml_encode_path(self, path: impl Into<PathBuf>) -> StorageResult<T>;
 }
 
+impl<T> PathTomlEncode<T> for Result<T, toml::ser::Error> {
+    fn with_toml_encode_path(self, path: impl Into<PathBuf>) -> StorageResult<T> {
+        self.map_err(|source| StorageError::TomlEncode {
+            path: path.into(),
+            source,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,14 +207,5 @@ mod tests {
             StorageError::AssignmentConflict("private-conflict-sentinel: /secret/path".into());
         assert_eq!(untrusted.kind(), "storage_assignment_conflict");
         assert_eq!(untrusted.safe_diagnostic(), None);
-    }
-}
-
-impl<T> PathTomlEncode<T> for Result<T, toml::ser::Error> {
-    fn with_toml_encode_path(self, path: impl Into<PathBuf>) -> StorageResult<T> {
-        self.map_err(|source| StorageError::TomlEncode {
-            path: path.into(),
-            source,
-        })
     }
 }

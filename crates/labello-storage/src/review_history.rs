@@ -459,7 +459,7 @@ mod tests {
         let base = now();
         let mut projection = Projection::default();
         for index in 0..1_000 {
-            let timestamp = base + std::time::Duration::from_secs(index as u64);
+            let timestamp = base + std::time::Duration::from_secs(index);
             let (image, observed) = observation(&format!("img-{index:04}"), index + 1, timestamp);
             projection.observe(image, observed);
         }
