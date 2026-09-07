@@ -283,7 +283,7 @@ impl LabelloApp {
                 60.0
             }
         } else if layout == LayoutMode::Compact && self.manual_migration_active() {
-            112.0
+            if Self::short_viewport(viewport) { 44.0 } else { 112.0 }
         } else if Self::short_viewport(viewport) || layout == LayoutMode::Compact {
             60.0
         } else {

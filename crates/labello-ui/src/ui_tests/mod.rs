@@ -81,3 +81,5 @@ include!("suites/statistics_overlay.rs");
 include!("suites/review_context.rs");
 
 include!("suites/review_context_bar.rs");
+
+include!("suites/workspace_overflow.rs");

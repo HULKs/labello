@@ -100,7 +100,7 @@ impl ReviewContext {
             );
         }
         if self.revision_mode {
-            lines.push("Decision revision mode".to_string());
+            lines.push("Decision revision mode; geometry unchanged".to_string());
         }
         let decision = match self.decision {
             Some(ReviewDecision::Approved) => "Approved",
