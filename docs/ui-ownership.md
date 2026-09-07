@@ -247,3 +247,8 @@ show Error in the workspace status control, with the full error and annotation
 save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
+
+Revision reviews offer missing-object markers only after every captured object
+has an explicit staged decision. An early object rejection can still commit
+without markers; it does not invent decisions for unvisited objects. The commit
+guard rejects incomplete marker-bearing revisions before freezing retry state.

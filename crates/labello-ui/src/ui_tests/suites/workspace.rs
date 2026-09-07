@@ -2577,6 +2577,166 @@ fn enter_test_review_revision(app: &mut LabelloApp) {
     app.sync_review_selection();
 }
 
+fn two_object_review_revision_harness() -> Harness<'static, LabelloApp> {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(
+        &api,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.3,
+            height: 0.3,
+        }),
+        true,
+    );
+    let mut harness = loaded_review_harness(api);
+    enter_test_review_revision(harness.state_mut());
+    {
+        let app = harness.state_mut();
+        let task = app.selected_task().unwrap().clone();
+        let assignment_id = app.work.assignment.as_ref().unwrap().assignment_id.clone();
+        let mut second = app.work.annotations[0].clone();
+        second.annotation_id = labello_domain::AnnotationId::from("review_annotation_2");
+        app.work.annotations.push(second.clone());
+        let state = app.work.current_state.as_mut().unwrap();
+        state
+            .annotations
+            .insert(second.annotation_id.clone(), vec![second]);
+        let targets = state.review_targets(&task).unwrap();
+        let fingerprint = state.review_target_fingerprint(&task);
+        let context = state
+            .review_assignment_contexts
+            .get_mut(&assignment_id)
+            .unwrap();
+        context.targets = targets;
+        context.target_fingerprint = fingerprint;
+    }
+    harness.state_mut().work.review_index = 0;
+    harness.state_mut().sync_review_selection();
+    harness
+}
+
+#[test]
+fn review_revision_requires_complete_objects_before_missing_markers() {
+    let mut early_rejection = two_object_review_revision_harness();
+    early_rejection
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Rejected);
+    early_rejection.step();
+    assert!(!early_rejection.state().review_revision_object_decisions_complete());
+    assert!(early_rejection.query_by_label("Mark missing").is_none());
+    early_rejection.state_mut().work.missing_objects.placing = true;
+    early_rejection
+        .state_mut()
+        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
+            NormalizedPoint { x: 0.5, y: 0.5 },
+        ));
+    assert!(early_rejection.state().work.missing_objects.locations.is_empty());
+    early_rejection
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Rejected);
+    let early_commit = early_rejection
+        .state()
+        .work
+        .review_revision_commit
+        .as_ref()
+        .unwrap();
+    assert_eq!(early_commit.reviews.len(), 2);
+    assert!(early_commit.missing_objects.is_empty());
+    assert!(early_commit.reviews.iter().any(|review| matches!(
+        &review.target,
+        ReviewTarget::AnnotationVersion { annotation_id, .. }
+            if annotation_id == &labello_domain::AnnotationId::from("review_annotation")
+    )));
+    assert!(early_commit.reviews.iter().any(|review| matches!(
+        &review.target,
+        ReviewTarget::Task { .. }
+    )));
+    assert!(!early_commit.reviews.iter().any(|review| matches!(
+        &review.target,
+        ReviewTarget::AnnotationVersion { annotation_id, .. }
+            if annotation_id == &labello_domain::AnnotationId::from("review_annotation_2")
+    )));
+    assert!(matches!(
+        early_rejection.state().runtime.commands.back(),
+        Some(UiCommand::Review {
+            revision: Some(revision),
+            missing_objects: None,
+            ..
+        }) if revision.reviews.len() == 2
+    ));
+
+    let mut complete = two_object_review_revision_harness();
+    complete
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Approved);
+    complete
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Approved);
+    complete.step();
+    assert!(complete.state().review_revision_object_decisions_complete());
+    assert!(complete.state().missing_objects_final_phase());
+    complete.state_mut().work.missing_objects.placing = true;
+    complete
+        .state_mut()
+        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
+            NormalizedPoint { x: 0.5, y: 0.5 },
+        ));
+    assert_eq!(complete.state().work.missing_objects.locations.len(), 1);
+    complete
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Rejected);
+    let complete_commit = complete
+        .state()
+        .work
+        .review_revision_commit
+        .as_ref()
+        .unwrap();
+    assert_eq!(complete_commit.reviews.len(), 3);
+    assert_eq!(complete_commit.missing_objects.len(), 1);
+    assert!(complete_commit.reviews.iter().any(|review| matches!(
+        &review.target,
+        ReviewTarget::AnnotationVersion { annotation_id, .. }
+            if annotation_id == &labello_domain::AnnotationId::from("review_annotation_2")
+    )));
+    assert!(matches!(
+        complete.state().runtime.commands.back(),
+        Some(UiCommand::Review {
+            revision: Some(revision),
+            missing_objects: None,
+            ..
+        }) if revision.reviews.len() == 3 && revision.missing_objects.len() == 1
+    ));
+
+    let mut injected = two_object_review_revision_harness();
+    injected
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Rejected);
+    let class_id = injected.state().selected_task().unwrap().class_ids[0].clone();
+    injected.state_mut().work.missing_objects.locations.push(
+        labello_domain::MissingObjectLocation {
+            marker_id: 1,
+            class_id,
+            position: NormalizedPoint { x: 0.5, y: 0.5 },
+        },
+    );
+    injected.state_mut().runtime.commands.clear();
+    injected.state_mut().runtime.active_requests.clear();
+    injected.state_mut().work.active_operation_id = None;
+    let before = injected.state().runtime.commands.len();
+    injected
+        .state_mut()
+        .request_review(labello_domain::ReviewDecision::Rejected);
+    assert!(injected.state().work.review_revision_commit.is_none());
+    assert_eq!(injected.state().runtime.commands.len(), before);
+    assert!(injected
+        .state()
+        .runtime
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("Remove draft missing-object locations")));
+}
+
 #[test]
 fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_identical_commit() {
     let api = Rc::new(SpyApi::new());

@@ -67,6 +67,7 @@ impl LabelloApp {
 
     pub(crate) fn missing_objects_final_phase(&self) -> bool {
         self.view == AppView::Review
+            && (!self.review_revision_active() || self.review_revision_object_decisions_complete())
             && self.has_dataset_role(labello_domain::DatasetRole::Reviewer)
             && !self.manual_migration_active()
             && self.work.correction_draft.is_none()

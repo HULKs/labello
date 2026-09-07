@@ -171,5 +171,9 @@ The annotator receives read-only normalized guidance through correction until
 committed task resubmission. No proximity-based auto-resolution occurs. Later
 review can inspect historical locations, and a new rejection without locations
 has no active markers. Completed decision revisions use the same evidence
-policy; superseded records remain auditable. Markers never create annotation
+policy; superseded records remain auditable. Revision markers require explicit
+decisions for every captured object. Early rejection may commit without markers,
+but never fills in decisions for objects the reviewer has not visited. An
+incomplete marker-bearing revision is rejected locally before its retry request
+is frozen. Markers never create annotation
 versions or independently count as completed work.
