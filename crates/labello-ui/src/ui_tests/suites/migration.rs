@@ -1627,18 +1627,42 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
             }
             _ => panic!("expected resolved migration target"),
         };
-        state.reviews.push(labello_domain::ReviewRecord {
+        let review = labello_domain::ReviewRecord {
             review_id: labello_domain::ReviewId::generate(),
             target,
             reviewer_user_id: app.config.user_id.clone(),
             decision: labello_domain::ReviewDecision::Approved,
             timestamp: reviewed_at,
             comment: None,
-        });
+        };
+        state.reviews.push(review);
     }
     let outgoing = state.clone();
     let mut completed = outgoing.clone();
     let completed_at = reviewed_at + chrono::Duration::seconds(1);
+    let previous_round = labello_domain::ReviewRound {
+        event_id: labello_domain::EventId::from("migration-submitted-round"),
+        event_sequence: 1,
+        submitted_by: labello_domain::UserId::from("annotator"),
+    };
+    for review in &completed.reviews {
+        completed
+            .review_record_rounds
+            .insert(review.review_id.clone(), previous_round.event_id.clone());
+    }
+    completed
+        .review_rounds
+        .insert(task_id.clone(), previous_round.clone());
+    // Simulate a true new submission round. Wall-clock timestamps do not
+    // identify review generations after the review-revision rebase.
+    completed.review_rounds.insert(
+        task_id.clone(),
+        labello_domain::ReviewRound {
+            event_id: labello_domain::EventId::from("migration-resubmitted-round"),
+            event_sequence: previous_round.event_sequence + 1,
+            submitted_by: previous_round.submitted_by.clone(),
+        },
+    );
     let task = completed
         .task_states
         .entry(task_id.clone())
@@ -1649,12 +1673,10 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
     // A new active round must still disregard the preceding round's approvals.
     app.work.current_state = Some(completed.clone());
     assert_eq!(app.canonical_migration_review_index(), 0);
-    app.work
-        .current_state
-        .as_mut()
-        .unwrap()
-        .task_states
-        .remove(&task_id);
+    // Keep the outgoing captured state visible until the final confirmation
+    // command returns. Its previous round is still the one shown in the
+    // overview; `completed` is the fresh-round response for the next load.
+    app.work.current_state = Some(outgoing);
     let mut assignment = app.work.assignment.clone().unwrap();
     assignment.status = labello_domain::AssignmentStatus::Completed;
     assignment.updated_at = completed_at;
