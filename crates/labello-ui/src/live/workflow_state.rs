@@ -176,6 +176,10 @@ impl LabelloApp {
             Some(self.work.migration.clone())
         } else { None };
         let image_id = loaded.queued.image.image_id.clone();
+        let same_assignment = self.work.assignment.as_ref().is_some_and(|assignment| {
+            assignment.assignment_id == loaded.assignment.assignment_id
+        });
+        self.work.assignment_touched = same_assignment && self.assignment_has_work();
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);
         self.work.current = Some(loaded.queued);
