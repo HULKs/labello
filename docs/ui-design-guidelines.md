@@ -234,6 +234,12 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
+  Place daily activity above Per Task and contributor rankings/history before
+  Throughput. Use shared rounded cards, UTC period filters, and top-three podiums.
+  Keep Rank noninteractive; show acceptance as a percentage with review counts.
+  History uses a compact searchable people selector with stable widget identities
+  and colors assigned by selection order. Show avatars beside names with initials
+  fallback, and preserve keyboard access and full accessible names when truncating.
 
 ## Verification
 
