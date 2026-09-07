@@ -272,6 +272,9 @@ impl LabelloApp {
         if self.work_view() && self.selected_task().is_some() {
             actions.insert(1, AppBarAction::Tutorial);
         }
+        if self.can_admin() {
+            actions.insert(0, AppBarAction::Admin);
+        }
         if self.datasets.metadata.is_some() {
             actions.insert(0, AppBarAction::Statistics);
         }
@@ -285,6 +288,7 @@ impl LabelloApp {
         let enabled = action != AppBarAction::SignOut || !self.loading.logout;
         let selected = match action {
             AppBarAction::Statistics => self.navigation.statistics.open,
+            AppBarAction::Admin => self.view == AppView::Admin,
             AppBarAction::Setup => self.view == AppView::Setup,
             AppBarAction::Tutorial => self.work.show_tutorial,
             AppBarAction::Settings => self.work.show_settings,
@@ -402,6 +406,7 @@ impl LabelloApp {
     fn perform_app_bar_action(&mut self, action: AppBarAction) {
         match action {
             AppBarAction::Statistics => self.open_view(AppView::Stats),
+            AppBarAction::Admin => self.open_view(AppView::Admin),
             AppBarAction::Setup => self.open_view(AppView::Setup),
             AppBarAction::Tutorial => {
                 self.trigger_user_action(labello_domain::UserAction::OpenTutorial)
@@ -430,6 +435,19 @@ impl LabelloApp {
                     );
                     painter.rect_filled(bar, egui::CornerRadius::same(1), color);
                 }
+            }
+            AppBarAction::Admin => {
+                painter.add(egui::Shape::closed_line(
+                    vec![
+                        center + egui::vec2(0.0, -8.0),
+                        center + egui::vec2(7.0, -5.0),
+                        center + egui::vec2(6.0, 3.0),
+                        center + egui::vec2(0.0, 8.0),
+                        center + egui::vec2(-6.0, 3.0),
+                        center + egui::vec2(-7.0, -5.0),
+                    ],
+                    stroke,
+                ));
             }
             AppBarAction::Setup => {
                 painter.add(egui::Shape::line(

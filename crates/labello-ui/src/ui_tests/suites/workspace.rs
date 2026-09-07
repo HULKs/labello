@@ -1979,6 +1979,12 @@ fn annotator_and_reviewer_roles_are_independent_capabilities() {
             "unexpected unauthorized {label} destination"
         );
     }
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    harness.set_size(egui::vec2(1500.0, 780.0));
+    harness.step();
+    assert!(harness.query_by_label("Open admin").is_none());
+    assert!(harness.query_by_label("Open statistics").is_some());
 }
 
 #[test]

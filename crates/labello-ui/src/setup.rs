@@ -603,9 +603,6 @@ impl LabelloApp {
                 destinations.push((view, label));
             }
         }
-        if self.can_admin() {
-            destinations.push((AppView::Admin, "Admin"));
-        }
         destinations
     }
 
