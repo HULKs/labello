@@ -150,9 +150,11 @@ has been recorded.
   in every Setup section, with About last. Each section owns its heading;
   do not repeat a dataset-specific welcome banner above unrelated sections.
   Signed-out secondary navigation also puts About last.
-- **Workspace:** preserve tested canvas geometry and gestures; keep Pan, zoom,
-  and Fit visible; keep Pan mode active during approval decisions and return
-  primary drag to object editing during reviewer correction; place review phase
+- **Workspace:** preserve tested canvas geometry and gestures; keep Pan and Fit
+  visible, with Refocus for review and migration. Omit explicit zoom buttons and
+  percentage displays; keep configurable zoom actions and wheel, touchpad, and
+  pinch instructions in Settings. Keep Pan mode active during approval decisions
+  and return primary drag to object editing during reviewer correction; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
