@@ -234,6 +234,9 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
+  show acceptance as a percentage with review counts.
+  Show avatars beside names with initials
+  fallback, and preserve keyboard access and full accessible names when truncating.
 
 ## Verification
 

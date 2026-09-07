@@ -63,7 +63,11 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
                 harness
                     .get_by_role_and_label(
                         egui::accesskit::Role::Button,
-                        if compact { "Statistics" } else { "Open statistics" },
+                        if compact {
+                            "Statistics"
+                        } else {
+                            "Open statistics"
+                        },
                     )
                     .is_focused(),
                 "review={review}, compact={compact}, invoker={:?}",
@@ -71,6 +75,425 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
             );
         }
     }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn contributor_periods_and_history_preserve_statistics_workspace() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut avatar_texture = None;
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|ctx| {
+            let mut app = inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx);
+            app.datasets
+                .stats
+                .contributors
+                .as_mut()
+                .unwrap()
+                .get_mut(&UserId::from("contributor_4"))
+                .unwrap()
+                .github_user_id = Some("583231".into());
+            let texture = ctx.egui_ctx.load_texture(
+                "test-avatar",
+                egui::ColorImage::filled([16, 16], egui::Color32::BLUE),
+                Default::default(),
+            );
+            avatar_texture = Some(texture.id());
+            ctx.egui_ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new(("github-avatar", 583231_u64)), Some(texture))
+            });
+            app
+        });
+    harness.run_steps(3);
+    let epoch = harness.state().workspace_epoch;
+    let today = labello_domain::now().date_naive();
+    assert!(
+        harness
+            .query_by_label(&format!(
+                "{today}: 75 activities · 45 labeled · 30 reviewed"
+            ))
+            .is_some()
+    );
+    assert!(
+        harness
+            .query_by_label(&format!(
+                "{}: 0 activities · 0 labeled · 0 reviewed",
+                today - chrono::Days::new(1)
+            ))
+            .is_some()
+    );
+    assert_eq!(
+        harness.get_by_label("Period").rect().center().y,
+        harness.get_by_label("History graph").rect().center().y
+    );
+    assert_eq!(
+        harness.get_by_label("Period").rect().center().y,
+        harness
+            .get_by_label("(All recorded activity · UTC)")
+            .rect()
+            .center()
+            .y
+    );
+    assert!(
+        harness.get_by_label("Daily activity").rect().bottom()
+            < harness.get_by_label("Per Task").rect().top()
+    );
+    assert!(
+        harness.get_by_label("Throughput").rect().top()
+            > harness.get_by_label("Rankings").rect().bottom()
+    );
+    assert_eq!(
+        harness.get_by_label("3000 activities").rect().center().y,
+        harness.get_by_label("Activity for").rect().center().y
+    );
+    assert!(harness.query_by_label("Sort by Rank").is_none());
+    for (column, direction, first, last) in [
+        (
+            "Reviewed",
+            "Descending",
+            "Alexandra Long Contributor Name",
+            "Taylor",
+        ),
+        (
+            "Reviewed",
+            "Ascending",
+            "Taylor",
+            "Alexandra Long Contributor Name",
+        ),
+        (
+            "Person",
+            "Ascending",
+            "Alexandra Long Contributor Name",
+            "Taylor",
+        ),
+        (
+            "Acceptance",
+            "Descending",
+            "Alexandra Long Contributor Name",
+            "Taylor",
+        ),
+        (
+            "Labeled",
+            "Descending",
+            "Taylor",
+            "Alexandra Long Contributor Name",
+        ),
+    ] {
+        let label = format!("Sort by {column}");
+        harness.get_by_label(&label).scroll_to_me();
+        harness.run_steps(3);
+        harness.get_by_label(&label).click();
+        harness.run_steps(3);
+        assert_eq!(
+            harness.get_by_label(&label).value().as_deref(),
+            Some(direction)
+        );
+        let row_top = |name| {
+            harness
+                .query_all_by_label(name)
+                .find(|node| node.rect().height() == 44.0)
+                .unwrap()
+                .rect()
+                .top()
+        };
+        assert!(row_top(first) < row_top(last));
+        assert!(
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| { Some(shape.shape.texture_id()) == avatar_texture }),
+            "rankings must display the cached profile picture"
+        );
+    }
+    assert!(
+        harness
+            .query_by_label("Labeled: rank 1, Taylor, 600")
+            .is_some()
+    );
+    harness.get_by_label("Period").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Period").click();
+    harness.run_steps(3);
+    harness.get_by_label("Last week").click();
+    harness.run_steps(3);
+    assert!(
+        harness
+            .query_by_label("Labeled: rank 1, Taylor, 105")
+            .is_some()
+    );
+    harness.get_by_label("Activity for").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Activity for").click();
+    harness.run_steps(3);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Taylor")
+        .scroll_to_me();
+    harness.run_steps(3);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Taylor")
+        .click();
+    harness.run_steps(3);
+    assert_eq!(
+        harness.get_by_label("Activity for").value().as_deref(),
+        Some("Taylor")
+    );
+    harness.get_by_label("History graph").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("History graph").click();
+    harness.run_steps(3);
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
+        .scroll_to_me();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("1 · Taylor").is_some());
+    assert!(harness.query_by_label("2 · Charlie").is_some());
+    assert!(
+        harness
+            .query_by_label(&format!("{today}: 17 activities · 15 labeled · 2 reviewed"))
+            .is_some()
+    );
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
+            .rect()
+            .center()
+            .y,
+        harness.get_by_label("Acceptance").rect().center().y
+    );
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
+        .click();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("Clear").is_none());
+    assert!(
+        harness.get_by_label("Select all").rect().top()
+            >= harness
+                .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search people")
+                .rect()
+                .bottom()
+    );
+    let first_person = harness.get_by_label("Alexandra Long Contributor Name");
+    assert!(first_person.rect().width() <= 240.0);
+    assert!(first_person.rect().height() <= 36.0);
+    assert_eq!(
+        first_person.rect().left(),
+        harness.get_by_label("Sam").rect().left()
+    );
+    let taylor_id = harness.get_by_label("Taylor").accesskit_node().id();
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search people")
+        .focus();
+    harness.run_steps(2);
+    for letter in ["t", "A", "y", "L"] {
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search people")
+            .type_text(letter);
+        for _ in 0..3 {
+            harness.step();
+            assert!(
+                harness.output().shapes.iter().all(|shape| {
+                    !matches!(&shape.shape, egui::Shape::Text(text)
+                    if text.galley.text().contains("use of widget ID"))
+                }),
+                "search must not paint widget ID warnings"
+            );
+        }
+    }
+    assert!(harness.query_by_label("Taylor").is_some());
+    assert_eq!(
+        harness.get_by_label("Taylor").accesskit_node().id(),
+        taylor_id,
+        "filtering must preserve each person's widget identity"
+    );
+    assert!(harness.query_by_label("Sam").is_none());
+    harness.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    harness.key_press(egui::Key::Backspace);
+    harness.run_steps(3);
+    assert_eq!(
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::TextInput, "Search people")
+            .value()
+            .as_deref(),
+        Some("")
+    );
+    for name in ["Taylor", "Sam", "Taylor"] {
+        harness.get_by_label(name).scroll_to_me();
+        harness.run_steps(3);
+        harness.get_by_label(name).click();
+        harness.run_steps(3);
+        assert!(
+            harness
+                .query_by_role_and_label(egui::accesskit::Role::TextInput, "Search people")
+                .is_some(),
+            "multi-select must stay open"
+        );
+    }
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(3);
+    assert!(harness.state().navigation.statistics.open);
+    for label in ["1 · Charlie", "2 · Robin", "3 · Sam", "4 · Taylor"] {
+        assert!(harness.query_by_label(label).is_some(), "{label}");
+    }
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
+        .focus();
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    harness
+        .get_by_label("Alexandra Long Contributor Name")
+        .focus();
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(3);
+    assert!(
+        harness
+            .query_by_label("5 · Alexandra Long Contributor Name")
+            .is_some()
+    );
+    harness.get_by_label("Compare people").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Compare people").click();
+    harness.run_steps(3);
+    harness.get_by_label("Select all").focus();
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    assert_eq!(
+        harness.get_by_label("Compare people").value().as_deref(),
+        Some("0 selected")
+    );
+    harness.get_by_label("Select all").focus();
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    assert_eq!(
+        harness.get_by_label("Compare people").value().as_deref(),
+        Some("5 selected")
+    );
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(3);
+    assert!(harness.state().navigation.statistics.open);
+    harness.get_by_label("Acceptance").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Acceptance").click();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("History data").is_none());
+    assert!(
+        harness
+            .query_by_label(&format!("{today}: 17 activities · 15 labeled · 2 reviewed"))
+            .is_some(),
+        "activity selection must stay independent of history people and metric"
+    );
+    assert!(
+        harness
+            .query_all_by_label_contains("Taylor: 90.9% · 400/440")
+            .next()
+            .is_some()
+    );
+    for size in [
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+        egui::vec2(320.0, 320.0),
+    ] {
+        for scale in [1.0, 2.0, 3.0] {
+            harness
+                .input_mut()
+                .viewports
+                .get_mut(&egui::ViewportId::ROOT)
+                .unwrap()
+                .native_pixels_per_point = Some(scale);
+            harness.set_size(size);
+            harness.run_steps(3);
+            let close = harness.get_by_label("Close statistics");
+            let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size * scale);
+            assert!(
+                viewport.contains_rect(close.rect()),
+                "size={size:?} scale={scale} close={:?}",
+                close.rect()
+            );
+        }
+    }
+    harness.state_mut().auth_epoch += 1;
+    harness.run_steps(3);
+    assert!(harness.query_by_label("Sort by Rank").is_none());
+    assert!(harness.query_by_label("Sort by Labeled").is_some());
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
+            .is_none()
+    );
+    assert_eq!(
+        harness
+            .get_by_label("Period")
+            .accesskit_node()
+            .value()
+            .as_deref(),
+        Some("Overall")
+    );
+    assert_eq!(
+        harness.get_by_label("Activity for").value().as_deref(),
+        Some("All people")
+    );
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(3);
+    assert!(!harness.state().navigation.statistics.open);
+    assert_eq!(harness.state().workspace_epoch, epoch);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn history_people_filter_handles_overflow_without_id_warnings() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(390.0, 568.0))
+        .build_eframe(|ctx| inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx));
+    for index in 0..30 {
+        harness
+            .state_mut()
+            .datasets
+            .stats
+            .contributors
+            .as_mut()
+            .unwrap()
+            .insert(
+                UserId::from(format!("extra-{index}")),
+                labello_domain::ContributorStats {
+                    display_name: format!("Person {index:02} with a name longer than the menu"),
+                    history: Vec::new(),
+                    ..Default::default()
+                },
+            );
+    }
+    harness.run_steps(3);
+    harness.get_by_label("History graph").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("History graph").click();
+    harness.run_steps(3);
+    harness.get_by_label("Compare people").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Compare people").focus();
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    harness.get_by_label("Search people").focus();
+    harness.run_steps(2);
+    for letter in ["p", "e", "r", "s", "o", "n", " ", "2", "9", "x"] {
+        harness.get_by_label("Search people").type_text(letter);
+        for _ in 0..3 {
+            harness.step();
+            assert!(
+                harness.output().shapes.iter().all(|shape| {
+                    !matches!(&shape.shape, egui::Shape::Text(text)
+                    if text.galley.text().contains("use of widget ID"))
+                }),
+                "filtered overflow must not paint widget ID warnings"
+            );
+        }
+    }
+    assert!(harness.query_by_label("No matching people").is_some());
 }
 
 #[test]

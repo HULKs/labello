@@ -2005,6 +2005,22 @@ async fn bbox_correction_is_terminal_idempotent_and_updates_quality_stats() {
     assert_eq!(stats.per_task[&task_id].rejected, 1);
     assert_eq!(stats.per_task[&task_id].reviewer_corrected, 1);
     assert_eq!(stats.per_task[&task_id].finalized, 1);
+    let contributors = stats.contributors.unwrap();
+    let history = &contributors[&annotator].history;
+    assert_eq!(history.iter().map(|day| day.labeled).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 1);
+    assert_eq!(history.iter().map(|day| day.rejected).sum::<usize>(), 1);
+    for reviewer in reviewers {
+        let history = &contributors[&reviewer].history;
+        assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 1);
+        assert_eq!(
+            history
+                .iter()
+                .map(|day| day.labeled + day.accepted + day.rejected)
+                .sum::<usize>(),
+            0
+        );
+    }
 }
 
 #[tokio::test]
@@ -2737,7 +2753,7 @@ async fn original_submitter_can_reopen_previous_review_and_commit_idempotently()
 
 #[tokio::test]
 async fn review_revision_reversals_are_atomic_idempotent_and_count_each_reviewer_once() {
-    let (temp, repo, image_id, task_id, _annotator, reviewers) =
+    let (temp, repo, image_id, task_id, annotator, reviewers) =
         correction_repo(AnnotationType::BoundingBox, false).await;
     let mut metadata = repo.load_dataset().await.unwrap();
     metadata.tasks[0].review.required_reviews = 2;
@@ -2784,7 +2800,11 @@ async fn review_revision_reversals_are_atomic_idempotent_and_count_each_reviewer
         .await
         .unwrap();
     let state = repo.load_image_state(&image_id).await.unwrap();
-    let replacement = revision_replacements(&state, &revision, ReviewDecision::Rejected);
+    let mut replacement = revision_replacements(&state, &revision, ReviewDecision::Rejected);
+    let staged_at = now() - std::time::Duration::from_secs(2 * 24 * 60 * 60);
+    for review in &mut replacement.reviews {
+        review.timestamp = staged_at;
+    }
     let (first, duplicate) = tokio::join!(
         repo.commit_review_revision(
             &reviewers[0],
@@ -2807,6 +2827,29 @@ async fn review_revision_reversals_are_atomic_idempotent_and_count_each_reviewer
     let rejected_stats = repo.dataset_stats().await.unwrap();
     assert_eq!(rejected_stats.rejected_tasks, 1);
     assert_eq!(rejected_stats.approved_tasks, 0);
+    let contributors = rejected_stats.contributors.as_ref().unwrap();
+    let reviewer_history = &contributors[&reviewers[0]].history;
+    assert_eq!(
+        reviewer_history
+            .iter()
+            .map(|day| day.reviewed)
+            .sum::<usize>(),
+        3
+    );
+    assert!(
+        reviewer_history
+            .iter()
+            .all(|day| day.day != staged_at.date_naive().to_string())
+    );
+    let author_history = &contributors[&annotator].history;
+    assert_eq!(
+        author_history.iter().map(|day| day.accepted).sum::<usize>(),
+        2
+    );
+    assert_eq!(
+        author_history.iter().map(|day| day.rejected).sum::<usize>(),
+        1
+    );
     assert!(
         rejected
             .superseded_review_ids
@@ -2834,6 +2877,31 @@ async fn review_revision_reversals_are_atomic_idempotent_and_count_each_reviewer
     let approved_stats = reopened_repo.dataset_stats().await.unwrap();
     assert_eq!(approved_stats.rejected_tasks, 0);
     assert_eq!(approved_stats.approved_tasks, 1);
+    let contributors = approved_stats.contributors.as_ref().unwrap();
+    assert_eq!(
+        contributors[&reviewers[0]]
+            .history
+            .iter()
+            .map(|day| day.reviewed)
+            .sum::<usize>(),
+        5
+    );
+    assert_eq!(
+        contributors[&annotator]
+            .history
+            .iter()
+            .map(|day| day.accepted)
+            .sum::<usize>(),
+        4
+    );
+    assert_eq!(
+        contributors[&annotator]
+            .history
+            .iter()
+            .map(|day| day.rejected)
+            .sum::<usize>(),
+        1
+    );
     assert_eq!(
         task_approval_count(
             &reopened_repo

@@ -67,6 +67,9 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/inspector.rs`: annotation, review, and adjudication controls;
 - `panels/workspace.rs`: central workspace and canvas controls;
 - `statistics.rs`: the dataset statistics modal and its existing metric renderer;
+  `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
+  podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
+  `statistics/avatar.rs` owns public avatar loading, caching and shared person rows;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;

@@ -19,6 +19,8 @@ Labello currently supports:
 - object-level approval review, full-image checks, and correction workflows;
 - dataset, task, class, text-tutorial, role, and keybinding administration;
 - filesystem image ingestion, duplicate detection, statistics, and snapshots;
+- dataset contributor leaderboards, top-three podiums and selectable user history
+  in Statistics, with labeling/review counts and acceptance percentages;
 - atomic new-dataset import for explicit YOLO detection/pose and COCO
   instances/keypoints ground-truth profiles;
 - original-image detection and pose dataset export with explicit

@@ -11,19 +11,21 @@ impl DatasetRepository {
         let mut workers = tokio::task::JoinSet::new();
         for image_id in image_ids.by_ref().take(MAX_STATS_SCAN_WORKERS) {
             let repository = self.clone();
-            workers.spawn(async move { repository.load_image_state(&image_id).await });
+            workers.spawn(async move { repository.load_image_state_with_events(&image_id).await });
         }
 
         while let Some(result) = workers.join_next().await {
-            let state = result.map_err(|error| {
+            let (state, events) = result.map_err(|error| {
                 crate::StorageError::BackgroundTask(format!(
                     "dataset statistics worker failed: {error}"
                 ))
             })??;
             aggregation.record_image(&metadata, &state);
+            aggregation.record_contributors(&state, &events);
             if let Some(image_id) = image_ids.next() {
                 let repository = self.clone();
-                workers.spawn(async move { repository.load_image_state(&image_id).await });
+                workers
+                    .spawn(async move { repository.load_image_state_with_events(&image_id).await });
             }
         }
 

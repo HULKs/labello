@@ -8,6 +8,10 @@ use crate::{
     theme,
 };
 
+mod avatar;
+mod leaderboard;
+pub(crate) use leaderboard::LeaderboardState;
+
 impl LabelloApp {
     pub(crate) fn statistics_visible(&self) -> bool {
         self.navigation.statistics.open || self.view == AppView::Stats
@@ -274,6 +278,15 @@ impl LabelloApp {
                 }
             });
         }
+        self.datasets.leaderboard.show_activity(
+            ui,
+            &self.datasets.stats,
+            (
+                &self.config.dataset_id,
+                &self.config.user_id,
+                self.auth_epoch,
+            ),
+        );
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Per Task");
@@ -358,6 +371,9 @@ impl LabelloApp {
                     });
             }
         });
+        ui.add_space(theme::SPACE_5);
+        self.datasets.leaderboard.show(ui, &self.datasets.stats);
+        ui.add_space(theme::SPACE_3);
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Throughput");
