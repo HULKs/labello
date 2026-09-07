@@ -1168,7 +1168,42 @@ fn statistics_preset() -> LabelloApp {
         migration: Default::default(),
         import_coverage: Default::default(),
         assignment_balance: None,
-        contributors: None,
+        contributors: Some(
+            (0..5)
+                .map(|index| {
+                    let user_id = UserId::from(format!("contributor_{index}"));
+                    let history = (0..40)
+                        .map(|day| {
+                            let activity = [1, 0, 1, 3, 0, 0, 2][(39 - day) as usize % 7];
+                            labello_domain::ContributorDay {
+                                day: (labello_domain::now().date_naive()
+                                    - chrono::Days::new(39 - day))
+                                .to_string(),
+                                labeled: (index + 1) * 3 * activity,
+                                reviewed: (5 - index) * 2 * activity,
+                                accepted: (index + 1) * 2 * activity,
+                                rejected: usize::from(index > 0) * activity,
+                            }
+                        })
+                        .collect();
+                    (
+                        user_id,
+                        labello_domain::ContributorStats {
+                            display_name: [
+                                "Alexandra Long Contributor Name",
+                                "Sam",
+                                "Robin",
+                                "Charlie",
+                                "Taylor",
+                            ][index]
+                                .into(),
+                            history,
+                            ..Default::default()
+                        },
+                    )
+                })
+                .collect(),
+        ),
     };
     app.datasets.last_stats_completion =
         Some(web_time::Instant::now() + web_time::Duration::from_secs(100 * 365 * 24 * 60 * 60));

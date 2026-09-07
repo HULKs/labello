@@ -234,6 +234,61 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
+  Contributor statistics add Leaderboard and History graph views after Per Class;
+  Throughput follows them. Put the period selector beside the view tabs,
+  wrapping on narrow screens. Place the period's UTC range in parentheses beside
+  the Period control. Both use Last day, Last week, Last month,
+  Last 3 months, Last year and Overall periods. Periods include today and use UTC calendar boundaries;
+  Last day begins at 00:00 UTC, Last week includes seven dates, and month/year
+  ranges begin one day after the corresponding prior calendar date (clamped to
+  month end). Existing dataset totals keep their existing all-time meanings.
+  Show top-three podiums for labeled tasks, review decisions and acceptance,
+  plus a ranked user table (stacked rows on compact layouts). Each podium and
+  the rankings table use the same rounded card frame and border as Per Task.
+  Show circular GitHub avatars beside ranking names, in both people selectors,
+  and in the History legend; use larger avatars above podium bars with the crown
+  above first place. Keep names accessible and menu rows compact. Use initials
+  for local accounts, pending downloads, and unavailable pictures. Avatar loading
+  must not alter selection order or graph colors. Fetch public thumbnails from
+  GitHub without browser credentials and cache them for the UI session.
+  Rank is a noninteractive heading. Sort by clicking Person, Labeled, Reviewed
+  or Acceptance headers; a second click reverses direction, shown by an arrow
+  and accessible value.
+  Numeric columns initially sort highest first; Person initially sorts
+  ascending. Rank follows the last selected numeric metric; unrated entries stay
+  last when sorting metrics. Sorting does not change the History metric.
+  On compact stacked layouts, keep the same sorting controls above the rows.
+  Podium bars use three blue shades, rounded corners, and a crown above first
+  place. Acceptance is
+  accepted / (accepted + rejected), accompanied by sample counts; no reviews
+  means no rating. Equal scores share rank, acceptance ties list larger samples
+  first, and stable user IDs resolve remaining ordering. Zero-activity users
+  do not fill podium places. History compares selected people using cumulative
+  totals, including earlier work, through each UTC day. Distinguish lines with
+  color and numbered legends/markers. Put the people dropdown beside the history
+  metric controls, wrapping as needed. Use a narrow, tall dropdown with compact,
+  left-aligned selectable rows and a named search field. Select all follows the
+  search field; it selects everyone, or clears everyone when all are selected.
+  Long names truncate with an ellipsis and retain full tooltips/accessibility names.
+  Filtering preserves each person's widget identity as rows move or disappear.
+  The History menu uses 36-point rows with 4-point gaps for the requested density;
+  palette slots follow selection order, with newly selected people appended and
+  remaining people keeping their relative order after removal. Expose history
+  values through pointer inspection and per-date accessibility labels, without
+  a separate data table. Dataset/account changes clear selections and search.
+  Place Daily activity above Per Task. It uses one blue squircle per UTC day,
+  with 2-point gaps and borderless empty cells, summing labeled tasks and review
+  decisions made; acceptance outcomes received are not counted again. It follows
+  the selected period. Its own Activity for selector offers All people or an
+  individual contributor, independently of History's comparison selection.
+  Put the activity total beside the user selector, omitting the repeated user name;
+  explain the total in its tooltip. Place each year on its calendar's month-label
+  row instead of reserving a separate heading row. Wrap the header when needed.
+  Dataset/account changes reset it to All people. Display yearly calendar strips with
+  Monday-first weeks, month labels, and no future/padding cells.
+  Overall begins January 1 of the earliest recorded year. All displayed years
+  share one intensity scale; cell tooltips/accessibility names give exact dates,
+  labels and reviews. Keep cells legible with horizontal scrolling on narrow screens.
 
 ## Verification
 
