@@ -232,5 +232,9 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
-Touched assignments keep the existing confirmation. Next/previous assignment
-rules are unchanged. Statistics continues to use its assignment-preserving overlay.
+Touched assignments keep the existing confirmation. Review Previous uses the
+same touched-work check: untouched reviews release directly, while changed
+reviews require confirmation. After a successful release, it reopens the previous
+review. Release failure preserves the current work and reports the error. The
+Previous review control belongs to the workspace context toolbar, including
+migration and compact layouts. Statistics continues to use its assignment-preserving overlay.

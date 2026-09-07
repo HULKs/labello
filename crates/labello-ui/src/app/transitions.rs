@@ -26,6 +26,7 @@ impl LabelloApp {
             || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
             || self.work.correction_draft.is_some()
             || self.migration_has_unsaved_input()
+            || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty())
     }
 
     fn stage_transition(&mut self, transition: PendingTransition) {
@@ -112,7 +113,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn release_pending_transition(&mut self) {
-        if let Some(PendingTransition::PreviousAssignment(previous)) = self.work.pending_transition.clone() {
+        if self.view != AppView::Review
+            && let Some(PendingTransition::PreviousAssignment(previous)) = self.work.pending_transition.clone() {
             self.request_reopen_assignment(previous);
             return;
         }
@@ -182,9 +184,16 @@ impl LabelloApp {
         let Some(previous) = self.work.previous_assignment.clone() else {
             return;
         };
+        if self.view == AppView::Review && self.work.assignment.is_some() {
+            let needs_confirmation = self.assignment_has_work();
+            self.stage_transition(PendingTransition::PreviousAssignment(previous));
+            if !needs_confirmation {
+                self.request_release();
+            }
+            return;
+        }
         if self.work.assignment.is_some()
-            && (self.view == AppView::Review
-                || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
+            && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || (self.manual_migration_active() && self.migration_has_unsaved_input()))
         {
             self.stage_transition(PendingTransition::PreviousAssignment(previous));

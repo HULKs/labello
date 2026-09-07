@@ -2657,17 +2657,101 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
         harness.step();
         harness.step();
         let canvas = harness.get_by_label("Annotation canvas").rect();
-        assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", harness.get_by_label("Previous").rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
-        assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous").accesskit_node().is_disabled());
+        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous");
+        let context = harness.get_by_label("Workspace context bar").rect();
+        assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
+        assert!(context.contains_rect(previous.rect()), "Previous must remain in the context bar at {width}x{height}: context={context:?}, previous={:?}", previous.rect());
+        assert!(!previous.accesskit_node().is_disabled());
     }
     harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.step();
     harness.state_mut().start_correction();
     let draft = harness.state().work.correction_draft.clone().unwrap();
+    click(&mut harness, "Previous");
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    click(&mut harness, "Cancel");
+    assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
+    assert!(harness.state().work.pending_transition.is_none());
     harness.key_press(egui::Key::ArrowLeft);
     harness.step();
     assert!(harness.query_by_label("Switch active assignment?").is_some());
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
+}
+
+#[test]
+fn previous_review_button_releases_then_reopens_the_previous_assignment() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    let original_image = harness.state().work.assignment.as_ref().unwrap().image_id.clone();
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id != original_image)
+            && app.work.previous_assignment.is_some()
+            && !app.loading.saving
+    });
+    assert!(harness.query_by_label("Switch active assignment?").is_none());
+    let released_before_previous = api.counts().release_assignment;
+    let reopened_before_previous = api.counts().reopen_assignment;
+    let current_assignment_id = harness.state().work.assignment.as_ref().unwrap().assignment_id.clone();
+    let previous_assignment_id = harness.state().work.previous_assignment.as_ref().unwrap().assignment_id.clone();
+
+    click(&mut harness, "Previous");
+    assert!(api.counts().release_assignment > released_before_previous);
+    assert!(!api.has_active_assignment(&current_assignment_id));
+    assert!(harness.query_by_label("Switch active assignment?").is_none());
+    step_until(&mut harness, 20, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id == original_image)
+            && !app.loading.image
+            && !app.loading.saving
+    });
+
+    assert_eq!(api.counts().reopen_assignment, reopened_before_previous + 1);
+    assert_ne!(harness.state().work.assignment.as_ref().unwrap().assignment_id, previous_assignment_id);
+    assert!(harness.state().work.previous_assignment.is_none());
+}
+
+#[test]
+fn failed_review_previous_release_preserves_correction_and_does_not_reopen() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_review_harness(api.clone());
+    let first_image = ImageId::from("img_1");
+    let second_image = ImageId::from("img_2");
+    let mut second_state = api.state.borrow().states[&first_image].clone();
+    second_state.image_id = second_image.clone();
+    api.state.borrow_mut().states.insert(second_image, second_state);
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+
+    click(&mut harness, "Skip");
+    step_until(&mut harness, 16, |app| {
+        app.work.assignment.as_ref().is_some_and(|assignment| assignment.image_id == ImageId::from("img_2"))
+            && app.work.previous_assignment.is_some()
+            && app.current_review_annotation().is_some()
+    });
+    harness.state_mut().start_correction();
+    let draft = harness.state().work.correction_draft.clone().unwrap();
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    let previous = harness.state().work.previous_assignment.clone();
+    api.state.borrow_mut().fail_next_release = true;
+
+    click(&mut harness, "Previous");
+    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    click(&mut harness, "Release and switch");
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+
+    assert_eq!(api.counts().reopen_assignment, 0);
+    assert_eq!(harness.state().work.assignment.as_ref(), Some(&assignment));
+    assert_eq!(harness.state().work.previous_assignment, previous);
+    assert_eq!(harness.state().work.correction_draft, Some(draft));
+    assert!(harness.state().runtime.error.as_deref().is_some_and(|error| error.contains("release failed")));
     assert!(harness.state().work.pending_transition.is_none());
 }
 

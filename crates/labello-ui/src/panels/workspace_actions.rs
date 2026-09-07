@@ -12,7 +12,6 @@ impl LabelloApp {
         if !self.work_view() {
             return;
         }
-        self.previous_review_action(ui);
         if self.manual_migration_active() {
             if self.view == AppView::Review && layout != LayoutMode::Wide {
                 self.responsive_migration_review_actions(ui);
@@ -135,7 +134,6 @@ impl LabelloApp {
         if self.manual_migration_active() {
             if self.view == AppView::Review {
                 ui.horizontal_wrapped(|ui| {
-                    self.previous_review_action(ui);
                     self.responsive_migration_review_actions(ui);
                 });
                 return;
@@ -147,7 +145,6 @@ impl LabelloApp {
         }
         if self.view == AppView::Review && self.work.correction_draft.is_none() {
             ui.horizontal_wrapped(|ui| {
-                self.previous_review_action(ui);
                 let review_layout = self.compact_review_row_layout(ui);
                 self.review_decision_buttons(ui, review_layout.shortcut_decisions, true);
             });
@@ -158,7 +155,6 @@ impl LabelloApp {
             && !self.loading.image
             && self.work.pending_transition.is_none();
         let add_contents = |ui: &mut egui::Ui| {
-            self.previous_review_action(ui);
             if self.view == AppView::Annotate
                 && theme::primary_button(ui, ready, egui::Button::new("Submit & next")).clicked()
             {

@@ -117,7 +117,8 @@ impl LabelloApp {
             return;
         };
         if self.loading.saving && !self.assignment_has_work()
-            && matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_)) {
+            && (matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_))
+                || (self.view == AppView::Review && matches!(pending, PendingTransition::PreviousAssignment(_)))) {
             return;
         }
         let current = self
