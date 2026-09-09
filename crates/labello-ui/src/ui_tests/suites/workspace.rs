@@ -4359,6 +4359,25 @@ fn review_item_decisions_are_local_and_overview_submits_the_accumulated_correcti
 }
 
 #[test]
+fn overview_navigation_keeps_corrections_submittable_without_a_separate_reject() {
+    let mut harness = two_object_review_revision_harness();
+    edit_test_review_box(harness.state_mut());
+    harness.state_mut().navigate_review_item(2);
+    assert!(harness.state().review_overview());
+    assert!(!harness.state().review_can_approve());
+    assert!(!harness.state().review_can_reject(), "unchanged second item still needs approval");
+    harness.state_mut().navigate_review_item(1);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
+    harness.run_steps(2);
+    assert!(harness.state().review_overview());
+    assert!(harness.state().review_can_reject());
+    assert!(!harness.state().review_can_approve());
+    assert!(harness.state().work.review_corrections.submission.is_none());
+    assert!(harness.state_mut().reject_review_item());
+    assert!(matches!(harness.state().runtime.commands.back(), Some(UiCommand::Correction { .. })));
+}
+
+#[test]
 fn resetting_an_earlier_correction_requires_a_new_item_decision() {
     let mut harness = two_object_review_revision_harness();
     edit_test_review_box(harness.state_mut());

@@ -185,14 +185,16 @@ has been recorded.
   alone is not a correction. The second-bar indicator leads with item position or
   Image overview, followed by workflow, class and geometry type. Its panel icon and
   selected state reflect Inspector visibility, and activating it toggles the panel.
+  Size the indicator to its text and panel icon, capped by the available width.
   Long identity text truncates within the indicator while the tooltip and Inspector
   retain the complete accessible identity. Keep the current position visible when
   corrections exist. Put Discard corrections immediately after Previous in the
   second bar, using Discard in compact layouts.
   Approve and Reject evaluate the focused item independently. An unchanged item
   enables Approve; a valid correction enables Reject. Reject retains changes locally
-  and advances. Previous item, Next item and Overview navigate without recording a
-  decision. Reset item restores the original annotation or disposition and requires
+  and advances. Previous item, Next item and Overview retain valid corrections, which
+  satisfy the corrected item's rejection requirement. Unchanged items still require
+  explicit approval. Reset item restores the original annotation or disposition and requires
   another decision. Discard corrections resets every changed item for review.
   The overview permits drawing missing annotations and revisiting existing items.
   Once every original item has a decision, Submit approval is enabled if no

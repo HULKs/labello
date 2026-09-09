@@ -163,7 +163,9 @@ configuration field remains readable but no longer gates approval review.
 The review UI edits the focused item directly. Approve is available for an
 unchanged item; Reject retains a valid correction locally and advances. Earlier
 corrections do not disable approval of another unchanged item. Reset restores the
-item and requires a new decision. Navigation alone records no decision.
+item and requires a new decision. A valid retained correction satisfies that item's
+rejection requirement when navigating to the overview; unchanged items still need
+explicit approval. Navigation alone does not approve items.
 The final overview permits adding missing annotations and revisiting existing
 items. Once every original item has a decision, it submits approval if there are
 no corrections, or submits the complete correction batch with rejection. Invalid

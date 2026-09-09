@@ -33,6 +33,15 @@ impl LabelloApp {
     }
 
     fn review_target_decided(&self, target: &ReviewTarget) -> bool {
+        if self
+            .work
+            .review_corrections
+            .changes
+            .iter()
+            .any(|change| self.change_matches_target(change, target))
+        {
+            return true;
+        }
         if self.work.review_corrections.needs_review.contains(target) {
             return false;
         }

@@ -81,6 +81,10 @@ impl ReviewBarText {
             lines.push(layout(format!("{kind} · {phase}"), false));
         }
         let height = (lines.iter().map(|line| line.size().y).sum::<f32>() + 8.0).max(44.0);
+        let content_width = lines.iter().enumerate().map(|(index, line)| {
+            line.size().x + if index == 0 && availability_loading { 24.0 } else { 0.0 }
+        }).fold(0.0_f32, f32::max);
+        let width = (content_width.ceil() + 44.0).min(width);
         Self {
             lines,
             width,

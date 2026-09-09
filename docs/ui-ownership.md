@@ -272,7 +272,9 @@ migration and compact layouts. Statistics continues to use its assignment-preser
 
 Normal and revision review use the same correction owner. Its interaction module
 owns item position, locally decided targets, targets requiring another decision,
-editor validity, navigation, reset, and aggregate overview eligibility. Ordinary
+editor validity, navigation, reset, and aggregate overview eligibility. Valid retained
+corrections satisfy their target's rejection requirement without a separate item
+decision; unchanged targets still require approval. Ordinary
 unchanged-item approvals retain the existing server command; corrected-item
 rejections remain local until overview submission. Revision approvals retain their
 existing staged decision owner. Opening the automatic editor does not mark work
