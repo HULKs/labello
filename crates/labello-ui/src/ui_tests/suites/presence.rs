@@ -1,6 +1,7 @@
 fn presence_sample() -> labello_client::ServerPresence {
     labello_client::ServerPresence { users: vec![labello_client::PresentUser {
         user_id: UserId::from("alexandria_long_username"),
+        github_login: None,
         datasets: vec![labello_client::PresenceDataset { dataset_id: DatasetId::from("other"), name: "Another dataset".into() }],
     }] }
 }
@@ -86,7 +87,7 @@ fn presence_header_overflows_and_exposes_details_without_a_footer() {
         harness
             .query_by_role_and_label(
                 egui::accesskit::Role::Button,
-                "Labelling presence: You are alone :(",
+                "Labelling presence: No active labellers",
             )
             .is_some()
     );
@@ -175,4 +176,78 @@ fn presence_and_connection_details_keep_keyboard_focus_across_header_layouts() {
         harness.step();
     }
     assert_eq!(harness.state().work.assignment, assignment);
+}
+
+#[test]
+fn presence_includes_self_deduplicates_by_id_and_uses_handles_in_details() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    let mut sample = presence_sample();
+    sample.users[0].user_id = app.config.user_id.clone();
+    sample.users[0].github_login = Some("octocat".into());
+    sample.users.push(sample.users[0].clone());
+    app.runtime.presence = Default::default();
+    app.request_presence();
+    let request = app.runtime.commands.back().unwrap().request().clone();
+    app.accept_presence(request, Ok(sample));
+    assert_eq!(app.runtime.presence.value.as_ref().unwrap().users.len(), 1);
+    harness.step();
+    let label = "Labelling presence: @octocat: Another dataset";
+    assert!(harness.query_by_label(label).is_some());
+    assert!(harness.query_by_label_contains("No active labellers").is_none());
+    assert!(harness.query_by_label_contains("You are alone").is_none());
+    click_accesskit_button(&mut harness, label);
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Label,
+        "@octocat: Another dataset").is_some());
+    harness.key_press(egui::Key::Escape);
+    // Matching presentation names must not collapse different identities.
+    let app = harness.state_mut();
+    let sample = app.runtime.presence.value.as_mut().unwrap();
+    let mut other = sample.users[0].clone();
+    other.user_id = UserId::from("different_id");
+    sample.users.push(other);
+    app.request_presence();
+    let request = app.runtime.commands.back().unwrap().request().clone();
+    let sample = app.runtime.presence.value.clone().unwrap();
+    app.accept_presence(request, Ok(sample));
+    assert_eq!(app.runtime.presence.value.as_ref().unwrap().users.len(), 2);
+}
+
+#[test]
+fn presence_counts_and_animation_keep_header_geometry_and_accessible_names_stable() {
+    fn text_in(shape: &egui::Shape, expected: &str) -> bool {
+        match shape {
+            egui::Shape::Text(text) => text.galley.job.text == expected,
+            egui::Shape::Vec(shapes) => shapes.iter().any(|shape| text_in(shape, expected)),
+            _ => false,
+        }
+    }
+    let mut app = LabelloApp::default();
+    let mut sample = presence_sample();
+    sample.users[0].github_login = Some("a-very-long-github-handle-for-testing".into());
+    app.runtime.presence.value = Some(sample);
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(190.0, 60.0))
+        .build_ui_state(|ui, app: &mut LabelloApp| app.presence_summary(ui), app);
+    harness.step();
+    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "1 person is labelling")));
+    let users = &mut harness.state_mut().runtime.presence.value.as_mut().unwrap().users;
+    let mut other = users[0].clone();
+    other.user_id = "another_user".into();
+    users.push(other);
+    harness.step();
+    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "2 people are labelling")));
+    harness.set_size(egui::vec2(1200.0, 60.0));
+    harness.step();
+    let rect = harness.get_by_label_contains("Labelling presence:").rect();
+    let label = harness.get_by_label_contains("Labelling presence:").accesskit_node().label().unwrap().to_owned();
+    crate::set_reduced_motion(&harness.ctx, false);
+    for time in [0.1, 0.5, 1.0, 1.5, 3.0, 8.1, 9.0] {
+        harness.input_mut().time = Some(time);
+        harness.step();
+        assert_eq!(harness.get_by_label(&label).rect(), rect);
+    }
+    crate::set_reduced_motion(&harness.ctx, true);
+    harness.step();
+    assert_eq!(harness.get_by_label(&label).rect(), rect);
 }

@@ -12,6 +12,52 @@ use crate::{
 
 const INTERVAL: Duration = Duration::from_secs(10);
 
+/// Integrations without a motion preference adapter keep decorative motion off.
+pub fn set_reduced_motion(ctx: &egui::Context, reduced: bool) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("reduced-motion"), reduced));
+    ctx.request_repaint();
+}
+
+fn presence_text(ui: &egui::Ui, text: &str, animate: bool) -> std::sync::Arc<egui::Galley> {
+    let mut galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        egui::TextStyle::Body.resolve(ui.style()),
+        theme::TEXT_MUTED,
+    );
+    let reduced = ui.ctx().data(|data| {
+        data.get_temp::<bool>(egui::Id::new("reduced-motion"))
+            .unwrap_or(true)
+    });
+    if !animate || reduced || !ui.is_visible() {
+        return galley;
+    }
+    // Two seconds of smooth brightening, then six seconds with no motion.
+    let phase = ui.input(|input| input.time).rem_euclid(8.0);
+    if phase >= 2.0 {
+        ui.ctx()
+            .request_repaint_after(Duration::from_secs_f64(8.0 - phase));
+        return galley;
+    }
+    ui.ctx().request_repaint_after(Duration::from_millis(33));
+    brighten_presence_text(std::sync::Arc::make_mut(&mut galley), phase as f32 / 2.0);
+    galley
+}
+
+fn brighten_presence_text(galley: &mut egui::Galley, progress: f32) {
+    let band = 28.0;
+    let center = egui::lerp(-band..=galley.size().x + band, progress);
+    for placed in &mut galley.rows {
+        let row = std::sync::Arc::make_mut(&mut placed.row);
+        for vertex in &mut row.visuals.mesh.vertices {
+            // Tilt the band slightly while leaving glyph geometry and UVs untouched.
+            let x = vertex.pos.x + placed.pos.x + (vertex.pos.y + placed.pos.y) * 0.2;
+            let distance = ((x - center) / band).abs().min(1.0);
+            let weight = (1.0 + (distance * std::f32::consts::PI).cos()) * 0.5;
+            vertex.color = theme::TEXT_MUTED.lerp_to_gamma(theme::TEXT, weight * 0.22);
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct PresenceState {
     pub identity: Option<(String, UserId)>,
@@ -105,9 +151,6 @@ impl LabelloApp {
         state.pending_request = None;
         match result {
             Ok(mut value) => {
-                value
-                    .users
-                    .retain(|user| user.user_id != self.config.user_id);
                 value.users.sort_by(|a, b| a.user_id.cmp(&b.user_id));
                 value.users.dedup_by(|a, b| a.user_id == b.user_id);
                 state.value = Some(value);
@@ -135,15 +178,16 @@ impl LabelloApp {
             .unwrap_or_default();
         let names = users
             .iter()
-            .map(|u| u.user_id.as_str())
+            .map(PresentUser::presence_name)
             .collect::<Vec<_>>()
             .join(" · ");
+        let mut shows_names = false;
         let label = if state.failures >= 3 {
             "Presence unavailable".to_owned()
         } else if state.value.is_none() {
             "Checking presence…".to_owned()
         } else if users.is_empty() {
-            "You are alone :(".to_owned()
+            "No active labellers".to_owned()
         } else {
             let font = egui::TextStyle::Body.resolve(ui.style());
             if ui
@@ -153,6 +197,7 @@ impl LabelloApp {
                 .x
                 <= ui.available_width() - 2.0 * ui.spacing().button_padding.x
             {
+                shows_names = true;
                 names
             } else {
                 if users.len() == 1 {
@@ -177,15 +222,18 @@ impl LabelloApp {
             .size()
             .x
             + 2.0 * ui.spacing().button_padding.x;
+        let text: egui::WidgetText = if shows_names {
+            presence_text(ui, &label, true).into()
+        } else {
+            egui::RichText::new(&label).color(theme::TEXT_MUTED).into()
+        };
         let response = ui
             .scope_builder(
                 egui::UiBuilder::new().id(egui::Id::new("workspace-presence")),
                 |ui| {
                     ui.add_sized(
                         [label_width.min(ui.available_width()), 44.0],
-                        egui::Button::new(egui::RichText::new(label).color(theme::TEXT_MUTED))
-                            .frame(false)
-                            .truncate(),
+                        egui::Button::new(text).frame(false).truncate(),
                     )
                 },
             )
@@ -288,7 +336,7 @@ impl LabelloApp {
 fn user_detail(user: &PresentUser) -> String {
     format!(
         "{}: {}",
-        user.user_id,
+        user.presence_name(),
         user.datasets
             .iter()
             .map(|d| d.name.as_str())
@@ -304,4 +352,65 @@ fn workspace_status_details(ui: &mut egui::Ui, details: &str) {
         .show(ui, |ui| {
             ui.add(egui::Label::new(details).wrap());
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(ctx: &egui::Context, time: f64, animate: bool) -> std::sync::Arc<egui::Galley> {
+        let mut text = None;
+        let _ = ctx.run_ui(
+            egui::RawInput {
+                time: Some(time),
+                ..Default::default()
+            },
+            |ui| text = Some(presence_text(ui, "@octocat · local_reviewer", animate)),
+        );
+        text.unwrap()
+    }
+
+    #[test]
+    fn presence_sweep_changes_only_glyph_color_and_honors_motion_changes() {
+        let ctx = egui::Context::default();
+        let baseline = sample(&ctx, 0.0, true);
+        // Unknown integration preferences keep text static.
+        assert_eq!(baseline, sample(&ctx, 1.0, true));
+        set_reduced_motion(&ctx, false);
+        let animated = sample(&ctx, 1.1, true);
+        assert_ne!(baseline, animated);
+        assert_eq!(baseline.job, animated.job);
+        assert_eq!(baseline.rect, animated.rect);
+        assert_eq!(baseline.mesh_bounds, animated.mesh_bounds);
+        for (before, after) in baseline.rows.iter().zip(&animated.rows) {
+            assert_eq!(before.pos, after.pos);
+            assert_eq!(before.glyphs, after.glyphs);
+            assert_eq!(before.visuals.mesh.indices, after.visuals.mesh.indices);
+            for (a, b) in before
+                .visuals
+                .mesh
+                .vertices
+                .iter()
+                .zip(&after.visuals.mesh.vertices)
+            {
+                assert_eq!(a.pos, b.pos);
+                assert_eq!(a.uv, b.uv);
+                for (base, color) in a.color.to_array().into_iter().zip(b.color.to_array()) {
+                    assert!(color >= base && color <= base.saturating_add(18));
+                }
+            }
+        }
+        assert_eq!(
+            baseline,
+            sample(&ctx, 1.2, false),
+            "counts and status text stay static"
+        );
+        assert_eq!(baseline, sample(&ctx, 4.0, true), "idle interval is static");
+        set_reduced_motion(&ctx, true);
+        assert_eq!(
+            baseline,
+            sample(&ctx, 9.1, true),
+            "preference changes stop the sweep"
+        );
+    }
 }
