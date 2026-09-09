@@ -234,7 +234,16 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
-  show acceptance as a percentage with review counts.
+  Show Daily activity and contributor rankings before dataset totals, assignment
+  balance, task/class breakdowns, and throughput. Below 850 points of content
+  width, collapse podium highlights above Rankings and use simple ranked rows
+  when expanded. Keep period controls beside activity and rankings; they share
+  the selected period. Provide a keyboard- and touch-operated Activity day
+  selector and Previous/Next day buttons with visible counts, alongside calendar
+  hover details. At enlarged browser zoom, stack the modal header and selector
+  labels, and use one sorting column when two no longer fit. Keep history
+  comparison controls below the metric choices and selected names in bounded rows.
+  Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
   fallback, and preserve keyboard access and full accessible names when truncating.
 

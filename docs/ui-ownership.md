@@ -186,6 +186,12 @@ failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
 Statistics data, remote status, and active request identity remain dataset-owned.
+The shared statistics renderer orders activity and rankings before aggregates.
+Dataset-owned leaderboard state retains the shared period, contributor filters,
+history selection and selected activity day. The day selector exposes calendar
+counts without hover and clamps to the current period after a period change.
+The modal scroll owner brings newly keyboard-focused content controls into view;
+its fixed header and separate popup layers keep their own placement.
 The navigation-owned modal does not perform an assignment transition or start a
 workspace epoch. Refresh uses the existing request/epoch gate and may run while
 assignment requests are active. Authentication/workspace invalidation dismisses
