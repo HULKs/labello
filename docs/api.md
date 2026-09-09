@@ -94,7 +94,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
-| `GET /presence` | Authenticated, server-wide | No input → other active lease holders and their dataset IDs/names; `ServerPresence`, `Cache-Control: no-store` |
+| `GET /presence` | Authenticated, server-wide | No input → active lease holders, optional GitHub logins, and their dataset IDs/names; `ServerPresence`, `Cache-Control: no-store` |
 | `GET /health` | Public | No input → `{"ok":true,"service":"labello"}` |
 | `GET /build-information` | Public, no session or CSRF token | No input → compiled artifact `releaseTag` and `sourceCommit`, independently of readiness; `Cache-Control: no-store` |
 | `GET /deployment/readiness` | Public; production API is loopback-bound | No input → bounded release identity, schema version, dataset-root traversal, and authentication-store load state; HTTP 503 when a probe fails |
@@ -455,10 +455,15 @@ Dataset-wide `DatasetStats` semantics remain unchanged.
 ## Server presence
 
 Authenticated `GET /presence` returns `ServerPresence` with `Cache-Control:
-no-store`. Each `PresentUser` contains a username (`userId`) and the IDs/names of
-datasets where that user holds an unexpired active annotation or review lease.
-Migration uses those same assignment kinds. The requesting user is excluded;
-other users are deduplicated and sorted by username, with datasets sorted by ID.
+no-store`. Each `PresentUser` contains a stable internal `userId`, optional
+`githubLogin` from the stored account, and the IDs/names of datasets where that
+user holds an unexpired active annotation or review lease. Clients display
+`@githubLogin` when nonempty, otherwise `userId`; display names do not override
+GitHub handles. Older responses without `githubLogin` use the same ID fallback.
+Migration uses those same assignment kinds. The requesting user is included
+under the same lease rules, even when they are the only active user. Users are
+deduplicated and sorted by internal ID, with datasets sorted by ID. Presentation
+metadata never changes identity or assignment ownership.
 
 This endpoint deliberately exposes active usernames and dataset names across
 server dataset-role boundaries to authenticated users. It grants no dataset

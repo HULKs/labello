@@ -28,14 +28,29 @@ async fn presence_requires_auth_and_lists_cross_dataset_leases_without_granting_
     let user = value.users.iter().find(|u| u.user_id == UserId::from("reviewer_2")).unwrap();
     assert_eq!(value.users.iter().filter(|u| u.user_id == UserId::from("reviewer_2")).count(), 1);
     assert_eq!(user.datasets.len(), 2);
+    assert_eq!(user.github_login, None);
     assert_eq!(user.datasets[1].name, "Other project");
     assert_eq!(user.datasets[0].dataset_id, DatasetId::from("ds"));
     assert_eq!(user.datasets[0].name, repo.load_dataset_config().await.unwrap().name);
     assert!(!String::from_utf8_lossy(&bytes).contains(assignment.assignment_id.as_str()));
     assert!(!activity_response(&app, "/datasets/ds/stats", Some("outsider")).await.status().is_success());
-    let self_response = activity_response(&app, "/presence", Some("reviewer_2")).await;
+    state.server_store.upsert_user(UserAccount {
+        user_id: UserId::from("reviewer_2"),
+        display_name: "Different display name".into(),
+        github_user_id: Some("42".into()),
+        github_login: Some("octocat".into()),
+        created_at: now(), updated_at: now(),
+    }).unwrap();
+    let session = state.create_session(UserId::from("reviewer_2")).unwrap();
+    let self_response = app.clone().oneshot(Request::builder().uri("/presence")
+        .header(header::COOKIE, format!("labello_session={}", session.cookie))
+        .body(Body::empty()).unwrap()).await.unwrap();
     let self_value: labello_client::ServerPresence = serde_json::from_slice(&to_bytes(self_response.into_body(), 8192).await.unwrap()).unwrap();
-    assert!(!self_value.users.iter().any(|u| u.user_id == UserId::from("reviewer_2")));
+    assert_eq!(self_value.users.len(), 1, "the only active user is the requester");
+    assert_eq!(self_value.users[0].user_id, UserId::from("reviewer_2"));
+    assert_eq!(self_value.users[0].github_login.as_deref(), Some("octocat"));
+    assert_eq!(self_value.users[0].presence_name(), "@octocat");
+    assert_eq!(self_value.users[0].datasets, user.datasets);
     repo.release_assignment(&UserId::from("reviewer_2"), &assignment.assignment_id, &image, &task, labello_domain::AssignmentKind::Review).await.unwrap();
     let response = activity_response(&app, "/presence", Some("outsider")).await;
     let value: labello_client::ServerPresence = serde_json::from_slice(&to_bytes(response.into_body(), 8192).await.unwrap()).unwrap();

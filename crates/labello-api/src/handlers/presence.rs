@@ -15,7 +15,7 @@ pub(super) async fn server_presence(
     State(state): State<ApiState>,
     headers: HeaderMap,
 ) -> ApiResult<impl IntoResponse> {
-    let actor = actor_from_headers(&state, &headers)?;
+    actor_from_headers(&state, &headers)?;
     // Authenticated presence intentionally spans datasets, including their names.
     // It does not confer access to any dataset or its assignments.
     let root = state.datasets_root();
@@ -61,21 +61,27 @@ pub(super) async fn server_presence(
         let repo = state.repo(&dataset_id)?;
         let metadata = repo.load_dataset_config().await?;
         for user_id in repo.active_lease_holders().await?.into_keys() {
-            if user_id != actor.user_id {
-                users.entry(user_id).or_default().push(PresenceDataset {
-                    dataset_id: dataset_id.clone(),
-                    name: metadata.name.clone(),
-                });
-            }
+            users.entry(user_id).or_default().push(PresenceDataset {
+                dataset_id: dataset_id.clone(),
+                name: metadata.name.clone(),
+            });
         }
     }
     let users = users
         .into_iter()
         .map(|(user_id, mut datasets)| {
             datasets.sort_by(|a, b| a.dataset_id.cmp(&b.dataset_id));
-            PresentUser { user_id, datasets }
+            let github_login = state
+                .server_store
+                .user(&user_id)?
+                .and_then(|user| user.github_login);
+            Ok(PresentUser {
+                user_id,
+                github_login,
+                datasets,
+            })
         })
-        .collect();
+        .collect::<ApiResult<Vec<_>>>()?;
     Ok((
         [(CACHE_CONTROL, "no-store")],
         Json(ServerPresence { users }),
