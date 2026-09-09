@@ -27,11 +27,30 @@ jobs:
       labels: [self-hosted, linux, x64]
     container:
       image: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}
+      options: --user 1000:1000
+    env:
+      CARGO_HOME: /github/home/.cargo
     defaults:
       run:
         shell: bash
     timeout-minutes: 120
     steps:
+      - name: Verify runner-compatible container ownership
+        run: |
+          if [[ "$(id -u):$(id -g)" != 1000:1000 ]]; then
+            printf 'release container must run as UID/GID 1000:1000\n' >&2
+            exit 1
+          fi
+          mkdir -p "$CARGO_HOME"
+          for variable in HOME RUNNER_TEMP GITHUB_WORKSPACE CARGO_HOME RUSTUP_HOME; do
+            directory="${!variable:-}"
+            if [[ -z "$directory" ]] || ! probe="$(mktemp -d "$directory/.labello-write-check.XXXXXXXX" 2>/dev/null)"; then
+              printf 'release container requires writable %s\n' "$variable" >&2
+              exit 1
+            fi
+            rmdir "$probe"
+          done
+
       - name: Require a digest-pinned build image
         env:
           BUILD_IMAGE: ${{ vars.LABELLO_RELEASE_BUILD_IMAGE }}

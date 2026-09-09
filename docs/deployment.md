@@ -19,6 +19,29 @@ publishes an immutable stable release, then sends an explicit
 `repository_dispatch` event. Drafts, prereleases, mutable releases, and tags
 that do not resolve to the dispatched commit cannot enter deployment.
 
+The release container runs as UID/GID `1000:1000`, matching the shared build
+runner account. Before checkout, it checks that identity and write access to
+`HOME`, `RUNNER_TEMP`, `GITHUB_WORKSPACE`, `CARGO_HOME`, and `RUSTUP_HOME`.
+GitHub Actions mounts its temporary home at `/github/home`; Git configuration
+and Trunk caches there must remain writable and removable by the runner.
+The job sets `CARGO_HOME=/github/home/.cargo` and creates it as the runner user,
+avoiding root-owned registry entries baked into the image's default Cargo home.
+The image's Cargo/Rustup executables remain available through `PATH`, and
+`RUSTUP_HOME` retains the preinstalled pinned toolchain.
+Native build outputs, browser assets, and release staging files likewise use
+the runner's ownership. Archive entries intentionally retain numeric owner and
+group zero for reproducible packaging; this does not change host file ownership.
+
+Before rolling out this workflow on a previously used runner, arrange an idle
+maintenance interval and inspect its temporary directory for root-owned entries
+left by earlier releases. Repair only the approved temporary paths, preserving
+persistent Cargo and target caches. Recheck for active jobs before repair and
+verify that the runner account can remove the temporary files afterward. The
+workflow does not repair existing ownership or change host permissions.
+Inspect existing Labello checkouts too: root-owned `.git`, `target/`, or browser
+`dist/` directories require a separately scoped repair before the unprivileged
+job can reuse that checkout.
+
 The deployment workflow runs on the production guest as the `hulk` account.
 It downloads a pinned GitHub CLI into `RUNNER_TEMP`, verifies the CLI checksum,
 checks release immutability and provenance, then streams the verified
@@ -93,6 +116,15 @@ inside that image. Verify `trunk --version` reports 0.21.14. Record the tested
 source commit, image digest, compiler and tool versions, commands, and results
 in the private rollout record. Keep registry locations and runner details out
 of public evidence. An unavailable or older image is an unmet rollout check.
+
+Run these checks with `--user 1000:1000`, a runner-owned checkout and temporary
+home, and the same environment as the release job, including its `CARGO_HOME`.
+Verify dependency downloads into the fresh Cargo home and selection of the
+image's pinned Rustup toolchain. Exercise the versioned browser build and release
+packaging as well, then check that all generated files have UID/GID `1000:1000`
+and that the runner account can remove the temporary home and release staging
+tree. Use disposable validation data without publishing assets or dispatching
+deployment. A root-only build does not satisfy the image verification contract.
 
 The release workflow validates a complete SHA-256 image reference and runs
 canonical verification before payload compilation. The image rollout checks
