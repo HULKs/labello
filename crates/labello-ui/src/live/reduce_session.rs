@@ -13,6 +13,7 @@ impl LabelloApp {
                         self.work.migration.pending_activate_target.take();
                     match *result {
                         Ok(result) => {
+                            let reviewed_item = self.view == AppView::Review && matches!(self.work.migration.retry_request.as_ref().map(|retry| &retry.action), Some(crate::app::MigrationAction::Review(_))) && !self.review_overview();
                             self.work.migration.retry_request = None;
                             self.work.migration.restore_revisit_focus = self.work.migration.direct_revisit_group.is_some()
                                 && matches!(result.cursor, Some(labello_domain::MigrationCursor::FullImage));
@@ -62,6 +63,7 @@ impl LabelloApp {
                                 self.work.migration.exclusion_note = retained.exclusion_note;
                                 self.work.migration.exclusion_dirty = retained.exclusion_dirty;
                             }
+                            if reviewed_item { self.finish_local_review_item(); }
                             if self.view == AppView::Review {
                                 self.work.migration.review_index =
                                     self.canonical_migration_review_index();

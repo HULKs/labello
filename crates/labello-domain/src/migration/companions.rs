@@ -115,7 +115,10 @@ impl ImageState {
                         annotation.origin,
                         AnnotationOrigin::Native { legacy_v2: false }
                     )
-                    && matches!(annotation.revision_source, RevisionSource::Human { .. })
+                    && matches!(
+                        annotation.revision_source,
+                        RevisionSource::Human { .. } | RevisionSource::ReviewerCorrection { .. }
+                    )
             })
             .collect()
     }
@@ -185,7 +188,10 @@ impl ImageState {
                 skeleton.origin,
                 AnnotationOrigin::Native { legacy_v2: false }
             )
-            || !matches!(skeleton.revision_source, RevisionSource::Human { .. })
+            || !matches!(
+                skeleton.revision_source,
+                RevisionSource::Human { .. } | RevisionSource::ReviewerCorrection { .. }
+            )
             || !matches!(
                 bounding_box.origin,
                 AnnotationOrigin::Native { legacy_v2: false }

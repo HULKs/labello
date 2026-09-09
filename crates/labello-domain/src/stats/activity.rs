@@ -65,7 +65,8 @@ pub fn daily_activity_from_events(
                     task_state.task_id.clone(),
                 ));
             }
-            EventPayload::ReviewRecorded { review }
+            EventPayload::ReviewCorrectionSubmitted { review, .. }
+            | EventPayload::ReviewRecorded { review }
                 if review.reviewer_user_id == event.actor_user_id =>
             {
                 if let ReviewTarget::Task { task_id }

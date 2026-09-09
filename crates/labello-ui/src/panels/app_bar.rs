@@ -189,7 +189,6 @@ impl LabelloApp {
         ui: &mut egui::Ui,
         destinations: &[(AppView, &'static str)],
         actions: &[AppBarAction],
-        include_review_actions: bool,
         account: Option<&str>,
     ) -> bool {
         let mut action_taken = false;
@@ -206,26 +205,7 @@ impl LabelloApp {
                 action_taken = true;
             }
         }
-        if include_review_actions
-            && ui
-                .add_enabled(
-                    self.work.assignment.is_some()
-                        && !self.loading.saving
-                        && !self.loading.image
-                        && self.work.pending_transition.is_none(),
-                    egui::Button::new("Skip assignment")
-                        .shortcut_text(crate::theme::button_shortcut(self.shortcut_text(
-                            ui.ctx(),
-                            labello_domain::UserAction::SkipAssignment,
-                        )))
-                        .min_size(egui::vec2(item_width, 44.0)),
-                )
-                .clicked()
-        {
-            self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
-            ui.close();
-            action_taken = true;
-        }
+
         for action in actions {
             let response = ui
                 .add_enabled(
@@ -350,9 +330,6 @@ impl LabelloApp {
             .account
             .as_ref()
             .map(|account| account.display_name.clone());
-        let include_review_actions =
-            LayoutMode::for_width(screen.width()) != LayoutMode::Wide
-                && self.view == AppView::Review;
         let response = theme::modal(ctx, id).area(area).show(ctx, |ui| {
             ui.set_width(width);
             ui.set_max_height(max_height);
@@ -379,7 +356,6 @@ impl LabelloApp {
                         ui,
                         &destinations,
                         &actions,
-                        include_review_actions,
                         account.as_deref(),
                     );
                 });

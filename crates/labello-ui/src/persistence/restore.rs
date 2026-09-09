@@ -389,6 +389,7 @@ impl crate::app::LabelloApp {
                 })
             }
             crate::app::AppView::Review => WorkDraftPayload::Review(ReviewDraft {
+                staged_corrections: Box::new(self.work.review_corrections.clone()),
                 target_annotation: self.work.selected_annotation.clone(),
                 correction: self
                     .work
@@ -509,8 +510,14 @@ impl crate::app::LabelloApp {
                         {
                             self.work.selected_annotation = Some(target);
                         }
-                        self.work.assignment_touched |= draft.correction.is_some();
+                        self.work.assignment_touched |= draft.correction.as_ref().is_some_and(|correction| correction.expected_version == 0 || correction.edited_geometry != correction.original_geometry)
+                            || !draft.staged_corrections.changes.is_empty() || !draft.staged_corrections.reviewed.is_empty() || !draft.staged_corrections.needs_review.is_empty();
                         self.work.correction_draft = draft.correction.map(Into::into);
+                        self.work.review_corrections = *draft.staged_corrections;
+                        if let Some(position) = self.work.review_corrections.position {
+                            self.work.review_index = position;
+                            self.work.migration.review_index = position;
+                        }
                     }
                 }
                 self.runtime.notice = Some("Recovered the validated browser draft.".to_string());

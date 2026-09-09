@@ -1,13 +1,14 @@
 use labello_domain::{
     Actor, AnnotationGeometry, AnnotationId, Assignment, AssignmentId, AssignmentKind,
     AssignmentStatus, CorrectionId, DatasetMetadata, DatasetRole, EventLogEntry, EventPayload,
-    ImageId, ReviewDecision, ReviewId, ReviewRecord, ReviewTarget, ReviewWorkflow,
-    ReviewerCorrectionRecord, RevisionSource, TaskDefinition, TaskId, TaskOutcome, TaskState,
-    TaskStatus, UserId, current_task_reviews, has_task_review_by_user, require_role,
-    task_approval_count,
+    ImageId, ReviewDecision, ReviewRecord, ReviewTarget, ReviewWorkflow, TaskDefinition, TaskId,
+    TaskOutcome, TaskState, TaskStatus, UserId, current_task_reviews, has_task_review_by_user,
+    require_role, task_approval_count,
 };
 
 use crate::{DatasetRepository, StorageError, StorageResult};
+#[cfg(test)]
+use labello_domain::RevisionSource;
 
 mod claim;
 mod migration;

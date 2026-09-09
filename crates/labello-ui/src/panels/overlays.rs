@@ -131,6 +131,7 @@ impl LabelloApp {
         let destination = self.transition_label(&pending);
         let discards_migration_draft =
             self.manual_migration_active() && self.migration_has_unsaved_input();
+        let discards_corrections = self.has_review_corrections();
         let discards_missing = self.has_missing_object_draft();
         let discards_review =
             self.review_revision_active() && !self.work.staged_review_decisions.is_empty();
@@ -140,10 +141,12 @@ impl LabelloApp {
         ) && self.view == AppView::Annotate
             && (matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
                 || discards_migration_draft);
-        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review && !discards_missing {
+        if pending == PendingTransition::NextAssignment && !discards_edits && !discards_review && !discards_missing && !discards_corrections {
             return;
         }
-        let modal_title = if discards_missing {
+        let modal_title = if discards_corrections {
+            "Discard reviewer correction?"
+        } else if discards_missing {
             "Discard missing-object locations?"
         } else if discards_review {
             "Discard staged review decisions?"
@@ -165,6 +168,7 @@ impl LabelloApp {
                 ui.heading(modal_title);
                 ui.label(format!("Current workflow: {current}"));
                 ui.label(format!("Pending destination: {destination}"));
+                if discards_corrections { ui.label("Leaving discards unsaved corrections. Cancel keeps them on this assignment."); }
                 if discards_missing { ui.label("Leaving discards these unsent missing-object locations. Cancel keeps them on this assignment."); }
                 if discards_review {
                     ui.label("Leaving discards staged replacement decisions. The previous effective outcome remains unchanged.");

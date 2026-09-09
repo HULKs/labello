@@ -35,6 +35,9 @@ pub struct ImageState {
     #[serde(default)]
     pub review_assignment_contexts: BTreeMap<crate::AssignmentId, crate::ReviewAssignmentContext>,
     #[serde(default)]
+    pub review_correction_submissions:
+        BTreeMap<crate::AssignmentId, crate::ReviewCorrectionSubmission>,
+    #[serde(default)]
     pub review_revision_commits: BTreeMap<crate::AssignmentId, crate::ReviewRevisionCommit>,
     #[serde(default)]
     pub review_finished_sequences: BTreeMap<crate::AssignmentId, u64>,
@@ -80,6 +83,7 @@ impl ImageState {
             review_record_rounds: BTreeMap::new(),
             superseded_review_ids: BTreeSet::new(),
             review_assignment_contexts: BTreeMap::new(),
+            review_correction_submissions: BTreeMap::new(),
             review_revision_commits: BTreeMap::new(),
             review_finished_sequences: BTreeMap::new(),
             missing_object_evidence: BTreeMap::new(),

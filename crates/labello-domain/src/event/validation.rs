@@ -60,6 +60,7 @@ impl EventLogEntry {
             EventPayload::TaskStateChanged { task_state } => Some(&task_state.task_id),
             EventPayload::AssignmentUpdated { assignment } => Some(&assignment.task_id),
             EventPayload::ReviewAssignmentOpened { assignment, .. }
+            | EventPayload::ReviewCorrectionSubmitted { assignment, .. }
             | EventPayload::ReviewRevisionCommitted { assignment, .. } => Some(&assignment.task_id),
             EventPayload::ReviewAssignmentFinished { task_id, .. } => Some(task_id),
             EventPayload::MissingObjectEvidenceRecorded { evidence, .. } => Some(&evidence.task_id),

@@ -215,8 +215,7 @@ impl TaskDefinition {
             && matches!(
                 self.review.workflow,
                 ReviewWorkflow::None | ReviewWorkflow::Approval
-            )
-            && !self.review.allow_reviewer_corrections;
+            );
         if valid {
             Ok(())
         } else {

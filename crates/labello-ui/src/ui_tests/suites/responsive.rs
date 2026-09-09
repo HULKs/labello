@@ -352,7 +352,9 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     for (width, height) in sizes {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert!(harness.query_all_by_label(&image_name).next().is_some());
+        if LayoutMode::for_width(width) != LayoutMode::Compact {
+            assert!(harness.query_all_by_label(&image_name).next().is_some());
+        }
         assert!(harness.query_all_by_label(&workflow_label).next().is_some());
         let presence = harness.get_by_label_contains("Labelling presence:").rect();
         let status_badge = harness.get_by_label_contains("Connection status:").rect();
@@ -752,30 +754,23 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     );
     let mut harness = loaded_review_harness(api);
 
-    assert!(harness.state().work.canvas.pan_mode());
-    assert!(harness.state().work.canvas.pan_mode_required());
-    assert!(
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Pan")
-            .accesskit_node()
-            .is_disabled()
-    );
+    assert!(!harness.state().work.canvas.pan_mode());
+    assert!(!harness.state().work.canvas.pan_mode_required());
+    assert!(harness.query_by_label("Pan").is_none());
     harness.key_press(egui::Key::Plus);
     harness.step();
     assert!(harness.state().work.canvas.current_zoom() > 1.0);
-    let pan_before = harness.get_by_label("Pan").rect();
     let fit_before = harness.get_by_label("Fit").rect();
     harness.key_press(egui::Key::P);
     harness.step();
     assert!(harness.state().work.canvas.pan_mode());
-    assert_eq!(harness.get_by_label("Pan").rect(), pan_before);
     assert_eq!(harness.get_by_label("Fit").rect(), fit_before);
     harness.key_press(egui::Key::Escape);
     harness.step();
-    assert!(harness.state().work.canvas.pan_mode());
+    assert!(!harness.state().work.canvas.pan_mode());
     click(&mut harness, "Fit");
     assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
-    assert!(harness.state().work.canvas.pan_mode());
+    assert!(!harness.state().work.canvas.pan_mode());
     harness.key_press(egui::Key::Plus);
     harness.step();
     assert!(harness.state().work.canvas.current_zoom() > 1.0);
@@ -788,16 +783,8 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
-        for label in ["Pan", "Fit"] {
-            assert_control_inside(
-                &harness,
-                label,
-                egui::accesskit::Role::Button,
-                width,
-                height,
-            );
-        }
+        assert_review_bar_paints(&harness, "Item 1 / 1");
+        assert_control_inside(&harness, "Fit", egui::accesskit::Role::Button, width, height);
         let context = harness.get_by_label("Workspace context bar").rect();
         let refocus = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, "Refocus object R")
@@ -808,11 +795,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
              refocus={refocus:?} context={context:?}",
         );
         let layout = LayoutMode::for_width(width);
-        let (approve, reject) = if layout != LayoutMode::Wide {
-            ("Accept", "Reject")
-        } else {
-            ("Approve object", "Reject object & finish")
-        };
+        let (approve, reject) = ("Approve", "Reject");
         for label in [approve, reject] {
             assert_control_inside(
                 &harness,
@@ -877,10 +860,9 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.step();
     for label in [
-        "Pan",
         "Fit",
         "Refocus object R",
-        "Accept",
+        "Approve",
         "Reject",
     ] {
         assert_control_inside(&harness, label, egui::accesskit::Role::Button, 320.0, 320.0);
@@ -897,10 +879,10 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.set_size(egui::vec2(150.0, 568.0));
     harness.step();
     let accept_shortcut = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "U")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Approve")
         .rect();
     let reject_shortcut = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "J")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Reject")
         .rect();
     assert!(
         (accept_shortcut.center().y - reject_shortcut.center().y).abs() <= 1.0,
@@ -908,7 +890,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     );
     assert!(accept_shortcut.right() <= reject_shortcut.left());
     assert!((accept_shortcut.width() - reject_shortcut.width()).abs() <= 1.0);
-    for label in ["U", "J"] {
+    for label in ["Approve", "Reject"] {
         assert_control_inside(
             &harness,
             label,
@@ -921,7 +903,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.state_mut().work.review_index = 1;
     harness.set_size(egui::vec2(320.0, 568.0));
     harness.step();
-    assert_review_bar_paints(&harness, "Bounding boxes · Final check");
+    assert_review_bar_paints(&harness, "Image overview");
 }
 
 

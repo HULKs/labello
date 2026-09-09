@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use eframe::egui;
 use labello_client::{
-    AssignmentAvailability, AuthOptions, CancelImportResult, CommitImportResult, CorrectionRequest,
+    AssignmentAvailability, AuthOptions, CancelImportResult, CommitImportResult,
     CreateImportRequest, DatasetSummary, DatasetUser, ImageExplorerQuery, ImportCapabilities,
     ImportJob, ImportPlan, IngestJob, SessionInfo, SnapshotFile, UpdateImportPlanRequest,
 };
@@ -659,7 +659,7 @@ pub(crate) enum UiCommand {
         operation_id: u64,
         dataset_id: DatasetId,
         assignment: Assignment,
-        correction: CorrectionRequest,
+        correction: labello_domain::ReviewCorrectionSubmission,
     },
 }
 

@@ -185,6 +185,15 @@ pub trait ReviewApi {
         })
     }
 
+    fn submit_review_corrections<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _assignment: AssignmentActionRequest,
+        _submission: labello_domain::ReviewCorrectionSubmission,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Api { status: 501, message: "review correction submission is unavailable".into() }) })
+    }
+
     fn record_correction<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

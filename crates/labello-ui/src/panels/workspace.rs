@@ -17,7 +17,7 @@ impl LabelloApp {
             AppView::Annotate | AppView::Review => {}
         }
         if self.review_revision_active() && !self.review_revision_in_compact_context(ui.ctx()) {
-            let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";
+            let explanation = "The previous outcome stays effective until you commit approval or submit corrections. Corrections return the image to a fresh review round.";
             let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
                 "Decision revision; geometry unchanged."
             } else { explanation };
@@ -245,7 +245,6 @@ impl LabelloApp {
         }
         let current = self.work.current.clone();
         let workflow = self.selected_workflow().map(|workflow| workflow.label());
-        let view = self.view;
         let loading_image = self.loading.image;
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
@@ -280,43 +279,31 @@ impl LabelloApp {
                 ui.label(RichText::new("No active assignment").color(theme::TEXT_MUTED));
             }
         };
-        let stack_controls = layout == LayoutMode::Compact
-            || (layout == LayoutMode::Medium && view != AppView::Annotate && current.is_some());
-        let show_panel_buttons =
-            layout != LayoutMode::Wide && matches!(view, AppView::Annotate | AppView::Review);
-        let response = if stack_controls {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.horizontal(|ui| {
-                    ui.set_min_height(44.0);
-                    if short && self.work.automatic_workflow_change.is_some() {
-                        // Reuse the identity row on short screens; leave the small canvas unobscured.
-                        let controls_width = if show_panel_buttons {
-                            88.0 + 2.0 * ui.spacing().item_spacing.x
-                        } else {
-                            0.0
-                        };
-                        let width = (ui.available_width() - controls_width - 4.0).max(120.0);
-                        egui::Frame::new()
-                            .corner_radius(egui::CornerRadius::same(6))
-                            .stroke(egui::Stroke::new(2.0, theme::AMBER))
-                            .show(ui, |ui| self.workflow_change_contents(ui, width));
-                    } else {
-                        add_summary(ui, 50.0);
-                        if current.is_some()
-                            && let Some(workflow) = workflow.as_ref()
-                        {
-                            theme::bounded_badge(ui, workflow, theme::Intent::Accent, 90.0);
-                        }
-                    }
-                    if show_panel_buttons {
-                        self.context_panel_buttons(ui);
-                    }
-                    self.previous_review_action(ui);
-                    self.assignment_availability_spinner(ui);
-                });
-                if current.is_some() {
-                    self.canvas_controls(ui, layout);
+        let show_panel_buttons = layout != LayoutMode::Wide;
+        let response = if layout == LayoutMode::Compact {
+            ui.horizontal(|ui| {
+                let control_count = if current.is_some() {
+                    if self.manual_migration_active() { 5.0 } else { 4.0 }
+                } else { 2.0 };
+                let loading_availability = self.work.availability.loading && self.work.availability.tasks.is_empty();
+                let spinner_width = if loading_availability { 12.0 + ui.spacing().item_spacing.x } else { 0.0 };
+                let summary_width = (ui.available_width()
+                    - control_count * (44.0 + ui.spacing().item_spacing.x) - spinner_width).max(0.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(summary_width, 44.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        let label = current.as_ref().map_or_else(
+                            || if loading_image { "Loading assignment..." } else if has_assignment { "Preview unavailable" } else { "No active assignment" }.to_owned(),
+                            |current| workflow.clone().unwrap_or_else(|| current.image.file_name.clone()),
+                        );
+                        ui.add(egui::Label::new(&label).truncate()).on_hover_text(label);
+                    },
+                );
+                if current.is_some() { self.canvas_controls(ui, layout); }
+                self.drawer_panel_buttons(ui, true);
+                if loading_availability {
+                    Self::describe_assignment_availability_spinner(ui.add(egui::Spinner::new().size(12.0)));
                 }
             })
         } else if short && current.is_some() {
@@ -325,7 +312,6 @@ impl LabelloApp {
                 if show_panel_buttons {
                     self.context_panel_buttons(ui);
                 }
-                self.previous_review_action(ui);
             })
         } else {
             workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
@@ -367,7 +353,6 @@ impl LabelloApp {
                     ui.separator();
                     self.workspace_actions(ui, layout);
                 }
-                self.previous_review_action(ui);
             })
         };
         response.response.widget_info(|| {
@@ -378,15 +363,6 @@ impl LabelloApp {
     fn context_panel_buttons(&mut self, ui: &mut egui::Ui) {
         let icon_only = !drawer_panel_labels_fit(ui);
         self.drawer_panel_buttons(ui, icon_only);
-    }
-
-    fn assignment_availability_spinner(&self, ui: &mut egui::Ui) {
-        if !self.work.availability.loading || !self.work.availability.tasks.is_empty() {
-            return;
-        }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            Self::describe_assignment_availability_spinner(ui.spinner());
-        });
     }
 
     fn describe_assignment_availability_spinner(response: egui::Response) {
@@ -402,18 +378,23 @@ impl LabelloApp {
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         ui.horizontal(|ui| {
             let show_refocus = self.view == AppView::Review || self.manual_migration_active();
-            let dense = show_refocus
-                && (layout != LayoutMode::Wide || ui.ctx().content_rect().width() < 1366.0);
+            let dense = layout == LayoutMode::Compact
+                || (show_refocus && (layout != LayoutMode::Wide || ui.ctx().content_rect().width() < 1366.0));
+            if self.view != AppView::Review {
             let pan_shortcut =
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::TogglePanMode);
             let pan_drag_shortcut =
                 format!("{}+left-drag", self.work.keybindings.pan_drag_modifier);
             let pan_required = self.work.canvas.pan_mode_required();
-            let pan = egui::Button::new("Pan")
+            let pan_width = (if dense { 44.0_f32 } else { 52.0_f32 }).min(ui.available_size_before_wrap().x.max(44.0));
+            let pan_icon = text_button_width(ui, "Pan") > pan_width;
+            let pan = egui::Button::new(if pan_icon { "" } else { "Pan" })
                 .selected(self.work.canvas.pan_mode())
-                .min_size(egui::vec2(52.0, 44.0));
-            if ui
-                .add_enabled(self.work.canvas.can_pan() && !pan_required, pan)
+                .min_size(egui::vec2(pan_width, 44.0));
+            let pan_response = ui.add_enabled(self.work.canvas.can_pan() && !pan_required, pan);
+            pan_response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, self.work.canvas.can_pan() && !pan_required, self.work.canvas.pan_mode(), "Pan"));
+            if pan_icon { paint_workspace_action_icon(ui, &pan_response, WorkspaceActionIcon::Pan); }
+            if pan_response
                 .on_disabled_hover_text(if pan_required {
                     "Pan mode stays active during review."
                 } else {
@@ -431,20 +412,14 @@ impl LabelloApp {
                 self.trigger_user_action(labello_domain::UserAction::TogglePanMode);
             }
 
+            }
+
             if show_refocus {
                 let refocus_shortcut =
                     self.shortcut_text(ui.ctx(), labello_domain::UserAction::RefocusObject);
                 let can_refocus = self.refocus_annotation().is_some();
                 let refocus_label = format!("Refocus object {refocus_shortcut}");
-                let button = if dense {
-                    egui::Button::new(egui::RichText::new("◎").size(20.0))
-                        .min_size(egui::vec2(44.0, 44.0))
-                } else {
-                    egui::Button::new("Refocus")
-                        .shortcut_text(crate::theme::button_shortcut(&refocus_shortcut))
-                        .min_size(egui::vec2(0.0, 44.0))
-                };
-                let response = theme::quiet_button(ui, can_refocus, button)
+                let response = workspace_action_button(ui, can_refocus, "Refocus", WorkspaceActionIcon::Refocus, dense.then_some(44.0), theme::Intent::Neutral)
                     .on_disabled_hover_text("Select an object to refocus.")
                     .on_hover_text(format!(
                         "Refocus object ({refocus_shortcut}). Center and zoom to the active object."
@@ -462,9 +437,7 @@ impl LabelloApp {
             }
 
             let fit_shortcut = self.shortcut_text(ui.ctx(), labello_domain::UserAction::FitImage);
-            let fit = egui::Button::new("Fit").min_size(egui::vec2(44.0, 44.0));
-            if ui
-                .add(fit)
+            if workspace_action_button(ui, true, "Fit", WorkspaceActionIcon::Fit, dense.then_some(44.0), theme::Intent::Neutral)
                 .on_hover_text(format!("Fit ({fit_shortcut}). Or double-click canvas."))
                 .clicked()
             {
@@ -473,7 +446,7 @@ impl LabelloApp {
 
             if layout == LayoutMode::Wide {
                 self.workflow_panel_toggle(ui);
-                self.inspector_panel_toggle(ui);
+                if self.view != AppView::Review { self.inspector_panel_toggle(ui); }
             }
         });
     }

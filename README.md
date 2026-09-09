@@ -232,8 +232,8 @@ workspace context bar, or press its configurable shortcut (`R` by default), to
 center and zoom to the active review object or guided-migration guide.
 
 Approval review keeps Pan mode active so primary drag moves the focused image
-without an extra mode switch. Missing-object placement and reviewer correction
-return primary drag to their respective editing controls; the configured modifier plus left-drag and middle-drag
+without an extra mode switch. Reviewer correction
+returns primary drag to editing controls; the configured modifier plus left-drag and middle-drag
 still pan while correcting. Refocus uses the active object's current correction
 geometry without leaving the assignment. Guided migration review likewise
 refocuses its active canonical guide or discovered skeleton. Discovered-object
@@ -242,21 +242,23 @@ historical data has no positions.
 
 Review Previous, also available through the configured Previous image shortcut,
 returns to the immediately previous eligible skipped or completed review.
-Completed reviews open a decision-only revision on current geometry. Stage the
-replacement decisions and explicitly commit the full-image result; opening or
-cancelling preserves the old outcome. Later work can make the previous review
-ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
+Completed reviews open a revision that preserves the old outcome until the
+reviewer commits approval or submits substantive corrections. Later work can
+make the previous review ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
 
-During the full-image check of an ordinary approval review, **Mark missing**
-adds locations for missing objects. Drag a marker to move it, select its list
-entry to refocus, or remove it before submitting. Keyboard users can add at the
-image center and edit normalized coordinates in the inspector. Approval is
-disabled while locations exist; Send back records the rejection and locations
-together. The annotator sees read-only guidance until resubmission. Later
-reviewers can inspect the history. These markers are evidence, never annotations.
-Unsent locations are scoped to the current assignment and require confirmation
-before switching. The browser warns on ordinary page exit, but reloads and
-crashes can lose drafts. Guided migration uses its separate missing-object flow.
+Reviewers can edit, add, or remove boxes and skeletons, and change guided
+migration dispositions. **Keep correction** stages the current edit locally;
+**Submit corrections & reject** saves the accumulated changes and returns the
+image to a fresh review round. Rejection always requires a substantive change.
+Saving corrections never completes the task. The same reviewer may claim the
+new round, but must review its current objects and final image again; earlier
+approvals do not count. Unsaved previews are identified in the inspector, and
+cancelling navigation preserves the draft. Failed submissions retain the exact
+request for retry. Browser draft recovery is a convenience, not durable storage.
+
+Missing-object markers are retired from active review. Reviewers create the
+missing annotation instead. Historical locations remain available as read-only
+evidence and do not describe the current submission.
 
 Saving a missing migration object also creates a derived box in its configured
 box task and reopens that task for correction and ordinary review. Still-derived

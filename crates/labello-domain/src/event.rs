@@ -43,6 +43,7 @@ pub enum EventType {
     ReviewAssignmentFinished,
     ReviewRevisionCommitted,
     MissingObjectEvidenceRecorded,
+    ReviewCorrectionSubmitted,
     ReviewerCorrectionRecorded,
     #[serde(rename = "adjudication_recorded")]
     LegacyAdjudicationRecorded,
@@ -71,6 +72,7 @@ impl std::fmt::Display for EventType {
             Self::ReviewAssignmentFinished => "review_assignment_finished",
             Self::ReviewRevisionCommitted => "review_revision_committed",
             Self::MissingObjectEvidenceRecorded => "missing_object_evidence_recorded",
+            Self::ReviewCorrectionSubmitted => "review_correction_submitted",
             Self::ReviewerCorrectionRecorded => "reviewer_correction_recorded",
             Self::LegacyAdjudicationRecorded => "adjudication_recorded",
             Self::AssignmentUpdated => "assignment_updated",
@@ -126,6 +128,12 @@ pub enum EventPayload {
         assignment: Assignment,
         superseded_review_ids: Vec<crate::ReviewId>,
         replacement: crate::ReviewRevisionCommit,
+        task_state: TaskState,
+    },
+    ReviewCorrectionSubmitted {
+        assignment: Assignment,
+        submission: Box<crate::ReviewCorrectionSubmission>,
+        review: ReviewRecord,
         task_state: TaskState,
     },
     ReviewerCorrectionRecorded {
@@ -200,6 +208,7 @@ impl EventPayload {
             Self::ReviewAssignmentFinished { .. } => EventType::ReviewAssignmentFinished,
             Self::ReviewRevisionCommitted { .. } => EventType::ReviewRevisionCommitted,
             Self::MissingObjectEvidenceRecorded { .. } => EventType::MissingObjectEvidenceRecorded,
+            Self::ReviewCorrectionSubmitted { .. } => EventType::ReviewCorrectionSubmitted,
             Self::ReviewerCorrectionRecorded { .. } => EventType::ReviewerCorrectionRecorded,
             Self::LegacyAdjudicationRecorded { .. } => EventType::LegacyAdjudicationRecorded,
             Self::AssignmentUpdated { .. } => EventType::AssignmentUpdated,

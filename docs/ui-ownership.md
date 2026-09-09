@@ -73,7 +73,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
-- `missing_objects.rs`: assignment-and-round-scoped missing-object drafts, stable rejection retries, inspector guidance/history, and browser exit warning; canvas rendering owns marker transforms and gestures.
+- `review_corrections.rs`: accumulated correction drafts, canvas previews, stable submission retries and object/disposition editing.
+- `missing_objects.rs`: read-only historical location evidence and browser exit warning.
 
 - `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
   stable command locations and overflow keyboard focus; workflow owners supply
@@ -254,7 +255,7 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
-Unsent missing-object locations count as work for the navigation gate.
+Unsent reviewer corrections count as work for the navigation gate.
 Touched assignments keep the existing confirmation. Review Previous uses the
 same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,
@@ -266,13 +267,36 @@ After confirmation the transition modal closes, but its pending transition remai
 to block conflicting actions and correction edits until loading finishes. Runtime failures
 show Error in the workspace status control, with the full error and annotation
 save status in its details, rather than retaining a success label. The
-Previous review control belongs to the workspace context toolbar, including
+Previous review control belongs to the shared review footer, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
 
-Revision reviews offer missing-object markers only after every captured object
-has an explicit staged decision. An early object rejection can still commit
-without markers; it does not invent decisions for unvisited objects. The commit
-guard rejects incomplete marker-bearing revisions before freezing retry state.
+Normal and revision review use the same correction owner. Its interaction module
+owns item position, locally decided targets, targets requiring another decision,
+editor validity, navigation, reset, and aggregate overview eligibility. Valid retained
+corrections satisfy their target's rejection requirement without a separate item
+decision; unchanged targets still require approval. Ordinary
+unchanged-item approvals retain the existing server command; corrected-item
+rejections remain local until overview submission. Revision approvals retain their
+existing staged decision owner. Opening the automatic editor does not mark work
+changed. Only actual differences enable rejection or receive amber preview styling.
+Persisted annotations remain unchanged while the canvas previews edits, additions,
+removals and migration replacements. Reset invalidates the affected local decision,
+and earlier corrections do not block approval of another unchanged item.
+
+The overview is the only correction submission point and requires a decision for
+every original target and valid geometry. Correction success advances the assignment
+after the server commits; failure retains the draft and frozen request. Local browser
+records include position, local decisions, reset targets, changes and retry request;
+assignment, round and sequence validation prevent cross-workspace recovery.
+Historical missing-object locations remain read-only. The second-bar review indicator
+owns its measured two-line presentation and toggles the existing Inspector panel or
+drawer, retaining focus-return behavior. It shows item position before workflow
+identity. The shared review footer owns decision buttons and Previous, Discard and
+Skip across ordinary, migration and revision review. Compact layouts keep navigation
+and discard actions in a second bottom row. Remove item for added migration objects
+uses the same footer and the existing local correction owner. The Inspector starts closed.
+Migration canvas preparation initializes the active skeleton draft independently of
+Inspector visibility, so advancing targets keeps editing available with the panel closed.
 
 ## Dataset export administration
 

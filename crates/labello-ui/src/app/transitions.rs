@@ -24,7 +24,8 @@ impl LabelloApp {
         self.work.assignment_touched
             || self.work.edit_generation != 0
             || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
-            || self.work.correction_draft.is_some()
+            || self.review_editor_changed()
+            || self.has_review_corrections()
             || self.migration_has_unsaved_input()
             || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty())
             || self.has_missing_object_draft()
@@ -279,9 +280,10 @@ impl LabelloApp {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn can_correct_review_object(&self) -> bool {
         self.view == AppView::Review
-            && !self.review_revision_active()
+            && self.work.review_corrections.submission.is_none()
             && self
                 .work
                 .assignment
@@ -289,7 +291,6 @@ impl LabelloApp {
                 .is_some_and(|assignment| assignment.kind == AssignmentKind::Review)
             && self.selected_task().is_some_and(|task| {
                 task.review.workflow == labello_domain::ReviewWorkflow::Approval
-                    && task.review.allow_reviewer_corrections
             })
             && self.current_review_annotation().is_some_and(|annotation| {
                 self.work.selected_annotation.as_ref() == Some(&annotation.annotation_id)
@@ -308,30 +309,16 @@ impl LabelloApp {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn start_correction(&mut self) {
-        if self.work.correction_draft.is_some() || !self.can_correct_review_object() {
-            return;
+        if let Some(annotation) = self.current_review_annotation().cloned() {
+            self.begin_review_correction(annotation);
         }
-        let Some(annotation) = self.current_review_annotation().cloned() else {
-            return;
-        };
-        self.work.assignment_touched = true;
-        let annotation_id = annotation.annotation_id.clone();
-        self.work.correction_draft = Some(CorrectionDraft {
-            correction_id: labello_domain::CorrectionId::generate(),
-            annotation_id,
-            expected_version: annotation.version,
-            original_geometry: annotation.geometry.clone(),
-            edited_geometry: annotation.geometry,
-            reason: String::new(),
-            geometry_history: Vec::new(),
-            selected_keypoint: None,
-        });
-        self.runtime.error = None;
     }
 
     pub(crate) fn discard_correction(&mut self) {
         self.work.correction_draft = None;
+        self.work.review_corrections.editor = None;
     }
 
     pub(crate) fn undo_correction(&mut self) {
@@ -352,6 +339,7 @@ impl LabelloApp {
         }
         draft.geometry_history.push(draft.edited_geometry.clone());
         draft.edited_geometry = geometry;
+        self.work.assignment_touched = true;
         self.runtime.error = None;
     }
 

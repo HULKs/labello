@@ -78,7 +78,8 @@ impl StatsAggregation {
                     );
                     continue;
                 }
-                EventPayload::ReviewRecorded { review }
+                EventPayload::ReviewCorrectionSubmitted { review, .. }
+                | EventPayload::ReviewRecorded { review }
                 | EventPayload::ReviewerCorrectionRecorded { review, .. } => {
                     (std::slice::from_ref(review), review.timestamp)
                 }

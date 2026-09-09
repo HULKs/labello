@@ -31,6 +31,11 @@ impl LabelloApp {
             {
                 annotation.geometry = draft.edited_geometry.clone();
             }
+            self.apply_staged_review_previews(&mut annotations);
+            if let Some(preview) = self.review_correction_preview() {
+                annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
+                annotations.push(preview);
+            }
             let skeleton_edges = self
                 .selected_task()
                 .and_then(|task| task.skeleton.as_ref())
@@ -47,13 +52,24 @@ impl LabelloApp {
                 self.view == AppView::Annotate && self.work.pending_transition.is_none();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
                 let mut interaction = CanvasInteraction::correction(draft.selected_keypoint);
+                interaction.allow_create = matches!(
+                    draft.edited_geometry,
+                    labello_domain::AnnotationGeometry::Skeleton(_)
+                );
                 interaction.editable = !self.loading.saving
                     && !self.loading.image
                     && self.work.pending_transition.is_none();
                 interaction
             });
-            let mut interaction = correction_interaction
-                .unwrap_or_else(|| CanvasInteraction::annotations(annotator_editable));
+            let overview_editable = self.view == AppView::Review
+                && self.review_overview()
+                && !self.loading.saving
+                && !self.loading.image
+                && self.work.pending_transition.is_none()
+                && self.work.review_corrections.submission.is_none();
+            let mut interaction = correction_interaction.unwrap_or_else(|| {
+                CanvasInteraction::annotations(annotator_editable || overview_editable)
+            });
             if correction_interaction.is_none()
                 && annotator_editable
                 && self.work.tool == Tool::Keypoints
@@ -68,7 +84,13 @@ impl LabelloApp {
                         .iter()
                         .find(|annotation| !annotation.deleted && &annotation.annotation_id == id)
                 });
-                self.work.canvas.set_review_focus(review_annotation);
+                self.work
+                    .canvas
+                    .set_review_focus(if self.review_overview() {
+                        None
+                    } else {
+                        review_annotation
+                    });
             } else {
                 self.work.canvas.clear_review_focus();
             }
@@ -88,6 +110,8 @@ impl LabelloApp {
                 self.work.canvas.focus_missing_object(point);
             }
             let mut missing_action = None;
+            let mut styles = std::collections::BTreeMap::new();
+            self.style_review_correction_previews(&annotations, &mut styles);
             let action = show_canvas_with_evidence(
                 ui,
                 &mut self.work.canvas,
@@ -100,7 +124,7 @@ impl LabelloApp {
                 &skeleton_edges,
                 &prelabels,
                 annotation_color,
-                &std::collections::BTreeMap::new(),
+                &styles,
                 None,
                 Some(MissingObjectOverlay {
                     locations: &locations,
@@ -123,8 +147,28 @@ impl LabelloApp {
                     Some(CanvasAction::SelectKeypoint(_)) => {}
                     None => {}
                 }
+            } else if overview_editable && self.work.correction_draft.is_none() {
+                match action {
+                    Some(CanvasAction::CreateBoundingBox(bbox)) => {
+                        self.begin_new_review_object(None);
+                        if let Some(draft) = self.work.correction_draft.as_mut() {
+                            draft.edited_geometry =
+                                labello_domain::AnnotationGeometry::BoundingBox(bbox);
+                        }
+                        self.retain_review_editor();
+                    }
+                    Some(CanvasAction::PlaceKeypoint(point)) => {
+                        self.begin_new_review_object(None);
+                        self.place_review_correction_keypoint(point);
+                    }
+                    Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                    _ => {}
+                }
             } else if self.work.correction_draft.is_some() {
                 match action {
+                    Some(CanvasAction::PlaceKeypoint(point)) => {
+                        self.place_review_correction_keypoint(point)
+                    }
                     Some(CanvasAction::EditBoundingBox(edit)) => self.edit_correction_bbox(edit),
                     Some(CanvasAction::SelectKeypoint(selection)) => {
                         if self
@@ -138,7 +182,6 @@ impl LabelloApp {
                     }
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
                     Some(CanvasAction::CreateBoundingBox(_))
-                    | Some(CanvasAction::PlaceKeypoint(_))
                     | Some(CanvasAction::Select(_))
                     | None => {}
                 }
@@ -154,102 +197,115 @@ impl LabelloApp {
             let availability_error = availability_matches
                 .then(|| self.work.availability.error.clone())
                 .flatten();
-            ui.add_space(((ui.available_height() - 160.0) * 0.5).max(0.0));
-            let width = ui.available_width().min(520.0);
-            let inset = ((ui.available_width() - width) * 0.5).max(0.0);
-            ui.horizontal(|ui| {
-                ui.add_space(inset);
-                ui.vertical(|ui| {
-                    ui.set_width(width);
-                    if self.loading.dataset {
-                        theme::inset_frame().show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.horizontal(|ui| {
-                                ui.spinner();
-                                ui.label(RichText::new("Opening dataset").strong());
-                            });
-                            ui.label(
-                                RichText::new("Loading workflows and dataset metadata.")
-                                    .color(theme::TEXT_MUTED),
-                            );
-                        });
-                    } else if self.loading.image {
-                        theme::inset_frame().show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.horizontal(|ui| {
-                                ui.spinner();
-                                ui.label(RichText::new("Loading assignment image").strong());
-                            });
-                            ui.label(
-                                RichText::new("Decoding the image preview for the canvas.")
-                                    .color(theme::TEXT_MUTED),
-                            );
-                        });
-                    } else if let Some(error) = self.runtime.error.clone() {
-                        let claimed = self.work.assignment.is_some();
-                        let (title, retry) = if claimed {
-                            ("Assignment image unavailable", "Retry image load")
-                        } else {
-                            ("Assignment unavailable", "Retry assignment")
-                        };
-                        let shortcut = self
-                            .shortcut_text(ui.ctx(), labello_domain::UserAction::RetryImageLoad);
-                        if theme::empty_state(
-                            ui,
-                            title,
-                            &error,
-                            Some(
-                                egui::Button::new(retry)
-                                    .shortcut_text(crate::theme::button_shortcut(shortcut)),
-                            ),
-                        ) {
-                            self.retry_assignment_load();
-                        }
-                    } else if checking_availability {
-                        theme::inset_frame().show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.horizontal(|ui| {
-                                ui.spinner();
-                                ui.label(
-                                    RichText::new("Checking assignment availability").strong(),
+            egui::ScrollArea::vertical()
+                .id_salt("workspace-empty-state")
+                .show(ui, |ui| {
+                    ui.add_space(((ui.available_height() - 160.0) * 0.5).max(0.0));
+                    let width = ui.available_width().min(520.0);
+                    let inset = ((ui.available_width() - width) * 0.5).max(0.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(inset);
+                        ui.vertical(|ui| {
+                            ui.set_width(width);
+                            if self.loading.dataset {
+                                theme::inset_frame().show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.spinner();
+                                        ui.label(RichText::new("Opening dataset").strong());
+                                    });
+                                    ui.label(
+                                        RichText::new("Loading workflows and dataset metadata.")
+                                            .color(theme::TEXT_MUTED),
+                                    );
+                                });
+                            } else if self.loading.image {
+                                theme::inset_frame().show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.spinner();
+                                        ui.label(
+                                            RichText::new("Loading assignment image").strong(),
+                                        );
+                                    });
+                                    ui.label(
+                                        RichText::new("Decoding the image preview for the canvas.")
+                                            .color(theme::TEXT_MUTED),
+                                    );
+                                });
+                            } else if let Some(error) = self.runtime.error.clone() {
+                                let claimed = self.work.assignment.is_some();
+                                let (title, retry) = if claimed {
+                                    ("Assignment image unavailable", "Retry image load")
+                                } else {
+                                    ("Assignment unavailable", "Retry assignment")
+                                };
+                                let shortcut = self.shortcut_text(
+                                    ui.ctx(),
+                                    labello_domain::UserAction::RetryImageLoad,
                                 );
-                            });
-                            ui.label(
-                                RichText::new("Looking for work in the selected workflows.")
-                                    .color(theme::TEXT_MUTED),
-                            );
+                                if theme::empty_state(
+                                    ui,
+                                    title,
+                                    &error,
+                                    Some(
+                                        egui::Button::new(retry)
+                                            .shortcut_text(crate::theme::button_shortcut(shortcut)),
+                                    ),
+                                ) {
+                                    self.retry_assignment_load();
+                                }
+                            } else if checking_availability {
+                                theme::inset_frame().show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.spinner();
+                                        ui.label(
+                                            RichText::new("Checking assignment availability")
+                                                .strong(),
+                                        );
+                                    });
+                                    ui.label(
+                                        RichText::new(
+                                            "Looking for work in the selected workflows.",
+                                        )
+                                        .color(theme::TEXT_MUTED),
+                                    );
+                                });
+                            } else if let Some(error) = availability_error {
+                                if theme::empty_state(
+                                    ui,
+                                    "Assignment availability unavailable",
+                                    &error,
+                                    Some(egui::Button::new("Retry availability")),
+                                ) {
+                                    self.request_assignment_availability();
+                                }
+                            } else {
+                                let title = match self.view {
+                                    AppView::Annotate => "No annotation assignments",
+                                    AppView::Review => "No review assignments",
+                                    _ => "No assignments",
+                                };
+                                let shortcut = self.shortcut_text(
+                                    ui.ctx(),
+                                    labello_domain::UserAction::RetryImageLoad,
+                                );
+                                if theme::empty_state(
+                                    ui,
+                                    title,
+                                    "No work is available right now. Retry to check again.",
+                                    Some(
+                                        egui::Button::new("Retry image load")
+                                            .shortcut_text(crate::theme::button_shortcut(shortcut)),
+                                    ),
+                                ) {
+                                    self.retry_assignment_load();
+                                }
+                            }
                         });
-                    } else if let Some(error) = availability_error {
-                        if theme::empty_state(
-                            ui,
-                            "Assignment availability unavailable",
-                            &error,
-                            Some(egui::Button::new("Retry availability")),
-                        ) {
-                            self.request_assignment_availability();
-                        }
-                    } else {
-                        let title = match self.view {
-                            AppView::Annotate => "No annotation assignments",
-                            AppView::Review => "No review assignments",
-                            _ => "No assignments",
-                        };
-                        let shortcut = self
-                            .shortcut_text(ui.ctx(), labello_domain::UserAction::RetryImageLoad);
-                        if theme::empty_state(
-                            ui,
-                            title,
-                            "No work is available right now. Retry to check again.",
-                            Some(
-                                egui::Button::new("Retry image load")
-                                    .shortcut_text(crate::theme::button_shortcut(shortcut)),
-                            ),
-                        ) {
-                            self.retry_assignment_load();
-                        }
-                    }
+                    });
                 });
-            });
         }
     }
 }

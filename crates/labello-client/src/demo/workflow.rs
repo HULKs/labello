@@ -248,6 +248,10 @@ impl AnnotationApi for DemoLabelloApi {
 }
 
 impl ReviewApi for DemoLabelloApi {
+    fn submit_review_corrections<'a>(&'a self, _dataset_id: &'a DatasetId, _assignment: crate::AssignmentActionRequest, _submission: labello_domain::ReviewCorrectionSubmission) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Demo("the demo backend does not create review assignments".into())) })
+    }
+
     fn record_review<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

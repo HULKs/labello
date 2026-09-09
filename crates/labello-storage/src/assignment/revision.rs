@@ -84,6 +84,11 @@ pub(super) fn validate_revision_exclusivity(
         {
             continue;
         }
+        let own_correction = events.iter().any(|event| matches!(&event.payload,
+            EventPayload::ReviewCorrectionSubmitted { assignment, .. } if assignment.assignment_id == context.assignment_id));
+        if own_correction {
+            continue;
+        }
         let own_commit = !events.is_empty()
             && matches!(&events[0].payload,
             EventPayload::ReviewRevisionCommitted { assignment, .. } if assignment.assignment_id == context.assignment_id);
@@ -390,6 +395,16 @@ impl DatasetRepository {
         context: AssignmentContext<'_>,
         replacement: ReviewRevisionCommit,
     ) -> StorageResult<ImageState> {
+        if !replacement.missing_objects.is_empty()
+            || replacement
+                .reviews
+                .iter()
+                .any(|review| review.decision == ReviewDecision::Rejected)
+        {
+            return Err(StorageError::InvalidCorrection(
+                "rejection requires a substantive correction submission".into(),
+            ));
+        }
         let _config_guard = self.review_config_lock.read().await;
         if context.kind != AssignmentKind::Review {
             return Err(conflict("revision requires a review assignment"));

@@ -10,7 +10,7 @@ use eframe::egui::{self, RichText};
 use crate::{
     app::{AppView, LabelloApp, MigrationAction, UiCommand},
     canvas::{CanvasAction, CanvasAnnotationStyle, CanvasInteraction, show_canvas_colored},
-    panels::{keypoint_placement_mode, shortcut_button_label},
+    panels::{WorkspaceActionIcon, keypoint_placement_mode, workspace_toolbar_button},
     theme,
 };
 
@@ -210,6 +210,12 @@ impl LabelloApp {
         let Some(current) = self.work.current.clone() else {
             return;
         };
+        if self.view == AppView::Annotate
+            && !self.work.migration.adding_missing_object
+            && let Some((group_id, _)) = self.migration_active_target()
+        {
+            self.ensure_migration_draft(&group_id);
+        }
         let texture = self.work.current_texture.clone();
         let Some(task) = self.selected_task().cloned() else {
             return;
@@ -395,7 +401,7 @@ impl LabelloApp {
             ))
             || (self.work.migration.adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)));
-        let interaction = CanvasInteraction {
+        let mut interaction = CanvasInteraction {
             editable: !self.work.migration.busy
                 && self.work.migration.inspected_group_id.is_none()
                 && (skeleton_editable || !selectable_annotations.is_empty()),
@@ -406,6 +412,40 @@ impl LabelloApp {
                 && self.work.migration.draft.is_some(),
             selected_keypoint: None,
         };
+        self.apply_staged_review_previews(&mut annotations);
+        if let Some(preview) = self.review_correction_preview() {
+            selected = Some(preview.annotation_id.clone());
+            selectable_annotations.insert(preview.annotation_id.clone());
+            annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
+            annotations.push(preview);
+            interaction = CanvasInteraction::correction(
+                self.work
+                    .correction_draft
+                    .as_ref()
+                    .and_then(|draft| draft.selected_keypoint),
+            );
+            interaction.allow_create = true;
+            interaction.editable = !self.loading.saving
+                && !self.loading.image
+                && self.work.pending_transition.is_none();
+        }
+        if self.view == AppView::Review && self.work.correction_draft.is_none() {
+            interaction = CanvasInteraction::annotations(
+                self.review_overview()
+                    && !self.loading.saving
+                    && !self.loading.image
+                    && !self.work.migration.busy
+                    && self.work.pending_transition.is_none()
+                    && self.work.review_corrections.submission.is_none(),
+            );
+            interaction.allow_create = self.review_overview();
+            selectable_annotations.extend(
+                annotations
+                    .iter()
+                    .map(|annotation| annotation.annotation_id.clone()),
+            );
+        }
+        self.style_review_correction_previews(&annotations, &mut annotation_styles);
         let action = show_canvas_colored(
             ui,
             &mut self.work.canvas,
@@ -421,6 +461,30 @@ impl LabelloApp {
             &annotation_styles,
             Some(&selectable_annotations),
         );
+        if self.work.correction_draft.is_some() {
+            match action {
+                Some(CanvasAction::PlaceKeypoint(point)) => {
+                    self.place_review_correction_keypoint(point)
+                }
+                Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
+                Some(CanvasAction::SelectKeypoint(selection)) => {
+                    self.select_correction_keypoint(selection.keypoint_index)
+                }
+                _ => {}
+            }
+            return;
+        }
+        if self.view == AppView::Review {
+            match action {
+                Some(CanvasAction::PlaceKeypoint(point)) if self.review_overview() => {
+                    self.begin_new_review_object(None);
+                    self.place_review_correction_keypoint(point);
+                }
+                Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                _ => {}
+            }
+            return;
+        }
         match action {
             Some(CanvasAction::PlaceKeypoint(point)) => self.place_migration_keypoint(point),
             Some(CanvasAction::Select(annotation_id)) => {
@@ -706,7 +770,7 @@ impl LabelloApp {
             }
         }
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_object_navigation_button(ui);
             self.migration_assignment_section(ui);
         }
@@ -926,7 +990,7 @@ impl LabelloApp {
                 if discovered == 1 { "object" } else { "objects" }
             ));
             if show_primary_action {
-                self.migration_discovered_edit_actions(ui, false);
+                self.migration_discovered_edit_actions(ui, false, None);
             }
         }
         let confirmation = if expected == 0 {
@@ -936,7 +1000,7 @@ impl LabelloApp {
         };
         ui.label(confirmation);
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_object_navigation_button(ui);
             self.migration_assignment_section(ui);
         }
@@ -1058,7 +1122,7 @@ impl LabelloApp {
             }
         }
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_assignment_section(ui);
         }
     }
@@ -1162,70 +1226,8 @@ impl LabelloApp {
         compact: bool,
         shortcut_only: bool,
     ) {
-        let approve_shortcut =
-            self.shortcut_text(ui.ctx(), labello_domain::UserAction::AcceptReviewObject);
-        let reject_shortcut =
-            self.shortcut_text(ui.ctx(), labello_domain::UserAction::RejectReviewObject);
-        let revision = self.review_revision_active();
-        let final_phase = matches!(
-            target,
-            labello_client::MigrationReviewTarget::Confirmation { .. }
-        );
-        let (approve, reject) = if revision && final_phase {
-            (
-                "Commit approval".to_string(),
-                "Commit rejection".to_string(),
-            )
-        } else if revision && !shortcut_only {
-            ("Stage approval".to_string(), "Stage rejection".to_string())
-        } else if shortcut_only {
-            (
-                shortcut_button_label(&approve_shortcut, "Accept"),
-                shortcut_button_label(&reject_shortcut, "Reject"),
-            )
-        } else if compact {
-            ("Accept".to_string(), "Reject".to_string())
-        } else {
-            (
-                "Approve migration item".to_string(),
-                "Reject migration item".to_string(),
-            )
-        };
-        let button_width =
-            compact.then(|| ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(44.0));
-        let approve_button = egui::Button::new(approve).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if compact { 44.0 } else { 0.0 },
-        ));
-        let reject_button = egui::Button::new(reject).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if compact { 44.0 } else { 0.0 },
-        ));
-        let ready = !self.work.migration.busy && !self.loading.saving;
-        if theme::primary_button(
-            ui,
-            ready && !(revision && self.work.review_rejected),
-            approve_button,
-        )
-        .on_hover_text(format!("Accept migration item ({approve_shortcut})"))
-        .clicked()
-        {
-            self.request_review_migration(
-                task_id.clone(),
-                target.clone(),
-                labello_domain::ReviewDecision::Approved,
-            );
-        }
-        if theme::danger_button(ui, ready, reject_button)
-            .on_hover_text(format!("Reject migration item ({reject_shortcut})"))
-            .clicked()
-        {
-            self.request_review_migration(
-                task_id,
-                target,
-                labello_domain::ReviewDecision::Rejected,
-            );
-        }
+        let _ = (task_id, target);
+        self.review_decision_buttons(ui, shortcut_only, compact);
     }
 
     pub(crate) fn migration_workspace_actions(&mut self, ui: &mut egui::Ui, compact: bool) {
@@ -1235,15 +1237,33 @@ impl LabelloApp {
             }
             return;
         }
+        let extra_actions = usize::from(
+            self.work.migration.adding_missing_object || self.migration_can_add_missing_object(),
+        ) + usize::from(
+            self.work.migration.editing_missing_annotation_id.is_some(),
+        ) + usize::from(self.migration_keypoint_undo_available())
+            + usize::from(
+                !self.discovered_migration_skeletons().is_empty()
+                    && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)),
+            );
+        let count = (1 + extra_actions) as f32;
+        let width = Some(
+            ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
+                .floor()
+                .max(44.0),
+        );
         if let Some(group_id) = self.work.migration.inspected_group_id.clone() {
-            if theme::primary_button(
+            if workspace_toolbar_button(
                 ui,
                 !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
-                egui::Button::new(if compact {
+                if compact {
                     "Edit object"
                 } else {
                     "Edit this object"
-                }),
+                },
+                WorkspaceActionIcon::Save,
+                width,
+                theme::Intent::Accent,
             )
             .clicked()
             {
@@ -1254,46 +1274,50 @@ impl LabelloApp {
             if !adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
             {
-                self.migration_discovered_edit_actions(ui, compact);
+                self.migration_discovered_edit_actions(ui, compact, width);
             }
             if (adding_missing_object || self.migration_can_add_missing_object())
-                && ui
-                    .add_enabled(
-                        !self.work.migration.busy,
-                        egui::Button::new(if adding_missing_object {
-                            if self.work.migration.editing_missing_annotation_id.is_some() {
-                                "Cancel editing object"
-                            } else {
-                                "Cancel adding object"
-                            }
-                        } else {
-                            "Add missing object"
-                        })
-                        .shortcut_text(crate::theme::button_shortcut(
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::AddMissingObject,
-                            ),
-                        )),
-                    )
-                    .on_hover_text(if adding_missing_object {
+                && workspace_toolbar_button(
+                    ui,
+                    !self.work.migration.busy,
+                    if adding_missing_object {
                         if self.work.migration.editing_missing_annotation_id.is_some() {
-                            "Discard changes to this added missing-object skeleton."
+                            "Cancel editing object"
                         } else {
-                            "Discard this unsaved missing-object skeleton."
+                            "Cancel adding object"
                         }
                     } else {
-                        "Add a skeleton for an object that had no imported guide."
-                    })
-                    .clicked()
+                        "Add missing object"
+                    },
+                    if adding_missing_object {
+                        WorkspaceActionIcon::Discard
+                    } else {
+                        WorkspaceActionIcon::Add
+                    },
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text(if adding_missing_object {
+                    if self.work.migration.editing_missing_annotation_id.is_some() {
+                        "Discard changes to this added missing-object skeleton."
+                    } else {
+                        "Discard this unsaved missing-object skeleton."
+                    }
+                } else {
+                    "Add a skeleton for an object that had no imported guide."
+                })
+                .clicked()
             {
                 self.trigger_missing_migration_object_action();
             }
             if let Some(annotation_id) = self.work.migration.editing_missing_annotation_id.clone()
-                && theme::danger_button(
+                && workspace_toolbar_button(
                     ui,
                     !self.work.migration.busy,
-                    egui::Button::new("Remove added object"),
+                    "Remove added object",
+                    WorkspaceActionIcon::Remove,
+                    width,
+                    theme::Intent::Error,
                 )
                 .on_hover_text(
                     "Remove this added missing-object skeleton. You can add it again if needed.",
@@ -1302,15 +1326,19 @@ impl LabelloApp {
             {
                 self.request_delete_migration_skeleton(annotation_id);
             }
-            self.migration_primary_button(ui, compact);
+            self.migration_primary_button(ui, compact, width);
             if self.migration_keypoint_undo_available() {
-                let response = ui.add_enabled(
+                let response = workspace_toolbar_button(
+                    ui,
                     self.migration_keypoint_undo_enabled(),
-                    egui::Button::new(if compact {
+                    if compact {
                         "Undo"
                     } else {
                         "Undo last keypoint"
-                    }),
+                    },
+                    WorkspaceActionIcon::Undo,
+                    width,
+                    theme::Intent::Neutral,
                 );
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Undo last keypoint")
@@ -1478,24 +1506,30 @@ impl LabelloApp {
         }
     }
 
-    fn migration_discovered_edit_actions(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn migration_discovered_edit_actions(
+        &mut self,
+        ui: &mut egui::Ui,
+        compact: bool,
+        width: Option<f32>,
+    ) {
         let skeletons = self.discovered_migration_skeletons();
         match skeletons.as_slice() {
             [] => {}
             [skeleton] => {
-                if ui
-                    .add_enabled(
-                        !self.work.migration.busy,
-                        egui::Button::new(if compact {
-                            "Edit added"
-                        } else {
-                            "Edit added object 1"
-                        }),
-                    )
-                    .on_hover_text(
-                        "Edit the skeleton for the object added during full-image review.",
-                    )
-                    .clicked()
+                if workspace_toolbar_button(
+                    ui,
+                    !self.work.migration.busy,
+                    if compact {
+                        "Edit added"
+                    } else {
+                        "Edit added object 1"
+                    },
+                    WorkspaceActionIcon::Save,
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text("Edit the skeleton for the object added during full-image review.")
+                .clicked()
                 {
                     self.begin_edit_missing_migration_object(skeleton.annotation_id.clone());
                 }
@@ -1503,7 +1537,12 @@ impl LabelloApp {
             _ => {
                 ui.add_enabled_ui(!self.work.migration.busy, |ui| {
                     egui::ComboBox::from_id_salt("migration-edit-added-object")
-                        .selected_text("Edit added object")
+                        .selected_text(if width.is_some_and(|width| width < 150.0) {
+                            "..."
+                        } else {
+                            "Edit added object"
+                        })
+                        .width(width.unwrap_or(150.0))
                         .show_ui(ui, |ui| {
                             for (index, skeleton) in skeletons.into_iter().enumerate() {
                                 if ui
@@ -1516,6 +1555,15 @@ impl LabelloApp {
                                     ui.close();
                                 }
                             }
+                        })
+                        .response
+                        .on_hover_text("Edit added object")
+                        .widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::ComboBox,
+                                !self.work.migration.busy,
+                                "Edit added object",
+                            )
                         });
                 });
             }
@@ -1621,7 +1669,7 @@ impl LabelloApp {
         self.migration_assignment_buttons(ui);
     }
 
-    fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool, width: Option<f32>) {
         let Some((action, enabled)) = self.migration_primary_action() else {
             return;
         };
@@ -1632,13 +1680,23 @@ impl LabelloApp {
         } else {
             action.label(compact)
         };
-        let response = theme::primary_button(
+        let response = workspace_toolbar_button(
             ui,
             enabled,
-            egui::Button::new(label).shortcut_text(crate::theme::button_shortcut(
-                self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage),
-            )),
-        );
+            label,
+            match &action {
+                MigrationPrimaryAction::Confirm { .. } => WorkspaceActionIcon::Approve,
+                MigrationPrimaryAction::KeepDisposition(_) => WorkspaceActionIcon::Next,
+                _ => WorkspaceActionIcon::Save,
+            },
+            width,
+            theme::Intent::Accent,
+        )
+        .on_hover_text(format!(
+            "{} ({})",
+            label,
+            self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage)
+        ));
         let overview_visible = if crate::app::LayoutMode::for_width(ui.ctx().content_rect().width())
             == crate::app::LayoutMode::Wide
         {
@@ -1962,39 +2020,15 @@ impl LabelloApp {
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
-        // Completion advances the task timestamp past its object approvals. Keep
-        // the outgoing review position until the next assignment is installed.
+        if let Some(position) = self.work.review_corrections.position {
+            return position;
+        }
         if self.work.assignment.as_ref().is_some_and(|assignment| {
-            assignment.kind == labello_domain::AssignmentKind::Review
-                && assignment.status == labello_domain::AssignmentStatus::Completed
+            assignment.status == labello_domain::AssignmentStatus::Completed
         }) {
             return self.work.migration.review_index;
         }
-        let (Some(state), Some(task)) = (self.work.current_state.as_ref(), self.selected_task())
-        else {
-            return 0;
-        };
-        let Ok(targets) = state.review_object_targets(task) else {
-            return 0;
-        };
-        let object_count = targets.len();
-        if self.review_revision_active() && self.work.review_rejected {
-            return object_count;
-        }
-        targets
-            .iter()
-            .take(object_count)
-            .position(|target| {
-                let review = if self.review_revision_active() {
-                    self.staged_review_decision(target)
-                } else {
-                    state.effective_review_for_target(&task.task_id, target, &self.config.user_id)
-                };
-                review.is_none_or(|review| {
-                    review.decision != labello_domain::ReviewDecision::Approved
-                })
-            })
-            .unwrap_or(object_count)
+        self.next_review_position()
     }
 
     fn migration_targets(&self) -> Vec<labello_domain::MigrationTarget> {
@@ -2973,6 +3007,13 @@ impl LabelloApp {
         target: labello_client::MigrationReviewTarget,
         decision: labello_domain::ReviewDecision,
     ) {
+        if decision == labello_domain::ReviewDecision::Rejected {
+            self.reject_review_item();
+            return;
+        }
+        if !self.review_can_approve() || !self.retain_review_editor() {
+            return;
+        }
         let Some(assignment) = self.work.assignment.clone() else {
             return;
         };

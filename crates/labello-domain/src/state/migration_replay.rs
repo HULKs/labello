@@ -60,7 +60,7 @@ impl ImageState {
                             action: HumanRevisionKind::Authored
                                 | HumanRevisionKind::Edited
                                 | HumanRevisionKind::AcceptedUnchanged
-                        }
+                        } | RevisionSource::ReviewerCorrection { .. }
                     )
                 {
                     return Err(DomainError::InvalidMigration(
@@ -463,6 +463,6 @@ fn is_discovered_migration_skeleton(annotation: &AnnotationVersion) -> bool {
                 action: HumanRevisionKind::Authored
                     | HumanRevisionKind::Edited
                     | HumanRevisionKind::AcceptedUnchanged
-            }
+            } | RevisionSource::ReviewerCorrection { .. }
         )
 }

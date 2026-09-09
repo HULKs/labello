@@ -385,29 +385,14 @@ impl LabelloApp {
                             let completed_assignment = self.work.assignment.clone();
                             self.runtime.error = None;
                             self.apply_state(state);
-                            self.work.review_index = self
-                                .work
-                                .selected_task_id
-                                .as_ref()
-                                .map(|task_id| {
-                                    crate::review_sequence::reviewed_object_prefix(
-                                        self.work
-                                            .current_state
-                                            .as_ref()
-                                            .expect("state was applied"),
-                                        task_id,
-                                        &self.config.user_id,
-                                    )
-                                })
-                                .unwrap_or(0);
-                            if let Some(assignment) = completed_assignment.as_ref() {
+                            if phase == crate::app::ReviewPhase::FullImage && let Some(assignment) = completed_assignment.as_ref() {
                                 self.clear_current_work_draft(assignment);
                             }
                             match phase {
                                 crate::app::ReviewPhase::Object
                                     if decision == labello_domain::ReviewDecision::Approved =>
                                 {
-                                    self.discard_correction();
+                                    self.finish_local_review_item();
                                     self.sync_review_selection();
                                 }
                                 crate::app::ReviewPhase::Object => {

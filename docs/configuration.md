@@ -495,3 +495,13 @@ and ZIP directory entries require memory proportional to the captured content.
 See [export operations](operations.md#dataset-export) for disk planning and
 recovery. An optional `maxMetadataBytes` also bounds source configuration,
 image-index and per-image event-log reads, as well as generated metadata.
+
+## Reviewer corrections
+
+Dataset task review configuration retains the legacy `allowReviewerCorrections`
+field for file and wire compatibility. Both `false` and `true` allow corrections
+in approval review; the administration UI no longer offers the switch. Every
+rejection requires substantive reviewer changes and creates a fresh review round.
+One reviewer approves all current-round objects and the final image, including
+guided migration. Historical `requiredReviews` values are normalized by the
+dataset review-policy upgrade.

@@ -24,6 +24,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             .build_eframe(|ctx| {
                 let mut app =
                     inspector_presets::build(InspectorPreset::MigrationObject, &ctx.egui_ctx);
+                app.work.inspector_panel_collapsed = false;
                 if width < 600.0 {
                     app.work.drawer = Some(Drawer::Inspector);
                 }
@@ -100,7 +101,9 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
     let mut full_image = Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_eframe(|ctx| {
-            inspector_presets::build(InspectorPreset::MigrationFullImage, &ctx.egui_ctx)
+            let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &ctx.egui_ctx);
+            app.work.inspector_panel_collapsed = false;
+            app
         });
     full_image.step();
     assert!(
@@ -128,6 +131,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
         InspectorPreset::MigrationFullImage,
         &egui::Context::default(),
     );
+    no_guides_app.work.inspector_panel_collapsed = false;
     let task_id = no_guides_app.work.selected_task_id.clone().unwrap();
     let state = no_guides_app.work.current_state.as_mut().unwrap();
     state
@@ -294,7 +298,9 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
     let mut annotated = Harness::builder()
         .with_size(egui::vec2(1440.0, 1000.0))
         .build_eframe(|ctx| {
-            inspector_presets::build(InspectorPreset::MigrationAnnotatedEdit, &ctx.egui_ctx)
+            let mut app = inspector_presets::build(InspectorPreset::MigrationAnnotatedEdit, &ctx.egui_ctx);
+            app.work.inspector_panel_collapsed = false;
+            app
         });
     annotated.step();
     assert!(

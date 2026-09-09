@@ -232,7 +232,7 @@ fn measured_workspace_shortcuts_keep_contrast_inline_and_in_wrapped_menus() {
                         return;
                     }
                     Frame::new().fill(PANEL).inner_margin(16).show(ui, |ui| {
-                        ui.set_width(if menu { 120.0 } else { 1000.0 });
+                        ui.set_width(if menu { 44.0 } else { 1000.0 });
                         ui.horizontal_wrapped(|ui| {
                             let action = WorkspaceAction {
                                 command: WorkspaceCommand::User(
@@ -243,9 +243,20 @@ fn measured_workspace_shortcuts_keep_contrast_inline_and_in_wrapped_menus() {
                                 enabled,
                                 help: "Return to the previous assignment.",
                             };
+                            let mut actions = vec![action];
+                            if menu {
+                                actions.push(WorkspaceAction {
+                                    command: WorkspaceCommand::User(
+                                        labello_domain::UserAction::UndoEdit,
+                                    ),
+                                    label: "Undo".into(),
+                                    shortcut: "Ctrl+Z".into(),
+                                    enabled,
+                                    help: "Undo the last edit.",
+                                });
+                            }
                             assert!(
-                                workspace_secondary_actions(ui, &[action], "More actions")
-                                    .is_none()
+                                workspace_secondary_actions(ui, &actions, "More actions").is_none()
                             );
                         });
                     });

@@ -12,7 +12,6 @@ fn paint_canvas(
     editable: bool,
     edit_preview: Option<(&AnnotationId, BoundingBox)>,
     draft_box: Option<BoundingBox>,
-    selected_keypoint: Option<usize>,
     keypoint_preview: Option<(&AnnotationId, usize, NormalizedPoint)>,
     skeleton_edges: &[(String, String)],
     prelabels: &[PrelabelSuggestion],
@@ -129,11 +128,6 @@ fn paint_canvas(
                         );
                         let center = normalized_to_screen(image_rect, pos2(point.x, point.y));
                         paint_keypoint(&painter, center, &keypoint.state, color, if selected { 5.0 } else { 4.0 }, false);
-                        if selected && selected_keypoint == Some(keypoint_index) {
-                            for stroke in overlay_strokes(theme::FOCUS_RING, 2.0) {
-                                painter.circle_stroke(center, 14.0, stroke);
-                            }
-                        }
                     }
                 }
             }

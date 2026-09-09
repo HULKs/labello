@@ -11,7 +11,9 @@ fn review_inspector_identifies_the_exact_persisted_target() {
         }),
         true,
     );
-    let harness = loaded_review_harness(api);
+    let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     assert!(harness.query_by_label("Active review target").is_some());
     assert!(harness.query_by_label("Persisted version 1").is_some());
     assert!(
@@ -98,14 +100,7 @@ fn review_context_distinguishes_correction_input_and_final_check_from_persisted_
     );
     let mut harness = loaded_review_harness(api);
     harness.state_mut().start_correction();
-    let correction = harness
-        .state()
-        .review_context()
-        .unwrap()
-        .correction
-        .unwrap();
-    assert_eq!(correction.base_version, 1);
-    assert!(!correction.unsaved_input);
+    assert!(harness.state().review_context().unwrap().correction.is_none());
     harness.state_mut().edit_correction_bbox(BoundingBoxEdit {
         annotation_id: id,
         bounding_box: BoundingBox {
@@ -436,7 +431,7 @@ fn review_context_retains_unsaved_correction_on_failure_and_clears_after_commit(
             height: 0.3,
         },
     });
-    let before = harness.state().review_context().unwrap();
+
     let old_image = harness
         .state()
         .work
@@ -446,10 +441,13 @@ fn review_context_retains_unsaved_correction_on_failure_and_clears_after_commit(
         .image_id
         .clone();
     api.fail_next_correction();
-    harness.state_mut().request_correction();
+    harness.state_mut().reject_review_item();
+    let before = harness.state().review_context().unwrap();
+    harness.state_mut().submit_staged_review_corrections();
     step_until(&mut harness, 12, |app| !app.loading.saving);
     assert_eq!(harness.state().review_context().unwrap(), before);
     harness.state_mut().request_correction();
+    harness.state_mut().submit_staged_review_corrections();
     step_until(&mut harness, 16, |app| {
         app.work
             .assignment

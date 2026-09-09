@@ -17,6 +17,7 @@ pub(crate) struct ReviewContext {
     pub staged_decision: Option<ReviewDecision>,
     pub correction: Option<CorrectionContext>,
     pub preview_unavailable: bool,
+    pub unsaved_corrections: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,7 +75,11 @@ impl ReviewContext {
                 }
                 if let Some(version) = annotation_version {
                     lines.push(if let Some(correction) = &self.correction {
-                        format!("Base persisted version {}", correction.base_version)
+                        if correction.base_version == 0 {
+                            "New annotation · unsaved".into()
+                        } else {
+                            format!("Base persisted version {}", correction.base_version)
+                        }
                     } else {
                         format!("Persisted version {version}")
                     });
@@ -99,8 +104,14 @@ impl ReviewContext {
                 .to_string(),
             );
         }
+        if self.unsaved_corrections > 0 {
+            lines.push(format!(
+                "{} unsaved corrections · amber previews",
+                self.unsaved_corrections
+            ));
+        }
         if self.revision_mode {
-            lines.push("Decision revision mode; geometry unchanged".to_string());
+            lines.push("Review revision mode".to_string());
         }
         let decision = match self.decision {
             Some(ReviewDecision::Approved) => "Approved",
@@ -248,17 +259,53 @@ impl LabelloApp {
                 return None;
             }
         }
-        let correction = if let Some(draft) = &self.work.correction_draft {
-            let persisted = state.current_annotation(annotation_id.as_ref()?)?;
-            if draft.annotation_id != persisted.annotation_id
-                || draft.expected_version != persisted.version
-            {
-                return None;
+        let correction = if let Some(draft) = self.work.correction_draft.as_ref().filter(|draft| {
+            draft.expected_version == 0
+                || draft.geometry_changed()
+                || !draft.reason.trim().is_empty()
+        }) {
+            if let Some(editor) = &self.work.review_corrections.editor {
+                Some(CorrectionContext {
+                    base_version: editor.version,
+                    unsaved_input: editor.version == 0
+                        || draft.geometry_changed()
+                        || !draft.reason.trim().is_empty(),
+                })
+            } else {
+                let persisted = state.current_annotation(annotation_id.as_ref()?)?;
+                if draft.annotation_id != persisted.annotation_id
+                    || draft.expected_version != persisted.version
+                {
+                    return None;
+                }
+                Some(CorrectionContext {
+                    base_version: persisted.version,
+                    unsaved_input: draft.geometry_changed() || !draft.reason.trim().is_empty(),
+                })
             }
-            Some(CorrectionContext {
-                base_version: persisted.version,
-                unsaved_input: draft.geometry_changed() || !draft.reason.trim().is_empty(),
-            })
+        } else if let Some(annotation) = annotation_id
+            .as_ref()
+            .and_then(|id| state.current_annotation(id))
+        {
+            self.work
+                .review_corrections
+                .changes
+                .iter()
+                .any(|change| match change {
+                    labello_domain::ReviewCorrectionChange::Edit { annotation_id, .. }
+                    | labello_domain::ReviewCorrectionChange::Remove { annotation_id, .. } => {
+                        *annotation_id == annotation.annotation_id
+                    }
+                    labello_domain::ReviewCorrectionChange::MigrationObject {
+                        object_group_id,
+                        ..
+                    } => annotation.object_group_id.as_ref() == Some(object_group_id),
+                    _ => false,
+                })
+                .then_some(CorrectionContext {
+                    base_version: annotation.version,
+                    unsaved_input: true,
+                })
         } else {
             None
         };
@@ -274,9 +321,20 @@ impl LabelloApp {
             revision_mode: self.review_revision_active(),
             staged_decision: self
                 .staged_review_decision(&target)
-                .map(|review| review.decision.clone()),
+                .map(|review| review.decision.clone())
+                .or_else(|| {
+                    (self.work.review_corrections.reviewed.contains(&target)
+                        && self
+                            .work
+                            .review_corrections
+                            .changes
+                            .iter()
+                            .any(|change| self.change_matches_target(change, &target)))
+                    .then_some(ReviewDecision::Rejected)
+                }),
             correction,
             preview_unavailable: self.work.current_texture.is_none(),
+            unsaved_corrections: self.work.review_corrections.changes.len(),
         })
     }
 

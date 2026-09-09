@@ -53,11 +53,11 @@ still requires the Reviewer role and ownership of the exact previous review;
 it does not grant permission to revise another reviewer's decisions.
 
 A skipped normal review resumes its original submission round and preserves
-valid object decisions. A completed review opens a decision-only revision.
+valid object decisions. A completed review opens an exclusive revision.
 Opening or cancelling that revision leaves the previous effective decisions,
 outcome, and completion counts unchanged. The reviewer stages object decisions
 locally, then explicitly commits the full-image decision. Approval requires all
-captured targets to be approved. A staged rejection prevents approval.
+captured targets to be approved. Rejection requires a substantive correction submission.
 
 Commit atomically supersedes the reviewer's captured decisions, appends their
 replacements, recomputes the task outcome and counts, and completes the fresh
@@ -73,12 +73,12 @@ are equal. Another active lease also prevents reopening. The revision lease
 excludes competing task mutations and is checked again at commit. Configuration
 publication is serialized with revision validation and commit.
 
-A reviewer's original geometry correction remains authoritative. Its immediate
-previous revision uses the corrected current geometry and cannot create, undo,
-or edit geometry. Skipped normal reviews retain ordinary correction support.
-Migration revisions require the original valid confirmation. A rejected
-migration whose rejection invalidated confirmation cannot be reopened as a
-decision-only revision; it needs the normal migration correction workflow.
+Revision reviewers can edit, create, or remove annotations and correct guided
+migration dispositions using the same correction transaction as normal review.
+A correction ends the revision and creates a new submission round. Its rejection
+belongs to the old round; old approvals cannot finalize the corrected work.
+Migration revisions require a current valid confirmation; historical rejection
+that invalidated confirmation still needs the normal migration correction flow.
 Historical assignments created before captured review contexts were introduced
 remain replayable but cannot be reopened through Previous.
 
@@ -150,33 +150,52 @@ replaces its selection with the applicable correction dependency and stale write
 are rejected. Existing global correction-pass records retain their audit history. The latest
 pass for the current assignment owns outstanding decisions and the completion
 gate; earlier passes do not reopen when later edits change an annotation.
-## Missing-object rejection guidance
 
-Ordinary approval reviewers can mark missing-object locations only during the
-final full-image check. Each marker names an expected task class and annotation
-type. Draft locations can be moved, selected/refocused, and removed; approval
-is disabled while any remain. Sending back atomically records the final review,
-all locations, `NeedsCorrection`, and the exact assignment's completion. The
-server checks the captured task, round, full object review phase, lease, and
-reviewer authority. Guided migration and reviewer correction do not use this
-command.
+## Reviewer correction submissions
 
-Switching or skipping with unsent locations requires confirmation. Cancel
-preserves the draft; a failed submission retains its exact retry request. Drafts
-cannot transfer between assignments or submission rounds, and expired ownership
-disables editing and submission. Unsent locations are not durable across reloads
-or crashes; the browser provides its ordinary page-exit warning.
+Both ordinary and guided migration reviews accumulate unsaved corrections.
+A submission must edit geometry, add an annotation, remove an erroneous object,
+or change a canonical migration disposition. Empty changes, unchanged geometry,
+comment-only changes, unchanged exclusion reasons, bare rejection, and new
+missing-object markers cannot reject work. The legacy `allowReviewerCorrections`
+configuration field remains readable but no longer gates approval review.
 
-The annotator receives read-only normalized guidance through correction until
-committed task resubmission. No proximity-based auto-resolution occurs. Later
-review can inspect historical locations, and a new rejection without locations
-has no active markers. Completed decision revisions use the same evidence
-policy; superseded records remain auditable. Revision markers require explicit
-decisions for every captured object. Early rejection may commit without markers,
-but never fills in decisions for objects the reviewer has not visited. An
-incomplete marker-bearing revision is rejected locally before its retry request
-is frozen. Markers never create annotation
-versions or independently count as completed work.
+The review UI edits the focused item directly. Approve is available for an
+unchanged item; Reject retains a valid correction locally and advances. Earlier
+corrections do not disable approval of another unchanged item. Reset restores the
+item and requires a new decision. A valid retained correction satisfies that item's
+rejection requirement when navigating to the overview; unchanged items still need
+explicit approval. Navigation alone does not approve items.
+The final overview permits adding missing annotations and revisiting existing
+items. Once every original item has a decision, it submits approval if there are
+no corrections, or submits the complete correction batch with rejection. Invalid
+or unfinished additions block submission. No corrected-item rejection reaches the
+server before this overview submission.
+
+The transaction holds the configuration guard and image lock, reloads state,
+checks the exact reviewer lease, captured round, task definition and target
+fingerprint, validates the complete correction batch, then publishes all changes,
+reviewer attribution, rejection, assignment completion and fresh submission in
+one atomic event-log replacement. Canonical skeletons retain their guide/group
+identities. Discovered skeletons retain the derived-box pairing rules above.
+
+Corrected work remains `Submitted` with no completion outcome. Other review
+leases are cancelled, and the same reviewer can claim a fresh assignment.
+One reviewer must approve every current object and the final image in the new
+round. Previous approvals remain historical evidence and cannot count toward it.
+
+The correction ID and complete request identify an exact retry. Changed retries,
+stale versions or targets, lost ownership, and changed configuration fail without
+appending a partial correction. Cancelling navigation preserves staged edits;
+failed requests retain the immutable submission for retry. Browser recovery is
+best effort and does not replace the server event log.
+
+## Historical missing-object evidence
+
+Active review no longer creates location markers. A missing object is corrected
+by creating its annotation. Existing marker events, revision records and evidence
+remain replayable, available in snapshots/offline data, and visible as read-only
+history. Historical records never become annotations implicitly.
 
 ## Single-reviewer completion
 
@@ -184,8 +203,8 @@ Approval tasks admit one active reviewer per image and task. That reviewer
 performs object-level decisions and the final full-image check. Final approval
 atomically records the decision, marks the task `Completed` with its approved
 outcome, completes the owned assignment, and cancels any outstanding competing
-review leases. Rejection returns work to `NeedsCorrection`. Reviewer geometry
-correction and decision revision retain their existing audited transactions.
+review leases. Rejection requires substantive corrections and returns work to a fresh
+`Submitted` review round.
 A task configured with review workflow `none` completes on annotation submission.
 
 Task statistics use five mutually exclusive states: Pending, In progress,

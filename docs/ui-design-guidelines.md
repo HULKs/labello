@@ -153,8 +153,9 @@ has been recorded.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
-  pinch instructions in Settings. Keep Pan mode active during approval decisions
-  and return primary drag to object editing during reviewer correction; place review phase
+  pinch instructions in Settings. Review opens each focused item for direct editing. Primary drag edits the item;
+  modifier-drag and middle-drag remain available for panning. Omit the Pan button
+  in review; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
@@ -180,7 +181,34 @@ has been recorded.
   "Final check / Full image" and omit object-only fields. Migration distinguishes
   annotated dispositions, excluded objects, discovered skeletons and confirmation;
   excluded objects show disposition version without inventing an annotation version.
-  Correction mode shows the base persisted version and whether input is unsaved.
+  Actual edits show the base persisted version and unsaved input; opening an item
+  alone is not a correction. The second-bar indicator leads with item position or
+  Image overview, followed by workflow, class and geometry type. Its panel icon and
+  selected state reflect Inspector visibility, and activating it toggles the panel.
+  Size the indicator to its text and panel icon, capped by the available width.
+  Long identity text truncates within the indicator while the tooltip and Inspector
+  retain the complete accessible identity. Keep the current position visible when
+  corrections exist. The Inspector starts closed. On mobile, keep the item/Inspector
+  indicator, Refocus, Fit and workflow toggle in one top row. Put Previous, Discard
+  and Skip in a permanently visible second bottom row beneath the decision buttons;
+  use Discard corrections on wide screens. Skip is not hidden in the navigation menu.
+  Reviewed keypoints retain their normal marker without an additional selection circle.
+  When reviewing an added migration object, Remove item also belongs to this footer
+  row, with an icon fallback when its text does not fit.
+  Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
+  width, retaining accessible names and tooltips. Short empty states scroll to keep
+  retry actions reachable.
+  Approve and Reject evaluate the focused item independently. An unchanged item
+  enables Approve; a valid correction enables Reject. Reject retains changes locally
+  and advances. Previous item, Next item and Overview retain valid corrections, which
+  satisfy the corrected item's rejection requirement. Unchanged items still require
+  explicit approval. Reset item restores the original annotation or disposition and requires
+  another decision. Discard corrections resets every changed item for review.
+  The overview permits drawing missing annotations and revisiting existing items.
+  Once every original item has a decision, Submit approval is enabled if no
+  corrections remain; otherwise Reject and submit corrections is enabled. Invalid
+  or unfinished additions block both submission actions. Only the overview submits
+  corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
   existing identity line. The full accessible details explain that geometry is
   unchanged; no redundant caption row consumes canvas space. If target context
@@ -193,7 +221,7 @@ has been recorded.
   Workspace secondary actions use measured button atoms, including the current
   font, icons and shortcuts, in the space left after preceding controls and badges.
   Preserve each workflow's primary controls and secondary order. Show the longest
-  secondary prefix that fits with an overflow trigger for the remaining tail; omit
+  secondary prefix that fits, trying icons before an overflow trigger for the remaining tail; omit
   the trigger when everything fits. Required controls wrap and the panel reserves
   their actual height. Migration Previous object leads its secondary action order;
   short migration annotation bars remove spare vertical padding so confirmation
@@ -205,8 +233,8 @@ has been recorded.
   filename text and secondary controls. Only the identity line may truncate; type
   and phase wrap at their measured text width and the shell reserves the resulting
   height. At compact sizes, the summary opens Inspector details by touch or keyboard,
-  a separate Workflow control stays reachable, and canvas controls occupy a second
-  row. Compact availability feedback shares the truncatable identity line; it
+  a separate Workflow control stays reachable, and canvas controls share the same
+  row. Annotation also keeps canvas and panel controls together in one compact row. Compact availability feedback shares the truncatable identity line; it
   must not take width from the full type/phase line or add a context row.
   Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.

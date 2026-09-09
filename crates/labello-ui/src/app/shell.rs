@@ -15,13 +15,9 @@ impl eframe::App for LabelloApp {
         self.retry_prefetch_if_due(ui.ctx());
         self.sync_review_selection();
         self.sync_missing_objects();
-        self.work.canvas.require_pan_mode(
-            self.view == AppView::Review
-                && self.work.current.is_some()
-                && self.work.correction_draft.is_none()
-                && !(self.missing_objects_editable() && (self.work.missing_objects.placing || self.has_missing_object_draft())),
-        );
+        self.work.canvas.require_pan_mode(false);
         self.sync_manual_migration();
+        self.sync_review_editor();
         self.start_next_persistence_command();
         self.start_setup_load();
         if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {
@@ -52,7 +48,7 @@ impl eframe::App for LabelloApp {
         let layout = LayoutMode::for_width(ui.available_width());
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
         let compact_action_height = (self.work_view()
-            && (layout != LayoutMode::Wide || self.manual_migration_active()))
+            && (layout != LayoutMode::Wide || self.manual_migration_active() || self.view == AppView::Review))
         .then(|| self.workspace_actions_height(layout, viewport));
         egui::Panel::top("app_bar")
             .exact_size(56.0)
@@ -77,7 +73,7 @@ impl eframe::App for LabelloApp {
                     .map(|state| state.size().y);
                 let actions = egui::Panel::bottom(actions_id)
                     .min_size(action_height)
-                    .frame(if Self::short_viewport(viewport) && self.manual_migration_active() && self.view == AppView::Annotate {
+                    .frame(if Self::short_viewport(viewport) && (self.view == AppView::Review || self.manual_migration_active() && self.view == AppView::Annotate) {
                         theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
                     } else { theme::top_bar_frame() })
                     .show(ui, |ui| {
@@ -144,7 +140,7 @@ impl eframe::App for LabelloApp {
                                         top: 0,
                                         bottom: 0,
                                     })
-                                    .show(ui, |ui| self.right_panel(ui, true));
+                                    .show(ui, |ui| self.right_panel(ui, self.view != AppView::Review));
                             });
                     });
             } else {

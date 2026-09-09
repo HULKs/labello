@@ -64,7 +64,11 @@ jobs:
 
       - name: Install native build prerequisites
         run: |
-          sudo apt-get update
+          # These prerequisites come from Ubuntu, not the runner's third-party repositories.
+          test -r /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=-
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
 
       - name: Install Clippy
@@ -92,7 +96,11 @@ jobs:
 
       - name: Install native build prerequisites
         run: |
-          sudo apt-get update
+          # These prerequisites come from Ubuntu, not the runner's third-party repositories.
+          test -r /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=-
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
 
       - name: Install Rust
@@ -126,7 +134,11 @@ jobs:
 
       - name: Install native build prerequisites
         run: |
-          sudo apt-get update
+          # These prerequisites come from Ubuntu, not the runner's third-party repositories.
+          test -r /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=-
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
 
       - name: Install Rust
@@ -160,7 +172,11 @@ jobs:
 
       - name: Install native build prerequisites
         run: |
-          sudo apt-get update
+          # These prerequisites come from Ubuntu, not the runner's third-party repositories.
+          test -r /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=-
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
 
       - name: Install Rust
@@ -188,7 +204,11 @@ jobs:
 
       - name: Install native build prerequisites
         run: |
-          sudo apt-get update
+          # These prerequisites come from Ubuntu, not the runner's third-party repositories.
+          test -r /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=sources.list.d/ubuntu.sources \
+            -o Dir::Etc::sourceparts=-
           sudo apt-get install --yes libgl1-mesa-dev libwayland-dev libx11-dev libxi-dev libxkbcommon-dev
 
       - name: Install Rust
