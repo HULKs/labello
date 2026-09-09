@@ -22,6 +22,8 @@ use crate::app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupS
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorPreset {
     Annotation,
+    Presence,
+    PresenceReducedMotion,
     Setup,
     About,
     BuildMismatch,
@@ -75,8 +77,10 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 51] = [
+    pub const ALL: [Self; 53] = [
         Self::Annotation,
+        Self::Presence,
+        Self::PresenceReducedMotion,
         Self::Setup,
         Self::About,
         Self::BuildMismatch,
@@ -132,6 +136,8 @@ impl InspectorPreset {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Annotation => "annotation",
+            Self::Presence => "presence",
+            Self::PresenceReducedMotion => "presence-reduced-motion",
             Self::Setup => "setup",
             Self::About => "about",
             Self::BuildMismatch => "build-mismatch",
@@ -198,6 +204,31 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         | InspectorPreset::OverlayCorrection
         | InspectorPreset::OverlayMigration => overlay_preset(ctx, preset),
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::Presence | InspectorPreset::PresenceReducedMotion => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            crate::set_reduced_motion(ctx, preset == InspectorPreset::PresenceReducedMotion);
+            app.runtime.presence.value = Some(labello_client::ServerPresence {
+                users: vec![
+                    labello_client::PresentUser {
+                        user_id: app.config.user_id.clone(),
+                        github_login: Some("demo-annotator".into()),
+                        datasets: vec![labello_client::PresenceDataset {
+                            dataset_id: "demo".into(),
+                            name: "Robot match footage".into(),
+                        }],
+                    },
+                    labello_client::PresentUser {
+                        user_id: "local_reviewer".into(),
+                        github_login: None,
+                        datasets: vec![labello_client::PresenceDataset {
+                            dataset_id: "other".into(),
+                            name: "Another dataset".into(),
+                        }],
+                    },
+                ],
+            });
+            app
+        }
         InspectorPreset::Setup => setup_preset(),
         InspectorPreset::About | InspectorPreset::BuildUnavailable => {
             let mut app = setup_preset();

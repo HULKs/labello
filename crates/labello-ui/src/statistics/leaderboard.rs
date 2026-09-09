@@ -43,6 +43,7 @@ pub(crate) struct LeaderboardState {
     selected: Option<Vec<UserId>>,
     people_filter: String,
     activity_user: Option<UserId>,
+    activity_day: Option<NaiveDate>,
 }
 
 impl Default for LeaderboardState {
@@ -58,6 +59,7 @@ impl Default for LeaderboardState {
             selected: None,
             people_filter: String::new(),
             activity_user: None,
+            activity_day: None,
         }
     }
 }
@@ -169,7 +171,7 @@ impl LeaderboardState {
         let response = if width > 0.0 {
             ui.add_sized([width, 44.0], button.truncate())
         } else {
-            ui.add(button.wrap_mode(egui::TextWrapMode::Extend))
+            ui.add(button.min_size(egui::vec2(44.0, 44.0)))
         };
         if response.clicked() {
             if active {
@@ -246,7 +248,8 @@ impl LeaderboardState {
                 ui,
                 contributors,
                 &mut self.activity_user,
-                period_start(self.period, today),
+                &mut self.activity_day,
+                &mut self.period,
                 today,
             );
             ui.add_space(theme::SPACE_3);
@@ -260,36 +263,18 @@ impl LeaderboardState {
             return;
         };
         let today = labello_domain::now().date_naive();
-        let controls_layout = if ui.available_width() < 450.0 {
-            egui::Layout::top_down(egui::Align::Min)
-        } else {
-            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)
-        };
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), 44.0),
-            controls_layout,
-            |ui| {
-                ui.selectable_value(&mut self.history, false, "Leaderboard");
-                ui.selectable_value(&mut self.history, true, "History graph");
-                ui.add_space(theme::SPACE_3);
-                egui::ComboBox::from_label("Period")
-                    .selected_text(PERIODS[self.period])
-                    .show_ui(ui, |ui| {
-                        for (index, label) in PERIODS.iter().enumerate() {
-                            ui.selectable_value(&mut self.period, index, *label);
-                        }
-                    })
-                    .response
-                    .on_hover_text(
-                        "UTC calendar days, including today. Last day starts at 00:00 UTC.",
-                    );
-                ui.small(if self.period == 5 {
-                    "(All recorded activity · UTC)".into()
-                } else {
-                    format!("({} – {today} · UTC)", period_start(self.period, today))
-                });
-            },
-        );
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut self.history, false, "Leaderboard");
+            ui.selectable_value(&mut self.history, true, "History graph");
+        });
+        period_selector(ui, &mut self.period, "Period");
+        ui.horizontal_wrapped(|ui| {
+            ui.small(if self.period == 5 {
+                "(All recorded activity · UTC)".into()
+            } else {
+                format!("({} – {today} · UTC)", period_start(self.period, today))
+            });
+        });
         let start = period_start(self.period, today);
         let rows: Vec<_> = contributors
             .iter()
@@ -317,7 +302,7 @@ impl LeaderboardState {
             ui.label("No contributor activity yet.");
             return;
         }
-        ui.collapsing("How scores are counted", |ui| {
+        ui.collapsing(if ui.available_width() < 230.0 { "Score rules" } else { "How scores are counted" }, |ui| {
             ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
             ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
             ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
@@ -339,7 +324,8 @@ impl LeaderboardState {
                     for (index, label) in METRICS.iter().enumerate() {
                         ui.selectable_value(&mut self.metric, index, *label);
                     }
-                    ui.add_space(theme::SPACE_3);
+                });
+                ui.horizontal_wrapped(|ui| {
                     egui::ComboBox::from_id_salt("history-people")
                         .selected_text(if selected.is_empty() {
                             "Select people".to_string()
@@ -353,7 +339,7 @@ impl LeaderboardState {
                         .show_ui(ui, |ui| {
                             ui.set_width(menu_width);
                             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                            ui.spacing_mut().interact_size.y = 36.0;
+                            ui.spacing_mut().interact_size.y = 44.0;
                             ui.spacing_mut().button_padding.y = 4.0;
                             ui.spacing_mut().item_spacing.y = 4.0;
                             ui.add(
@@ -400,7 +386,7 @@ impl LeaderboardState {
                                             ui,
                                             person,
                                             RichText::new(&person.display_name),
-                                            egui::vec2(ui.available_width(), 36.0),
+                                            egui::vec2(ui.available_width(), 44.0),
                                             Some(checked),
                                         )
                                         .clicked()
@@ -430,7 +416,7 @@ impl LeaderboardState {
                         });
                 });
                 ui.add_space(theme::SPACE_2);
-                ui.horizontal_wrapped(|ui| {
+                ui.vertical(|ui| {
                     for (index, id) in selected.iter().enumerate() {
                         avatar::person(
                             ui,
@@ -458,9 +444,18 @@ impl LeaderboardState {
                     }
                 });
             } else {
-                for metric in 0..3 {
-                    podium(ui, &rows, metric);
-                }
+                ui.collapsing(
+                    if ui.available_width() < 200.0 {
+                        "Podiums"
+                    } else {
+                        "Podium highlights"
+                    },
+                    |ui| {
+                        for metric in 0..3 {
+                            compact_podium(ui, &rows, metric);
+                        }
+                    },
+                );
             }
             ui.add_space(theme::SPACE_3);
             theme::card_frame().show(ui, |ui| {
@@ -510,12 +505,24 @@ impl LeaderboardState {
                             }
                         });
                 } else {
-                    ui.horizontal_wrapped(|ui| {
-                        self.sort_header(ui, None, "Person", 0.0);
+                    if ui.available_width() < 210.0 {
+                        self.sort_header(ui, None, "Person", ui.available_width());
                         for (metric, label) in METRICS.iter().enumerate() {
-                            self.sort_header(ui, Some(metric), label, 0.0);
+                            self.sort_header(ui, Some(metric), label, ui.available_width());
                         }
-                    });
+                    } else {
+                        let sort_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                        egui::Grid::new("compact-ranking-sort")
+                            .num_columns(2)
+                            .show(ui, |ui| {
+                                self.sort_header(ui, None, "Person", sort_width);
+                                self.sort_header(ui, Some(0), METRICS[0], sort_width);
+                                ui.end_row();
+                                self.sort_header(ui, Some(1), METRICS[1], sort_width);
+                                self.sort_header(ui, Some(2), METRICS[2], sort_width);
+                                ui.end_row();
+                            });
+                    }
                     for (rank, row) in self.table_rows(&rows) {
                         let rank = if value(&row.total, self.ranking_metric).is_some() {
                             format!("#{rank}")
@@ -531,11 +538,9 @@ impl LeaderboardState {
                             None,
                         )
                         .on_hover_text(row.id.as_str());
-                        ui.horizontal_wrapped(|ui| {
-                            for (metric, label) in METRICS.iter().enumerate() {
-                                ui.label(format!("{label}: {}", display(&row.total, metric)));
-                            }
-                        });
+                        for (metric, label) in METRICS.iter().enumerate() {
+                            ui.label(format!("{label}: {}", display(&row.total, metric)));
+                        }
                     }
                 }
             });
@@ -543,11 +548,37 @@ impl LeaderboardState {
     }
 }
 
+fn period_selector(ui: &mut egui::Ui, period: &mut usize, label: &str) {
+    let combo = if ui.available_width() < 260.0 {
+        ui.label(format!("{label}:"));
+        egui::ComboBox::from_id_salt(label)
+    } else {
+        egui::ComboBox::from_label(label)
+    };
+    combo
+        .width(ui.available_width().min(140.0))
+        .truncate()
+        .selected_text(PERIODS[*period])
+        .show_ui(ui, |ui| {
+            for (index, label) in PERIODS.iter().enumerate() {
+                ui.selectable_value(period, index, *label);
+            }
+        })
+        .response
+        .on_hover_text("UTC calendar days, including today. Last day starts at 00:00 UTC.")
+        .widget_info(|| {
+            let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label);
+            info.current_text_value = Some(PERIODS[*period].into());
+            info
+        });
+}
+
 fn activity_chart(
     ui: &mut egui::Ui,
     contributors: &BTreeMap<UserId, ContributorStats>,
     activity_user: &mut Option<UserId>,
-    start: NaiveDate,
+    activity_day: &mut Option<NaiveDate>,
+    period: &mut usize,
     today: NaiveDate,
 ) {
     const BLUES: [egui::Color32; 5] = [
@@ -565,103 +596,94 @@ fn activity_chart(
     }
     theme::card_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
+        ui.heading("Daily activity");
+        period_selector(ui, period, "Activity period");
+        let start = period_start(*period, today);
         let menu_width = ui.available_width().min(300.0);
-        let header_layout = if ui.available_width() < 450.0 {
-            egui::Layout::top_down(egui::Align::Min)
-        } else {
-            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)
-        };
         let (daily, start, maximum) = ui
-            .allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), 44.0),
-                header_layout,
-                |ui| {
-                    ui.heading("Daily activity");
-                    egui::ComboBox::from_id_salt("activity-person")
-                        .selected_text(
+            .horizontal_wrapped(|ui| {
+                egui::ComboBox::from_id_salt("activity-person")
+                    .selected_text(
+                        activity_user
+                            .as_ref()
+                            .map_or("All people", |id| contributors[id].display_name.as_str()),
+                    )
+                    .width(210.0_f32.min(menu_width))
+                    .truncate()
+                    .show_ui(ui, |ui| {
+                        ui.set_width(menu_width);
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                        ui.selectable_value(activity_user, None, "All people");
+                        for (id, person) in contributors {
+                            ui.push_id(id, |ui| {
+                                if avatar::person(
+                                    ui,
+                                    person,
+                                    RichText::new(&person.display_name),
+                                    egui::vec2(ui.available_width(), 44.0),
+                                    Some(activity_user.as_ref() == Some(id)),
+                                )
+                                .clicked()
+                                {
+                                    *activity_user = Some(id.clone());
+                                }
+                            });
+                        }
+                    })
+                    .response
+                    .widget_info(|| {
+                        let mut info = egui::WidgetInfo::labeled(
+                            egui::WidgetType::ComboBox,
+                            true,
+                            "Activity for",
+                        );
+                        info.current_text_value = Some(
                             activity_user
                                 .as_ref()
-                                .map_or("All people", |id| contributors[id].display_name.as_str()),
-                        )
-                        .width(210.0_f32.min(menu_width))
-                        .truncate()
-                        .show_ui(ui, |ui| {
-                            ui.set_width(menu_width);
-                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                            ui.selectable_value(activity_user, None, "All people");
-                            for (id, person) in contributors {
-                                ui.push_id(id, |ui| {
-                                    if avatar::person(
-                                        ui,
-                                        person,
-                                        RichText::new(&person.display_name),
-                                        egui::vec2(ui.available_width(), 36.0),
-                                        Some(activity_user.as_ref() == Some(id)),
-                                    )
-                                    .clicked()
-                                    {
-                                        *activity_user = Some(id.clone());
-                                    }
-                                });
-                            }
-                        })
-                        .response
-                        .widget_info(|| {
-                            let mut info = egui::WidgetInfo::labeled(
-                                egui::WidgetType::ComboBox,
-                                true,
-                                "Activity for",
-                            );
-                            info.current_text_value = Some(
-                                activity_user
-                                    .as_ref()
-                                    .map_or("All people", |id| {
-                                        contributors[id].display_name.as_str()
-                                    })
-                                    .to_string(),
-                            );
-                            info
-                        });
-                    let mut daily = BTreeMap::<NaiveDate, (usize, usize)>::new();
-                    for (id, person) in contributors {
-                        if activity_user
-                            .as_ref()
-                            .is_some_and(|selected| selected != id)
+                                .map_or("All people", |id| contributors[id].display_name.as_str())
+                                .to_string(),
+                        );
+                        info
+                    });
+                let mut daily = BTreeMap::<NaiveDate, (usize, usize)>::new();
+                for (id, person) in contributors {
+                    if activity_user
+                        .as_ref()
+                        .is_some_and(|selected| selected != id)
+                    {
+                        continue;
+                    }
+                    for day in &person.history {
+                        if let Ok(date) = day.day.parse::<NaiveDate>()
+                            && date <= today
                         {
-                            continue;
-                        }
-                        for day in &person.history {
-                            if let Ok(date) = day.day.parse::<NaiveDate>()
-                                && date <= today
-                            {
-                                let counts = daily.entry(date).or_default();
-                                counts.0 += day.labeled;
-                                counts.1 += day.reviewed;
-                            }
+                            let counts = daily.entry(date).or_default();
+                            counts.0 += day.labeled;
+                            counts.1 += day.reviewed;
                         }
                     }
-                    let start = if start == NaiveDate::MIN {
-                        daily
-                            .keys()
-                            .next()
-                            .copied()
-                            .unwrap_or(today)
-                            .with_ordinal(1)
-                            .unwrap()
-                    } else {
-                        start
-                    };
-                    let (total, maximum) = daily
-                        .range(start..=today)
-                        .map(|(_, (labeled, reviewed))| labeled + reviewed)
-                        .fold((0, 0), |(total, maximum), count| {
-                            (total + count, maximum.max(count))
-                        });
-                    ui.small(format!("{total} activities"))
-                        .on_hover_text("Labeled tasks + reviews in the selected period.");
-                    (daily, start, maximum)
-                },
-            )
+                }
+                let start = if start == NaiveDate::MIN {
+                    daily
+                        .keys()
+                        .next()
+                        .copied()
+                        .unwrap_or(today)
+                        .with_ordinal(1)
+                        .unwrap()
+                } else {
+                    start
+                };
+                let (total, maximum) = daily
+                    .range(start..=today)
+                    .map(|(_, (labeled, reviewed))| labeled + reviewed)
+                    .fold((0, 0), |(total, maximum), count| {
+                        (total + count, maximum.max(count))
+                    });
+                ui.small(format!("{total} activities"))
+                    .on_hover_text("Labeled tasks + reviews in the selected period.");
+                (daily, start, maximum)
+            })
             .inner;
         for year in start.year()..=today.year() {
             let first = start.max(NaiveDate::from_ymd_opt(year, 1, 1).unwrap());
@@ -751,7 +773,77 @@ fn activity_chart(
             }
             ui.small(format!("More · up to {maximum} per day · UTC"));
         });
+        let selected_day = activity_day.get_or_insert(today);
+        *selected_day = (*selected_day).clamp(start, today);
+        let day_combo = if ui.available_width() < 260.0 {
+            ui.label("Activity day:");
+            egui::ComboBox::from_id_salt("Activity day")
+        } else {
+            egui::ComboBox::from_label("Activity day")
+        };
+        day_combo
+            .width(ui.available_width().min(140.0))
+            .truncate()
+            .selected_text(selected_day.to_string())
+            .height(220.0)
+            .show_ui(ui, |ui| {
+                let count = (today - start).num_days() as usize + 1;
+                egui::ScrollArea::vertical().show_rows(ui, 44.0, count, |ui, range| {
+                    for offset in range {
+                        let date = today - Days::new(offset as u64);
+                        ui.selectable_value(selected_day, date, date.to_string());
+                    }
+                });
+            })
+            .response
+            .widget_info(|| {
+                let mut info =
+                    egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Activity day");
+                info.current_text_value = Some(selected_day.to_string());
+                info
+            });
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .add_enabled(*selected_day > start, egui::Button::new("Previous day"))
+                .clicked()
+            {
+                *selected_day -= chrono::TimeDelta::days(1);
+            }
+            if ui
+                .add_enabled(*selected_day < today, egui::Button::new("Next day"))
+                .clicked()
+            {
+                *selected_day += chrono::TimeDelta::days(1);
+            }
+        });
+        let (labeled, reviewed) = daily.get(selected_day).copied().unwrap_or_default();
+        ui.label(format!(
+            "Selected day {selected_day}: {} activities · {labeled} labeled · {reviewed} reviewed",
+            labeled + reviewed
+        ));
     });
+}
+
+fn compact_podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
+    ui.label(
+        RichText::new(["Most labeled", "Most reviewed", "Highest acceptance"][metric]).strong(),
+    );
+    for (rank, row) in sorted(rows, metric)
+        .into_iter()
+        .filter(|(_, row)| {
+            value(&row.total, metric).is_some_and(|value| metric == 2 || value > 0.0)
+        })
+        .take(3)
+    {
+        avatar::person(
+            ui,
+            row.person,
+            RichText::new(format!("#{rank} {}", row.name)),
+            egui::vec2(ui.available_width(), 28.0),
+            None,
+        );
+        ui.label(display(&row.total, metric));
+    }
 }
 
 fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {

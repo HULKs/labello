@@ -234,7 +234,16 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
-  show acceptance as a percentage with review counts.
+  Show Daily activity and contributor rankings before dataset totals, assignment
+  balance, task/class breakdowns, and throughput. Below 850 points of content
+  width, collapse podium highlights above Rankings and use simple ranked rows
+  when expanded. Keep period controls beside activity and rankings; they share
+  the selected period. Provide a keyboard- and touch-operated Activity day
+  selector and Previous/Next day buttons with visible counts, alongside calendar
+  hover details. At enlarged browser zoom, stack the modal header and selector
+  labels, and use one sorting column when two no longer fit. Keep history
+  comparison controls below the metric choices and selected names in bounded rows.
+  Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
   fallback, and preserve keyboard access and full accessible names when truncating.
 
@@ -322,10 +331,10 @@ pointer or keyboard event; forced extra frames can conceal a cached-height gap.
 
 Presence belongs in the existing top header, with muted body text and a small
 semantic-color connection dot. Right-align the presence text and dot immediately
-before the navigation action icons. The signed-in username is omitted from the
-top bar. Navigation icons run right to left: Logout, Home/Setup, authorized
+before the navigation action icons. The signed-in account has no separate username label in the
+top bar; qualifying active leases include it in presence. Navigation icons run right to left: Logout, Home/Setup, authorized
 Admin, shortcut settings, and statistics. Keep the dataset pill centered in the
-header when space permits. A successful empty presence sample reads "You are alone :(". Do not add a presence bar, daily-count footer or
+header when space permits. A successful empty presence sample reads "No active labellers". Do not add a presence bar, daily-count footer or
 extra row. Reserve a 44-point focusable target for the dot while painting only a
 9-point circle. Names use measured horizontal space and collapse to a people
 count; full usernames and active datasets remain available on hover, activation
@@ -337,3 +346,14 @@ disconnection, saving/unsaved work and application errors. Color is accompanied
 by textual status in the dot's accessible name and details. No lease-duration
 explanation is added to the presence tooltip. Preserve a single header row,
 primary action targets, canvas space and keyboard focus through resizing.
+
+Presence uses `@githubLogin` consistently in the header, details and accessible
+names, falling back to the internal user ID when no login exists. Counts include
+the current user under the same active-lease rules. Visible header names have a
+slightly diagonal, low-contrast brightening sweep lasting two seconds every eight
+seconds. It changes only glyph color, preserves text geometry and accessible
+labels, and adds no highlight to counts, empty, loading or unavailable states.
+The browser observes `prefers-reduced-motion` at startup and on changes; reduced
+motion disables the sweep. Integrations without a preference adapter keep it
+static. Idle gaps schedule one repaint at the next sweep rather than continuous
+animation frames.

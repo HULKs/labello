@@ -15,6 +15,7 @@ mod missing_objects;
 pub mod panels;
 mod persistence;
 mod presence;
+pub use presence::set_reduced_motion;
 pub mod queue;
 mod review_context;
 mod review_revision;

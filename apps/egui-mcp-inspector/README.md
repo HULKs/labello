@@ -195,7 +195,7 @@ not establish subagent-host MCP isolation or parallel live-server behavior.
 The default is the annotation preset. Use `-- --preset <name>` with Cargo or
 `--preset <name>` with the local headless launcher for another frozen state.
 
-Available presets are `annotation`, `setup`, `about`, `build-mismatch`,
+Available presets are `annotation`, `presence`, `presence-reduced-motion`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
@@ -252,3 +252,9 @@ proves shared layout and named semantics. Actual artifact binding, visible-tab
 refresh and browser clipboard success/rejection require Chromium. Without a
 clipboard adapter, the native About screen offers selectable manual-copy text
 and reports that automatic copying is unavailable.
+
+The presence presets show a GitHub handle, the current user, and a local-ID
+fallback in the shared work header. `presence` explicitly enables the sweep;
+`presence-reduced-motion` keeps the same content static. Other native presets
+and live mode default to static presence because the inspector has no operating
+system motion-preference adapter. Browser media-query behavior requires Chromium.

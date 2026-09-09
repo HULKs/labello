@@ -186,6 +186,12 @@ failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
 Statistics data, remote status, and active request identity remain dataset-owned.
+The shared statistics renderer orders activity and rankings before aggregates.
+Dataset-owned leaderboard state retains the shared period, contributor filters,
+history selection and selected activity day. The day selector exposes calendar
+counts without hover and clamps to the current period after a period change.
+The modal scroll owner brings newly keyboard-focused content controls into view;
+its fixed header and separate popup layers keep their own placement.
 The navigation-owned modal does not perform an assignment transition or start a
 workspace epoch. Refresh uses the existing request/epoch gate and may run while
 assignment requests are active. Authentication/workspace invalidation dismisses
@@ -394,7 +400,13 @@ The existing application header shows presence between navigation and a compact
 status dot. The dataset badge shares the header when there is enough room and yields its space to presence on narrower screens. Names form one muted horizontal
 line, falling back to a people count when measured text does not fit. Hover or
 activation exposes the usernames and active dataset names. An empty successful
-sample reads `Labelling alone`; an initial sample reads `Checking presence…`.
+sample reads `No active labellers`; an initial sample reads `Checking presence…`.
+Presence retains the requester and deduplicates by internal ID. `PresentUser`
+resolves the presentation name from `githubLogin` with internal-ID fallback.
+The shared `presence.rs` renderer owns the stationary glyph-color sweep and
+sparse repaint schedule. The WASM `motion` adapter observes the browser's
+reduced-motion media query and updates the shared context preference, including
+changes while the app is open. Unknown preferences default to static text.
 There is no daily-count footer or automatic daily-count polling. The existing
 daily-count API remains available for future Statistics work.
 

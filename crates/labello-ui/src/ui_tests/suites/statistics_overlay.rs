@@ -123,18 +123,6 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
             ))
             .is_some()
     );
-    assert_eq!(
-        harness.get_by_label("Period").rect().center().y,
-        harness.get_by_label("History graph").rect().center().y
-    );
-    assert_eq!(
-        harness.get_by_label("Period").rect().center().y,
-        harness
-            .get_by_label("(All recorded activity · UTC)")
-            .rect()
-            .center()
-            .y
-    );
     assert!(
         harness.get_by_label("Daily activity").rect().bottom()
             < harness.get_by_label("Per Task").rect().top()
@@ -254,14 +242,6 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
             .query_by_label(&format!("{today}: 17 activities · 15 labeled · 2 reviewed"))
             .is_some()
     );
-    assert_eq!(
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
-            .rect()
-            .center()
-            .y,
-        harness.get_by_label("Acceptance").rect().center().y
-    );
     harness
         .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
         .click();
@@ -276,7 +256,7 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
     );
     let first_person = harness.get_by_label("Alexandra Long Contributor Name");
     assert!(first_person.rect().width() <= 240.0);
-    assert!(first_person.rect().height() <= 36.0);
+    assert_eq!(first_person.rect().height(), 44.0);
     assert_eq!(
         first_person.rect().left(),
         harness.get_by_label("Sam").rect().left()
@@ -834,6 +814,148 @@ fn statistics_overlay_resizes_using_immediate_repaints_without_waiting_for_refre
     assert_eq!(api.counts().record_review, counts.record_review);
 }
 
+#[test]
+fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(195.0, 422.0),
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+        egui::vec2(320.0, 320.0),
+    ] {
+        let mut harness = Harness::builder().with_size(size).build_eframe(|ctx| {
+            inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx)
+        });
+        harness.run_steps(4);
+        for (before, after) in [
+            ("Daily activity", "Contributor leaderboard"),
+            ("Rankings", "Dataset totals"),
+            ("Dataset totals", "Per Task"),
+            ("Per Task", "Per Class"),
+            ("Per Class", "Throughput"),
+        ] {
+            assert!(
+                harness.get_by_label(before).rect().bottom()
+                    < harness.get_by_label(after).rect().top(),
+                "{before} must precede {after} at {size:?}"
+            );
+        }
+        if size.x < 1000.0 {
+            assert!(
+                harness.query_by_label("Most labeled").is_none(),
+                "compact podium must start collapsed"
+            );
+            assert!(
+                harness.get_by_label("Rankings").rect().top()
+                    - harness.get_by_label("Contributor leaderboard").rect().top()
+                    < if size.x < 260.0 { 500.0 } else { 360.0 }
+            );
+        }
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        for label in [
+            "Activity period",
+            "Activity for",
+            "Activity day",
+            "Previous day",
+            "Next day",
+            "History graph",
+            "Period",
+            "Sort by Person",
+            "Sort by Labeled",
+            "Sort by Reviewed",
+            "Sort by Acceptance",
+        ] {
+            harness.get_by_label(label).scroll_to_me();
+            harness.run_steps(4);
+            let rect = harness.get_by_label(label).rect();
+            assert!(
+                viewport.contains_rect(rect),
+                "{label} unreachable at {size:?}: {rect:?}"
+            );
+            assert!(
+                rect.height() >= 44.0,
+                "{label} has a short touch target: {rect:?}"
+            );
+        }
+        let name = if size.x < 700.0 {
+            "#5  Alexandra Long Contributor Name"
+        } else {
+            "Alexandra Long Contributor Name"
+        };
+        assert!(
+            harness.query_all_by_label(name).next().is_some(),
+            "full contributor name must remain accessible"
+        );
+        harness.get_by_label("Close statistics").focus();
+        for _ in 0..12 {
+            harness.key_press(egui::Key::Tab);
+            harness.run_steps(4);
+            if harness.get_by_label("Previous day").is_focused() {
+                break;
+            }
+        }
+        assert!(harness.get_by_label("Previous day").is_focused());
+        assert!(viewport.contains_rect(harness.get_by_label("Previous day").rect()));
+        harness.key_press(egui::Key::Space);
+        harness.run_steps(3);
+        let yesterday = labello_domain::now().date_naive() - chrono::Days::new(1);
+        assert!(
+            harness
+                .query_by_label(&format!(
+                    "Selected day {yesterday}: 0 activities · 0 labeled · 0 reviewed"
+                ))
+                .is_some()
+        );
+        harness.get_by_label("Next day").focus();
+        harness.key_press(egui::Key::Space);
+        harness.run_steps(3);
+        harness.get_by_label("Activity day").scroll_to_me();
+        harness.run_steps(4);
+        harness.get_by_label("Activity day").click();
+        harness.run_steps(3);
+        let yesterday = labello_domain::now().date_naive() - chrono::Days::new(1);
+        harness.get_by_label(&yesterday.to_string()).click();
+        harness.run_steps(3);
+        assert!(
+            harness
+                .query_by_label(&format!(
+                    "Selected day {yesterday}: 0 activities · 0 labeled · 0 reviewed"
+                ))
+                .is_some()
+        );
+        harness.get_by_label("History graph").scroll_to_me();
+        harness.run_steps(4);
+        harness.get_by_label("History graph").click();
+        harness.run_steps(3);
+        harness.get_by_label("Compare people").scroll_to_me();
+        harness.run_steps(4);
+        let compare = harness.get_by_label("Compare people").rect();
+        assert!(
+            viewport.contains_rect(compare) && compare.height() >= 44.0,
+            "Compare people at {size:?}: {compare:?}"
+        );
+        harness.get_by_label("Compare people").click();
+        harness.run_steps(3);
+        let person = harness.get_by_role_and_label(
+            egui::accesskit::Role::Button,
+            "Alexandra Long Contributor Name",
+        );
+        assert!(person.rect().width() <= 240.0 && person.rect().height() >= 44.0);
+        person.focus();
+        harness.key_press(egui::Key::Space);
+        harness.run_steps(3);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(harness.state().navigation.statistics.open);
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(!harness.state().navigation.statistics.open);
+    }
+}
+
 #[cfg(feature = "inspector-presets")]
 #[test]
 fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() {
@@ -848,10 +970,6 @@ fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() 
         let rect = harness.get_by_label("Dataset statistics").rect();
         assert!(rect.left() >= -0.5 && rect.right() <= width + 0.5, "overflow at {width}: {rect:?}");
         assert_label_inside(&harness, "Live Statistics", width, height);
-        if width >= 1288.0 {
-            let metric_bottom = harness.get_by_label("Metric Needs correction").rect().bottom();
-            let activity_top = harness.get_by_label("Daily activity").rect().top();
-            assert!(activity_top - metric_bottom < 80.0, "activity header reserves excess vertical space");
-        }
+
     }
 }
