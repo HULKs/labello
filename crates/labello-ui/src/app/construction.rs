@@ -70,6 +70,7 @@ impl LabelloApp {
             missing_objects: Default::default(),
             staged_review_decisions: Vec::new(),
             review_revision_commit: None,
+            review_corrections: Default::default(),
             correction_draft: None,
             show_tutorial: false,
             pending_transition: None,

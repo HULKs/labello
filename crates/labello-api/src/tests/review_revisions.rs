@@ -17,6 +17,10 @@ async fn api_review_revision_fixture(final_decision: Option<&str>) -> ApiReviewR
     // The author is admin. reviewer_2 has only the review role.
     let original = claim_assignment(&app, "reviewer_2", "review").await;
     assert_eq!(original["imageId"], image_id.as_str());
+    if final_decision.is_some() {
+        let response = post_test_review(&app, &image_id, "reviewer_2", "original-object", json!({"targetType":"annotation_version","annotation_id":"ann_1","version":1}), "approved").await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
     let response = if let Some(decision) = final_decision {
         post_test_review(
             &app,
@@ -142,10 +146,9 @@ async fn review_reopen_http_revalidates_role_owner_and_task_and_retries_fresh_id
 }
 
 #[tokio::test]
-async fn completed_review_http_stages_without_retraction_and_commits_both_reversals_idempotently() {
+async fn completed_review_http_stages_without_retraction_and_commits_approval_idempotently() {
     for (initial, replacement_decision, expected_status) in [
-        ("approved", "rejected", "needs_correction"),
-        ("rejected", "approved", "completed"),
+        ("approved", "approved", "completed"),
     ] {
         let fixture = api_review_revision_fixture(Some(initial)).await;
         let before = load_test_image_state(&fixture.app, &fixture.image_id).await;
@@ -350,7 +353,7 @@ async fn server_owned_review_events_are_rejected_by_raw_http_ingresses() {
         &fixture.app,
         "reviewer_2",
         &reopened,
-        api_review_revision_replacement(&fixture.task_id, "rejected"),
+        api_review_revision_replacement(&fixture.task_id, "approved"),
     )
     .await;
     assert_eq!(committed.status(), StatusCode::OK);
@@ -429,4 +432,9 @@ async fn server_owned_review_events_are_rejected_by_raw_http_ingresses() {
             .len(),
         events.len()
     );
+}
+
+async fn post_api_review_corrections(app: &axum::Router, user: &str, assignment: &Value, submission: Value) -> axum::response::Response {
+    let uri = format!("/datasets/ds/images/{}/review-corrections?assignmentId={}&imageId={}&taskId={}&kind=review", assignment["imageId"].as_str().unwrap(), assignment["assignmentId"].as_str().unwrap(), assignment["imageId"].as_str().unwrap(), urlencoding::encode(assignment["taskId"].as_str().unwrap()));
+    app.clone().oneshot(Request::builder().method("POST").uri(uri).header("x-test-user-id",user).header(header::CONTENT_TYPE,"application/json").body(Body::from(submission.to_string())).unwrap()).await.unwrap()
 }

@@ -489,6 +489,19 @@ impl ReviewApi for HttpLabelloApi {
         })
     }
 
+    fn submit_review_corrections<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        assignment: AssignmentActionRequest,
+        submission: labello_domain::ReviewCorrectionSubmission,
+    ) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST,
+                &format!("/datasets/{dataset_id}/images/{}/review-corrections", assignment.image_id))?
+                .query(&assignment), &submission).await
+        })
+    }
+
     fn record_correction<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

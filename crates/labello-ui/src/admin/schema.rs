@@ -812,7 +812,7 @@ fn edit_review(ui: &mut egui::Ui, task_index: usize, task: &mut TaskDefinition) 
             });
             if task.review.workflow == ReviewWorkflow::Approval {
                 ui.label("One reviewer completes the review.");
-                ui.checkbox(&mut task.review.allow_reviewer_corrections, "Allow reviewer correction");
+                ui.label("Rejection requires corrections and a fresh review.");
             } else {
                 task.review.allow_reviewer_corrections = false;
             }

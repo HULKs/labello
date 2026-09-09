@@ -17,12 +17,11 @@ impl ReviewBarContent {
             } else {
                 identity
             };
-            let phase = if context.correction.is_some() {
+            let phase = if context.unsaved_corrections > 0 {
+                format!("{} unsaved corrections", context.unsaved_corrections)
+            } else if context.correction.is_some() {
                 "Correction mode".to_string()
-            } else if matches!(
-                context.phase,
-                crate::review_context::ReviewContextPhase::FullImage { .. }
-            ) {
+            } else if matches!(context.phase, crate::review_context::ReviewContextPhase::FullImage { .. }) {
                 "Final check".to_string()
             } else {
                 context.phase_label()

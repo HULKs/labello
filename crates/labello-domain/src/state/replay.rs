@@ -103,6 +103,16 @@ impl ImageState {
                     event,
                 )?;
             }
+            EventPayload::ReviewCorrectionSubmitted {
+                assignment,
+                submission,
+                review,
+                task_state,
+            } => {
+                self.apply_review_correction_submission(
+                    assignment, submission, review, task_state, event,
+                )?;
+            }
             EventPayload::ReviewerCorrectionRecorded {
                 correction,
                 annotation,

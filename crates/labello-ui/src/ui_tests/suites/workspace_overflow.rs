@@ -330,7 +330,7 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     assert_review_bar_paints(&harness, &format!("Revising · {identity}"));
     assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
     let details = harness.get_by_label_contains("Review details: Workflow:");
-    assert!(details.accesskit_node().label().unwrap().contains("Decision revision mode; geometry unchanged"));
+    assert!(details.accesskit_node().label().unwrap().contains("Review revision mode"));
     assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_none());
 
     // An invalid target cannot claim that the context bar presented revision details.

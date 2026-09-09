@@ -531,7 +531,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
         "approved",
     )
     .await;
-    assert_eq!(wrong_image.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(wrong_image.status(), StatusCode::CONFLICT);
     let unknown_task = post_test_review(
         &app,
         &image_id,
@@ -541,7 +541,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
         "approved",
     )
     .await;
-    assert_eq!(unknown_task.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(unknown_task.status(), StatusCode::CONFLICT);
     let stale_disposition = post_test_review(
         &app,
         &image_id,
@@ -556,7 +556,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
         "approved",
     )
     .await;
-    assert_eq!(stale_disposition.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(stale_disposition.status(), StatusCode::CONFLICT);
     let stale_confirmation = post_test_review(
         &app,
         &image_id,
@@ -570,7 +570,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
         "approved",
     )
     .await;
-    assert_eq!(stale_confirmation.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(stale_confirmation.status(), StatusCode::CONFLICT);
     let missing_version = post_test_review(
         &app,
         &image_id,
@@ -584,7 +584,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
         "approved",
     )
     .await;
-    assert_eq!(missing_version.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(missing_version.status(), StatusCode::CONFLICT);
 
     let object_review = post_test_review(
         &app,
@@ -628,7 +628,7 @@ async fn validates_review_targets_and_completes_after_one_final_approval() {
 }
 
 #[tokio::test]
-async fn task_review_rejection_immediately_needs_correction() {
+async fn task_review_rejection_without_corrections_is_rejected() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
@@ -647,10 +647,10 @@ async fn task_review_rejection_immediately_needs_correction() {
         "rejected",
     )
     .await;
-    assert_eq!(rejection.status(), StatusCode::OK);
+    assert_eq!(rejection.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
-        "needs_correction"
+        "submitted"
     );
 }
 
@@ -675,57 +675,38 @@ async fn annotation_completion_without_review_completes_task() {
 
 #[tokio::test]
 async fn correction_starts_a_new_review_round() {
-    let temp = tempfile::tempdir().unwrap();
-    let state = ApiState::new(temp.path());
-    let app = router(state.clone());
-    create_dataset(&app).await;
-    configure_pixel_task_review(&app, "approval").await;
-    let png = png_bytes(4, 2);
-    let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
-    upload_test_image(&app, "review-round.png", &png).await;
-    submit_test_task(&app, &image_id).await;
-
-    let rejection = post_test_review(
-        &app,
-        &image_id,
-        "reviewer_2",
-        "round_1_rejection",
-        json!({ "targetType": "task", "task_id": "bounding_box:pixel" }),
-        "rejected",
-    )
-    .await;
-    assert_eq!(rejection.status(), StatusCode::OK);
-
-    submit_test_task(&app, &image_id).await;
-    let new_round_approval = post_test_review(
-        &app,
-        &image_id,
-        "admin",
-        "round_2_approval",
-        json!({ "targetType": "task", "task_id": "bounding_box:pixel" }),
-        "approved",
-    )
-    .await;
-    assert_eq!(new_round_approval.status(), StatusCode::OK);
-    assert_eq!(load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"], "completed");
-    let reviewer_id = UserId::from("reviewer_2");
-    let mut reviewer = state.server_store.user(&reviewer_id).unwrap().unwrap();
-    reviewer.github_user_id = Some("583231".into());
-    state.server_store.upsert_user(reviewer).unwrap();
-    let stats: labello_domain::DatasetStats =
-        serde_json::from_value(get_test_stats(&app).await).unwrap();
-    let contributors = stats.contributors.unwrap();
-    assert_eq!(contributors[&reviewer_id].github_user_id.as_deref(), Some("583231"));
-    assert!(contributors[&UserId::from("admin")].github_user_id.is_none());
-    let history = &contributors[&UserId::from("admin")].history;
-    assert_eq!(history.iter().map(|day| day.labeled).sum::<usize>(), 1);
-    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 1);
-    assert_eq!(history.iter().map(|day| day.rejected).sum::<usize>(), 1);
-    assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 1);
+    let fixture = api_review_revision_fixture(Some("approved")).await;
+    let response = post_assignment_action(&fixture.app, "reviewer_2", "reopen", &fixture.original).await;
+    let assignment = response_json(response).await;
+    let before = load_test_image_state(&fixture.app, &fixture.image_id).await;
+    let context = &before["reviewAssignmentContexts"][assignment["assignmentId"].as_str().unwrap()];
+    let submission = json!({"correctionId":"revision-corrections", "round":context["round"], "targetFingerprint":context["targetFingerprint"], "reason":"corrected objects", "changes":[
+        {"kind":"edit","annotation_id":"ann_1","expected_version":1,"geometry":{"type":"bounding_box","geometry":{"x":0.2,"y":0.2,"width":0.3,"height":0.4}}},
+        {"kind":"add","annotation_id":"added-by-reviewer","class_id":"pixel","geometry":{"type":"bounding_box","geometry":{"x":0.6,"y":0.6,"width":0.2,"height":0.2}}}
+    ]});
+    let mut empty = submission.clone(); empty["changes"] = json!([]);
+    assert_eq!(post_api_review_corrections(&fixture.app, "reviewer_2", &assignment, empty).await.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(post_api_review_corrections(&fixture.app, "admin", &assignment, submission.clone()).await.status(), StatusCode::UNAUTHORIZED);
+    let (first, retry) = tokio::join!(post_api_review_corrections(&fixture.app, "reviewer_2", &assignment, submission.clone()), post_api_review_corrections(&fixture.app, "reviewer_2", &assignment, submission.clone()));
+    assert_eq!(first.status(), StatusCode::OK, "{}", response_json(first).await);
+    assert_eq!(retry.status(), StatusCode::OK);
+    let after = response_json(retry).await;
+    assert_eq!(after["taskStates"][&fixture.task_id]["status"], "submitted");
+    assert_eq!(after["taskStates"][&fixture.task_id]["outcome"], Value::Null);
+    assert_ne!(after["reviewRounds"], before["reviewRounds"]);
+    let fresh = claim_assignment(&fixture.app, "reviewer_2", "review").await;
+    assert_ne!(fresh["assignmentId"], assignment["assignmentId"]);
+    assert_eq!(post_test_review(&fixture.app, &fixture.image_id, "reviewer_2", "too-early-final", json!({"targetType":"task","task_id":fixture.task_id}), "approved").await.status(), StatusCode::CONFLICT);
+    for (id, version) in [("ann_1",2),("added-by-reviewer",1)] {
+        assert_eq!(post_test_review(&fixture.app, &fixture.image_id, "reviewer_2", &format!("approve-{id}"), json!({"targetType":"annotation_version","annotation_id":id,"version":version}), "approved").await.status(), StatusCode::OK);
+    }
+    assert_eq!(post_test_review(&fixture.app, &fixture.image_id, "reviewer_2", "fresh-final", json!({"targetType":"task","task_id":fixture.task_id}), "approved").await.status(), StatusCode::OK);
+    let state = fixture.repository.rebuild_image_state(&fixture.image_id).await.unwrap();
+    assert_eq!(state.task_states[&TaskId::from(fixture.task_id)].status, TaskStatus::Completed);
 }
 
 #[tokio::test]
-async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive() {
+async fn reviewer_bbox_correction_resubmits_idempotent_and_cancels_competitors() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
@@ -752,7 +733,7 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive(
     assert_eq!(corrected.status(), StatusCode::OK);
     let body = to_bytes(corrected.into_body(), usize::MAX).await.unwrap();
     let event: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(event["payload"]["kind"], "reviewer_correction_recorded");
+    assert_eq!(event["payload"]["kind"], "review_correction_submitted");
     let retry = post_test_correction(&app, &image_id, "admin", &assignment, request).await;
     assert_eq!(retry.status(), StatusCode::OK);
     let body = to_bytes(retry.into_body(), usize::MAX).await.unwrap();
@@ -767,10 +748,10 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive(
         "reviewer_correction"
     );
     assert_eq!(state["reviews"][0]["decision"], "rejected");
-    assert_eq!(state["taskStates"][&task_id]["status"], "completed");
+    assert_eq!(state["taskStates"][&task_id]["status"], "submitted");
     assert_eq!(
         state["taskStates"][&task_id]["outcome"],
-        "reviewer_corrected"
+        Value::Null
     );
     assert_eq!(
         assignment_status_json(&state, assignment["assignmentId"].as_str().unwrap()),
@@ -783,9 +764,9 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive(
     );
 
     let stats = get_test_stats(&app).await;
-    assert_eq!(stats["completedTasks"], 1);
+    assert_eq!(stats["completedTasks"], 0);
     assert_eq!(stats["needsCorrectionTasks"], 0);
-    assert_eq!(stats["awaitingReviewTasks"], 0);
+    assert_eq!(stats["awaitingReviewTasks"], 1);
     for removed in ["reviewedTasks", "approvedTasks", "rejectedTasks", "reviewerCorrectedTasks", "finalizedTasks", "unreviewedTasks"] {
         assert!(stats.get(removed).is_none());
     }
@@ -793,7 +774,7 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive(
 }
 
 #[tokio::test]
-async fn reviewer_keypoint_correction_uses_server_provenance_and_respects_config() {
+async fn reviewer_keypoint_correction_uses_server_provenance_and_ignores_retired_config_flag() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
@@ -830,7 +811,7 @@ async fn reviewer_keypoint_correction_uses_server_provenance_and_respects_config
     );
     assert_eq!(
         state["taskStates"][&task_id]["outcome"],
-        "reviewer_corrected"
+        Value::Null
     );
 
     let temp = tempfile::tempdir().unwrap();
@@ -855,7 +836,7 @@ async fn reviewer_keypoint_correction_uses_server_provenance_and_respects_config
         }),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -2374,91 +2355,19 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
         decision: ReviewDecision::Rejected,
         comment: Some("correct the first skeleton".to_string()),
     };
-    let rejected = successful_migration(
-        migration_request(
-            &fixture,
-            "reviewer_1",
-            "review",
-            Some("reject-first"),
-            &rejection,
-        )
-        .await,
-    );
-    assert_eq!(
-        rejected.image_state.task_states[&fixture.task_id].status,
-        TaskStatus::NeedsCorrection
-    );
-    let sequence = rejected.image_state.current_sequence;
-    let retry = successful_migration(
-        migration_request(
-            &fixture,
-            "reviewer_1",
-            "review",
-            Some("reject-first"),
-            &rejection,
-        )
-        .await,
-    );
-    assert_eq!(retry.image_state.current_sequence, sequence);
-
-    let reopened_assignment: Assignment = serde_json::from_value(
-        claim_assignment_for_task(
-            &fixture.app,
-            "annotator",
-            "annotation",
-            fixture.task_id.as_str(),
-        )
-        .await,
-    )
-    .unwrap();
-    let correction_state = migration_state(&fixture.app, &fixture.image_id, "annotator").await;
-    let correction = labello_client::SaveMigrationSkeletonRequest {
-        assignment_id: reopened_assignment.assignment_id.clone(),
-        pass_id: None,
-        target: migration_expectation(&correction_state, &fixture.task_id, &fixture.targets[0]),
-        skeleton: migration_skeleton(0.35),
+    assert_eq!(migration_request(&fixture, "reviewer_1", "review", Some("reject-first"), &rejection).await.0, StatusCode::BAD_REQUEST);
+    let before = migration_state(&fixture.app, &fixture.image_id, "reviewer_1").await;
+    let context = &before.review_assignment_contexts[&rejection.assignment_id];
+    let submission = labello_domain::ReviewCorrectionSubmission {
+        correction_id: labello_domain::CorrectionId::from("migration-review-correction"), round: context.round.clone(), target_fingerprint: context.target_fingerprint.clone(), reason: None,
+        changes: vec![labello_domain::ReviewCorrectionChange::MigrationObject { object_group_id: fixture.targets[0].object_group_id.clone(), expected_disposition_version: first_version, replacement: labello_domain::MigrationReviewCorrection::Skeleton { skeleton: migration_skeleton(0.35) } }],
     };
-    let corrected = successful_migration(
-        migration_request(
-            &fixture,
-            "annotator",
-            "skeleton",
-            Some("review-correction"),
-            &correction,
-        )
-        .await,
-    );
-    assert_eq!(
-        corrected.cursor,
-        Some(labello_domain::MigrationCursor::FullImage)
-    );
-
-    let target_hash = corrected.image_state.migration_target_sets[&fixture.task_id]
-        .target_set_hash
-        .clone();
-    let state_hash = corrected
-        .image_state
-        .current_migration_state_hash(&fixture.task_id)
-        .unwrap();
-    let confirmation_hash = migration_confirmation_hash(&target_hash, &state_hash).unwrap();
-    let reconfirm = labello_client::ConfirmMigrationRequest {
-        assignment_id: reopened_assignment.assignment_id,
-        task_id: fixture.task_id.clone(),
-        target_set_hash: target_hash,
-        state_hash,
-        confirmation_hash: confirmation_hash.clone(),
-    };
-    let resubmitted = successful_migration(
-        migration_request(
-            &fixture,
-            "annotator",
-            "confirm",
-            Some("confirm-correction"),
-            &reconfirm,
-        )
-        .await,
-    );
-
+    let assignment = json!({"assignmentId": rejection.assignment_id, "imageId": fixture.image_id, "taskId": fixture.task_id, "kind":"review"});
+    let response = post_api_review_corrections(&fixture.app, "reviewer_1", &assignment, serde_json::to_value(&submission).unwrap()).await;
+    assert_eq!(response.status(), StatusCode::OK, "{}", response_json(response).await);
+    let corrected = migration_state(&fixture.app, &fixture.image_id, "reviewer_1").await;
+    let confirmation_hash = corrected.migration_confirmations[&fixture.task_id].confirmation_hash.clone();
+    assert_eq!(corrected.task_states[&fixture.task_id].status, TaskStatus::Submitted);
     let final_review: Assignment = serde_json::from_value(
         claim_assignment_for_task(
             &fixture.app,
@@ -2469,7 +2378,7 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
         .await,
     )
     .unwrap();
-    let mut reviewed = resubmitted;
+    let mut reviewed = serde_json::from_value::<labello_client::ManualMigrationCommandResult>(json!({"imageState": corrected})).unwrap();
     for (index, target) in fixture.targets.iter().enumerate() {
         let request = labello_client::ReviewMigrationRequest {
             assignment_id: final_review.assignment_id.clone(),

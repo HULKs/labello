@@ -268,6 +268,10 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::commit_review_revision),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/review-corrections",
+            post(workflow::submit_review_corrections),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/corrections",
             post(workflow::record_correction),
         )

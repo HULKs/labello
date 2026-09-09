@@ -73,7 +73,8 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
-- `missing_objects.rs`: assignment-and-round-scoped missing-object drafts, stable rejection retries, inspector guidance/history, and browser exit warning; canvas rendering owns marker transforms and gestures.
+- `review_corrections.rs`: accumulated correction drafts, canvas previews, stable submission retries and object/disposition editing.
+- `missing_objects.rs`: read-only historical location evidence and browser exit warning.
 
 - `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
   stable command locations and overflow keyboard focus; workflow owners supply
@@ -254,7 +255,7 @@ canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
 retain confirmation protection. This state is local to the loaded assignment;
 server leases and persisted workflow history retain their existing authority.
 
-Unsent missing-object locations count as work for the navigation gate.
+Unsent reviewer corrections count as work for the navigation gate.
 Touched assignments keep the existing confirmation. Review Previous uses the
 same touched-work check: untouched reviews switch directly, while changed
 reviews require confirmation. It first reopens and loads the previous review,
@@ -269,10 +270,15 @@ save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
 
-Revision reviews offer missing-object markers only after every captured object
-has an explicit staged decision. An early object rejection can still commit
-without markers; it does not invent decisions for unvisited objects. The commit
-guard rejects incomplete marker-bearing revisions before freezing retry state.
+Normal and revision review use the same staged correction owner. Persisted
+annotations remain unchanged while the canvas previews unsaved edits, additions
+and removals. Amber previews and a compact toolbar count distinguish unsaved
+work from persisted annotations. Correction success advances the assignment only after the server
+commits; failure retains the draft and frozen retry request. Approval is disabled
+while corrections exist, and rejection buttons and shortcuts require a substantive
+staged change. Local browser records include the staged changes and request;
+assignment and round validation prevent cross-workspace recovery. Historical
+missing-object locations are read-only and never offered as active rejection input.
 
 ## Dataset export administration
 

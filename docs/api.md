@@ -179,8 +179,9 @@ blocked by the enforced window.
 | `POST /datasets/{dataset_id}/images/{image_id}/admin/events` | Data admin | `AppendEventRequest` with permitted repair payload → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/rebuild` | Any role | No body → replayed `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/reviews` | Assigned reviewer | `AssignmentActionRequest` query plus `ReviewRecord` → `ImageState` |
-| `POST /datasets/{dataset_id}/images/{image_id}/missing-object-rejections` | Owner of active ordinary final-review assignment; reviewer role | `AssignmentActionRequest` query plus `MissingObjectRejection` → `ImageState` |
+| `POST /datasets/{dataset_id}/images/{image_id}/missing-object-rejections` | Reviewer; retired command | Returns 400; historical evidence remains readable |
 | `POST /datasets/{dataset_id}/images/{image_id}/review-revisions` | Owner of active decision-revision lease; reviewer role | `AssignmentActionRequest` query plus `ReviewRevisionCommit` → `ImageState` |
+| `POST /datasets/{dataset_id}/images/{image_id}/review-corrections` | Assigned reviewer, including revision owner | `AssignmentActionRequest` query plus `ReviewCorrectionSubmission` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/corrections` | Assigned reviewer | `AssignmentActionRequest` query plus `CorrectionRequest` → `EventLogEntry` |
 | `GET /datasets/{dataset_id}/offline-bundle` | Annotator | `OfflineBundleRequest` query → `OfflineBundle` |
 | `POST /datasets/{dataset_id}/offline-sync` | Annotator; same authenticated user and dataset | versioned `OfflineSyncRequest` → `OfflineSyncResult` |
@@ -203,31 +204,36 @@ migration-confirmation decision. Approval must include every captured target
 without a rejected object. Foreign actors or missing reviewer authority return
 401. Invalid syntax or assignment-kind input returns 400; changed context,
 expired ownership, malformed replacement targets, and conflicting retries return
-409. Neither ordinary reviews nor correction endpoints can mutate a task held
-by an exclusive decision-revision lease.
+409. Ordinary review commands cannot mutate a task held by an exclusive revision
+lease. Its owner may submit corrections through `review-corrections`.
 
 `ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
-`ReviewRevisionCommitted`, and `MissingObjectEvidenceRecorded` are server-owned events. Raw event, annotation batch,
+`ReviewRevisionCommitted`, `ReviewCorrectionSubmitted`, and `MissingObjectEvidenceRecorded` are server-owned events. Raw event, annotation batch,
 admin repair, and offline sync ingress cannot publish them. Clients submit
 commands to the dedicated endpoints and never choose superseded review IDs.
 
-Missing-object rejection accepts `review`, the captured `round`, and 1–64
-`locations`. Each location has a nonzero `markerId` unique within that request,
-a `classId` from the assigned task, and a finite normalized `position` within
-`[0, 1]` on each axis. This command requires an ordinary rejected Task target,
-the current submission round, all exact object targets already reviewed by the
-caller, and an active lease. It rejects correction, migration, foreign targets,
-and changed task configuration. Invalid locations return 400; stale phase,
-round, ownership, or conflicting retries return 409. The assignment ID identifies
-the immutable request for exact retries. Current reviewer authority is still
-required on retry.
+`ReviewCorrectionSubmission` contains `correctionId`, captured `round`,
+`targetFingerprint`, 1–10000 `changes`, and optional `reason` (at most 2000 bytes).
+Changes are tagged `edit`, `add`, `remove`, or `migration_object` and use snake-case
+variant fields: exact `annotation_id`/`expected_version`, new `class_id` and
+`geometry`, or `object_group_id`/`expected_disposition_version` with a `replacement`
+(`skeleton` or `exclude`). The server supplies reviewer attribution and provenance.
+It rejects empty or unchanged corrections, invalid geometry and identifiers,
+stale targets, foreign ownership, and conflicting retries. The full batch,
+rejection of the old round, assignment completion and fresh submitted round are
+atomic. An identical retry does not append events. Saving does not finalize work.
 
-`ReviewRevisionCommit` also accepts optional `missingObjects`, defaulting to an
-empty list. Nonempty locations require an ordinary final rejection and a full
-replacement target set. The transaction publishes decisions, evidence, task
-state, and assignment completion together. Repeating the same commit is safe;
-changing locations on a retry is a conflict. `ImageState` exposes evidence and
-history; markers do not create annotation versions or IDs.
+`corrections` is a compatibility adapter for one geometry edit; it now returns
+the `ReviewCorrectionSubmitted` receipt event and has the same fresh-round semantics.
+The `allowReviewerCorrections` flag no longer disables corrections. Ordinary,
+migration and revision commands reject decision-only rejection. Final approval
+requires approval of every current object by this reviewer.
+
+`missing-object-rejections` is retired and rejects writes. Nonempty
+`ReviewRevisionCommit.missingObjects` is rejected as well. Historical evidence
+remains in `ImageState`, snapshots and event replay. Raw event and admin repair
+commands cannot bypass substantive-correction requirements with `ReviewRecorded`
+rejections.
 
 ## Manual Migration Routes
 
@@ -444,7 +450,9 @@ Annotation activity counts committed normal or guided-migration submissions,
 including completion with no review stage. Review activity counts committed
 final task or migration-confirmation decisions, approved or rejected. Each
 counter deduplicates dataset/image/task/user within that UTC day. Saves, imports,
-skips, object decisions and reviewer corrections alone do not count. Reopening,
+skips and object decisions do not count. A committed correction submission
+counts its final rejection, once per user/image/task/day. Historical immediate
+reviewer corrections alone do not count. Reopening,
 later rejection and superseding a decision do not retract historical activity.
 Same-day replacement commits count once; a later-day submission or final-review
 replacement counts on its new commit day. Compound review revisions use the

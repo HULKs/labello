@@ -198,7 +198,7 @@ impl InspectorPreset {
 }
 
 pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
-    match preset {
+    let mut app = match preset {
         InspectorPreset::OverlayAnnotation
         | InspectorPreset::OverlayReview
         | InspectorPreset::OverlayCorrection
@@ -358,7 +358,68 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::MigrationDiscoveryReview => migration_discovery_preset(ctx, true),
         InspectorPreset::MigrationAnnotatedEdit => migration_preset(ctx, MigrationPreset::Pass),
         InspectorPreset::MigrationGuideDeleted => migration_deleted_guide_preset(ctx),
+    };
+    if app.view == AppView::Review {
+        let task = app.selected_task().cloned();
+        let assignment = app.work.assignment.clone();
+        if let (Some(task), Some(assignment), Some(state)) =
+            (task, assignment, app.work.current_state.as_mut())
+        {
+            for annotation in &app.work.annotations {
+                state
+                    .annotations
+                    .entry(annotation.annotation_id.clone())
+                    .or_insert_with(|| vec![annotation.clone()]);
+            }
+            if task.manual_box_guide_migration.is_some() {
+                let target_set_hash = state.migration_target_sets[&task.task_id]
+                    .target_set_hash
+                    .clone();
+                let state_hash = state.current_migration_state_hash(&task.task_id).unwrap();
+                state.migration_confirmations.insert(
+                    task.task_id.clone(),
+                    labello_domain::MigrationConfirmation {
+                        task_id: task.task_id.clone(),
+                        confirmation_hash: labello_domain::migration_confirmation_hash(
+                            &target_set_hash,
+                            &state_hash,
+                        )
+                        .unwrap(),
+                        target_set_hash,
+                        state_hash,
+                        actor_user_id: app.config.user_id.clone(),
+                        timestamp: timestamp(),
+                    },
+                );
+            }
+            let round = labello_domain::ReviewRound {
+                event_id: "inspector-submission".into(),
+                event_sequence: state.current_sequence,
+                submitted_by: app.config.user_id.clone(),
+            };
+            state
+                .review_rounds
+                .insert(task.task_id.clone(), round.clone());
+            state.review_assignment_contexts.insert(
+                assignment.assignment_id.clone(),
+                labello_domain::ReviewAssignmentContext {
+                    assignment_id: assignment.assignment_id.clone(),
+                    source_assignment_id: None,
+                    decision_revision: false,
+                    round,
+                    target_fingerprint: state.review_target_fingerprint(&task),
+                    targets: state.review_targets(&task).unwrap(),
+                    task,
+                    superseded_review_ids: Vec::new(),
+                },
+            );
+            if let Some(draft) = &app.work.correction_draft {
+                app.work.review_corrections.editor =
+                    state.current_annotation(&draft.annotation_id).cloned();
+            }
+        }
     }
+    app
 }
 
 fn import_multiple_descriptors_preset() -> LabelloApp {

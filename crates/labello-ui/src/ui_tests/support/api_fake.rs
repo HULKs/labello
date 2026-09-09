@@ -1584,6 +1584,15 @@ impl ImageApi for SpyApi {
             created_at: now(),
             updated_at: now(),
         };
+        if assignment.kind == AssignmentKind::Review {
+            let task = state.metadata.task(&assignment.task_id).unwrap().clone();
+            let image = state.states.entry(assignment.image_id.clone()).or_insert_with(|| ImageState::new(assignment.image_id.clone()));
+            let round = image.review_rounds.entry(task.task_id.clone()).or_insert_with(|| labello_domain::ReviewRound { event_id: EventId::generate(), event_sequence: image.current_sequence, submitted_by: "annotator".into() }).clone();
+            image.review_assignment_contexts.insert(assignment.assignment_id.clone(), labello_domain::ReviewAssignmentContext {
+                assignment_id: assignment.assignment_id.clone(), source_assignment_id: None, round, target_fingerprint: image.review_target_fingerprint(&task),
+                targets: image.review_targets(&task).unwrap_or_default(), task, superseded_review_ids: Vec::new(), decision_revision: false,
+            });
+        }
         state.active_assignments.push(assignment.clone());
         ready(Ok(Some(assignment)))
     }
@@ -2061,6 +2070,20 @@ impl ReviewApi for SpyApi {
             *active = renewed;
         }
         ready(Ok(result))
+    }
+
+    fn submit_review_corrections<'a>(
+        &'a self, _dataset_id: &'a DatasetId, assignment: AssignmentActionRequest,
+        submission: labello_domain::ReviewCorrectionSubmission,
+    ) -> ApiFuture<'a, ImageState> {
+        let mut state = self.state.borrow_mut();
+        state.counts.record_correction += 1;
+        if let Some(labello_domain::ReviewCorrectionChange::Edit { annotation_id, expected_version, geometry }) = submission.changes.first() {
+            state.last_correction = Some(CorrectionRequest { correction_id: submission.correction_id.clone(), annotation_id: annotation_id.clone(), expected_version: *expected_version, geometry: geometry.clone(), reason: submission.reason.clone() });
+        }
+        if std::mem::take(&mut state.fail_next_correction) { return ready(Err(ClientError::Demo("correction conflict".into()))); }
+        state.active_assignments.retain(|active| active.assignment_id != assignment.assignment_id);
+        ready(Ok(state.states.get(&assignment.image_id).cloned().unwrap_or_else(|| ImageState::new(assignment.image_id))))
     }
 
     fn record_correction<'a>(

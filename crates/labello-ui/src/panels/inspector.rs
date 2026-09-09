@@ -34,6 +34,7 @@ impl LabelloApp {
             // Migration commands live in the persistent workspace action bar so
             // collapsing this optional panel never hides the current action.
             self.manual_migration_actions(ui, false);
+            if self.view == AppView::Review { self.review_corrections_panel(ui); }
             return;
         }
         let active_count = self
@@ -58,6 +59,7 @@ impl LabelloApp {
             AppView::Review => self.review_actions(ui, show_primary_actions),
             AppView::Setup | AppView::Admin | AppView::Stats => {}
         }
+        if self.view == AppView::Review { self.review_corrections_panel(ui); }
         self.missing_object_panel(ui);
     }
 
@@ -289,7 +291,6 @@ impl LabelloApp {
         let ready = self.work.assignment.is_some() && !self.loading.saving
             && !self.loading.image && self.work.pending_transition.is_none();
         if self.work.correction_draft.is_some() {
-            self.correction_actions(ui, ready);
             return;
         }
         let (_, _, explanation) = self.review_phase();
@@ -332,10 +333,10 @@ impl LabelloApp {
             if fill_width {
                 ("Commit yes".to_string(), "Commit no".to_string())
             } else {
-                ("Commit approval".to_string(), "Commit rejection".to_string())
+                ("Commit approval".to_string(), "Submit & reject".to_string())
             }
         } else if revision && !shortcut_only {
-            ("Stage approval".to_string(), "Stage rejection".to_string())
+            ("Stage approval".to_string(), "Submit & reject".to_string())
         } else if shortcut_only {
             (
                 shortcut_button_label(&approve_shortcut, "Accept"),
@@ -348,7 +349,7 @@ impl LabelloApp {
         } else {
             (
                 "Approve object".to_string(),
-                "Reject object & finish".to_string(),
+                "Submit & reject".to_string(),
             )
         };
         let reject = if self.has_missing_object_draft() { format!("{reject} ({})", self.work.missing_objects.locations.len()) } else { reject };
@@ -362,7 +363,7 @@ impl LabelloApp {
             button_width.unwrap_or_default(),
             if fill_width { 44.0 } else { 0.0 },
         ));
-        let can_approve = ready && !(revision && self.work.review_rejected) && !self.has_missing_object_draft();
+        let can_approve = ready && !(revision && self.work.review_rejected) && !self.has_review_corrections();
         if theme::primary_button(ui, can_approve, approve_button)
             .on_hover_text(format!(
                 "Accept review object ({})",
@@ -372,7 +373,7 @@ impl LabelloApp {
         {
             self.request_review(ReviewDecision::Approved);
         }
-        if theme::danger_button(ui, ready && (!self.has_missing_object_draft() || self.missing_objects_final_phase()), reject_button)
+        if theme::danger_button(ui, ready && self.can_submit_review_corrections(), reject_button)
             .on_hover_text(format!(
                 "Reject review object ({})",
                 shortcut_button_label(&reject_shortcut, "Reject")
@@ -383,10 +384,10 @@ impl LabelloApp {
         }
     }
 
-    fn correction_actions(&mut self, ui: &mut egui::Ui, ready: bool) {
+    pub(crate) fn correction_actions(&mut self, ui: &mut egui::Ui, ready: bool) {
         ui.separator();
         ui.heading("Correction mode");
-        ui.label("Only the highlighted existing object can be edited.");
+        ui.label("Edit the highlighted preview, then keep it to correct another object.");
 
         let skeleton_keypoints = self.work.correction_draft.as_ref().and_then(|draft| {
             let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry else {
@@ -465,10 +466,10 @@ impl LabelloApp {
             }
             if theme::primary_button(
                 ui,
-                ready && geometry_changed,
-                egui::Button::new("Correct & finalize"),
+                ready && (geometry_changed || self.work.correction_draft.as_ref().is_some_and(|draft| draft.expected_version == 0)),
+                egui::Button::new("Keep correction"),
             )
-            .on_disabled_hover_text("Move, resize, or change a keypoint before finalizing.")
+            .on_disabled_hover_text("Move, resize, or change a keypoint before keeping the correction.")
             .clicked()
             {
                 self.request_correction();

@@ -120,6 +120,8 @@ pub(crate) struct StoredCorrectionDraft {
 pub(crate) struct ReviewDraft {
     pub target_annotation: Option<AnnotationId>,
     pub correction: Option<StoredCorrectionDraft>,
+    #[serde(default)]
+    pub staged_corrections: Box<crate::review_corrections::ReviewCorrectionsDraft>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

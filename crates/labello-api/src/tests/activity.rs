@@ -76,7 +76,7 @@ async fn current_user_activity_is_authenticated_isolated_and_counts_committed_fi
         "reviewer_2",
         "final-review",
         json!({"targetType":"task","task_id":task}),
-        "rejected",
+        "approved",
     )
     .await;
     assert_eq!(final_review.status(), StatusCode::OK);
@@ -121,7 +121,7 @@ async fn current_user_activity_revision_commits_and_retries_remain_one_task() {
         activity_counts(&fixture.app, "reviewer_2").await.counts,
         before.counts
     );
-    let replacement = api_review_revision_replacement(&fixture.task_id, "rejected");
+    let replacement = api_review_revision_replacement(&fixture.task_id, "approved");
     for _ in 0..2 {
         assert_eq!(
             post_api_review_revision(&fixture.app, "reviewer_2", &reopened, replacement.clone())

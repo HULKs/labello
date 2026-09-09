@@ -395,7 +395,7 @@ impl LabelloApp {
             ))
             || (self.work.migration.adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)));
-        let interaction = CanvasInteraction {
+        let mut interaction = CanvasInteraction {
             editable: !self.work.migration.busy
                 && self.work.migration.inspected_group_id.is_none()
                 && (skeleton_editable || !selectable_annotations.is_empty()),
@@ -406,6 +406,24 @@ impl LabelloApp {
                 && self.work.migration.draft.is_some(),
             selected_keypoint: None,
         };
+        self.apply_staged_review_previews(&mut annotations);
+        if let Some(preview) = self.review_correction_preview() {
+            selected = Some(preview.annotation_id.clone());
+            selectable_annotations.insert(preview.annotation_id.clone());
+            annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
+            annotations.push(preview);
+            interaction = CanvasInteraction::correction(
+                self.work
+                    .correction_draft
+                    .as_ref()
+                    .and_then(|draft| draft.selected_keypoint),
+            );
+            interaction.allow_create = true;
+            interaction.editable = !self.loading.saving
+                && !self.loading.image
+                && self.work.pending_transition.is_none();
+        }
+        self.style_review_correction_previews(&annotations, &mut annotation_styles);
         let action = show_canvas_colored(
             ui,
             &mut self.work.canvas,
@@ -421,6 +439,19 @@ impl LabelloApp {
             &annotation_styles,
             Some(&selectable_annotations),
         );
+        if self.work.correction_draft.is_some() {
+            match action {
+                Some(CanvasAction::PlaceKeypoint(point)) => {
+                    self.place_review_correction_keypoint(point)
+                }
+                Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
+                Some(CanvasAction::SelectKeypoint(selection)) => {
+                    self.select_correction_keypoint(selection.keypoint_index)
+                }
+                _ => {}
+            }
+            return;
+        }
         match action {
             Some(CanvasAction::PlaceKeypoint(point)) => self.place_migration_keypoint(point),
             Some(CanvasAction::Select(annotation_id)) => {
@@ -1172,12 +1203,9 @@ impl LabelloApp {
             labello_client::MigrationReviewTarget::Confirmation { .. }
         );
         let (approve, reject) = if revision && final_phase {
-            (
-                "Commit approval".to_string(),
-                "Commit rejection".to_string(),
-            )
+            ("Commit approval".to_string(), "Submit & reject".to_string())
         } else if revision && !shortcut_only {
-            ("Stage approval".to_string(), "Stage rejection".to_string())
+            ("Stage approval".to_string(), "Submit & reject".to_string())
         } else if shortcut_only {
             (
                 shortcut_button_label(&approve_shortcut, "Accept"),
@@ -1188,7 +1216,7 @@ impl LabelloApp {
         } else {
             (
                 "Approve migration item".to_string(),
-                "Reject migration item".to_string(),
+                "Submit & reject".to_string(),
             )
         };
         let button_width =
@@ -1204,7 +1232,7 @@ impl LabelloApp {
         let ready = !self.work.migration.busy && !self.loading.saving;
         if theme::primary_button(
             ui,
-            ready && !(revision && self.work.review_rejected),
+            ready && !(revision && self.work.review_rejected) && !self.has_review_corrections(),
             approve_button,
         )
         .on_hover_text(format!("Accept migration item ({approve_shortcut})"))
@@ -1216,9 +1244,13 @@ impl LabelloApp {
                 labello_domain::ReviewDecision::Approved,
             );
         }
-        if theme::danger_button(ui, ready, reject_button)
-            .on_hover_text(format!("Reject migration item ({reject_shortcut})"))
-            .clicked()
+        if theme::danger_button(
+            ui,
+            ready && self.can_submit_review_corrections(),
+            reject_button,
+        )
+        .on_hover_text(format!("Reject migration item ({reject_shortcut})"))
+        .clicked()
         {
             self.request_review_migration(
                 task_id,
@@ -2973,6 +3005,13 @@ impl LabelloApp {
         target: labello_client::MigrationReviewTarget,
         decision: labello_domain::ReviewDecision,
     ) {
+        if decision == labello_domain::ReviewDecision::Rejected {
+            self.submit_staged_review_corrections();
+            return;
+        }
+        if self.has_review_corrections() {
+            return;
+        }
         let Some(assignment) = self.work.assignment.clone() else {
             return;
         };

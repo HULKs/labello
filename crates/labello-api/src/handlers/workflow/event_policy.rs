@@ -18,6 +18,12 @@ pub(super) fn validate_payload(
             "historical workflow data cannot be authored".into(),
         ));
     }
+    if matches!(payload, EventPayload::ReviewRecorded { review } if review.decision == labello_domain::ReviewDecision::Rejected)
+    {
+        return Err(ApiError::BadRequest(
+            "rejection requires the dedicated correction endpoint".into(),
+        ));
+    }
     match payload {
         EventPayload::AnnotationVersionCreated { annotation, .. } => {
             if matches!(
@@ -84,6 +90,7 @@ pub(super) fn validate_payload(
         | EventPayload::AssignmentUpdated { .. } => {}
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
         | EventPayload::ImportInitialized { .. }
@@ -260,6 +267,7 @@ pub(super) fn required_role_for_payload(
         )),
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
         | EventPayload::ImportInitialized { .. }
@@ -319,6 +327,7 @@ pub(super) fn validate_annotation_assignment_payload(
         | EventPayload::AssignmentUpdated { .. }
         | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
         | EventPayload::ImportInitialized { .. }
@@ -394,6 +403,7 @@ pub(super) fn validate_admin_repair_payload(
         )),
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
         | EventPayload::ImportInitialized { .. }

@@ -7,7 +7,8 @@ use crate::{
 
 pub(crate) fn submitted_review_tasks(event: &EventLogEntry) -> Vec<&TaskId> {
     match &event.payload {
-        EventPayload::TaskStateChanged { task_state }
+        EventPayload::ReviewCorrectionSubmitted { task_state, .. }
+        | EventPayload::TaskStateChanged { task_state }
         | EventPayload::ImportedTaskReopened { task_state, .. }
             if task_state.status == TaskStatus::Submitted =>
         {

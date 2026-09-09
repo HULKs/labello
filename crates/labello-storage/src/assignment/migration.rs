@@ -17,6 +17,7 @@ use super::{
 };
 
 mod companions;
+mod review_corrections;
 use companions::*;
 
 const MAX_IDEMPOTENCY_KEY_BYTES: usize = 200;
@@ -1497,6 +1498,11 @@ impl DatasetRepository {
         comment: Option<String>,
         idempotency_key: &str,
     ) -> StorageResult<ManualMigrationCommandResult> {
+        if decision == ReviewDecision::Rejected {
+            return Err(StorageError::InvalidCorrection(
+                "rejection requires a substantive correction submission".into(),
+            ));
+        }
         validate_idempotency_key(idempotency_key)?;
         validate_comment(comment.as_deref())?;
         let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
@@ -1701,10 +1707,13 @@ impl DatasetRepository {
         primary_index: usize,
         timestamp: Timestamp,
     ) -> StorageResult<ImageState> {
-        if payloads
-            .iter()
-            .any(|payload| matches!(payload, EventPayload::MigrationCompanionLinked { .. }))
-        {
+        if payloads.iter().any(|payload| {
+            matches!(
+                payload,
+                EventPayload::MigrationCompanionLinked { .. }
+                    | EventPayload::ReviewCorrectionSubmitted { .. }
+            )
+        }) {
             crate::fsjson::write_json_atomic(
                 &self.schema_path(),
                 &labello_domain::labello_schema_bundle(),
@@ -1755,6 +1764,12 @@ impl DatasetRepository {
         expected_sequence: u64,
         payload: EventPayload,
     ) -> StorageResult<EventLogEntry> {
+        if matches!(&payload, EventPayload::ReviewRecorded { review } if review.decision == ReviewDecision::Rejected)
+        {
+            return Err(conflict(
+                "rejection requires substantive review corrections",
+            ));
+        }
         let (_config_guard, metadata, _image) = self.load_migration_inputs(image_id).await?;
         require_role(
             &metadata.role_assignments,
@@ -2066,7 +2081,7 @@ fn validate_exact_one(state: &ImageState, task: &TaskDefinition) -> StorageResul
                     action: HumanRevisionKind::Authored
                         | HumanRevisionKind::Edited
                         | HumanRevisionKind::AcceptedUnchanged
-                }
+                } | RevisionSource::ReviewerCorrection { .. }
             );
         if !valid && !discovered {
             return Err(conflict(

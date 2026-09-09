@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, rc::Rc};
 
 use eframe::egui;
 use labello_client::{
-    AnnotationBatchRequest, AssignNextRequest, AssignmentActionRequest, CorrectionRequest,
-    LabelloApi, PrelabelSuggestionRequest,
+    AnnotationBatchRequest, AssignNextRequest, AssignmentActionRequest, LabelloApi,
+    PrelabelSuggestionRequest,
 };
 use labello_domain::{
     AnnotationId, Assignment, AssignmentKind, EventPayload, PrelabelConfigId, ReviewDecision,
@@ -53,6 +53,7 @@ impl LabelloApp {
         self.work.staged_review_decisions.clear();
         self.work.review_revision_commit = None;
         self.work.correction_draft = None;
+        self.work.review_corrections = Default::default();
         self.work.migration = Default::default();
         self.work.canvas.fit_view();
         self.work.active_load_id = None;
@@ -419,7 +420,7 @@ impl LabelloApp {
             } => self.spawn_message(request.clone(), async move {
                 let assignment_id = assignment.assignment_id.clone();
                 let result = api
-                    .record_assigned_correction(
+                    .submit_review_corrections(
                         &dataset_id,
                         assignment_action(&assignment),
                         correction,
@@ -818,35 +819,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_correction(&mut self) {
-        let (Some(assignment), Some(draft)) = (
-            self.work.assignment.clone(),
-            self.work.correction_draft.clone(),
-        ) else {
-            return;
-        };
-        if assignment.kind != AssignmentKind::Review
-            || self.loading.saving
-            || self.runtime.api.is_none()
-            || !self.can_correct_review_object()
-            || !draft.geometry_changed()
-        {
-            return;
-        }
-        let operation_id = self.begin_operation();
-        let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
-        self.queue_command(UiCommand::Correction {
-            request,
-            operation_id,
-            dataset_id: self.config.dataset_id.clone(),
-            assignment,
-            correction: CorrectionRequest {
-                correction_id: draft.correction_id,
-                annotation_id: draft.annotation_id,
-                expected_version: draft.expected_version,
-                geometry: draft.edited_geometry,
-                reason: (!draft.reason.trim().is_empty()).then(|| draft.reason.trim().to_string()),
-            },
-        });
+        self.stage_review_correction();
     }
 
     pub(crate) fn request_full_image_review(&mut self, decision: ReviewDecision) {
@@ -872,6 +845,14 @@ impl LabelloApp {
         decision: ReviewDecision,
         phase: ReviewPhase,
     ) -> bool {
+        if decision == ReviewDecision::Rejected {
+            return self.submit_staged_review_corrections();
+        }
+        if self.has_review_corrections() {
+            self.runtime.error =
+                Some("Submit or discard the unsaved corrections before approving.".into());
+            return false;
+        }
         if self.loading.saving || self.runtime.api.is_none() {
             return false;
         }

@@ -31,6 +31,11 @@ impl LabelloApp {
             {
                 annotation.geometry = draft.edited_geometry.clone();
             }
+            self.apply_staged_review_previews(&mut annotations);
+            if let Some(preview) = self.review_correction_preview() {
+                annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
+                annotations.push(preview);
+            }
             let skeleton_edges = self
                 .selected_task()
                 .and_then(|task| task.skeleton.as_ref())
@@ -47,6 +52,10 @@ impl LabelloApp {
                 self.view == AppView::Annotate && self.work.pending_transition.is_none();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
                 let mut interaction = CanvasInteraction::correction(draft.selected_keypoint);
+                interaction.allow_create = matches!(
+                    draft.edited_geometry,
+                    labello_domain::AnnotationGeometry::Skeleton(_)
+                );
                 interaction.editable = !self.loading.saving
                     && !self.loading.image
                     && self.work.pending_transition.is_none();
@@ -88,6 +97,8 @@ impl LabelloApp {
                 self.work.canvas.focus_missing_object(point);
             }
             let mut missing_action = None;
+            let mut styles = std::collections::BTreeMap::new();
+            self.style_review_correction_previews(&annotations, &mut styles);
             let action = show_canvas_with_evidence(
                 ui,
                 &mut self.work.canvas,
@@ -100,7 +111,7 @@ impl LabelloApp {
                 &skeleton_edges,
                 &prelabels,
                 annotation_color,
-                &std::collections::BTreeMap::new(),
+                &styles,
                 None,
                 Some(MissingObjectOverlay {
                     locations: &locations,
@@ -125,6 +136,9 @@ impl LabelloApp {
                 }
             } else if self.work.correction_draft.is_some() {
                 match action {
+                    Some(CanvasAction::PlaceKeypoint(point)) => {
+                        self.place_review_correction_keypoint(point)
+                    }
                     Some(CanvasAction::EditBoundingBox(edit)) => self.edit_correction_bbox(edit),
                     Some(CanvasAction::SelectKeypoint(selection)) => {
                         if self
@@ -138,7 +152,6 @@ impl LabelloApp {
                     }
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
                     Some(CanvasAction::CreateBoundingBox(_))
-                    | Some(CanvasAction::PlaceKeypoint(_))
                     | Some(CanvasAction::Select(_))
                     | None => {}
                 }

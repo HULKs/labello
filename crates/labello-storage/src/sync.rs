@@ -367,6 +367,8 @@ impl DatasetRepository {
         history_commit.observe();
         self.observe_completion_transition(image_id, previous_completion, &next_state);
         *state = next_state;
+        #[cfg(test)]
+        self.completion_post_observation_test_hook().await?;
         crate::fsjson::write_json_atomic(&self.state_path(image_id), state).await?;
         if resequenced
             .iter()

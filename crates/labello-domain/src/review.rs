@@ -89,8 +89,12 @@ pub use missing_objects::{
     MissingObjectRejection, validate_missing_object_locations,
 };
 
+mod corrections;
 mod policy;
 mod revision;
+pub use corrections::{
+    MigrationReviewCorrection, ReviewCorrectionChange, ReviewCorrectionSubmission,
+};
 
 pub(crate) use policy::submitted_review_tasks;
 pub use policy::{

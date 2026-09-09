@@ -1595,20 +1595,6 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
     let task_id = app.work.selected_task_id.clone().unwrap();
     let reviewed_at = labello_domain::now();
     let state = app.work.current_state.as_mut().unwrap();
-    let hash = state.migration_target_sets[&task_id]
-        .target_set_hash
-        .clone();
-    state.migration_confirmations.insert(
-        task_id.clone(),
-        labello_domain::MigrationConfirmation {
-            task_id: task_id.clone(),
-            target_set_hash: hash.clone(),
-            state_hash: hash.clone(),
-            confirmation_hash: hash,
-            actor_user_id: app.config.user_id.clone(),
-            timestamp: reviewed_at,
-        },
-    );
     for (group_id, disposition) in &state.migration_dispositions[&task_id] {
         let target = match &disposition.status {
             labello_domain::MigrationDispositionStatus::Annotated {
@@ -1635,6 +1621,7 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
             timestamp: reviewed_at,
             comment: None,
         };
+        state.review_record_rounds.insert(review.review_id.clone(), state.review_round(&task_id).unwrap().event_id.clone());
         state.reviews.push(review);
     }
     let outgoing = state.clone();

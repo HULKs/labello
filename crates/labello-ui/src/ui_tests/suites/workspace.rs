@@ -2103,14 +2103,14 @@ fn review_correction_drawer_and_actions_stay_reachable() {
                 .is_some()
         );
         let finalize =
-            harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize");
+            harness.get_by_role_and_label(egui::accesskit::Role::Button, "Keep correction");
         finalize.scroll_to_me();
         for _ in 0..4 {
             harness.step();
         }
         assert_control_inside(
             &harness,
-            "Correct & finalize",
+            "Keep correction",
             egui::accesskit::Role::Button,
             width,
             height,
@@ -2123,14 +2123,14 @@ fn review_correction_drawer_and_actions_stay_reachable() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
         harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Keep correction")
             .scroll_to_me();
         for _ in 0..8 {
             harness.step();
         }
         assert_control_inside(
             &harness,
-            "Correct & finalize",
+            "Keep correction",
             egui::accesskit::Role::Button,
             width,
             height,
@@ -2146,7 +2146,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert_eq!(harness.state().work.queue.queue_size(), IMAGE_QUEUE_SIZE);
     assert!(harness.query_by_label("Assignment").is_none());
     assert!(harness.query_by_label("Approve object").is_none());
-    assert!(harness.query_by_label("Reject object & finish").is_none());
+    assert!(harness.query_by_label("Submit & reject").is_none());
     assert!(harness.query_by_label("Accept all annotations").is_none());
 
     harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Questionmark);
@@ -2215,18 +2215,17 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.state().work.drawer.is_none());
     assert!(harness.query_by_label("Tutorial").is_none());
     assert!(harness.query_by_label("Approve object").is_some());
-    assert!(harness.query_by_label("Reject object & finish").is_some());
+    assert!(harness.query_by_label("Submit & reject").is_some());
     assert!(harness.query_by_label("Accept").is_none());
     harness.key_press(egui::Key::Y);
     harness.step();
     step_until(&mut harness, 10, |app| !app.loading.saving);
     assert_eq!(api.counts().record_review, 1);
 
-    click(&mut harness, "Reject object & finish");
+    click(&mut harness, "Submit & reject");
     step_until(&mut harness, 10, |app| !app.loading.saving);
-    // Rejecting an object records the object decision and the task-level
-    // correction outcome that closes the review assignment.
-    assert_eq!(api.counts().record_review, 3);
+    // A rejection without staged corrections cannot write any decision.
+    assert_eq!(api.counts().record_review, 1);
     step_until(&mut harness, 10, |app| {
         app.work.assignment
             .as_ref()
@@ -2447,7 +2446,7 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
         false,
     );
     let disabled = loaded_review_harness(disabled_api);
-    assert!(disabled.query_by_label("Correct object").is_none());
+    assert!(disabled.query_by_label("Correct object").is_some());
 
     let api = Rc::new(SpyApi::new());
     let original = BoundingBox {
@@ -2493,19 +2492,17 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     assert!(harness.state().work.correction_draft.is_some());
 
     api.fail_next_correction();
-    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Keep correction").scroll_to_me();
     harness.run_steps(8);
-    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
-    click(&mut harness, "Correct & finalize");
+    assert_control_inside(&harness, "Keep correction", egui::accesskit::Role::Button, 1500.0, 780.0);
+    click(&mut harness, "Keep correction");
+    assert!(harness.state_mut().submit_staged_review_corrections());
     step_until(&mut harness, 8, |app| !app.loading.saving);
     assert_eq!(api.counts().record_correction, 1);
-    assert!(harness.state().work.correction_draft.is_some());
+    assert!(harness.state().has_review_corrections());
     assert!(harness.state().work.current.is_some());
 
-    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize").scroll_to_me();
-    harness.run_steps(8);
-    assert_control_inside(&harness, "Correct & finalize", egui::accesskit::Role::Button, 1500.0, 780.0);
-    click(&mut harness, "Correct & finalize");
+    assert!(harness.state_mut().submit_staged_review_corrections());
     step_until(&mut harness, 12, |app| {
         api.counts().record_correction == 2
             && app
@@ -2686,124 +2683,14 @@ fn two_object_review_revision_harness() -> Harness<'static, LabelloApp> {
 }
 
 #[test]
-fn review_revision_requires_complete_objects_before_missing_markers() {
-    let mut early_rejection = two_object_review_revision_harness();
-    early_rejection
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    early_rejection.step();
-    assert!(!early_rejection.state().review_revision_object_decisions_complete());
-    assert!(early_rejection.query_by_label("Mark missing").is_none());
-    early_rejection.state_mut().work.missing_objects.placing = true;
-    early_rejection
-        .state_mut()
-        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
-            NormalizedPoint { x: 0.5, y: 0.5 },
-        ));
-    assert!(early_rejection.state().work.missing_objects.locations.is_empty());
-    early_rejection
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    let early_commit = early_rejection
-        .state()
-        .work
-        .review_revision_commit
-        .as_ref()
-        .unwrap();
-    assert_eq!(early_commit.reviews.len(), 2);
-    assert!(early_commit.missing_objects.is_empty());
-    assert!(early_commit.reviews.iter().any(|review| matches!(
-        &review.target,
-        ReviewTarget::AnnotationVersion { annotation_id, .. }
-            if annotation_id == &labello_domain::AnnotationId::from("review_annotation")
-    )));
-    assert!(early_commit.reviews.iter().any(|review| matches!(
-        &review.target,
-        ReviewTarget::Task { .. }
-    )));
-    assert!(!early_commit.reviews.iter().any(|review| matches!(
-        &review.target,
-        ReviewTarget::AnnotationVersion { annotation_id, .. }
-            if annotation_id == &labello_domain::AnnotationId::from("review_annotation_2")
-    )));
-    assert!(matches!(
-        early_rejection.state().runtime.commands.back(),
-        Some(UiCommand::Review {
-            revision: Some(revision),
-            missing_objects: None,
-            ..
-        }) if revision.reviews.len() == 2
-    ));
-
-    let mut complete = two_object_review_revision_harness();
-    complete
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Approved);
-    complete
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Approved);
-    complete.step();
-    assert!(complete.state().review_revision_object_decisions_complete());
-    assert!(complete.state().missing_objects_final_phase());
-    complete.state_mut().work.missing_objects.placing = true;
-    complete
-        .state_mut()
-        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
-            NormalizedPoint { x: 0.5, y: 0.5 },
-        ));
-    assert_eq!(complete.state().work.missing_objects.locations.len(), 1);
-    complete
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    let complete_commit = complete
-        .state()
-        .work
-        .review_revision_commit
-        .as_ref()
-        .unwrap();
-    assert_eq!(complete_commit.reviews.len(), 3);
-    assert_eq!(complete_commit.missing_objects.len(), 1);
-    assert!(complete_commit.reviews.iter().any(|review| matches!(
-        &review.target,
-        ReviewTarget::AnnotationVersion { annotation_id, .. }
-            if annotation_id == &labello_domain::AnnotationId::from("review_annotation_2")
-    )));
-    assert!(matches!(
-        complete.state().runtime.commands.back(),
-        Some(UiCommand::Review {
-            revision: Some(revision),
-            missing_objects: None,
-            ..
-        }) if revision.reviews.len() == 3 && revision.missing_objects.len() == 1
-    ));
-
-    let mut injected = two_object_review_revision_harness();
-    injected
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    let class_id = injected.state().selected_task().unwrap().class_ids[0].clone();
-    injected.state_mut().work.missing_objects.locations.push(
-        labello_domain::MissingObjectLocation {
-            marker_id: 1,
-            class_id,
-            position: NormalizedPoint { x: 0.5, y: 0.5 },
-        },
-    );
-    injected.state_mut().runtime.commands.clear();
-    injected.state_mut().runtime.active_requests.clear();
-    injected.state_mut().work.active_operation_id = None;
-    let before = injected.state().runtime.commands.len();
-    injected
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    assert!(injected.state().work.review_revision_commit.is_none());
-    assert_eq!(injected.state().runtime.commands.len(), before);
-    assert!(injected
-        .state()
-        .runtime
-        .error
-        .as_deref()
-        .is_some_and(|error| error.contains("Remove draft missing-object locations")));
+fn review_revision_rejects_bare_rejection_and_has_no_marker_creation() {
+    let mut harness = two_object_review_revision_harness();
+    harness.state_mut().runtime.commands.clear();
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert!(harness.state().work.review_revision_commit.is_none());
+    assert!(harness.state().runtime.commands.is_empty());
+    assert!(harness.state().can_correct_review_object());
+    assert!(harness.query_by_label("Mark missing").is_none());
 }
 
 #[test]
@@ -2815,8 +2702,8 @@ fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_ident
     enter_test_review_revision(harness.state_mut());
     harness.step();
     assert!(harness.state().review_revision_active());
-    assert!(!harness.state().can_correct_review_object());
-    assert!(harness.query_by_label("Correct object").is_none());
+    assert!(harness.state().can_correct_review_object());
+    assert!(harness.query_by_label("Correct object").is_some());
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.step();
     harness.step();
@@ -2826,17 +2713,17 @@ fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_ident
     harness.set_size(egui::vec2(1440.0, 1000.0));
     let before = harness.state().work.current_state.clone().unwrap();
     let geometry = harness.state().work.annotations.clone();
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
     harness.step();
     assert_eq!(api.counts().record_review, 0);
     assert_eq!(harness.state().work.current_state.as_ref().unwrap(), &before);
     assert_eq!(harness.state().work.staged_review_decisions.len(), 1);
     assert!(harness.state().current_review_annotation().is_none());
-    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit approval").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit approval").accesskit_node().is_disabled());
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.step(); harness.step(); harness.step();
-    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit yes").accesskit_node().is_disabled());
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit no").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit yes").accesskit_node().is_disabled());
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Commit no").accesskit_node().is_disabled());
     let canvas = harness.get_by_label("Annotation canvas").rect();
     assert!(canvas.height() >= 44.0, "short final revision canvas: {canvas:?}");
     harness.set_size(egui::vec2(1440.0, 1000.0));
@@ -2858,7 +2745,7 @@ fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_ident
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.staged_review_decisions.len(), 1);
     assert_eq!(harness.state().work.annotations, geometry);
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
     let committed = harness.state().work.review_revision_commit.clone().unwrap();
     assert_eq!(committed.reviews.len(), 2);
     assert!(matches!(harness.state().runtime.commands.back(), Some(UiCommand::Review { revision: Some(_), .. })));
@@ -2866,7 +2753,7 @@ fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_ident
     harness.state_mut().runtime.active_requests.clear();
     harness.state_mut().work.active_operation_id = None;
     harness.state_mut().loading.saving = false;
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
     assert_eq!(harness.state().work.review_revision_commit.as_ref(), Some(&committed));
 }
 
@@ -2897,13 +2784,13 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
     harness.state_mut().start_correction();
     let draft = harness.state().work.correction_draft.clone().unwrap();
     click(&mut harness, "Previous");
-    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
     assert!(harness.state().work.pending_transition.is_none());
     harness.key_press(egui::Key::ArrowLeft);
     harness.step();
-    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
 }
@@ -3028,7 +2915,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
     );
     for labels in [
         ["Approve object", "Complete review"],
-        ["Reject object & finish", "Send back"],
+        ["Submit & reject", "Send back"],
     ] {
         let action = labels
             .into_iter()
@@ -3160,7 +3047,7 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
     click(&mut harness, "Previous");
     assert!(
         harness
-            .query_by_label("Switch active assignment?")
+            .query_by_label("Discard reviewer correction?")
             .is_some()
     );
     click(&mut harness, "Release and switch");
@@ -3191,7 +3078,7 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
     );
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Correct & finalize")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Keep correction")
             .is_none_or(|action| action.accesskit_node().is_disabled())
     );
 
@@ -3336,7 +3223,7 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
     api.fail_next_preview();
 
     click(&mut harness, "Previous");
-    assert!(harness.query_by_label("Switch active assignment?").is_some());
+    assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Release and switch");
     step_until(&mut harness, 12, |app| !app.loading.saving && !app.loading.image);
 
@@ -3994,90 +3881,45 @@ fn recorded_review_decision_still_requires_navigation_confirmation() {
     assert!(harness.query_by_label("Switch active assignment?").is_some());
 }
 
-fn enter_missing_object_final_check(app: &mut LabelloApp) {
-    enter_test_review_revision(app);
-    let assignment = app.work.assignment.as_ref().unwrap().assignment_id.clone();
-    app.work.current_state.as_mut().unwrap().review_assignment_contexts.get_mut(&assignment).unwrap().decision_revision = false;
-    app.work.review_index = app.work.annotations.len();
-    app.sync_review_selection();
-    app.sync_missing_objects();
-}
 
 #[test]
-fn missing_object_canvas_editor_guards_approval_and_skip_and_retries_exact_submission() {
+fn staged_review_corrections_preserve_persisted_geometry_and_retry_identically() {
     let api = Rc::new(SpyApi::new());
-    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
-    let mut harness = loaded_review_harness(api.clone());
-    assert!(harness.query_by_label("Mark missing").is_none());
-    enter_missing_object_final_check(harness.state_mut());
-    harness.step();
-    let geometry = harness.state().work.annotations.clone();
-    click(&mut harness, "Mark missing");
-    harness.step();
-    assert!(!harness.state().work.canvas.pan_mode_required());
-    let canvas = harness.get_by_label("Annotation canvas").rect();
-    let first = canvas.center();
-    click_at(&mut harness, first);
-    assert_eq!(harness.state().work.missing_objects.locations.len(), 1);
-    let first_position = harness.state().work.missing_objects.locations[0].position;
-    drag_at(&mut harness, first, first + egui::vec2(45.0,25.0));
-    assert_ne!(harness.state().work.missing_objects.locations[0].position, first_position);
-    click_at(&mut harness, first - egui::vec2(60.0,40.0));
-    assert_eq!(harness.state().work.missing_objects.locations.len(), 2);
-    assert_eq!(harness.state().work.annotations, geometry);
-    assert_eq!(api.counts().annotation_batch, 0);
-    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Complete review").accesskit_node().is_disabled());
+    let id = seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), false);
+    let mut harness = loaded_review_harness(api);
+    let persisted = harness.state().work.annotations.clone();
+    harness.state_mut().start_correction();
+    harness.state_mut().edit_correction_bbox(BoundingBoxEdit { annotation_id: id, bounding_box: BoundingBox { x:0.4,y:0.2,width:0.2,height:0.3 } });
+    harness.state_mut().request_correction();
+    assert_eq!(harness.state().work.annotations, persisted);
+    assert_eq!(harness.state().work.review_corrections.changes.len(), 1);
     harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
-    assert_eq!(api.counts().record_review, 0);
-    assert!(harness.state().work.missing_objects.submission.is_none());
-    harness.state_mut().skip_assignment(); harness.step();
-    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
-    click(&mut harness, "Cancel");
-    assert_eq!(harness.state().work.missing_objects.locations.len(), 2);
-    let reject = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Send back (2)").rect();
-    assert!(reject.bottom() <= 780.0, "primary rejection must precede the scrolling evidence editor: {reject:?}");
-    harness.event(egui::Event::PointerMoved(egui::pos2(1400.0, 600.0)));
-    harness.event(egui::Event::MouseWheel { phase: egui::TouchPhase::Move, unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0.0,-350.0), modifiers: egui::Modifiers::NONE });
-    for _ in 0..15 { harness.step(); }
-    let remove = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Remove missing 1").rect();
-    assert!(remove.bottom() <= 780.0 && remove.top() >= 112.0, "scroll must expose remove: {remove:?}");
-    click(&mut harness, "Remove missing 1");
-    assert_eq!(harness.state().work.missing_objects.locations.len(), 1);
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
-    let submitted = harness.state().work.missing_objects.submission.clone().unwrap();
-    assert_eq!(submitted.locations.len(), 1);
-    assert!(matches!(harness.state().runtime.commands.back(), Some(UiCommand::Review { missing_objects:Some(_), revision:None, .. })));
+    assert!(!harness.state().loading.saving);
+    assert!(harness.state_mut().submit_staged_review_corrections());
+    let submitted = harness.state().work.review_corrections.submission.clone().unwrap();
     harness.state_mut().runtime.commands.clear();
     harness.state_mut().runtime.active_requests.clear();
     harness.state_mut().work.active_operation_id = None;
     harness.state_mut().loading.saving = false;
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
-    assert_eq!(harness.state().work.missing_objects.submission.as_ref(), Some(&submitted));
-    assert_eq!(harness.state().work.annotations, geometry);
+    assert!(harness.state_mut().submit_staged_review_corrections());
+    assert_eq!(harness.state().work.review_corrections.submission.as_ref(), Some(&submitted));
+    assert_eq!(harness.state().work.annotations, persisted);
 }
 
 #[test]
-fn missing_object_drafts_do_not_transplant_to_other_assignments_or_expired_review() {
+fn review_correction_drafts_clear_when_leaving_the_assignment() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
     let mut harness = loaded_review_harness(api);
-    enter_missing_object_final_check(harness.state_mut());
-    harness.state_mut().work.missing_objects.placing = true;
-    harness.state_mut().apply_missing_object_action(crate::canvas::MissingObjectAction::Add(NormalizedPoint { x:0.5,y:0.5 }));
-    assert!(harness.state().has_missing_object_draft());
-    harness.state_mut().work.assignment.as_mut().unwrap().expires_at = Some(now() - chrono::Duration::seconds(1));
-    harness.state_mut().sync_missing_objects();
-    assert!(!harness.state().missing_objects_editable());
-    assert!(harness.state().has_missing_object_draft());
-    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
-    assert!(harness.state().work.missing_objects.submission.is_none());
-    harness.state_mut().work.assignment.as_mut().unwrap().assignment_id = AssignmentId::from("foreign-assignment");
-    harness.state_mut().sync_missing_objects();
-    assert!(!harness.state().has_missing_object_draft());
+    harness.state_mut().start_correction();
+    assert!(harness.state().has_review_corrections());
+    harness.state_mut().clear_current_image();
+    assert!(!harness.state().has_review_corrections());
+    assert!(harness.state().work.review_corrections.editor.is_none());
 }
 
 #[test]
-fn missing_object_draft_counts_as_work_for_normal_and_previous_navigation() {
+fn review_correction_draft_counts_as_work_for_normal_and_previous_navigation() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(
         &api,
@@ -4090,27 +3932,21 @@ fn missing_object_draft_counts_as_work_for_normal_and_previous_navigation() {
         true,
     );
     let mut harness = loaded_review_harness(api);
-    enter_missing_object_final_check(harness.state_mut());
-    harness.state_mut().work.missing_objects.placing = true;
-    harness
-        .state_mut()
-        .apply_missing_object_action(crate::canvas::MissingObjectAction::Add(
-            NormalizedPoint { x: 0.5, y: 0.5 },
-        ));
+    harness.state_mut().start_correction();
     harness.state_mut().work.assignment_touched = false;
 
-    assert!(harness.state().has_missing_object_draft());
+    assert!(harness.state().has_review_corrections());
     assert!(harness.state().assignment_has_work());
 
     harness.state_mut().open_view(AppView::Setup);
     harness.step();
-    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
+    assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     assert!(matches!(
         harness.state().work.pending_transition,
         Some(crate::app::PendingTransition::View(AppView::Setup))
     ));
     click(&mut harness, "Cancel");
-    assert!(harness.state().has_missing_object_draft());
+    assert!(harness.state().has_review_corrections());
 
     let mut previous = harness.state().work.assignment.clone().unwrap();
     previous.assignment_id = AssignmentId::from("previous_review");
@@ -4119,13 +3955,13 @@ fn missing_object_draft_counts_as_work_for_normal_and_previous_navigation() {
     harness.state_mut().work.previous_assignment = Some(previous);
     harness.step();
     click(&mut harness, "Previous");
-    assert!(harness.query_by_label("Discard missing-object locations?").is_some());
+    assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     assert!(matches!(
         harness.state().work.pending_transition,
         Some(crate::app::PendingTransition::PreviousAssignment(_))
     ));
     click(&mut harness, "Cancel");
-    assert!(harness.state().has_missing_object_draft());
+    assert!(harness.state().has_review_corrections());
 }
 
 #[test]
@@ -4157,7 +3993,7 @@ fn missing_object_history_is_read_only_navigable_and_separate_from_current_revie
     harness.event(egui::Event::PointerMoved(egui::pos2(1400.0, 600.0)));
     harness.event(egui::Event::MouseWheel { phase:egui::TouchPhase::Move,unit:egui::MouseWheelUnit::Point,delta:egui::vec2(0.0,-650.0),modifiers:egui::Modifiers::NONE });
     for _ in 0..15 { harness.step(); }
-    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox,"Missing-object history").click_accesskit();
+    harness.get_by_label("Historical missing-object evidence").click_accesskit();
     harness.step();
     let label = format!("{} · {} · 1 locations", timestamp.format("%Y-%m-%d %H:%M UTC"),reviewer);
     harness.get_by_label(&label).click_accesskit();
@@ -4165,18 +4001,12 @@ fn missing_object_history_is_read_only_navigable_and_separate_from_current_revie
     assert_eq!(harness.state().missing_object_canvas_locations(),locations);
     assert!(harness.query_by_label("Historical missing-object evidence").is_some());
     assert!(harness.query_by_label("Remove missing 1").is_none());
-    let label = format!("Missing 1 · {} · 80% across, 70% down",harness.state().class_name(&locations[0].class_id));
-    let marker = harness.get_by_role_and_label(egui::accesskit::Role::Button,&label).rect();
-    assert!(marker.height() >= 44.0);
-    harness.get_by_label(&label).click_accesskit();
-    harness.step();
     assert_eq!(harness.state().work.annotations,geometry);
     assert!(!harness.state().has_missing_object_draft());
     assert_eq!(api.counts().annotation_batch,0);
     harness.key_press(egui::Key::Escape);
     harness.step();
-    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox,"Missing-object history").click_accesskit();
-    harness.step();
+
     harness.get_by_label("Hide historical locations").click_accesskit();
     harness.step();
     assert!(harness.state().missing_object_canvas_locations().is_empty());
@@ -4482,4 +4312,31 @@ fn workflow_dot_ignores_stale_availability() {
     assert_workflow_dot(&harness, "Person boxes", true);
     assert_workflow_dot(&harness, "Vehicle boxes", false);
     assert!(harness.state().work.automatic_workflow_change.is_none());
+}
+
+#[test]
+fn reviewer_can_stage_multiple_additions_and_distinguish_unsaved_previews() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), false);
+    let mut harness = loaded_review_harness(api.clone());
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.step();
+    let persisted = harness.state().work.annotations.clone();
+    for _ in 0..2 {
+        click(&mut harness, "Add missing annotation");
+        harness.step();
+        click(&mut harness, "Keep correction");
+        harness.step();
+    }
+    assert_eq!(harness.state().work.review_corrections.changes.len(), 2);
+    assert_eq!(api.counts().record_correction, 0);
+    assert_eq!(harness.state().work.annotations, persisted);
+    let mut previews = persisted;
+    harness.state().apply_staged_review_previews(&mut previews);
+    assert_eq!(previews.len(), 3);
+    let mut styles = std::collections::BTreeMap::new();
+    harness.state().style_review_correction_previews(&previews, &mut styles);
+    assert_eq!(styles.len(), 2);
+    assert!(styles.values().all(|style| style.dashed_box && style.color == crate::theme::WARNING));
+    assert!(harness.state().review_context().unwrap().accessible_summary().contains("2 unsaved corrections"));
 }

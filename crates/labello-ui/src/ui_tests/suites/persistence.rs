@@ -1585,9 +1585,10 @@ fn queue_saturation_rolls_back_claim_release_review_and_correction() {
     });
     saturate_command_queue(review.state_mut());
     review.state_mut().request_correction();
+    review.state_mut().submit_staged_review_corrections();
     assert!(!review.state().loading.saving);
     assert!(review.state().work.active_operation_id.is_none());
-    assert!(review.state().work.correction_draft.is_some());
+    assert!(review.state().has_review_corrections());
 
 
 }
@@ -1964,8 +1965,8 @@ fn correction_mode_blocks_review_shortcuts_and_saturation_never_discards_the_dra
     harness
         .state_mut()
         .request_review(labello_domain::ReviewDecision::Rejected);
-    assert!(harness.state().work.correction_draft.is_none());
-    assert!(harness.state().loading.saving);
+    assert!(harness.state().work.correction_draft.is_some());
+    assert!(!harness.state().loading.saving);
 }
 
 #[test]

@@ -1,6 +1,83 @@
 use super::*;
 
 impl ImageState {
+    pub(super) fn apply_review_correction_submission(
+        &mut self,
+        assignment: &Assignment,
+        submission: &crate::ReviewCorrectionSubmission,
+        review: &ReviewRecord,
+        task_state: &TaskState,
+        event: &EventLogEntry,
+    ) -> DomainResult<()> {
+        submission.validate()?;
+        let invalid = || {
+            DomainError::InvalidReviewerCorrection("invalid correction submission boundary".into())
+        };
+        let context = self
+            .review_assignment_contexts
+            .get(&assignment.assignment_id)
+            .ok_or_else(invalid)?;
+        let old = self
+            .assignments
+            .iter()
+            .find(|old| old.assignment_id == assignment.assignment_id)
+            .ok_or_else(invalid)?;
+        if old.status != AssignmentStatus::Active
+            || old.kind != AssignmentKind::Review
+            || old.assigned_to != event.actor_user_id
+            || old.task_id != assignment.task_id
+            || old.image_id != assignment.image_id
+            || assignment.assigned_to != old.assigned_to
+            || assignment.kind != old.kind
+            || assignment.status != AssignmentStatus::Completed
+            || event.actor_role != crate::DatasetRole::Reviewer
+            || context.round != submission.round
+            || self.review_round(&assignment.task_id) != Some(&submission.round)
+            || context.target_fingerprint != submission.target_fingerprint
+            || self.review_target_fingerprint(&context.task) == submission.target_fingerprint
+            || self
+                .review_correction_submissions
+                .contains_key(&assignment.assignment_id)
+            || review.decision != ReviewDecision::Rejected
+            || review.reviewer_user_id != event.actor_user_id
+            || context.targets.last() != Some(&review.target)
+            || self
+                .reviews
+                .iter()
+                .any(|old| old.review_id == review.review_id)
+            || task_state.task_id != assignment.task_id
+            || task_state.status != TaskStatus::Submitted
+            || task_state.outcome.is_some()
+            || task_state.completed_at.is_some()
+            || task_state.completed_by.is_some()
+            || task_state.assigned_to.is_some()
+            || task_state.updated_at != event.timestamp
+            || assignment.updated_at != event.timestamp
+            || review.timestamp != event.timestamp
+            || review.comment != submission.reason
+            || !submission.matches_applied_changes(
+                self,
+                &assignment.task_id,
+                &event.actor_user_id,
+                event.timestamp,
+            )
+        {
+            return Err(invalid());
+        }
+        let mut next = self.clone();
+        next.apply_review_record(review);
+        next.apply_task_state(task_state)?;
+        *next
+            .assignments
+            .iter_mut()
+            .find(|old| old.assignment_id == assignment.assignment_id)
+            .expect("validated above") = assignment.clone();
+        next.review_correction_submissions
+            .insert(assignment.assignment_id.clone(), submission.clone());
+        *self = next;
+        Ok(())
+    }
+
     pub(super) fn apply_review_record(&mut self, review: &ReviewRecord) {
         if let Some(round) = self
             .review_target_task(&review.target)

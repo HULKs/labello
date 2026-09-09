@@ -426,6 +426,7 @@ pub struct WorkState {
     pub(crate) missing_objects: crate::missing_objects::MissingObjectDraft,
     pub(crate) staged_review_decisions: Vec<labello_domain::ReviewRecord>,
     pub(crate) review_revision_commit: Option<labello_domain::ReviewRevisionCommit>,
+    pub(crate) review_corrections: crate::review_corrections::ReviewCorrectionsDraft,
     pub(crate) correction_draft: Option<CorrectionDraft>,
     pub(crate) show_tutorial: bool,
     pub(crate) pending_transition: Option<PendingTransition>,

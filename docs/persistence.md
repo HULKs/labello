@@ -338,6 +338,25 @@ still guard event validation, exclusive revision ownership, and publication.
 A live revision excludes relevant annotation, review, migration, and assignment
 mutations, including mutation paths used by offline synchronization.
 
+## Reviewer correction rounds
+
+Version 3 also supports `ReviewCorrectionSubmitted`. A correction transaction
+appends version/delete/disposition/companion events, renewed migration confirmation
+where needed, cancelled competing leases, and this receipt in one atomic log
+replacement. The receipt stores the immutable submission, rejected old-round
+review, completed assignment and `Submitted` task state with no final outcome.
+Replay applies the rejection to the captured round before creating the fresh round.
+Derived `reviewCorrectionSubmissions` supports exact retries; missing historical
+fields default empty. Existing `ReviewerCorrectionRecorded` events retain their
+historical immediate-completion meaning. No old event is rewritten.
+
+All annotation and migration changes remain independently replayable at every
+event boundary. The publication transaction simulates the complete batch before
+renaming the event log; caches and statistics are then rebuilt/invalidated through
+the existing owner. Schema bundles, snapshots and offline wire states include
+the receipt, but raw/offline commands cannot author it. Schema version remains 3;
+version 2 cannot encode the new event.
+
 ## Previous-review history index
 
 Each repository and its clones share an in-memory index derived from per-image
@@ -366,8 +385,9 @@ explicit repair take the history membership write guard. Reopening checks the
 latest candidate under the same reviewer/task guard used by terminal review
 publication and retains it through event publication and index observation.
 
-## Missing-object review evidence
+## Historical missing-object review evidence
 
+Active commands no longer create this evidence. Historical
 `MissingObjectEvidenceRecorded` is a server-owned version-3 event appended in
 the same atomic transaction as a final rejection and assignment completion,
 before its `ReviewAssignmentFinished` boundary. Ordinary review retains its

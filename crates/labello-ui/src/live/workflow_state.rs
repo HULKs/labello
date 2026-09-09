@@ -193,6 +193,7 @@ impl LabelloApp {
         self.work.staged_review_decisions.clear();
         self.work.review_revision_commit = None;
         self.work.correction_draft = None;
+        self.work.review_corrections = Default::default();
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
         self.work.last_edit_at = None;
@@ -306,6 +307,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn sync_review_selection(&mut self) {
+        if self.work.review_corrections.editor.is_some() { return; }
         if self.view != AppView::Review {
             return;
         }

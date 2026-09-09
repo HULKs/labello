@@ -811,7 +811,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
         let (approve, reject) = if layout != LayoutMode::Wide {
             ("Accept", "Reject")
         } else {
-            ("Approve object", "Reject object & finish")
+            ("Approve object", "Submit & reject")
         };
         for label in [approve, reject] {
             assert_control_inside(

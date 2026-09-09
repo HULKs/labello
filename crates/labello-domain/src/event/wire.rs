@@ -154,6 +154,7 @@ impl Serialize for EventLogEntry {
                     | EventPayload::MissingObjectEvidenceRecorded { .. }
                     | EventPayload::ReviewAssignmentFinished { .. }
                     | EventPayload::ReviewRevisionCommitted { .. }
+                    | EventPayload::ReviewCorrectionSubmitted { .. }
             )
         {
             return Err(serde::ser::Error::custom(

@@ -1285,6 +1285,37 @@ pub(crate) async fn commit_review_revision(
     ))
 }
 
+pub(crate) async fn submit_review_corrections(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    Query(assignment): Query<AssignmentActionRequest>,
+    headers: HeaderMap,
+    Json(submission): Json<labello_domain::ReviewCorrectionSubmission>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    image_id.validate_path_segment()?;
+    submission
+        .validate()
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_dataset_role(&metadata, &actor, DatasetRole::Reviewer)?;
+    validate_assignment_request(&assignment, &image_id, AssignmentKind::Review)?;
+    Ok(Json(
+        repo.submit_review_corrections(
+            &actor.user_id,
+            AssignmentContext {
+                assignment_id: &assignment.assignment_id,
+                image_id: &image_id,
+                task_id: &assignment.task_id,
+                kind: AssignmentKind::Review,
+            },
+            submission,
+        )
+        .await?,
+    ))
+}
+
 pub(crate) async fn record_correction(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
