@@ -29,6 +29,11 @@ build. Use `./scripts/verify.sh all` to run the baseline and browser build
 without changed-path optimization, or `./scripts/verify.sh classify <base>` to
 inspect the selected profiles.
 
+Hosted native-build jobs refresh Ubuntu's `ubuntu.sources` package index only.
+The required native libraries come from Ubuntu; third-party repositories bundled
+with the runner image must not block their installation. APT signature and hash
+verification remain enabled.
+
 The required baseline is:
 
 ```text
