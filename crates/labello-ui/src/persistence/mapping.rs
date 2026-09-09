@@ -2,7 +2,6 @@ fn stored_view(view: crate::app::AppView) -> StoredView {
     match view {
         crate::app::AppView::Annotate => StoredView::Annotate,
         crate::app::AppView::Review => StoredView::Review,
-        crate::app::AppView::Adjudicate => StoredView::Adjudicate,
         crate::app::AppView::Admin => StoredView::Admin,
         crate::app::AppView::Stats | crate::app::AppView::Setup => StoredView::Stats,
     }
@@ -12,7 +11,7 @@ fn app_view(view: StoredView) -> crate::app::AppView {
     match view {
         StoredView::Annotate => crate::app::AppView::Annotate,
         StoredView::Review => crate::app::AppView::Review,
-        StoredView::Adjudicate => crate::app::AppView::Adjudicate,
+        StoredView::Adjudicate => crate::app::AppView::Setup,
         StoredView::Admin => crate::app::AppView::Admin,
         StoredView::Stats => crate::app::AppView::Stats,
     }
@@ -22,7 +21,7 @@ fn assignment_kind_segment(kind: &AssignmentKind) -> &'static str {
     match kind {
         AssignmentKind::Annotation => "annotation",
         AssignmentKind::Review => "review",
-        AssignmentKind::Adjudication => "adjudication",
+        AssignmentKind::LegacyAdjudication => "adjudication",
     }
 }
 

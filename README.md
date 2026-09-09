@@ -181,7 +181,7 @@ localAdminLogin = false
 ```
 
 Dataset permissions remain role-based. The available roles are annotator,
-reviewer, adjudicator, and data admin. Only users listed in `bootstrapAdmins`
+reviewer, and data admin. Only users listed in `bootstrapAdmins`
 can create datasets.
 
 ### GitHub OAuth
@@ -277,10 +277,10 @@ non-editable.
 A bootstrap admin creates a dataset in the setup view. A data admin can then:
 
 1. Define classes and bounding-box or skeleton tasks.
-2. Configure review requirements and user roles.
+2. Choose optional single-reviewer approval and configure user roles.
 3. Add relative filesystem image roots or upload a browser folder.
 4. Run ingestion to index images and detect duplicate content.
-5. Assign users to annotation, review, adjudication, or administration roles.
+5. Assign users to annotation, review, or administration roles.
 
 A bootstrap administrator can also select `Import a dataset` in Setup when the
 server advertises import capability. Import accepts the four explicit profiles
@@ -447,10 +447,7 @@ See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
   download an offline workspace, author against it without a network
   connection, retain versioned offline mutations, synchronize them, or
   present merge conflicts. Browser draft recovery is not offline mode.
-- Independent multi-annotator labeling, agreement calculation, automatic
-  acceptance, disagreement routing, and adjudication are not operational.
-  Adjudicator roles and API/domain shapes exist, but there is no reachable
-  production adjudication workflow and the Adjudicate UI is disabled.
+- Independent multi-annotator labeling and agreement calculation are not operational.
 - Prelabel configuration, task association, queued loading, display,
   acceptance, and discard controls exist, but annotators cannot choose among
   the available configurations: every configuration associated with the task

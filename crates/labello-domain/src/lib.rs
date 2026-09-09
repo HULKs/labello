@@ -4,7 +4,6 @@
 //! the backend, browser client, and future native offline client can share the
 //! same rules.
 
-pub mod agreement;
 pub mod annotation;
 pub mod assignment;
 pub mod dataset;
@@ -25,7 +24,6 @@ pub mod stats;
 pub mod task;
 pub mod user;
 
-pub use agreement::*;
 pub use annotation::*;
 pub use assignment::*;
 pub use dataset::*;

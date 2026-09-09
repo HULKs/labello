@@ -1588,16 +1588,13 @@ async fn migration_review_is_sequential_and_rejection_cancels_competitors() {
         .await
         .unwrap()
         .unwrap();
-    let second_review = fixture
-        .repository
-        .assign_next_image(
-            &fixture.reviewers[1],
-            &fixture.task_id,
-            AssignmentKind::Review,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let second_review = crate::assignment::tests::historical_review_assignment(
+        &fixture.repository,
+        &fixture.image_id,
+        &fixture.task_id,
+        &fixture.reviewers[1],
+    )
+    .await;
     let state = fixture
         .repository
         .load_image_state(&fixture.image_id)
@@ -2255,10 +2252,9 @@ async fn reviewer_guide_correction_invalidates_submitted_migration_atomically() 
         .find(|task| task.task_id == fixture.guide_task_id)
         .unwrap()
         .review = ReviewConfig {
-        required_reviews: 1,
         workflow: ReviewWorkflow::Approval,
         allow_reviewer_corrections: true,
-        agreement_threshold: None,
+        legacy: None,
     };
     fixture.repository.save_dataset(&metadata).await.unwrap();
     let migration_review = prepare_submitted_migration(&fixture).await;
@@ -2364,10 +2360,9 @@ async fn fixture_with_skeleton_spec(
         instructions: tutorial(),
         skeleton: Some(skeleton_spec),
         review: ReviewConfig {
-            required_reviews: 1,
             workflow,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         prelabel_config_ids: Vec::new(),
         manual_box_guide_migration: Some(ManualBoxGuideMigration {
@@ -2575,10 +2570,9 @@ async fn add_migration_pair(fixture: &Fixture, class: &str, keypoint: &str) -> M
             allow_absent: false,
         }),
         review: ReviewConfig {
-            required_reviews: 1,
             workflow: ReviewWorkflow::Approval,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         prelabel_config_ids: Vec::new(),
         manual_box_guide_migration: Some(ManualBoxGuideMigration {

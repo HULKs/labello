@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use labello_domain::{
     ClassStats, DatasetStats, ImageState, ImportCoverage, MigrationDispositionStatus,
-    ReviewDecision, ReviewTarget, RevisionSource, TaskId, TaskOutcome, TaskStats, TaskStatus,
+    RevisionSource, TaskId, TaskStats, TaskStatus,
 };
 
 use tokio::sync::Mutex;
@@ -25,8 +25,6 @@ mod contributors;
 mod scan;
 
 use aggregation::StatsAggregation;
-#[cfg(test)]
-use aggregation::current_task_review_decision;
 pub(crate) use cache::StatsCache;
 
 #[cfg(test)]
@@ -44,10 +42,9 @@ mod tests {
         Actor, AnnotationGeometry, AnnotationId, AnnotationOrigin, AnnotationType, Assignment,
         AssignmentId, AssignmentKind, AssignmentStatus, BoundingBox, ClassId, DatasetId,
         DatasetMetadata, DatasetRole, EventPayload, HumanRevisionKind, ImageId, ImageRecord,
-        ImageState, ImagesIndex, ImportCoverage, ImportGeometryProvenance, ImportId,
-        ImportTaskInitialization, ImportedOrigin, ReviewConfig, ReviewId, ReviewRecord,
-        ReviewWorkflow, RevisionSource, SCHEMA_VERSION, SourceProfile, TaskDefinition, TaskId,
-        TaskOutcome, TaskState, TutorialContent, UserId, now,
+        ImagesIndex, ImportCoverage, ImportGeometryProvenance, ImportId, ImportTaskInitialization,
+        ImportedOrigin, ReviewConfig, ReviewWorkflow, RevisionSource, SCHEMA_VERSION,
+        SourceProfile, TaskDefinition, TaskId, TaskState, TutorialContent, UserId, now,
     };
 
     use super::*;
@@ -250,10 +247,9 @@ mod tests {
             },
             skeleton: None,
             review: ReviewConfig {
-                required_reviews: 1,
                 workflow: ReviewWorkflow::None,
                 allow_reviewer_corrections: false,
-                agreement_threshold: None,
+                legacy: None,
             },
             prelabel_config_ids: Vec::new(),
             manual_box_guide_migration: None,
@@ -438,80 +434,5 @@ mod tests {
         let generation = repository.stats_cache.generation.load(Ordering::Acquire);
         let cached = repository.stats_cache.value.lock().await;
         assert_eq!(cached.as_ref().unwrap().generation, generation);
-    }
-
-    #[tokio::test]
-    async fn reviewed_status_uses_the_current_submission_round() {
-        let image_id = ImageId::from("img_1");
-        let task_id = TaskId::from("boxes");
-        let mut state = ImageState::new(image_id);
-        state.reviews.push(ReviewRecord {
-            review_id: ReviewId::generate(),
-            target: ReviewTarget::Task {
-                task_id: task_id.clone(),
-            },
-            reviewer_user_id: UserId::from("reviewer"),
-            decision: ReviewDecision::Approved,
-            timestamp: now(),
-            comment: None,
-        });
-        tokio::time::sleep(Duration::from_millis(2)).await;
-        let submitted_at = now();
-        state.task_states.insert(
-            task_id.clone(),
-            TaskState {
-                task_id: task_id.clone(),
-                status: TaskStatus::Submitted,
-                outcome: None,
-                assigned_to: None,
-                completed_by: Some(UserId::from("annotator")),
-                completed_at: Some(submitted_at),
-                updated_at: submitted_at,
-            },
-        );
-
-        assert_eq!(current_task_review_decision(&state, &task_id), None);
-
-        state.task_states.insert(
-            task_id.clone(),
-            TaskState {
-                task_id: task_id.clone(),
-                status: TaskStatus::Completed,
-                outcome: Some(TaskOutcome::ReviewerCorrected),
-                assigned_to: None,
-                completed_by: Some(UserId::from("reviewer")),
-                completed_at: Some(submitted_at),
-                updated_at: submitted_at,
-            },
-        );
-        assert_eq!(current_task_review_decision(&state, &task_id), None);
-
-        let reviewed_at = now();
-        state.reviews.push(ReviewRecord {
-            review_id: ReviewId::generate(),
-            target: ReviewTarget::Task {
-                task_id: task_id.clone(),
-            },
-            reviewer_user_id: UserId::from("reviewer_2"),
-            decision: ReviewDecision::Rejected,
-            timestamp: reviewed_at,
-            comment: None,
-        });
-        state.task_states.insert(
-            task_id.clone(),
-            TaskState {
-                task_id: task_id.clone(),
-                status: TaskStatus::NeedsCorrection,
-                outcome: None,
-                assigned_to: None,
-                completed_by: Some(UserId::from("reviewer_2")),
-                completed_at: Some(reviewed_at),
-                updated_at: reviewed_at,
-            },
-        );
-        assert_eq!(
-            current_task_review_decision(&state, &task_id),
-            Some(ReviewDecision::Rejected)
-        );
     }
 }

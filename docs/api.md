@@ -35,7 +35,7 @@ Dataset access is role-based:
 - **Any role:** at least one role in the dataset.
 - **Data admin:** the dataset's `data_admin` role.
 - **Assigned actor:** the authenticated user owns the exact live assignment;
-  its kind requires annotator, reviewer, or adjudicator authority.
+  its kind requires annotator or reviewer authority.
 - **Bootstrap admin:** a server-configured bootstrap administrator. Import
   additionally limits job access to the creating owner and filters server roots
   by configured owner.
@@ -182,7 +182,6 @@ blocked by the enforced window.
 | `POST /datasets/{dataset_id}/images/{image_id}/missing-object-rejections` | Owner of active ordinary final-review assignment; reviewer role | `AssignmentActionRequest` query plus `MissingObjectRejection` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/review-revisions` | Owner of active decision-revision lease; reviewer role | `AssignmentActionRequest` query plus `ReviewRevisionCommit` → `ImageState` |
 | `POST /datasets/{dataset_id}/images/{image_id}/corrections` | Assigned reviewer | `AssignmentActionRequest` query plus `CorrectionRequest` → `EventLogEntry` |
-| `POST /datasets/{dataset_id}/images/{image_id}/adjudications` | Assigned adjudicator | `AssignmentActionRequest` query plus `AdjudicationRecord` → `EventLogEntry` |
 | `GET /datasets/{dataset_id}/offline-bundle` | Annotator | `OfflineBundleRequest` query → `OfflineBundle` |
 | `POST /datasets/{dataset_id}/offline-sync` | Annotator; same authenticated user and dataset | versioned `OfflineSyncRequest` → `OfflineSyncResult` |
 
@@ -474,3 +473,17 @@ request instead of reporting a potentially false empty presence list.
 
 Presence reads never claim, renew or release leases. Closing a browser does not
 release its leases automatically; the existing lease-expiry policy applies.
+
+## Review configuration and task statistics
+
+Current task `review` configuration contains `workflow`, either `none` or
+`approval`, and `allowReviewerCorrections`. Approval requires one reviewer.
+Historical-only configuration fields, roles, task states and assignment kinds
+cannot be introduced through current mutation endpoints.
+
+`DatasetStats` reports `pendingTasks`, `inProgressTasks`, `awaitingReviewTasks`,
+`needsCorrectionTasks`, and `completedTasks`. Each `perTask` entry uses `pending`,
+`inProgress`, `awaitingReview`, `needsCorrection`, and `completed`, plus its
+existing provenance and migration statistics. Each eligible image/task occupies
+one state count. The task table and summary use this same contract. Audit review
+records and contributor activity remain available through their existing APIs.

@@ -7,7 +7,7 @@ fn assignment_kind_cache_key(kind: &AssignmentKind) -> &'static str {
     match kind {
         AssignmentKind::Annotation => "annotation",
         AssignmentKind::Review => "review",
-        AssignmentKind::Adjudication => "adjudication",
+        AssignmentKind::LegacyAdjudication => "adjudication",
     }
 }
 
@@ -38,20 +38,16 @@ impl DatasetRepository {
             role_for_kind(&requested_kind),
         )?;
         let requested_generation = self.assignment_availability_cache.generation();
-        let kinds = [
-            AssignmentKind::Annotation,
-            AssignmentKind::Review,
-            AssignmentKind::Adjudication,
-        ]
-        .into_iter()
-        .filter(|candidate| {
-            config.role_assignments.iter().any(|assignment| {
-                assignment.dataset_id == config.dataset_id
-                    && assignment.user_id == *user_id
-                    && assignment.roles.contains(&role_for_kind(candidate))
+        let kinds = [AssignmentKind::Annotation, AssignmentKind::Review]
+            .into_iter()
+            .filter(|candidate| {
+                config.role_assignments.iter().any(|assignment| {
+                    assignment.dataset_id == config.dataset_id
+                        && assignment.user_id == *user_id
+                        && assignment.roles.contains(&role_for_kind(candidate))
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         if let Some(cached) = self
             .cached_assignment_availabilities(user_id, &kinds, requested_generation)
             .await
@@ -264,7 +260,7 @@ impl DatasetRepository {
             let eligible = match &kind {
                 AssignmentKind::Annotation => state.assignment_eligible(task_id),
                 AssignmentKind::Review => status == &TaskStatus::Submitted,
-                AssignmentKind::Adjudication => status == &TaskStatus::AdjudicationRequired,
+                AssignmentKind::LegacyAdjudication => false,
             };
             if !eligible {
                 return Ok(None);
@@ -317,7 +313,7 @@ impl DatasetRepository {
             match task.review.workflow {
                 ReviewWorkflow::Approval => {}
                 ReviewWorkflow::None => return Ok(None),
-                ReviewWorkflow::IndependentAgreement => {
+                ReviewWorkflow::LegacyIndependentAgreement => {
                     return Err(StorageError::InvalidAssignment(format!(
                         "independent agreement workflow is not implemented for task {task_id}"
                     )));
@@ -365,7 +361,7 @@ impl DatasetRepository {
         let eligible = match kind {
             AssignmentKind::Annotation => state.assignment_eligible(task_id),
             AssignmentKind::Review => revision || status == &TaskStatus::Submitted,
-            AssignmentKind::Adjudication => status == &TaskStatus::AdjudicationRequired,
+            AssignmentKind::LegacyAdjudication => false,
         };
         if !eligible {
             return Ok(None);
@@ -374,12 +370,11 @@ impl DatasetRepository {
             let events = self.load_events(image_id).await?;
             let already_final = if task.manual_box_guide_migration.is_some() {
                 has_migration_final_review_by_user(&events, task_id, user_id)
-                    || migration_final_approval_count(&events, task_id)
-                        >= task.review.required_reviews
+                    || migration_final_approval_count(&events, task_id) >= 1
             } else {
                 let reviews = current_task_reviews(&events, task_id);
                 has_task_review_by_user(&reviews, task_id, user_id)
-                    || task_approval_count(&reviews, task_id) >= task.review.required_reviews
+                    || task_approval_count(&reviews, task_id) >= 1
             };
             if already_final {
                 return Ok(None);
@@ -425,7 +420,7 @@ impl DatasetRepository {
         let required_role = match kind {
             AssignmentKind::Annotation => DatasetRole::Annotator,
             AssignmentKind::Review => DatasetRole::Reviewer,
-            AssignmentKind::Adjudication => DatasetRole::Adjudicator,
+            AssignmentKind::LegacyAdjudication => DatasetRole::LegacyAdjudicator,
         };
         require_role(
             &metadata.role_assignments,
@@ -568,10 +563,10 @@ impl DatasetRepository {
         if !task.enabled {
             return Ok(false);
         }
-        if *kind == AssignmentKind::Adjudication {
+        if *kind == AssignmentKind::LegacyAdjudication {
             return Ok(false);
         }
-        if task.review.workflow == ReviewWorkflow::IndependentAgreement {
+        if task.review.workflow == ReviewWorkflow::LegacyIndependentAgreement {
             return Err(StorageError::InvalidAssignment(format!(
                 "independent agreement workflow is not implemented for task {}",
                 task.task_id
@@ -635,12 +630,11 @@ impl DatasetRepository {
             let already_final = if task.manual_box_guide_migration.is_some() {
                 let events = self.load_events(image_id).await?;
                 has_migration_final_review_by_user(&events, task_id, user_id)
-                    || migration_final_approval_count(&events, task_id)
-                        >= task.review.required_reviews
+                    || migration_final_approval_count(&events, task_id) >= 1
             } else {
                 let reviews = self.current_task_reviews(image_id, task_id).await?;
                 has_task_review_by_user(&reviews, task_id, user_id)
-                    || task_approval_count(&reviews, task_id) >= task.review.required_reviews
+                    || task_approval_count(&reviews, task_id) >= 1
             };
             if already_final {
                 return Ok(false);
@@ -724,7 +718,7 @@ fn status_matches_kind(status: &TaskStatus, kind: &AssignmentKind) -> bool {
             matches!(status, TaskStatus::Pending | TaskStatus::NeedsCorrection)
         }
         AssignmentKind::Review => matches!(status, TaskStatus::Submitted),
-        AssignmentKind::Adjudication => matches!(status, TaskStatus::AdjudicationRequired),
+        AssignmentKind::LegacyAdjudication => false,
     }
 }
 
@@ -735,9 +729,6 @@ fn has_conflicting_assignment(
     kind: &AssignmentKind,
     now: labello_domain::Timestamp,
 ) -> bool {
-    if *kind == AssignmentKind::Review {
-        return false;
-    }
     assignments.iter().any(|assignment| {
         &assignment.task_id == task_id
             && &assignment.kind == kind

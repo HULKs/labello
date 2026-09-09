@@ -1,8 +1,8 @@
 use labello_domain::{
-    AdjudicationRecord, Assignment, DatasetId, DatasetMetadata, DatasetSnapshot, DatasetStats,
-    EventLogEntry, ImageExplorerPage, ImageId, ImageRecord, ImageState, ImportId, KeybindingSet,
-    OfflineBundle, OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, PrelabelSuggestion,
-    ReviewRecord, TaskDefinition, UserAccount, UserId,
+    Assignment, DatasetId, DatasetMetadata, DatasetSnapshot, DatasetStats, EventLogEntry,
+    ImageExplorerPage, ImageId, ImageRecord, ImageState, ImportId, KeybindingSet, OfflineBundle,
+    OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, PrelabelSuggestion, ReviewRecord,
+    TaskDefinition, UserAccount, UserId,
 };
 use reqwest::{Method, RequestBuilder, Response, header::CONTENT_TYPE};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -23,7 +23,7 @@ struct ErrorBody {
 }
 
 use crate::{
-    AdjudicationApi, AnnotationApi, AnnotationBatchRequest, AppendEventRequest, AssignNextRequest,
+    AnnotationApi, AnnotationBatchRequest, AppendEventRequest, AssignNextRequest,
     AssignmentActionRequest, AuthApi, AuthOptions, ClientError, ClientResult, CorrectionRequest,
     CreateDatasetRequest, DatasetApi, DatasetSummary, DatasetUser, ImageApi, ImageExplorerQuery,
     ImageFile, ImagePreview, ImportApi, IngestJob, IngestReport, KeybindingApi,

@@ -205,27 +205,6 @@ pub trait ReviewApi {
     }
 }
 
-pub trait AdjudicationApi {
-    fn record_adjudication<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        image_id: &'a ImageId,
-        adjudication: AdjudicationRecord,
-    ) -> ApiFuture<'a, EventLogEntry>;
-
-    fn record_assigned_adjudication<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        assignment: AssignmentActionRequest,
-        adjudication: AdjudicationRecord,
-    ) -> ApiFuture<'a, EventLogEntry> {
-        Box::pin(async move {
-            self.record_adjudication(dataset_id, &assignment.image_id, adjudication)
-                .await
-        })
-    }
-}
-
 pub trait OfflineApi {
     fn offline_bundle<'a>(
         &'a self,

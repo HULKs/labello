@@ -257,27 +257,33 @@ impl DatasetRepository {
                     "user {user_id} already reviewed task {task_id} in this round"
                 )));
             }
-            let approval_count = task_approval_count(&current_reviews, task_id)
-                + u32::from(review.decision == ReviewDecision::Approved);
             let status = match review.decision {
-                ReviewDecision::Approved if approval_count >= task.review.required_reviews => {
-                    TaskStatus::Completed
-                }
-                ReviewDecision::Approved => TaskStatus::Submitted,
+                ReviewDecision::Approved => TaskStatus::Completed,
                 ReviewDecision::Rejected => TaskStatus::NeedsCorrection,
             };
-            if status != TaskStatus::Submitted {
-                payloads.push(EventPayload::TaskStateChanged {
-                    task_state: TaskState {
-                        task_id: task_id.clone(),
-                        outcome: (review.decision == ReviewDecision::Approved)
-                            .then_some(TaskOutcome::Approved),
-                        status,
-                        assigned_to: None,
-                        completed_by: Some(user_id.clone()),
-                        completed_at: Some(now),
-                        updated_at: now,
-                    },
+            payloads.push(EventPayload::TaskStateChanged {
+                task_state: TaskState {
+                    task_id: task_id.clone(),
+                    outcome: (review.decision == ReviewDecision::Approved)
+                        .then_some(TaskOutcome::Approved),
+                    status,
+                    assigned_to: None,
+                    completed_by: Some(user_id.clone()),
+                    completed_at: Some(now),
+                    updated_at: now,
+                },
+            });
+            for competing in state.assignments.iter().filter(|other| {
+                other.task_id == *task_id
+                    && other.kind == AssignmentKind::Review
+                    && other.status == AssignmentStatus::Active
+                    && other.assignment_id != *assignment_id
+            }) {
+                let mut cancelled = competing.clone();
+                cancelled.status = AssignmentStatus::Cancelled;
+                cancelled.updated_at = now;
+                payloads.push(EventPayload::AssignmentUpdated {
+                    assignment: cancelled,
                 });
             }
             assignment.status = AssignmentStatus::Completed;

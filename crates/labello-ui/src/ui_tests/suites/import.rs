@@ -650,7 +650,6 @@ fn mutable_import_spy_accepts_multiple_manual_approval_categories() {
     assert_eq!(request.task_mappings.len(), 4);
     assert!(request.task_mappings.iter().all(|mapping| {
         mapping.task.review.workflow == labello_domain::ReviewWorkflow::Approval
-            && mapping.task.review.required_reviews == 1
     }));
     assert_eq!(request.skeleton_mappings.len(), 2);
     assert!(

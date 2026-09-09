@@ -8,7 +8,8 @@ use crate::{AssignmentId, ImageId, TaskId, Timestamp, UserId};
 pub enum AssignmentKind {
     Annotation,
     Review,
-    Adjudication,
+    #[serde(rename = "adjudication")]
+    LegacyAdjudication,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

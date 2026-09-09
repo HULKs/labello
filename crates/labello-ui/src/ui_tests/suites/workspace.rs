@@ -566,7 +566,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
                     (TaskId::from("bounding_box:vehicle"), true),
                 ]),
                 related: vec![labello_client::AssignmentAvailabilityEntry {
-                    kind: AssignmentKind::Adjudication,
+                    kind: AssignmentKind::Review,
                     tasks: BTreeMap::from([
                         (TaskId::from("bounding_box:person"), true),
                         (TaskId::from("bounding_box:vehicle"), false),
@@ -595,7 +595,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     assert_eq!(task_id, TaskId::from("bounding_box:vehicle"));
 
     app.execute_transition(crate::app::PendingTransition::View(
-        AppView::Adjudicate,
+        AppView::Review,
     ));
 
     assert!(app.runtime.commands.is_empty());
@@ -603,7 +603,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     assert!(app.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment {
-            kind: AssignmentKind::Adjudication,
+            kind: AssignmentKind::Review,
             task_id,
             ..
         } if task_id == &TaskId::from("bounding_box:person")
@@ -1978,36 +1978,6 @@ fn dataset_summary_roles_survive_sanitized_metadata_and_show_supported_tabs() {
     assert!(harness.query_all_by_label("Adjudicate").next().is_none());
 }
 
-#[test]
-fn adjudication_is_absent_from_navigation_and_rejected_programmatically() {
-    let api = Rc::new(SpyApi::new());
-    let mut setup = live_harness(api.clone());
-    step_until(&mut setup, 8, |app| app.datasets.summaries.len() == 1);
-    assert!(
-        setup
-            .query_by_role_and_label(
-                egui::accesskit::Role::Button,
-                "Adjudicate Demo Dataset"
-            )
-            .is_none()
-    );
-
-    let mut harness = loaded_work_harness(api);
-    assert!(
-        harness
-            .state()
-            .primary_navigation_destinations()
-            .iter()
-            .all(|(view, _)| *view != AppView::Adjudicate)
-    );
-    let original_view = harness.state().view;
-    harness.state_mut().open_view(AppView::Adjudicate);
-    assert_eq!(harness.state().view, original_view);
-    assert_eq!(
-        harness.state().runtime.error.as_deref(),
-        Some(crate::app::ADJUDICATION_UNAVAILABLE_MESSAGE)
-    );
-}
 
 #[test]
 fn restored_adjudication_workspace_is_rejected_with_the_operational_message() {
@@ -2016,7 +1986,7 @@ fn restored_adjudication_workspace_is_rejected_with_the_operational_message() {
     app.datasets.summaries = vec![DatasetSummary {
         dataset_id: DatasetId::from("demo"),
         name: "Demo Dataset".to_string(),
-        roles: vec![DatasetRole::Adjudicator],
+        roles: vec![DatasetRole::LegacyAdjudicator],
         total_images: 1,
     }];
     app.runtime.persistence.preference = Some(WorkspacePreference {
@@ -2045,7 +2015,7 @@ fn restored_adjudication_workspace_is_rejected_with_the_operational_message() {
 
     assert_eq!(
         app.runtime.notice.as_deref(),
-        Some(crate::app::ADJUDICATION_UNAVAILABLE_MESSAGE)
+        Some("The previous view is no longer authorized; choose an available dataset view.")
     );
     assert!(app.datasets.requested_view.is_none());
     assert_eq!(app.view, AppView::Setup);

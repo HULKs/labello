@@ -80,7 +80,7 @@ of production crates and the root workspace graph.
 
 ## Ownership Boundaries
 
-- Domain `state/`, `event/`, `task`, `review/`, `agreement`, and `migration/`
+- Domain `state/`, `event/`, `task`, `review/`, and `migration/`
   own pure validation, replay, transition, and digest policy.
 - Storage `repository/` owns managed paths, durable artifact I/O, replayed
   caches, locks, snapshots, and schema migration.
@@ -111,9 +111,8 @@ claim:
 
 - Browser offline bundle/sync APIs exist, but the browser has no offline
   annotation or conflict-resolution workflow.
-- Independent multi-annotator agreement and automatic disagreement routing are
-  not operational. Adjudication shapes and roles exist, but the production
-  Adjudicate workflow is disabled.
+- Independent multi-annotator labeling and agreement are not operational.
+- Approval review requires one reviewer and directly completes the task.
 - Prelabel configuration and suggestion UI exist, but model execution returns
   placeholder geometry; browser-local WebGPU/CPU execution is not implemented.
 - Tutorial example-image paths can be configured but are not rendered.
@@ -160,7 +159,7 @@ otherwise report the follow-up needed.
 - Validate IDs, normalized geometry, relative paths, sizes, counts, and all
   external input at their trust boundaries.
 - Preserve dataset-role checks, exact assignment ownership, bootstrap-admin
-  restrictions, and reviewer/adjudicator separation.
+  restrictions, and separate annotator/reviewer permissions.
 - Import builds and verifies a complete dataset before atomic no-replace
   publication. It never partially merges into an existing dataset.
 - Imported annotations and migration changes must remain reconstructable from

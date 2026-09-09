@@ -636,12 +636,6 @@ fn normalize_task_annotation(task: &mut TaskDefinition) {
 fn set_task_annotation_type(task: &mut TaskDefinition, annotation_type: AnnotationType) {
     task.annotation_type = annotation_type;
     normalize_task_annotation(task);
-    if let Some(agreement) = task.review.agreement_threshold.as_mut() {
-        agreement.metric = match task.annotation_type {
-            AnnotationType::BoundingBox => AgreementMetric::Iou,
-            AnnotationType::Skeleton => AgreementMetric::KeypointMeanDistance,
-        };
-    }
 }
 
 fn edit_skeleton(ui: &mut egui::Ui, task_index: usize, skeleton: &mut SkeletonSpec) {
@@ -809,100 +803,27 @@ fn edit_review(ui: &mut egui::Ui, task_index: usize, task: &mut TaskDefinition) 
         .show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Workflow");
-                let previous = task.review.workflow.clone();
                 egui::ComboBox::from_id_salt(format!("review-workflow-{task_index}"))
                     .selected_text(review_workflow_name(&task.review.workflow))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut task.review.workflow,
-                            ReviewWorkflow::None,
-                            "none",
-                        );
-                        ui.selectable_value(
-                            &mut task.review.workflow,
-                            ReviewWorkflow::Approval,
-                            "approval",
-                        );
-                        ui.selectable_value(
-                            &mut task.review.workflow,
-                            ReviewWorkflow::IndependentAgreement,
-                            "independent agreement",
-                        );
+                        ui.selectable_value(&mut task.review.workflow, ReviewWorkflow::None, "none");
+                        ui.selectable_value(&mut task.review.workflow, ReviewWorkflow::Approval, "approval");
                     });
-                if task.review.workflow != previous {
-                    match task.review.workflow {
-                        ReviewWorkflow::None => {
-                            task.review.required_reviews = 0;
-                            task.review.agreement_threshold = None;
-                        }
-                        ReviewWorkflow::Approval => {
-                            task.review.required_reviews = task.review.required_reviews.max(1);
-                            task.review.agreement_threshold = None;
-                        }
-                        ReviewWorkflow::IndependentAgreement => {
-                            task.review.required_reviews = task.review.required_reviews.max(2);
-                            task.review.agreement_threshold = Some(default_agreement(task));
-                        }
-                    }
-                }
             });
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Required reviews");
-                ui.add(
-                    egui::DragValue::new(&mut task.review.required_reviews)
-                        .range(0..=100)
-                        .speed(1),
-                )
-                .on_hover_text("Number of completed reviews required for this task.");
-                ui.checkbox(
-                    &mut task.review.allow_reviewer_corrections,
-                    "Allow reviewer correction",
-                );
-            });
-            if task.review.workflow == ReviewWorkflow::IndependentAgreement {
-                let mut enabled = task.review.agreement_threshold.is_some();
-                if ui
-                    .checkbox(&mut enabled, "Use agreement threshold")
-                    .changed()
-                {
-                    task.review.agreement_threshold = enabled.then(|| default_agreement(task));
-                }
-                if let Some(agreement) = task.review.agreement_threshold.as_mut() {
-                    agreement.metric = match task.annotation_type {
-                        AnnotationType::BoundingBox => AgreementMetric::Iou,
-                        AnnotationType::Skeleton => AgreementMetric::KeypointMeanDistance,
-                    };
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label("Agreement metric");
-                        ui.label(match agreement.metric {
-                            AgreementMetric::Iou => "intersection over union",
-                            AgreementMetric::KeypointMeanDistance => "keypoint mean distance",
-                        });
-                        ui.add(
-                            egui::Slider::new(&mut agreement.threshold, 0.0..=1.0)
-                                .text("threshold"),
-                        );
-                    });
-                }
+            if task.review.workflow == ReviewWorkflow::Approval {
+                ui.label("One reviewer completes the review.");
+                ui.checkbox(&mut task.review.allow_reviewer_corrections, "Allow reviewer correction");
+            } else {
+                task.review.allow_reviewer_corrections = false;
             }
         });
-}
-
-fn default_agreement(task: &TaskDefinition) -> AgreementThreshold {
-    AgreementThreshold {
-        metric: match task.annotation_type {
-            AnnotationType::BoundingBox => AgreementMetric::Iou,
-            AnnotationType::Skeleton => AgreementMetric::KeypointMeanDistance,
-        },
-        threshold: 0.5,
-    }
 }
 
 fn review_workflow_name(workflow: &ReviewWorkflow) -> &'static str {
     match workflow {
         ReviewWorkflow::None => "none",
         ReviewWorkflow::Approval => "approval",
-        ReviewWorkflow::IndependentAgreement => "independent agreement",
+        ReviewWorkflow::LegacyIndependentAgreement => "unsupported historical configuration",
     }
 }
 
@@ -1321,44 +1242,8 @@ fn skeleton_issues(skeleton: &SkeletonSpec, context: &str) -> Vec<String> {
 }
 
 fn validate_review(issues: &mut Vec<String>, context: &str, task: &TaskDefinition) {
-    match task.review.workflow {
-        ReviewWorkflow::None => {}
-        ReviewWorkflow::Approval if task.review.required_reviews == 0 => issues.push(format!(
-            "{context}: approval workflow requires at least one review."
-        )),
-        ReviewWorkflow::IndependentAgreement if task.review.required_reviews < 2 => issues.push(
-            format!("{context}: independent agreement requires at least two reviews."),
-        ),
-        _ => {}
-    }
-    if task.review.workflow == ReviewWorkflow::IndependentAgreement
-        && task.review.agreement_threshold.is_none()
-    {
-        issues.push(format!(
-            "{context}: enable an agreement threshold for independent agreement."
-        ));
-    }
-    if task.review.workflow == ReviewWorkflow::IndependentAgreement
-        && let Some(agreement) = &task.review.agreement_threshold
-    {
-        if !agreement.threshold.is_finite() || !(0.0..=1.0).contains(&agreement.threshold) {
-            issues.push(format!(
-                "{context}: agreement threshold must be between 0 and 1."
-            ));
-        }
-        let metric_matches = matches!(
-            (&task.annotation_type, &agreement.metric),
-            (AnnotationType::BoundingBox, AgreementMetric::Iou)
-                | (
-                    AnnotationType::Skeleton,
-                    AgreementMetric::KeypointMeanDistance
-                )
-        );
-        if !metric_matches {
-            issues.push(format!(
-                "{context}: agreement metric must match the annotation type."
-            ));
-        }
+    if !task.review.is_current() {
+        issues.push(format!("{context}: unsupported review configuration."));
     }
 }
 

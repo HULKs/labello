@@ -16,9 +16,8 @@ use labello_client::{
     StartMigrationPassRequest,
 };
 use labello_domain::{
-    Actor, AdjudicationDecision, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind,
-    DatasetId, DatasetRole, EventPayload, ImageId, KeybindingSet, OfflineSyncRequest,
-    PrelabelSuggestion, TaskOutcome, TaskState, TaskStatus,
+    Actor, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind, DatasetId, DatasetRole,
+    EventPayload, ImageId, KeybindingSet, OfflineSyncRequest, PrelabelSuggestion,
 };
 use labello_storage::assignment::AssignmentContext;
 
@@ -242,7 +241,7 @@ pub(crate) async fn reopen_assignment(
     request.assignment_id.validate_path_segment()?;
     request.image_id.validate_path_segment()?;
     request.task_id.validate_path_segment()?;
-    if request.kind == AssignmentKind::Adjudication {
+    if request.kind == AssignmentKind::LegacyAdjudication {
         return Err(ApiError::BadRequest(
             "adjudication assignments cannot be reopened".to_string(),
         ));
@@ -1324,80 +1323,6 @@ pub(crate) async fn record_correction(
         "review correction recorded"
     );
     Ok(Json(event))
-}
-
-pub(crate) async fn record_adjudication(
-    State(state): State<ApiState>,
-    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
-    Query(assignment): Query<AssignmentActionRequest>,
-    headers: HeaderMap,
-    Json(adjudication): Json<labello_domain::AdjudicationRecord>,
-) -> ApiResult<Json<labello_domain::EventLogEntry>> {
-    image_id.validate_path_segment()?;
-    let actor = actor_from_headers(&state, &headers)?;
-    if adjudication.adjudicator_user_id != actor.user_id {
-        return Err(ApiError::Unauthorized(
-            "cannot record adjudications for another user".to_string(),
-        ));
-    }
-    let repo = state.repo(&dataset_id)?;
-    let metadata = repo.load_dataset().await?;
-    ensure_dataset_role(&metadata, &actor, DatasetRole::Adjudicator)?;
-    validate_assignment_request(&assignment, &image_id, AssignmentKind::Adjudication)?;
-    if adjudication.task_id != assignment.task_id {
-        return Err(ApiError::BadRequest(
-            "adjudication task does not match assignment task".to_string(),
-        ));
-    }
-    let status = match adjudication.decision {
-        AdjudicationDecision::AcceptAnnotation
-        | AdjudicationDecision::MergeAnnotations
-        | AdjudicationDecision::RejectAnnotation => TaskStatus::Completed,
-        AdjudicationDecision::NeedsCorrection => TaskStatus::NeedsCorrection,
-    };
-    let timestamp = labello_domain::now();
-    let (events, _) = repo
-        .append_for_assignment(
-            &actor.user_id,
-            AssignmentContext {
-                assignment_id: &assignment.assignment_id,
-                image_id: &image_id,
-                task_id: &assignment.task_id,
-                kind: AssignmentKind::Adjudication,
-            },
-            vec![
-                EventPayload::AdjudicationRecorded {
-                    adjudication: adjudication.clone(),
-                },
-                EventPayload::TaskStateChanged {
-                    task_state: TaskState {
-                        task_id: adjudication.task_id,
-                        outcome: (status == TaskStatus::Completed)
-                            .then_some(TaskOutcome::Adjudicated),
-                        status,
-                        assigned_to: None,
-                        completed_by: Some(actor.user_id.clone()),
-                        completed_at: Some(timestamp),
-                        updated_at: timestamp,
-                    },
-                },
-            ],
-            true,
-        )
-        .await?;
-    tracing::debug!(
-        event = "adjudication.recorded",
-        dataset_id = %dataset_id,
-        user_id = %actor.user_id,
-        assignment_id = %assignment.assignment_id,
-        "adjudication recorded"
-    );
-    Ok(Json(
-        events
-            .into_iter()
-            .next()
-            .expect("adjudication was appended"),
-    ))
 }
 
 pub(crate) async fn offline_bundle(

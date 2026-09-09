@@ -208,7 +208,11 @@ impl ImageState {
             .values()
             .filter(|decision| ***decision == crate::ReviewDecision::Approved)
             .count()
-            >= task.review.required_reviews.max(1) as usize
+            >= task
+                .review
+                .legacy
+                .as_ref()
+                .map_or(1, |legacy| legacy.required_reviews.max(1)) as usize
         {
             (
                 crate::TaskStatus::Completed,

@@ -36,10 +36,10 @@ fn review_config_for_task(
 ) -> ReviewConfig {
     if manual_box_guide_migration {
         return ReviewConfig {
-            required_reviews: 1,
+
             workflow: labello_domain::ReviewWorkflow::Approval,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         };
     }
     review_config(intent)
@@ -48,17 +48,17 @@ fn review_config_for_task(
 fn review_config(intent: ImportWorkflowIntent) -> ReviewConfig {
     match intent {
         ImportWorkflowIntent::AuthoritativeGroundTruth => ReviewConfig {
-            required_reviews: 0,
+
             workflow: labello_domain::ReviewWorkflow::None,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         ImportWorkflowIntent::RequireApproval | ImportWorkflowIntent::SeedFutureAnnotation => {
             ReviewConfig {
-                required_reviews: 1,
+
                 workflow: labello_domain::ReviewWorkflow::Approval,
                 allow_reviewer_corrections: false,
-                agreement_threshold: None,
+                legacy: None,
             }
         }
     }

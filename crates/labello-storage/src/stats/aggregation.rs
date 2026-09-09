@@ -104,51 +104,20 @@ impl StatsAggregation {
                     }
                 }
                 TaskStatus::Submitted => {
-                    stats.unreviewed_tasks += 1;
-                    task_stats.unreviewed += 1;
+                    stats.awaiting_review_tasks += 1;
+                    task_stats.awaiting_review += 1;
                 }
-                _ => {
+                TaskStatus::InProgress => {
+                    stats.in_progress_tasks += 1;
+                    task_stats.in_progress += 1;
+                }
+                TaskStatus::NeedsCorrection | TaskStatus::LegacyAdjudicationRequired => {
+                    stats.needs_correction_tasks += 1;
+                    task_stats.needs_correction += 1;
+                }
+                TaskStatus::Pending => {
                     stats.pending_tasks += 1;
                     task_stats.pending += 1;
-                }
-            }
-            let reviewer_corrected =
-                state
-                    .task_states
-                    .get(&task.task_id)
-                    .is_some_and(|task_state| {
-                        task_state.outcome == Some(TaskOutcome::ReviewerCorrected)
-                    });
-            let review_decision = (!reviewer_corrected)
-                .then(|| current_task_review_decision(state, &task.task_id))
-                .flatten();
-            if review_decision == Some(ReviewDecision::Approved) {
-                stats.reviewed_tasks += 1;
-                task_stats.reviewed += 1;
-            }
-            match review_decision.as_ref() {
-                Some(ReviewDecision::Approved) => {
-                    stats.approved_tasks += 1;
-                    task_stats.approved += 1;
-                }
-                Some(ReviewDecision::Rejected) => {
-                    stats.rejected_tasks += 1;
-                    task_stats.rejected += 1;
-                }
-                None => {}
-            }
-            if let Some(outcome) = state.task_states.get(&task.task_id).and_then(|task_state| {
-                (task_state.status == TaskStatus::Completed)
-                    .then_some(task_state.outcome.as_ref())
-                    .flatten()
-            }) {
-                stats.finalized_tasks += 1;
-                task_stats.finalized += 1;
-                if outcome == &TaskOutcome::ReviewerCorrected {
-                    stats.rejected_tasks += 1;
-                    task_stats.rejected += 1;
-                    stats.reviewer_corrected_tasks += 1;
-                    task_stats.reviewer_corrected += 1;
                 }
             }
         }
@@ -196,7 +165,7 @@ impl StatsAggregation {
                 .iter()
                 .map(|task_id| {
                     let stats = &self.stats.per_task[task_id];
-                    (task_id.clone(), stats.completed + stats.unreviewed)
+                    (task_id.clone(), stats.completed + stats.awaiting_review)
                 })
                 .collect::<BTreeMap<_, _>>();
             let review_counts = self
@@ -226,38 +195,107 @@ impl StatsAggregation {
     }
 }
 
-pub(super) fn current_task_review_decision(
-    state: &ImageState,
-    task_id: &TaskId,
-) -> Option<ReviewDecision> {
-    let task_state = state.task_states.get(task_id)?;
-    let task_reviews = state.effective_reviews_for_task(task_id).filter(|review| {
-        matches!(
-            &review.target,
-            ReviewTarget::Task { task_id: reviewed } if reviewed == task_id
-        )
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use labello_domain::{
+        AnnotationType, DatasetId, DatasetMetadata, ImageId, ReviewConfig, TaskDefinition,
+        TaskOutcome, TaskState, TutorialContent, now,
+    };
 
-    match task_state.status {
-        TaskStatus::Submitted => {
-            let round_started_at = task_state.completed_at?;
-            task_reviews
-                .filter(|review| {
-                    state.review_round(task_id).is_some() || review.timestamp >= round_started_at
-                })
-                .max_by_key(|review| review.timestamp)
-                .map(|review| review.decision.clone())
+    #[test]
+    fn task_counts_are_exclusive_and_preserve_the_completion_denominator() {
+        let timestamp = now();
+        let task_id = TaskId::from("boxes");
+        let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", timestamp);
+        metadata.tasks.push(TaskDefinition {
+            task_id: task_id.clone(),
+            name: "Boxes".into(),
+            annotation_type: AnnotationType::BoundingBox,
+            class_ids: Vec::new(),
+            instructions: TutorialContent {
+                title: "Boxes".into(),
+                example_text: String::new(),
+                example_images: Vec::new(),
+            },
+            skeleton: None,
+            review: ReviewConfig::default(),
+            prelabel_config_ids: Vec::new(),
+            manual_box_guide_migration: None,
+            enabled: true,
+        });
+        let mut disabled = metadata.tasks[0].clone();
+        disabled.task_id = TaskId::from("disabled");
+        disabled.enabled = false;
+        metadata.tasks.push(disabled);
+        let mut aggregation = StatsAggregation::new(&metadata);
+        for (status, outcome) in [
+            (TaskStatus::Pending, None),
+            (TaskStatus::InProgress, None),
+            (TaskStatus::Submitted, None),
+            (TaskStatus::NeedsCorrection, None),
+            (TaskStatus::Completed, Some(TaskOutcome::Approved)),
+            (TaskStatus::Completed, Some(TaskOutcome::ReviewerCorrected)),
+            (
+                TaskStatus::Completed,
+                Some(TaskOutcome::AnnotationCompleted),
+            ),
+        ] {
+            let mut state = ImageState::new(ImageId::from("image"));
+            let mut task_state = TaskState::new(task_id.clone(), timestamp);
+            task_state.status = status;
+            task_state.outcome = outcome;
+            state.task_states.insert(task_id.clone(), task_state);
+            aggregation.record_image(&metadata, &state);
         }
-        // Completing an approval round replaces the submitted TaskState timestamp, so the
-        // final review, rather than that timestamp, identifies the current round.
-        TaskStatus::Completed if task_state.outcome == Some(TaskOutcome::Approved) => task_reviews
-            .max_by_key(|review| review.timestamp)
-            .map(|review| review.decision.clone()),
-        TaskStatus::Completed => None,
-        TaskStatus::NeedsCorrection => task_reviews
-            .max_by_key(|review| review.timestamp)
-            .filter(|review| review.decision == ReviewDecision::Rejected)
-            .map(|review| review.decision.clone()),
-        _ => None,
+        // Missing state is pending; explicitly excluded import coverage contributes nothing.
+        let mut missing = ImageState::new(ImageId::from("missing"));
+        aggregation.record_image(&metadata, &missing);
+        missing
+            .import_coverage
+            .insert(task_id.clone(), ImportCoverage::Excluded);
+        aggregation.record_image(&metadata, &missing);
+        let stats = aggregation.finish();
+        assert_eq!(stats.per_task.len(), 1);
+        let task = &stats.per_task[&task_id];
+        assert_eq!(
+            [
+                task.pending,
+                task.in_progress,
+                task.awaiting_review,
+                task.needs_correction,
+                task.completed
+            ],
+            [2, 1, 1, 1, 3]
+        );
+        assert_eq!(
+            [
+                stats.pending_tasks,
+                stats.in_progress_tasks,
+                stats.awaiting_review_tasks,
+                stats.needs_correction_tasks,
+                stats.completed_tasks
+            ],
+            [2, 1, 1, 1, 3]
+        );
+        assert_eq!(
+            task.pending
+                + task.in_progress
+                + task.awaiting_review
+                + task.needs_correction
+                + task.completed,
+            8
+        );
+        let wire = serde_json::to_value(task).unwrap();
+        for removed in [
+            "unreviewed",
+            "reviewed",
+            "approved",
+            "rejected",
+            "reviewerCorrected",
+            "finalized",
+        ] {
+            assert!(wire.get(removed).is_none());
+        }
     }
 }

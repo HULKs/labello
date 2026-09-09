@@ -138,20 +138,20 @@ fn normalize_manual_migration_review(mut task: TaskDefinition) -> TaskDefinition
 
 fn manual_migration_review_config() -> ReviewConfig {
     ReviewConfig {
-        required_reviews: 1,
+
         workflow: ReviewWorkflow::Approval,
         allow_reviewer_corrections: false,
-        agreement_threshold: None,
+        legacy: None,
     }
 }
 
 fn review_config(intent: ImportIntent) -> ReviewConfig {
     match intent {
         ImportIntent::AuthoritativeGroundTruth => ReviewConfig {
-            required_reviews: 0,
+
             workflow: ReviewWorkflow::None,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         ImportIntent::RequireApproval | ImportIntent::SeedFutureAnnotation => {
             manual_migration_review_config()

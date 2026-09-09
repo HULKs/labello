@@ -250,7 +250,7 @@ fn setup_does_not_recommend_a_dataset_without_an_available_destination() {
 #[test]
 fn adjudicator_only_dataset_recommends_statistics() {
     let api = Rc::new(SpyApi::new());
-    api.set_summary_roles(vec![DatasetRole::Adjudicator]);
+    api.set_summary_roles(vec![DatasetRole::LegacyAdjudicator]);
     let mut harness = live_harness(api);
     step_until(&mut harness, 8, |app| !app.datasets.summaries.is_empty());
 

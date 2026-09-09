@@ -41,7 +41,7 @@ console at `DEBUG` and above. Release builds report only warnings and errors.
 - `INFO`: server lifecycle, HTTP completion, successful authentication,
   dataset administration, ingest, upload, import lifecycle, snapshots, and
   offline sync, validation and conflict rejections, missing routes and methods.
-- `DEBUG`: assignment, annotation, review, correction, adjudication, and
+- `DEBUG`: assignment, annotation, review, correction, and
   expected unauthenticated browser requests.
 
 ## Request failure diagnostics

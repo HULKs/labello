@@ -72,7 +72,7 @@ longer own feature validation or event-batch construction:
 | Location | Responsibility |
 | --- | --- |
 | `labello-storage/repository/events.rs` | Loads and atomically appends the authoritative event log, rebuilds the replay cache, and invalidates derived caches after an explicit rebuild. |
-| `labello-storage/assignment/transaction.rs` | Applies the common single-image commit order after annotation, review, adjudication, or migration code has validated its request and constructed its feature-specific batch. |
+| `labello-storage/assignment/transaction.rs` | Applies the common single-image commit order after annotation, review, or migration code has validated its request and constructed its feature-specific batch. |
 | `labello-storage/assignment/{mod,review,migration}.rs` | Owns feature authorization, exact-state validation, and the event payloads required for that transition. |
 | `labello-storage/sync.rs` | Owns offline-fragment validation and resequencing before using the same authoritative append and rebuildable-cache mechanics. |
 

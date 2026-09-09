@@ -364,7 +364,7 @@ Improvements:
 - Keep the canvas dark, low-noise, and shadow-free. It is a working surface,
   not a card floating above the application.
 
-### Review And Adjudication
+### Review
 
 - Show object progress or final-check phase near the canvas toolbar so compact
   users do not need to open Inspector to understand the current step.
@@ -373,8 +373,6 @@ Improvements:
 - Group correction controls into `Object`, `Keypoints`, `Reason`, and `Actions`
   instead of one long stack.
 - Associate the correction reason field with its visible label.
-- Add a compact candidate/disagreement summary for adjudication before adding
-  any complex comparison visualization.
 
 ### Admin
 
@@ -654,7 +652,7 @@ checks that protect the new system:
 ### Native Inspector
 
 The inspector currently opens one deterministic annotation state. Add
-development-only presets for Setup, Review, Adjudication, Admin, Statistics,
+development-only presets for Setup, Review, Admin, Statistics,
 dialogs, and major failure states. This keeps production code unchanged while
 making visual review repeatable.
 

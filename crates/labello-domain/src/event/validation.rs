@@ -33,7 +33,7 @@ impl EventLogEntry {
                     | EventType::TaskStateChanged
                     | EventType::ReviewRecorded
                     | EventType::ReviewerCorrectionRecorded
-                    | EventType::AdjudicationRecorded
+                    | EventType::LegacyAdjudicationRecorded
                     | EventType::AssignmentUpdated
             )
         {
@@ -63,7 +63,9 @@ impl EventLogEntry {
             | EventPayload::ReviewRevisionCommitted { assignment, .. } => Some(&assignment.task_id),
             EventPayload::ReviewAssignmentFinished { task_id, .. } => Some(task_id),
             EventPayload::MissingObjectEvidenceRecorded { evidence, .. } => Some(&evidence.task_id),
-            EventPayload::AdjudicationRecorded { adjudication } => Some(&adjudication.task_id),
+            EventPayload::LegacyAdjudicationRecorded { adjudication } => {
+                Some(&adjudication.task_id)
+            }
             EventPayload::ReviewerCorrectionRecorded { correction, .. } => {
                 Some(&correction.task_id)
             }

@@ -2,10 +2,7 @@ use eframe::egui::{self, RichText};
 use labello_domain::{DatasetId, DatasetRole};
 
 use crate::{
-    app::{
-        ADJUDICATION_UNAVAILABLE_MESSAGE, AppView, LabelloApp, LayoutMode, PendingTransition,
-        SetupSection,
-    },
+    app::{AppView, LabelloApp, LayoutMode, PendingTransition, SetupSection},
     theme,
 };
 
@@ -626,17 +623,12 @@ impl LabelloApp {
             return;
         }
         if !self.can_open_view(view) {
-            self.runtime.error = Some(if view == AppView::Adjudicate {
-                ADJUDICATION_UNAVAILABLE_MESSAGE.to_string()
-            } else {
-                "The current user is not authorized for that view.".to_string()
-            });
+            self.runtime.error =
+                Some("The current user is not authorized for that view.".to_string());
             return;
         }
-        if matches!(
-            view,
-            AppView::Annotate | AppView::Review | AppView::Adjudicate
-        ) && !self.ensure_valid_task_selection()
+        if matches!(view, AppView::Annotate | AppView::Review)
+            && !self.ensure_valid_task_selection()
         {
             self.runtime.error = Some(
                 "No enabled one-class workflow is configured. Ask a data admin to enable one."
@@ -715,7 +707,7 @@ fn role_badge(ui: &mut egui::Ui, role: &DatasetRole) {
     let label = match role {
         DatasetRole::Annotator => "Annotator",
         DatasetRole::Reviewer => "Reviewer",
-        DatasetRole::Adjudicator => "Adjudicator",
+        DatasetRole::LegacyAdjudicator => "Retired role",
         DatasetRole::DataAdmin => "Data admin",
     };
     theme::badge(ui, label, theme::Intent::Info);

@@ -97,10 +97,10 @@ async fn create_dataset(app: &axum::Router) {
 }
 
 async fn configure_pixel_task(app: &axum::Router) {
-    configure_pixel_task_review(app, 1, "approval").await;
+    configure_pixel_task_review(app, "approval").await;
 }
 
-async fn configure_pixel_task_review(app: &axum::Router, required_reviews: u32, workflow: &str) {
+async fn configure_pixel_task_review(app: &axum::Router, workflow: &str) {
     let admin = app
         .clone()
         .oneshot(
@@ -133,10 +133,8 @@ async fn configure_pixel_task_review(app: &axum::Router, required_reviews: u32, 
         },
         "skeleton": null,
         "review": {
-            "requiredReviews": required_reviews,
             "workflow": workflow,
             "allowReviewerCorrections": false,
-            "agreementThreshold": null
         },
         "prelabelConfigIds": [],
         "enabled": true
@@ -209,7 +207,7 @@ async fn prepare_correction_task(
     allow_reviewer_corrections: bool,
     file_name: &str,
 ) -> (ImageId, String) {
-    configure_pixel_task_review(app, 1, "approval").await;
+    configure_pixel_task_review(app, "approval").await;
     let admin = app
         .clone()
         .oneshot(
@@ -652,10 +650,9 @@ async fn api_migration_fixture() -> ApiMigrationFixture {
             allow_absent: true,
         }),
         review: ReviewConfig {
-            required_reviews: 1,
             workflow: ReviewWorkflow::Approval,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         prelabel_config_ids: Vec::new(),
         manual_box_guide_migration: Some(ManualBoxGuideMigration {

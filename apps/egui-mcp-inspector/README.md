@@ -197,7 +197,7 @@ The default is the annotation preset. Use `-- --preset <name>` with Cargo or
 
 Available presets are `annotation`, `presence`, `presence-reduced-motion`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
-`adjudication`, `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
+`admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
 `statistics-failure`, `assignment-failure`, `image-failure`, `import-source`,
 `import-preflight`, `import-ready`, `import-running`, `import-failure`,

@@ -232,7 +232,6 @@ impl LabelloApp {
                         let title = match self.view {
                             AppView::Annotate => "No annotation assignments",
                             AppView::Review => "No review assignments",
-                            AppView::Adjudicate => "No adjudication assignments",
                             _ => "No assignments",
                         };
                         let shortcut = self

@@ -513,7 +513,7 @@ mod tests {
             target.task.review.workflow,
             labello_domain::ReviewWorkflow::Approval
         );
-        assert_eq!(target.task.review.required_reviews, 1);
+        assert!(target.task.review.is_current());
         assert!(request.task_mappings.iter().any(|mapping| {
             mapping.task.task_id == TaskId::from("skeleton:vehicle")
                 && mapping
@@ -755,21 +755,18 @@ mod tests {
 
     #[test]
     fn mapped_tasks_match_api_review_validation_for_every_intent() {
-        for (intent, workflow, required_reviews) in [
+        for (intent, workflow) in [
             (
                 ImportWorkflowIntent::AuthoritativeGroundTruth,
                 labello_domain::ReviewWorkflow::None,
-                0,
             ),
             (
                 ImportWorkflowIntent::RequireApproval,
                 labello_domain::ReviewWorkflow::Approval,
-                1,
             ),
             (
                 ImportWorkflowIntent::SeedFutureAnnotation,
                 labello_domain::ReviewWorkflow::Approval,
-                1,
             ),
         ] {
             let task = mapped_task(
@@ -782,9 +779,9 @@ mod tests {
                 intent,
             );
             assert_eq!(task.review.workflow, workflow);
-            assert_eq!(task.review.required_reviews, required_reviews);
+            assert!(task.review.is_current());
             assert!(!task.review.allow_reviewer_corrections);
-            assert!(task.review.agreement_threshold.is_none());
+            assert!(task.review.legacy.is_none());
         }
 
         let manual = mapped_task(
@@ -810,7 +807,7 @@ mod tests {
             manual.review.workflow,
             labello_domain::ReviewWorkflow::Approval
         );
-        assert_eq!(manual.review.required_reviews, 1);
+        assert!(manual.review.is_current());
         assert!(!manual.review.allow_reviewer_corrections);
     }
 

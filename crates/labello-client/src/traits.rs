@@ -1,10 +1,10 @@
 use std::{future::Future, pin::Pin};
 
 use labello_domain::{
-    AdjudicationRecord, Assignment, DatasetId, DatasetMetadata, DatasetSnapshot, DatasetStats,
-    EventLogEntry, EventPayload, ImageExplorerPage, ImageId, ImageRecord, ImageState, ImportId,
-    KeybindingSet, OfflineBundle, OfflineSyncRequest, OfflineSyncResult, PrelabelConfig,
-    PrelabelSuggestion, ReviewRecord, TaskDefinition, UserAccount, UserId,
+    Assignment, DatasetId, DatasetMetadata, DatasetSnapshot, DatasetStats, EventLogEntry,
+    EventPayload, ImageExplorerPage, ImageId, ImageRecord, ImageState, ImportId, KeybindingSet,
+    OfflineBundle, OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, PrelabelSuggestion,
+    ReviewRecord, TaskDefinition, UserAccount, UserId,
 };
 
 use crate::{

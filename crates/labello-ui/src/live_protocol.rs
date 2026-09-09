@@ -7,9 +7,9 @@ use labello_client::{
     ImportJob, ImportPlan, IngestJob, SessionInfo, SnapshotFile, UpdateImportPlanRequest,
 };
 use labello_domain::{
-    AdjudicationRecord, AnnotationId, Assignment, AssignmentId, AssignmentKind, DatasetId,
-    DatasetMetadata, DatasetRole, DatasetSnapshot, DatasetStats, ImageExplorerPage, ImageId,
-    ImageState, KeybindingSet, PrelabelConfigId, ReviewRecord, TaskId, UserId,
+    AnnotationId, Assignment, AssignmentId, AssignmentKind, DatasetId, DatasetMetadata,
+    DatasetRole, DatasetSnapshot, DatasetStats, ImageExplorerPage, ImageId, ImageState,
+    KeybindingSet, PrelabelConfigId, ReviewRecord, TaskId, UserId,
 };
 
 use crate::queue::QueuedImage;
@@ -360,12 +360,6 @@ pub(crate) enum UiMessage {
         assignment_id: AssignmentId,
         result: Result<(), UiRequestError>,
     },
-    AdjudicationFinished {
-        request: RequestIdentity,
-        operation_id: u64,
-        assignment_id: AssignmentId,
-        result: Result<(), UiRequestError>,
-    },
     PersistenceFinished(Box<crate::persistence::PersistenceCompletion>),
     IngestJobLoaded {
         request: RequestIdentity,
@@ -667,13 +661,6 @@ pub(crate) enum UiCommand {
         assignment: Assignment,
         correction: CorrectionRequest,
     },
-    Adjudication {
-        request: RequestIdentity,
-        operation_id: u64,
-        dataset_id: DatasetId,
-        assignment: Assignment,
-        adjudication: AdjudicationRecord,
-    },
 }
 
 impl UiCommand {
@@ -687,7 +674,6 @@ impl UiCommand {
                 | Self::SaveAnnotations { submit: true, .. }
                 | Self::Review { .. }
                 | Self::Correction { .. }
-                | Self::Adjudication { .. }
         )
     }
 
@@ -739,7 +725,6 @@ impl UiCommand {
             | Self::ReleaseAssignment { request, .. }
             | Self::Review { request, .. }
             | Self::Correction { request, .. }
-            | Self::Adjudication { request, .. }
             | Self::Migration { request, .. } => request,
         }
     }
@@ -939,11 +924,6 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
-            Self::AdjudicationFinished { result, .. } => result
-                .as_ref()
-                .as_ref()
-                .err()
-                .is_some_and(|error| error.unauthorized),
             Self::IngestJobLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -1014,7 +994,6 @@ impl UiMessage {
             | Self::ReleaseFinished { request, .. }
             | Self::ReviewFinished { request, .. }
             | Self::CorrectionFinished { request, .. }
-            | Self::AdjudicationFinished { request, .. }
             | Self::IngestJobLoaded { request, .. }
             | Self::PresenceLoaded { request, .. }
             | Self::StatsLoaded { request, .. }

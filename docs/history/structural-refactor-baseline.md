@@ -136,7 +136,6 @@ continue to use `MatchedPath` instead of raw URLs.
 | `POST` | `/datasets/{dataset_id}/images/{image_id}/annotation-batch` |
 | `POST` | `/datasets/{dataset_id}/images/{image_id}/reviews` |
 | `POST` | `/datasets/{dataset_id}/images/{image_id}/corrections` |
-| `POST` | `/datasets/{dataset_id}/images/{image_id}/adjudications` |
 | `POST` | `/datasets/{dataset_id}/images/{image_id}/admin/events` |
 | `POST` | `/datasets/{dataset_id}/images/{image_id}/rebuild` |
 
@@ -249,7 +248,7 @@ limits.
 | `labello-domain/src/state.rs` (1,443) | `ImageState` and exhaustive replay for every event, migration replay helpers, focused tests; called by storage, API, UI | Event order, shape validation, historical replay, derived cache only | Current state model and replay modules; exhaustive match remains visible |
 | `labello-client/src/import.rs` (1,423) | Import and manual-migration transport DTOs, serde policy, redacted `Debug`, tests; called by HTTP/API/UI | Public JSON compatibility, tolerant responses, strict requests | Import DTO submodules; retain transport/domain separation |
 | `labello-ui/src/manual_migration.rs` (1,281) | Migration feature state synchronization, canvas/action rendering, command requests; called by workspace/runtime | Canonical cursor, expected hashes/versions, assignment ownership | Workspace migration state, view, and actions |
-| `labello-api/src/handlers/workflow/mod.rs` (1,153) | All workflow routes, auth, request validation/conversion, safe file responses; called by router | Role policy, assignment binding, event ingress trust | Assignment, annotation, review, adjudication, migration, offline route modules |
+| `labello-api/src/handlers/workflow/mod.rs` (1,153) | All workflow routes, auth, request validation/conversion, safe file responses; called by router | Role policy, assignment binding, event ingress trust | Assignment, annotation, review, migration, offline route modules |
 | `labello-api/src/handlers.rs` (1,140) | Router/middleware plus dataset/admin/task/prelabel/snapshot handlers; called by server | Route inventory, middleware order, matched-path logging, role checks | Central router plus focused route families |
 | `labello-ui/src/inspector_presets.rs` (1,099) | Deterministic inspection states across features; called only with inspector feature | Preset determinism and representative accessibility states | Leave cohesive unless preset changes collide; split by feature only then |
 | `labello-storage/src/import/source.rs` (1,001) | Source index, browser registration/upload, server copy/browse, sealing and path validation; called by import service/API browse | Pinned server roots, traversal/link rejection, source fingerprints | Browser, server-directory, browse, and seal modules |

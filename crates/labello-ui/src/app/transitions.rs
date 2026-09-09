@@ -89,7 +89,7 @@ impl LabelloApp {
                 self.view = view;
                 if matches!(
                     view,
-                    AppView::Annotate | AppView::Review | AppView::Adjudicate
+                    AppView::Annotate | AppView::Review
                 ) {
                     self.request_next_image();
                 } else if view == AppView::Stats {

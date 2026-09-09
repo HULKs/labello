@@ -40,7 +40,7 @@ Record:
 GET /datasets/{datasetId}/assignments/availability?kind={kind}
 ```
 
-- `kind` is `annotation`, `review`, or `adjudication`.
+- `kind` is `annotation` or `review`.
 - Authentication and the corresponding dataset role are required.
 - The HTTP client uses a 30-second timeout.
 - Availability is advisory.
@@ -81,14 +81,12 @@ Document:
 - `false` includes policy-ineligible or unavailable tasks, such as:
   - disabled tasks;
   - review-disabled tasks;
-  - unsupported adjudication;
   - imbalance exclusions;
   - no eligible image.
 - Validation failures fail the entire endpoint instead of becoming `false`. Current examples are:
-  - independent-agreement review workflow;
   - enabled tasks without exactly one class.
 - `related` contains other authorized assignment kinds.
-- Related kinds use annotation/review/adjudication order, excluding the requested kind.
+- Related kinds use annotation/review order, excluding the requested kind.
 - `related` is omitted when empty.
 - No generation, cache age, or expiry metadata is public.
 
@@ -325,7 +323,6 @@ Use the helper for:
 - Annotation submission.
 - Review completion.
 - Correction completion.
-- Adjudication completion.
 - Migration completion.
 - Ingest completion.
 - Any admin or role mutation when a work context remains active.

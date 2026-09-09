@@ -530,48 +530,6 @@ impl ReviewApi for HttpLabelloApi {
     }
 }
 
-impl AdjudicationApi for HttpLabelloApi {
-    fn record_adjudication<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        image_id: &'a ImageId,
-        adjudication: AdjudicationRecord,
-    ) -> crate::ApiFuture<'a, EventLogEntry> {
-        Box::pin(async move {
-            Self::send_json(
-                self.request(
-                    Method::POST,
-                    &format!("/datasets/{dataset_id}/images/{image_id}/adjudications"),
-                )?,
-                &adjudication,
-            )
-            .await
-        })
-    }
-
-    fn record_assigned_adjudication<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        assignment: AssignmentActionRequest,
-        adjudication: AdjudicationRecord,
-    ) -> crate::ApiFuture<'a, EventLogEntry> {
-        Box::pin(async move {
-            Self::send_json(
-                self.request(
-                    Method::POST,
-                    &format!(
-                        "/datasets/{dataset_id}/images/{}/adjudications",
-                        assignment.image_id
-                    ),
-                )?
-                .query(&assignment),
-                &adjudication,
-            )
-            .await
-        })
-    }
-}
-
 impl OfflineApi for HttpLabelloApi {
     fn offline_bundle<'a>(
         &'a self,

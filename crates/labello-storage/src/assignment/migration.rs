@@ -1640,22 +1640,12 @@ impl DatasetRepository {
             assignment.status = AssignmentStatus::Completed;
             assignment.updated_at = now;
         } else if final_decision {
-            let approvals = current_confirmation_approvals(
-                &events,
-                context.task_id,
-                match &review_target {
-                    ReviewTarget::MigrationConfirmation {
-                        confirmation_hash, ..
-                    } => confirmation_hash,
-                    _ => unreachable!(),
-                },
-            );
             assignment.status = AssignmentStatus::Completed;
             assignment.updated_at = now;
             payloads.push(EventPayload::AssignmentUpdated {
                 assignment: assignment.clone(),
             });
-            if approvals + 1 >= task.review.required_reviews {
+            {
                 payloads.push(EventPayload::TaskStateChanged {
                     task_state: TaskState {
                         task_id: context.task_id.clone(),
@@ -1899,7 +1889,7 @@ fn migration_role(kind: &AssignmentKind) -> StorageResult<DatasetRole> {
     match kind {
         AssignmentKind::Annotation => Ok(DatasetRole::Annotator),
         AssignmentKind::Review => Ok(DatasetRole::Reviewer),
-        AssignmentKind::Adjudication => Err(StorageError::InvalidAssignment(
+        AssignmentKind::LegacyAdjudication => Err(StorageError::InvalidAssignment(
             "manual migration does not use adjudication assignments".to_string(),
         )),
     }
@@ -2512,22 +2502,6 @@ fn current_migration_reviews<'a>(
     task_id: &TaskId,
 ) -> Vec<&'a ReviewRecord> {
     labello_domain::current_migration_reviews(events, task_id)
-}
-
-fn current_confirmation_approvals(
-    events: &[EventLogEntry],
-    task_id: &TaskId,
-    hash: &MigrationHash,
-) -> u32 {
-    current_migration_reviews(events, task_id)
-        .into_iter()
-        .filter(|review| {
-            review.decision == ReviewDecision::Approved
-                && matches!(&review.target, ReviewTarget::MigrationConfirmation { task_id: reviewed, confirmation_hash } if reviewed == task_id && confirmation_hash == hash)
-        })
-        .map(|review| &review.reviewer_user_id)
-        .collect::<std::collections::BTreeSet<_>>()
-        .len() as u32
 }
 
 pub(super) fn has_migration_final_review_by_user(

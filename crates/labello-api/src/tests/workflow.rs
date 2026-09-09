@@ -484,11 +484,11 @@ async fn ordinary_event_ingresses_reject_server_owned_payloads() {
 }
 
 #[tokio::test]
-async fn validates_review_targets_and_counts_distinct_task_approvals() {
+async fn validates_review_targets_and_completes_after_one_final_approval() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
-    configure_pixel_task_review(&app, 2, "approval").await;
+    configure_pixel_task_review(&app, "approval").await;
     let png = png_bytes(2, 2);
     let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
     upload_test_image(&app, "review.png", &png).await;
@@ -617,25 +617,12 @@ async fn validates_review_targets_and_counts_distinct_task_approvals() {
     assert_eq!(approval.status(), StatusCode::OK);
     assert_eq!(
         load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
-        "submitted"
-    );
-
-    let second_approval = post_test_review(
-        &app,
-        &image_id,
-        "reviewer_2",
-        "review_second",
-        json!({ "targetType": "task", "task_id": "bounding_box:pixel" }),
-        "approved",
-    )
-    .await;
-    assert_eq!(second_approval.status(), StatusCode::OK);
-    assert_eq!(
-        load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
         "completed"
     );
 
-    configure_pixel_task_review(&app, 2, "none").await;
+    assert!(claim_assignment(&app, "reviewer_2", "review").await.is_null());
+
+    configure_pixel_task_review(&app, "none").await;
     let disabled = claim_assignment(&app, "admin", "review").await;
     assert!(disabled.is_null());
 }
@@ -645,7 +632,7 @@ async fn task_review_rejection_immediately_needs_correction() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
-    configure_pixel_task_review(&app, 3, "approval").await;
+    configure_pixel_task_review(&app, "approval").await;
     let png = png_bytes(3, 2);
     let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
     upload_test_image(&app, "rejection.png", &png).await;
@@ -672,7 +659,7 @@ async fn annotation_completion_without_review_completes_task() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
-    configure_pixel_task_review(&app, 0, "none").await;
+    configure_pixel_task_review(&app, "none").await;
     let png = png_bytes(2, 4);
     let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
     upload_test_image(&app, "no-review.png", &png).await;
@@ -692,22 +679,12 @@ async fn correction_starts_a_new_review_round() {
     let state = ApiState::new(temp.path());
     let app = router(state.clone());
     create_dataset(&app).await;
-    configure_pixel_task_review(&app, 2, "approval").await;
+    configure_pixel_task_review(&app, "approval").await;
     let png = png_bytes(4, 2);
     let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
     upload_test_image(&app, "review-round.png", &png).await;
     submit_test_task(&app, &image_id).await;
 
-    let first_approval = post_test_review(
-        &app,
-        &image_id,
-        "admin",
-        "round_1_approval",
-        json!({ "targetType": "task", "task_id": "bounding_box:pixel" }),
-        "approved",
-    )
-    .await;
-    assert_eq!(first_approval.status(), StatusCode::OK);
     let rejection = post_test_review(
         &app,
         &image_id,
@@ -730,32 +707,7 @@ async fn correction_starts_a_new_review_round() {
     )
     .await;
     assert_eq!(new_round_approval.status(), StatusCode::OK);
-    assert_eq!(
-        load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
-        "submitted"
-    );
-    let final_approval = post_test_review(
-        &app,
-        &image_id,
-        "reviewer_2",
-        "round_2_approval_2",
-        json!({ "targetType": "task", "task_id": "bounding_box:pixel" }),
-        "approved",
-    )
-    .await;
-    assert_eq!(final_approval.status(), StatusCode::OK);
-    let body = to_bytes(final_approval.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let review_state: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(
-        review_state["taskStates"]["bounding_box:pixel"]["status"],
-        "completed"
-    );
-    assert_eq!(
-        load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"],
-        "completed"
-    );
+    assert_eq!(load_test_image_state(&app, &image_id).await["taskStates"]["bounding_box:pixel"]["status"], "completed");
     let reviewer_id = UserId::from("reviewer_2");
     let mut reviewer = state.server_store.user(&reviewer_id).unwrap().unwrap();
     reviewer.github_user_id = Some("583231".into());
@@ -767,19 +719,19 @@ async fn correction_starts_a_new_review_round() {
     assert!(contributors[&UserId::from("admin")].github_user_id.is_none());
     let history = &contributors[&UserId::from("admin")].history;
     assert_eq!(history.iter().map(|day| day.labeled).sum::<usize>(), 1);
-    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 3);
+    assert_eq!(history.iter().map(|day| day.accepted).sum::<usize>(), 1);
     assert_eq!(history.iter().map(|day| day.rejected).sum::<usize>(), 1);
-    assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 2);
+    assert_eq!(history.iter().map(|day| day.reviewed).sum::<usize>(), 1);
 }
 
 #[tokio::test]
-async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_cancels_competitors() {
+async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_exclusive() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
     let (image_id, task_id) = prepare_correction_task(&app, false, true, "correct-box.png").await;
     let assignment = claim_assignment_for_task(&app, "admin", "review", &task_id).await;
-    let competing = claim_assignment_for_task(&app, "reviewer_2", "review", &task_id).await;
+    assert!(claim_assignment_for_task(&app, "reviewer_2", "review", &task_id).await.is_null());
     let request = json!({
         "correctionId": "cor_api_bbox",
         "annotationId": "ann_1",
@@ -824,10 +776,6 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_cancels_co
         assignment_status_json(&state, assignment["assignmentId"].as_str().unwrap()),
         "completed"
     );
-    assert_eq!(
-        assignment_status_json(&state, competing["assignmentId"].as_str().unwrap()),
-        "cancelled"
-    );
     assert!(
         claim_assignment_for_task(&app, "other_annotator", "annotation", &task_id)
             .await
@@ -835,11 +783,13 @@ async fn reviewer_bbox_correction_is_terminal_rejected_idempotent_and_cancels_co
     );
 
     let stats = get_test_stats(&app).await;
-    assert_eq!(stats["reviewedTasks"], 0);
-    assert_eq!(stats["approvedTasks"], 0);
-    assert_eq!(stats["rejectedTasks"], 1);
-    assert_eq!(stats["reviewerCorrectedTasks"], 1);
-    assert_eq!(stats["finalizedTasks"], 1);
+    assert_eq!(stats["completedTasks"], 1);
+    assert_eq!(stats["needsCorrectionTasks"], 0);
+    assert_eq!(stats["awaitingReviewTasks"], 0);
+    for removed in ["reviewedTasks", "approvedTasks", "rejectedTasks", "reviewerCorrectedTasks", "finalizedTasks", "unreviewedTasks"] {
+        assert!(stats.get(removed).is_none());
+    }
+
 }
 
 #[tokio::test]
@@ -909,7 +859,7 @@ async fn reviewer_keypoint_correction_uses_server_provenance_and_respects_config
 }
 
 #[tokio::test]
-async fn config_rejects_enabling_independent_agreement() {
+async fn config_rejects_retired_review_settings_and_roles() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
@@ -926,10 +876,21 @@ async fn config_rejects_enabling_independent_agreement() {
         .await
         .unwrap();
     let body = to_bytes(admin.into_body(), usize::MAX).await.unwrap();
-    let mut metadata: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    metadata["tasks"][0]["review"]["workflow"] = json!("independent_agreement");
+    let metadata: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    for case in 0..5 {
+    let mut metadata = metadata.clone();
+    match case {
+        0 => metadata["tasks"][0]["review"]["workflow"] = json!("independent_agreement"),
+        1 => metadata["tasks"][0]["review"]["requiredReviews"] = json!(1),
+        2 => {
+            metadata["tasks"][0]["enabled"] = json!(false);
+            metadata["tasks"][0]["review"]["requiredReviews"] = json!(3);
+        }
+        3 => metadata["tasks"][0]["review"]["agreementThreshold"] = json!(null),
+        _ => metadata["roleAssignments"][0]["roles"] = json!(["data_admin", "adjudicator"]),
+    }
 
-    let update = app
+    let update = app.clone()
         .oneshot(
             Request::builder()
                 .method("PUT")
@@ -953,9 +914,8 @@ async fn config_rejects_enabling_independent_agreement() {
         .await
         .unwrap();
 
-    assert_eq!(update.status(), StatusCode::BAD_REQUEST);
-    let body = to_bytes(update.into_body(), usize::MAX).await.unwrap();
-    assert!(String::from_utf8_lossy(&body).contains("not implemented"));
+    assert_eq!(update.status(), if case == 3 { StatusCode::UNPROCESSABLE_ENTITY } else { StatusCode::BAD_REQUEST }, "case {case}");
+    }
 }
 
 #[tokio::test]
@@ -1312,21 +1272,9 @@ async fn assignment_availability_is_batched_authenticated_and_advisory() {
         .collect::<BTreeSet<_>>();
     assert_eq!(
         related_kinds,
-        BTreeSet::from(["review", "adjudication"]),
+        BTreeSet::from(["review"]),
         "one scan should return the other authorized work-view caches"
     );
-    let adjudication = get_assignment_availability(&app, "admin", "adjudication").await;
-    assert_eq!(adjudication["kind"], "adjudication");
-    assert_eq!(
-        adjudication["tasks"]["bounding_box:pixel"],
-        serde_json::Value::Bool(false)
-    );
-    assert!(
-        claim_assignment(&app, "admin", "adjudication")
-            .await
-            .is_null()
-    );
-
     let competing = claim_assignment(&app, "other_annotator", "annotation").await;
     assert!(!competing.is_null());
     assert!(

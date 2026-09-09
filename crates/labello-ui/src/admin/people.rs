@@ -205,7 +205,6 @@ fn edit_user_roles(
     for (role, label) in [
         (DatasetRole::Annotator, "Annotator"),
         (DatasetRole::Reviewer, "Reviewer"),
-        (DatasetRole::Adjudicator, "Adjudicator"),
         (DatasetRole::DataAdmin, "Data admin"),
     ] {
         let is_admin_role = role == DatasetRole::DataAdmin;
@@ -251,14 +250,13 @@ fn user_permissions_dirty(user: &DatasetUser, baseline: &[DatasetUser]) -> bool 
         .is_none_or(|existing| existing.roles != user.roles)
 }
 
-fn task_statuses() -> [TaskStatus; 6] {
+fn task_statuses() -> [TaskStatus; 5] {
     [
         TaskStatus::Pending,
         TaskStatus::InProgress,
         TaskStatus::Submitted,
         TaskStatus::Completed,
         TaskStatus::NeedsCorrection,
-        TaskStatus::AdjudicationRequired,
     ]
 }
 
@@ -269,7 +267,7 @@ fn task_status_label(status: &TaskStatus) -> &'static str {
         TaskStatus::Submitted => "Submitted",
         TaskStatus::Completed => "Completed",
         TaskStatus::NeedsCorrection => "Needs correction",
-        TaskStatus::AdjudicationRequired => "Adjudication required",
+        TaskStatus::LegacyAdjudicationRequired => "Needs correction",
     }
 }
 

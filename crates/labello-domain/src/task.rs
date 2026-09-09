@@ -62,22 +62,95 @@ pub struct SkeletonSpec {
     pub allow_absent: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, JsonSchema)]
+#[schemars(rename_all = "camelCase")]
 pub struct ReviewConfig {
-    pub required_reviews: u32,
     pub workflow: ReviewWorkflow,
     pub allow_reviewer_corrections: bool,
+    /// Decoding and fingerprint reproduction only. Current configuration never uses this policy.
+    #[schemars(skip)]
+    pub legacy: Option<Box<LegacyReviewConfig>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LegacyReviewConfig {
+    pub required_reviews: u32,
     pub agreement_threshold: Option<AgreementThreshold>,
 }
 
 impl Default for ReviewConfig {
     fn default() -> Self {
         Self {
-            required_reviews: 1,
             workflow: ReviewWorkflow::Approval,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
+        }
+    }
+}
+
+impl Serialize for ReviewConfig {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut fields = serializer
+            .serialize_struct("ReviewConfig", if self.legacy.is_some() { 4 } else { 2 })?;
+        if let Some(legacy) = &self.legacy {
+            fields.serialize_field("requiredReviews", &legacy.required_reviews)?;
+        }
+        fields.serialize_field("workflow", &self.workflow)?;
+        fields.serialize_field("allowReviewerCorrections", &self.allow_reviewer_corrections)?;
+        if let Some(legacy) = &self.legacy {
+            fields.serialize_field("agreementThreshold", &legacy.agreement_threshold)?;
+        }
+        fields.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ReviewConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Wire {
+            workflow: ReviewWorkflow,
+            allow_reviewer_corrections: bool,
+            required_reviews: Option<u32>,
+            agreement_threshold: Option<AgreementThreshold>,
+        }
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let historical =
+            value.get("requiredReviews").is_some() || value.get("agreementThreshold").is_some();
+        let wire: Wire = serde_json::from_value(value).map_err(D::Error::custom)?;
+        let legacy = if historical {
+            Some(Box::new(LegacyReviewConfig {
+                required_reviews: wire
+                    .required_reviews
+                    .ok_or_else(|| D::Error::custom("historical review count is missing"))?,
+                agreement_threshold: wire.agreement_threshold,
+            }))
+        } else {
+            None
+        };
+        Ok(Self {
+            workflow: wire.workflow,
+            allow_reviewer_corrections: wire.allow_reviewer_corrections,
+            legacy,
+        })
+    }
+}
+
+impl ReviewConfig {
+    pub fn is_current(&self) -> bool {
+        self.legacy.is_none()
+            && matches!(
+                self.workflow,
+                ReviewWorkflow::None | ReviewWorkflow::Approval
+            )
+    }
+
+    pub fn upgrade(&mut self) {
+        self.legacy = None;
+        if self.workflow == ReviewWorkflow::LegacyIndependentAgreement {
+            self.workflow = ReviewWorkflow::Approval;
         }
     }
 }
@@ -87,7 +160,8 @@ impl Default for ReviewConfig {
 pub enum ReviewWorkflow {
     None,
     Approval,
-    IndependentAgreement,
+    #[serde(rename = "independent_agreement")]
+    LegacyIndependentAgreement,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -162,7 +236,8 @@ pub enum TaskStatus {
     Submitted,
     Completed,
     NeedsCorrection,
-    AdjudicationRequired,
+    #[serde(rename = "adjudication_required")]
+    LegacyAdjudicationRequired,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -172,7 +247,8 @@ pub enum TaskOutcome {
     ImportedGroundTruth,
     Approved,
     ReviewerCorrected,
-    Adjudicated,
+    #[serde(rename = "adjudicated")]
+    LegacyAdjudicated,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -197,6 +273,37 @@ impl TaskState {
             completed_by: None,
             completed_at: None,
             updated_at: timestamp,
+        }
+    }
+}
+
+#[cfg(test)]
+mod review_config_tests {
+    use super::*;
+
+    #[test]
+    fn historical_review_configuration_preserves_fingerprint_bytes_and_normalizes() {
+        for workflow in ["none", "approval", "independent_agreement"] {
+            let wire = format!(
+                r#"{{"requiredReviews":3,"workflow":"{workflow}","allowReviewerCorrections":false,"agreementThreshold":null}}"#
+            );
+            let mut config: ReviewConfig = serde_json::from_str(&wire).unwrap();
+            assert!(!config.is_current());
+            assert_eq!(serde_json::to_string(&config).unwrap(), wire);
+            config.upgrade();
+            assert!(config.is_current());
+            assert_eq!(
+                config.workflow,
+                if workflow == "none" {
+                    ReviewWorkflow::None
+                } else {
+                    ReviewWorkflow::Approval
+                }
+            );
+            let current = serde_json::to_value(&config).unwrap();
+            assert_eq!(current.as_object().unwrap().len(), 2);
+            assert!(current.get("requiredReviews").is_none());
+            assert!(current.get("agreementThreshold").is_none());
         }
     }
 }

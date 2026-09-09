@@ -30,7 +30,6 @@ pub enum InspectorPreset {
     BuildUnavailable,
     Review,
     ReviewCorrection,
-    Adjudication,
     Admin,
     ExportSelection,
     ExportLoading,
@@ -78,7 +77,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 54] = [
+    pub const ALL: [Self; 53] = [
         Self::Annotation,
         Self::Presence,
         Self::PresenceReducedMotion,
@@ -88,7 +87,6 @@ impl InspectorPreset {
         Self::BuildUnavailable,
         Self::Review,
         Self::ReviewCorrection,
-        Self::Adjudication,
         Self::Admin,
         Self::ExportSelection,
         Self::ExportLoading,
@@ -146,7 +144,6 @@ impl InspectorPreset {
             Self::BuildUnavailable => "build-unavailable",
             Self::Review => "review",
             Self::ReviewCorrection => "review-correction",
-            Self::Adjudication => "adjudication",
             Self::Admin => "admin",
             Self::ExportSelection => "export-selection",
             Self::ExportLoading => "export-loading",
@@ -275,7 +272,6 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             });
             app
         }
-        InspectorPreset::Adjudication => work_preset(AssignmentKind::Adjudication, ctx),
         InspectorPreset::Admin => admin_preset(),
         InspectorPreset::ExportSelection => export_preset(preset),
         InspectorPreset::ExportLoading => export_preset(preset),
@@ -1093,7 +1089,7 @@ fn work_preset(kind: AssignmentKind, ctx: &egui::Context) -> LabelloApp {
     let view = match kind {
         AssignmentKind::Annotation => AppView::Annotate,
         AssignmentKind::Review => AppView::Review,
-        AssignmentKind::Adjudication => AppView::Adjudicate,
+        AssignmentKind::LegacyAdjudication => unreachable!("historical assignment kind"),
     };
     let mut app = LabelloApp {
         view,
@@ -1146,24 +1142,18 @@ fn statistics_preset() -> LabelloApp {
     app.datasets.stats = DatasetStats {
         total_images: 24,
         completed_tasks: 18,
-        pending_tasks: 6,
-        reviewed_tasks: 14,
-        unreviewed_tasks: 4,
-        approved_tasks: 12,
-        rejected_tasks: 2,
-        reviewer_corrected_tasks: 3,
-        finalized_tasks: 14,
+        pending_tasks: 0,
+        in_progress_tasks: 0,
+        awaiting_review_tasks: 4,
+        needs_correction_tasks: 2,
         per_task: [(
             TaskId::from("bounding_box:person"),
             TaskStats {
                 completed: 18,
-                pending: 6,
-                reviewed: 14,
-                unreviewed: 4,
-                approved: 12,
-                rejected: 2,
-                reviewer_corrected: 3,
-                finalized: 14,
+                pending: 0,
+                in_progress: 0,
+                awaiting_review: 4,
+                needs_correction: 2,
                 provenance: Default::default(),
                 migration: Default::default(),
             },
@@ -1245,7 +1235,6 @@ fn seed_dataset(app: &mut LabelloApp) {
     let roles = vec![
         DatasetRole::Annotator,
         DatasetRole::Reviewer,
-        DatasetRole::Adjudicator,
         DatasetRole::DataAdmin,
     ];
     let account = sample_account(app.config.user_id.clone());

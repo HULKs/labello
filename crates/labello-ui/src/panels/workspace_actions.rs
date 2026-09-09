@@ -73,9 +73,6 @@ impl LabelloApp {
             }
             return;
         }
-        if layout != LayoutMode::Wide && self.view == AppView::Adjudicate {
-            self.adjudication_decision_buttons(ui, false);
-        }
         if ui
             .add_enabled(ready, egui::Button::new("Skip"))
             .on_hover_text("Release this assignment and claim another.")
@@ -114,9 +111,6 @@ impl LabelloApp {
                 && theme::primary_button(ui, ready, egui::Button::new("Submit & next")).clicked()
             {
                 self.trigger_user_action(labello_domain::UserAction::NextImage);
-            }
-            if self.view == AppView::Adjudicate {
-                self.adjudication_decision_buttons(ui, true);
             }
             let actions = if self.view == AppView::Annotate {
                 self.annotation_secondary_actions(ui.ctx(), ready, true)

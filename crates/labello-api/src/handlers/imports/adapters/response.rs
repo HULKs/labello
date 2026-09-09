@@ -442,17 +442,17 @@ fn client_intent(intent: storage::ImportIntent) -> client::ImportWorkflowIntent 
 fn review_for_intent(intent: storage::ImportIntent) -> labello_domain::ReviewConfig {
     match intent {
         storage::ImportIntent::AuthoritativeGroundTruth => labello_domain::ReviewConfig {
-            required_reviews: 0,
+
             workflow: labello_domain::ReviewWorkflow::None,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         storage::ImportIntent::RequireApproval | storage::ImportIntent::SeedFutureAnnotation => {
             labello_domain::ReviewConfig {
-                required_reviews: 1,
+
                 workflow: labello_domain::ReviewWorkflow::Approval,
                 allow_reviewer_corrections: false,
-                agreement_threshold: None,
+                legacy: None,
             }
         }
     }

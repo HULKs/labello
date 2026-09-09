@@ -4,9 +4,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AdjudicationRecord, AnnotationId, AnnotationOrigin, AnnotationType, AnnotationVersion,
-    Assignment, AssignmentKind, AssignmentStatus, DomainError, DomainResult, EventLogEntry,
-    EventPayload, HumanRevisionKind, ImageId, ImportCoverage, ImportId, MigrationConfirmation,
+    AnnotationId, AnnotationOrigin, AnnotationType, AnnotationVersion, Assignment, AssignmentKind,
+    AssignmentStatus, DomainError, DomainResult, EventLogEntry, EventPayload, HumanRevisionKind,
+    ImageId, ImportCoverage, ImportId, LegacyAdjudicationRecord, MigrationConfirmation,
     MigrationDependencyKind, MigrationDependencyMarker, MigrationDisposition,
     MigrationDispositionStatus, MigrationHashContext, MigrationHashStateTarget, MigrationPass,
     MigrationPassId, MigrationTargetSetInitialization, ObjectGroupId, ReviewDecision, ReviewRecord,
@@ -43,7 +43,7 @@ pub struct ImageState {
     #[serde(default)]
     pub missing_object_submissions: BTreeMap<crate::AssignmentId, crate::MissingObjectRejection>,
     pub reviewer_corrections: Vec<ReviewerCorrectionRecord>,
-    pub adjudications: Vec<AdjudicationRecord>,
+    pub adjudications: Vec<LegacyAdjudicationRecord>,
     pub task_states: BTreeMap<TaskId, TaskState>,
     pub assignments: Vec<Assignment>,
     #[serde(default)]

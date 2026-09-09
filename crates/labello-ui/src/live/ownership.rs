@@ -298,7 +298,7 @@ impl LabelloApp {
             | UiCommand::ReleaseAssignment { operation_id, .. }
             | UiCommand::Review { operation_id, .. }
             | UiCommand::Correction { operation_id, .. }
-            | UiCommand::Adjudication { operation_id, .. } => {
+            => {
                 if self.work.active_operation_id == Some(*operation_id) {
                     self.work.active_operation_id = None;
                     self.loading.saving = false;

@@ -56,7 +56,6 @@ impl LabelloApp {
         match self.view {
             AppView::Annotate => self.prelabel_panel(ui),
             AppView::Review => self.review_actions(ui, show_primary_actions),
-            AppView::Adjudicate => self.adjudication_actions(ui, show_primary_actions),
             AppView::Setup | AppView::Admin | AppView::Stats => {}
         }
         self.missing_object_panel(ui);
@@ -537,46 +536,7 @@ impl LabelloApp {
         });
     }
 
-    fn adjudication_actions(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
-        let candidates = self
-            .work
-            .annotations
-            .iter()
-            .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-            })
-            .count();
-        theme::compact_metric(ui, "Candidate annotations", candidates.to_string());
-        if candidates == 0 {
-            theme::inline_message(
-                ui,
-                theme::Intent::Warning,
-                "This assignment has no annotation candidates to adjudicate.",
-            );
-        }
-        if show_primary_actions {
-            ui.horizontal_wrapped(|ui| self.adjudication_decision_buttons(ui, false));
-        }
-    }
 
-    fn adjudication_decision_buttons(&mut self, ui: &mut egui::Ui, compact: bool) {
-        let has_candidates = self.work.annotations.iter().any(|annotation| {
-            !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-        });
-        let ready = self.work.assignment.is_some() && !self.loading.saving
-            && !self.loading.image && self.work.pending_transition.is_none();
-        let (accept, correct) = if compact {
-            ("Accept all", "Send back")
-        } else {
-            ("Accept all annotations", "Send back for correction")
-        };
-        if theme::primary_button(ui, ready && has_candidates, egui::Button::new(accept)).clicked() {
-            self.request_adjudication(AdjudicationDecision::AcceptAnnotation);
-        }
-        if theme::danger_button(ui, ready, egui::Button::new(correct)).clicked() {
-            self.request_adjudication(AdjudicationDecision::NeedsCorrection);
-        }
-    }
 
 }
 

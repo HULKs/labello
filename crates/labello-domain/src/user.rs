@@ -12,7 +12,8 @@ use crate::{DatasetId, DomainError, DomainResult, Timestamp, UserId};
 pub enum DatasetRole {
     Annotator,
     Reviewer,
-    Adjudicator,
+    #[serde(rename = "adjudicator")]
+    LegacyAdjudicator,
     DataAdmin,
 }
 
@@ -21,7 +22,7 @@ impl std::fmt::Display for DatasetRole {
         f.write_str(match self {
             Self::Annotator => "annotator",
             Self::Reviewer => "reviewer",
-            Self::Adjudicator => "adjudicator",
+            Self::LegacyAdjudicator => "adjudicator",
             Self::DataAdmin => "data_admin",
         })
     }

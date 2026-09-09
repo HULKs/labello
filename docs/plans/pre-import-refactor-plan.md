@@ -96,8 +96,7 @@ Cover:
 - Every current `EventType` and `EventPayload` serialized name and shape.
 - `EventPayload::event_type` and `EventLogEntry::validate_shape` agreement.
 - A representative v2 event log containing annotation creation, edit, deletion,
-  task state, assignment state, object review, task review, reviewer correction,
-  and adjudication.
+  task state, assignment state, object review, task review, and reviewer correction.
 - `TaskStatus`, `TaskOutcome`, `TaskState`, and all `ReviewTarget` variants.
 - Schema-version fields in dataset configuration, image index, state,
   keybindings, snapshots, offline bundles, and offline sync.
@@ -191,10 +190,9 @@ Regression requirements:
 
 - Exact reclaim still avoids append and lease renewal.
 - Claim retries still return the same active assignment.
-- Annotation claims remain exclusive; review claims may coexist.
+- Annotation and review claims remain exclusive for each image/task.
 - Expiration preserves `NeedsCorrection` semantics.
 - Image scan order remains deterministic.
-- Independent agreement remains rejected where currently unsupported.
 - Review rounds still begin at the latest submitted event.
 - Reviewer correction remains one atomic, idempotent event.
 - Concurrent final approvals and corrections remain serialized by the same

@@ -50,7 +50,7 @@ Status: Completed; historical work package
   shortcut-recording buttons report selected state through AccessKit.
 - The native inspector accepts `--preset <name>` through an opt-in
   `inspector-presets` feature. Fifteen deterministic presets cover Setup,
-  annotation, review, correction, adjudication, Admin, Statistics, three
+  annotation, review, correction, Admin, Statistics, three
   dialogs, and five major failure states.
 - Added regressions for modal containment, short-height work and Settings
   layouts, drawer scrolling and shortcut blocking, shortcut event consumption,

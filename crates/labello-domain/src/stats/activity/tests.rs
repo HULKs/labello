@@ -178,7 +178,7 @@ fn daily_activity_ignores_imported_reviewed_and_correction_only_outcomes() {
         TaskOutcome::ImportedGroundTruth,
         TaskOutcome::Approved,
         TaskOutcome::ReviewerCorrected,
-        TaskOutcome::Adjudicated,
+        TaskOutcome::LegacyAdjudicated,
     ] {
         completed.outcome = Some(outcome);
         events.push(event(
