@@ -57,7 +57,7 @@ impl LabelloApp {
             return;
         }
         let screen = ctx.content_rect();
-        let width = (screen.width() - 56.0).clamp(200.0, 1050.0);
+        let width = (screen.width() - 56.0).clamp(120.0, 1050.0);
         let max_height = (screen.height() - 56.0).max(160.0);
         let id = egui::Id::new("statistics-overlay");
         let resized = ctx.data_mut(|data| {
@@ -75,26 +75,48 @@ impl LabelloApp {
         let response = theme::modal(ctx, id).area(area).show(ctx, |ui| {
             ui.set_width(width);
             ui.set_max_height(max_height);
-            ui.horizontal(|ui| {
-                ui.heading("Statistics");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let button = ui.add(
-                        egui::Button::new("Close statistics").min_size(egui::vec2(120.0, 44.0)),
+            let mut close_button = |ui: &mut egui::Ui| {
+                let button =
+                    ui.add(egui::Button::new("Close statistics").min_size(egui::vec2(120.0, 44.0)));
+                if std::mem::take(&mut self.navigation.statistics.focus_close) {
+                    button.request_focus();
+                }
+                close = button.clicked();
+            };
+            let header = if width < 260.0 {
+                ui.vertical(|ui| {
+                    ui.heading("Statistics");
+                    close_button(ui);
+                })
+            } else {
+                ui.horizontal(|ui| {
+                    ui.heading("Statistics");
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        close_button,
                     );
-                    if std::mem::take(&mut self.navigation.statistics.focus_close) {
-                        button.request_focus();
-                    }
-                    close = button.clicked();
-                });
-            });
+                })
+            };
             egui::ScrollArea::vertical()
                 .id_salt("statistics-overlay-scroll")
-                .max_height((max_height - 64.0).max(80.0))
+                .max_height(
+                    (max_height - header.response.rect.height() - ui.spacing().item_spacing.y)
+                        .max(80.0),
+                )
                 .show(ui, |ui| {
                     if let Some(error) = &self.runtime.error {
                         theme::inline_message(ui, theme::Intent::Warning, error);
                     }
                     self.stats_view(ui, LayoutMode::for_width(width));
+                    if let Some(focused) = ui
+                        .memory(|memory| memory.focused())
+                        .and_then(|id| ui.ctx().read_response(id))
+                        && focused.gained_focus()
+                        && focused.layer_id == ui.layer_id()
+                        && ui.min_rect().contains_rect(focused.rect)
+                    {
+                        focused.scroll_to_me(None);
+                    }
                 });
         });
         response.response.widget_info(|| {
@@ -114,6 +136,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn stats_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        ui.spacing_mut().interact_size.y = 44.0;
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
         let has_data = self.datasets.last_stats_completion.is_some();
         let initial_loading = self.loading.stats && !has_data;
         ui.horizontal_wrapped(|ui| {
@@ -198,6 +222,18 @@ impl LabelloApp {
             .map(|class| (class.class_id.clone(), class.name.clone()))
             .collect::<BTreeMap<_, _>>();
         ui.add_space(8.0);
+        self.datasets.leaderboard.show_activity(
+            ui,
+            &self.datasets.stats,
+            (
+                &self.config.dataset_id,
+                &self.config.user_id,
+                self.auth_epoch,
+            ),
+        );
+        self.datasets.leaderboard.show(ui, &self.datasets.stats);
+        ui.add_space(theme::SPACE_5);
+        ui.heading("Dataset totals");
         let metrics = [
             ("Images", self.datasets.stats.total_images),
             ("Completed", self.datasets.stats.completed_tasks),
@@ -278,15 +314,6 @@ impl LabelloApp {
                 }
             });
         }
-        self.datasets.leaderboard.show_activity(
-            ui,
-            &self.datasets.stats,
-            (
-                &self.config.dataset_id,
-                &self.config.user_id,
-                self.auth_epoch,
-            ),
-        );
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Per Task");
@@ -371,9 +398,6 @@ impl LabelloApp {
                     });
             }
         });
-        ui.add_space(theme::SPACE_5);
-        self.datasets.leaderboard.show(ui, &self.datasets.stats);
-        ui.add_space(theme::SPACE_3);
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Throughput");
