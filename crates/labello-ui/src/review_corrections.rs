@@ -266,6 +266,46 @@ impl LabelloApp {
         })
     }
 
+    pub(crate) fn migration_review_removal(&self) -> Option<ReviewCorrectionChange> {
+        if self.view != AppView::Review || !self.manual_migration_active() {
+            return None;
+        }
+        let labello_domain::ReviewTarget::AnnotationVersion {
+            annotation_id,
+            version,
+        } = self.focused_review_target()?
+        else {
+            return None;
+        };
+        let annotation = self
+            .work
+            .current_state
+            .as_ref()?
+            .current_annotation(&annotation_id)?;
+        annotation
+            .object_group_id
+            .is_none()
+            .then_some(ReviewCorrectionChange::Remove {
+                annotation_id,
+                expected_version: version,
+            })
+    }
+
+    pub(crate) fn remove_migration_review_item(&mut self) {
+        if self.loading.saving
+            || self.loading.image
+            || self.work.migration.busy
+            || self.work.pending_transition.is_some()
+            || self.work.review_corrections.submission.is_some()
+        {
+            return;
+        }
+        if let Some(change) = self.migration_review_removal() {
+            self.discard_correction();
+            self.keep_review_change(change);
+        }
+    }
+
     pub(crate) fn review_corrections_panel(&mut self, ui: &mut egui::Ui) {
         if self.view != AppView::Review || self.work.assignment.is_none() {
             return;
@@ -319,9 +359,10 @@ impl LabelloApp {
                         .filter(|_| self.manual_migration_active())
                     {
                         self.review_exclusion_menu(ui, group, ready);
-                    } else if ui
-                        .add_enabled(ready, egui::Button::new("Remove item"))
-                        .clicked()
+                    } else if !self.manual_migration_active()
+                        && ui
+                            .add_enabled(ready, egui::Button::new("Remove item"))
+                            .clicked()
                     {
                         self.discard_correction();
                         self.keep_review_change(ReviewCorrectionChange::Remove {

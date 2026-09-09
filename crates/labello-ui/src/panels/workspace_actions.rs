@@ -5,10 +5,15 @@ impl LabelloApp {
             && self.work.pending_transition.is_none();
         let compact = LayoutMode::for_width(ui.ctx().content_rect().width()) != LayoutMode::Wide;
         let secondary = |app: &mut Self, ui: &mut egui::Ui| {
-            let count = if app.work.previous_assignment.is_some() { 3.0 } else { 2.0 };
+            let removable = app.migration_review_removal().is_some();
+            let count = (if app.work.previous_assignment.is_some() { 3.0 } else { 2.0 })
+                + if removable { 1.0 } else { 0.0 };
             let width = compact.then(|| ((ui.available_width() - (count - 1.0) * ui.spacing().item_spacing.x) / count).floor().max(44.0));
             app.previous_review_action(ui, width);
             app.discard_review_action(ui, width);
+            if removable && workspace_action_button(ui, ready && app.work.review_corrections.submission.is_none(), "Remove item", WorkspaceActionIcon::Remove, width, theme::Intent::Error).clicked() {
+                app.remove_migration_review_item();
+            }
             if workspace_action_button(ui, ready, "Skip", WorkspaceActionIcon::Skip, width, theme::Intent::Neutral).clicked() {
                 app.trigger_user_action(labello_domain::UserAction::SkipAssignment);
             }

@@ -550,3 +550,37 @@ fn mobile_annotation_and_migration_toolbars_keep_large_text_controls_inline() {
         }
     }
 }
+
+#[test]
+fn added_migration_review_item_removal_lives_in_the_footer() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for (width, height) in [(320.0, 320.0), (390.0, 844.0), (1440.0, 1000.0)] {
+        let mut app = inspector_presets::build(InspectorPreset::MigrationDiscoveryReview, &egui::Context::default());
+        app.work.previous_assignment = app.work.assignment.clone();
+        app.work.inspector_panel_collapsed = width < 1000.0;
+        let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
+        harness.run_steps(3);
+        let remove = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Remove item").rect();
+        let skip = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Skip").rect();
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        assert!((remove.center().y - skip.center().y).abs() < 1.0);
+        assert!(remove.top() >= canvas.bottom() && remove.bottom() <= height);
+        assert!(remove.left() >= 0.0 && remove.right() <= width && remove.height() >= 44.0);
+        harness.state_mut().work.migration.busy = true;
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Remove item").accesskit_node().is_disabled());
+        harness.state_mut().work.migration.busy = false;
+        harness.run_steps(2);
+        harness.get_by_label("Remove item").click();
+        harness.run_steps(3);
+        assert!(harness.state().work.review_corrections.changes.iter().any(|change| matches!(change,
+            labello_domain::ReviewCorrectionChange::Remove { annotation_id, expected_version: 1 }
+            if annotation_id == &labello_domain::AnnotationId::from("discovered-object-1"))));
+        let overview = harness.state().review_object_targets().len();
+        harness.state_mut().navigate_review_item(overview);
+        harness.run_steps(3);
+        assert!(harness.query_by_label("Remove item").is_none());
+    }
+    let app = inspector_presets::build(InspectorPreset::MigrationReview, &egui::Context::default());
+    assert!(app.migration_review_removal().is_none());
+}

@@ -192,6 +192,9 @@ has been recorded.
   indicator, Refocus, Fit and workflow toggle in one top row. Put Previous, Discard
   and Skip in a permanently visible second bottom row beneath the decision buttons;
   use Discard corrections on wide screens. Skip is not hidden in the navigation menu.
+  Reviewed keypoints retain their normal marker without an additional selection circle.
+  When reviewing an added migration object, Remove item also belongs to this footer
+  row, with an icon fallback when its text does not fit.
   Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
   width, retaining accessible names and tooltips. Short empty states scroll to keep
   retry actions reachable.
