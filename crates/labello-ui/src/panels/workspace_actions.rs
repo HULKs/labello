@@ -243,7 +243,7 @@ pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &
 
 fn paint_workspace_action_icon(ui: &egui::Ui, response: &egui::Response, icon: WorkspaceActionIcon) {
         let center = response.rect.center();
-        let stroke = egui::Stroke::new(2.0, ui.style().interact(&response).fg_stroke.color);
+        let stroke = egui::Stroke::new(2.0, ui.style().interact(response).fg_stroke.color);
         let point = |x, y| center + egui::vec2(x, y);
         let line = |a, b| { ui.painter().line_segment([a, b], stroke); };
         match icon {

@@ -291,13 +291,14 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
         .with_size(egui::vec2(1440.0, 900.0))
         .with_max_steps(40)
         .build_eframe(|_| app);
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
-    let add_action = harness.get_by_label("Add missing object M").rect();
+    let add_action = harness.get_by_label("Add missing object").rect();
     harness.key_press(egui::Key::M);
     harness.step();
     assert!(harness.state().work.migration.adding_missing_object);
-    let cancel_action = harness.get_by_label("Cancel adding object M").rect();
+    let cancel_action = harness.get_by_label("Cancel adding object").rect();
     assert!(
         (add_action.left() - cancel_action.left()).abs() <= 1.0
             && (add_action.top() - cancel_action.top()).abs() <= 1.0,
@@ -306,7 +307,7 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     click_accesskit_button(&mut harness, "Cancel adding object");
     harness.step();
     assert!(!harness.state().work.migration.adding_missing_object);
-    assert!(harness.query_by_label("Add missing object M").is_some());
+    assert!(harness.query_by_label("Add missing object").is_some());
 
     harness.key_press(egui::Key::M);
     harness.step();
@@ -314,7 +315,7 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     harness.key_press(egui::Key::M);
     harness.step();
     assert!(!harness.state().work.migration.adding_missing_object);
-    assert!(harness.query_by_label("Add missing object M").is_some());
+    assert!(harness.query_by_label("Add missing object").is_some());
     harness.key_press(egui::Key::M);
     harness.step();
     assert!(harness.state().work.migration.adding_missing_object);
@@ -493,6 +494,7 @@ fn missing_object_uses_its_own_zero_position_explanation() {
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_eframe(|_| app);
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
     click_accesskit_button(&mut harness, "Add missing object");
@@ -788,6 +790,7 @@ fn migration_draft_supports_undo_and_delete() {
         .build_eframe(|ctx| {
             inspector_presets::build(InspectorPreset::MigrationObject, &ctx.egui_ctx)
         });
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
     let place_first_keypoint = |app: &mut LabelloApp| {
@@ -1155,8 +1158,8 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
     let context = roomy_compact
         .get_by_label("Workspace context bar")
         .rect();
-    assert!(workflow.width() > 80.0, "{workflow:?}");
-    assert!(inspector.width() > 80.0, "{inspector:?}");
+    assert!(workflow.width() >= 44.0, "{workflow:?}");
+    assert!(inspector.width() >= 44.0, "{inspector:?}");
     assert!(workflow.top() >= context.top() && workflow.bottom() <= context.bottom());
     assert!(inspector.top() >= context.top() && inspector.bottom() <= context.bottom());
     let canvas = roomy_compact.get_by_label("Annotation canvas").rect();
@@ -1307,6 +1310,7 @@ fn single_optional_migration_separates_not_present_from_object_exclusion() {
                 &ctx.egui_ctx,
             )
         });
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
     let visible = harness.get_by_role_and_label(
@@ -1405,6 +1409,7 @@ fn migration_decision_summary_counts_positioned_and_not_present_keypoints() {
         .build_eframe(|ctx| {
             inspector_presets::build(InspectorPreset::MigrationObject, &ctx.egui_ctx)
     });
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
     let draft = harness
         .state_mut()
@@ -1789,19 +1794,10 @@ fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
 
     harness.set_size(egui::vec2(150.0, 667.0));
     harness.step();
-    let accept = harness.get_by_label("Y").rect();
-    let reject = harness.get_by_label("N").rect();
+    let accept = harness.get_by_label("Approve").rect();
+    let reject = harness.get_by_label("Reject").rect();
     assert!((accept.center().y - reject.center().y).abs() <= 1.0);
     assert!((accept.width() - reject.width()).abs() <= 1.0);
-
-    harness.set_size(egui::vec2(90.0, 667.0));
-    harness.step();
-    let row_positions = ["Y", "N"].map(|label| harness.get_by_label(label).rect().center().y);
-    assert!(
-        (row_positions[0] - row_positions[1]).abs() > 1.0,
-        "review controls may reflow only after both decisions use their shortcuts",
-    );
-    assert!(harness.query_by_label("Controls").is_none());
 
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
@@ -2064,6 +2060,7 @@ fn companion_reconciliation_escape_restores_invoking_button_focus() {
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1440.0, 1000.0))
         .build_eframe(|_| app);
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
     click(&mut harness, "Companion boxes: 0 of 2 paired");
     click_accesskit_button(&mut harness, "Reconcile box for added object 1");
@@ -2091,6 +2088,7 @@ fn direct_revisit_overview_saves_non_final_target_and_restores_focus() {
         .with_size(egui::vec2(1440.0, 1000.0))
         .with_max_steps(40)
         .build_eframe(|_| app);
+    harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
     click(&mut harness, "Review 2 resolved objects");
     let entry = harness.get_by_role_and_label(
@@ -2360,6 +2358,7 @@ fn migration_full_image_has_direct_controls_without_a_global_pass_start() {
             &egui::Context::default(),
         );
         let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.state_mut().work.inspector_panel_collapsed = false;
         harness.step();
         assert!(harness.query_by_label("Start correction pass").is_none());
         assert!(

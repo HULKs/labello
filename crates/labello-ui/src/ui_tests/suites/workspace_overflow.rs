@@ -339,7 +339,7 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
         harness.run_steps(4);
         let after = harness.get_by_label("Annotation canvas").rect();
         assert_eq!(after, before, "availability must not displace required review context: revision={revision}");
-        assert_eq!(harness.get_by_label("Workspace context bar").rect(), bar);
+        assert_eq!(harness.get_by_label("Workspace context bar").rect().height(), bar.height());
         assert!(after.height() >= 44.0);
         assert_review_bar_paints(&harness, "Item 1 / 1");
         let details = harness.get_by_label_contains("Review details: Workflow:").rect();

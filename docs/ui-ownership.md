@@ -295,6 +295,8 @@ identity. The shared review footer owns decision buttons and Previous, Discard a
 Skip across ordinary, migration and revision review. Compact layouts keep navigation
 and discard actions in a second bottom row. Remove item for added migration objects
 uses the same footer and the existing local correction owner. The Inspector starts closed.
+Migration canvas preparation initializes the active skeleton draft independently of
+Inspector visibility, so advancing targets keeps editing available with the panel closed.
 
 ## Dataset export administration
 

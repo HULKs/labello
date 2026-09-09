@@ -210,6 +210,12 @@ impl LabelloApp {
         let Some(current) = self.work.current.clone() else {
             return;
         };
+        if self.view == AppView::Annotate
+            && !self.work.migration.adding_missing_object
+            && let Some((group_id, _)) = self.migration_active_target()
+        {
+            self.ensure_migration_draft(&group_id);
+        }
         let texture = self.work.current_texture.clone();
         let Some(task) = self.selected_task().cloned() else {
             return;

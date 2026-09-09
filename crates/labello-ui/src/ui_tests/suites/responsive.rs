@@ -352,7 +352,9 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     for (width, height) in sizes {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert!(harness.query_all_by_label(&image_name).next().is_some());
+        if LayoutMode::for_width(width) != LayoutMode::Compact {
+            assert!(harness.query_all_by_label(&image_name).next().is_some());
+        }
         assert!(harness.query_all_by_label(&workflow_label).next().is_some());
         let presence = harness.get_by_label_contains("Labelling presence:").rect();
         let status_badge = harness.get_by_label_contains("Connection status:").rect();
@@ -877,10 +879,10 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     harness.set_size(egui::vec2(150.0, 568.0));
     harness.step();
     let accept_shortcut = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "U")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Approve")
         .rect();
     let reject_shortcut = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "J")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Reject")
         .rect();
     assert!(
         (accept_shortcut.center().y - reject_shortcut.center().y).abs() <= 1.0,
@@ -888,7 +890,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     );
     assert!(accept_shortcut.right() <= reject_shortcut.left());
     assert!((accept_shortcut.width() - reject_shortcut.width()).abs() <= 1.0);
-    for label in ["U", "J"] {
+    for label in ["Approve", "Reject"] {
         assert_control_inside(
             &harness,
             label,

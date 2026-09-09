@@ -11,7 +11,9 @@ fn review_inspector_identifies_the_exact_persisted_target() {
         }),
         true,
     );
-    let harness = loaded_review_harness(api);
+    let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     assert!(harness.query_by_label("Active review target").is_some());
     assert!(harness.query_by_label("Persisted version 1").is_some());
     assert!(

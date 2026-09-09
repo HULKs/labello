@@ -285,21 +285,26 @@ impl LabelloApp {
                 let control_count = if current.is_some() {
                     if self.manual_migration_active() { 5.0 } else { 4.0 }
                 } else { 2.0 };
+                let loading_availability = self.work.availability.loading && self.work.availability.tasks.is_empty();
+                let spinner_width = if loading_availability { 12.0 + ui.spacing().item_spacing.x } else { 0.0 };
                 let summary_width = (ui.available_width()
-                    - control_count * (44.0 + ui.spacing().item_spacing.x)).max(0.0);
+                    - control_count * (44.0 + ui.spacing().item_spacing.x) - spinner_width).max(0.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(summary_width, 44.0),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         let label = current.as_ref().map_or_else(
                             || if loading_image { "Loading assignment..." } else if has_assignment { "Preview unavailable" } else { "No active assignment" }.to_owned(),
-                            |current| current.image.file_name.clone(),
+                            |current| workflow.clone().unwrap_or_else(|| current.image.file_name.clone()),
                         );
                         ui.add(egui::Label::new(&label).truncate()).on_hover_text(label);
                     },
                 );
                 if current.is_some() { self.canvas_controls(ui, layout); }
                 self.drawer_panel_buttons(ui, true);
+                if loading_availability {
+                    Self::describe_assignment_availability_spinner(ui.add(egui::Spinner::new().size(12.0)));
+                }
             })
         } else if short && current.is_some() {
             ui.horizontal(|ui| {

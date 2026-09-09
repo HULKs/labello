@@ -10,6 +10,9 @@ pub(super) fn loaded_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloAp
     step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
     click(&mut harness, "Continue with Demo Dataset");
     step_until(&mut harness, 12, |app| app.work.current.is_some());
+    // Work fixtures expose inspector actions explicitly; the application defaults closed.
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     harness
 }
 

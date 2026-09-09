@@ -2080,6 +2080,8 @@ fn review_correction_drawer_and_actions_stay_reachable() {
         true,
     );
     let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     harness.state_mut().start_correction();
 
     for (width, height) in viewport_sizes() {
@@ -2459,6 +2461,8 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     let annotation_id =
         seed_review_annotation(&api, AnnotationGeometry::BoundingBox(original), true);
     let mut harness = loaded_review_harness(api.clone());
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
     let next = harness.state().work.queue.prepared_image_ids()[0].clone();
     assert!(harness.state().work.correction_draft.is_some());
@@ -2527,6 +2531,8 @@ fn review_edits_directly_and_reset_does_not_force_pan_mode() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
     let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     assert!(!harness.state().work.canvas.pan_mode());
     assert!(!harness.state().work.canvas.pan_mode_required());
     assert!(harness.state().work.correction_draft.is_some());
@@ -2749,14 +2755,15 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
         harness.step();
         let canvas = harness.get_by_label("Annotation canvas").rect();
         let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous");
-        let context = harness.get_by_label("Workspace context bar").rect();
         assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
-        assert!(context.contains_rect(previous.rect()), "Previous must remain in the context bar at {width}x{height}: context={context:?}, previous={:?}", previous.rect());
+        assert!(previous.rect().top() >= canvas.bottom() && previous.rect().bottom() <= height,
+            "Previous must remain in the footer at {width}x{height}: {:?}", previous.rect());
         assert!(!previous.accesskit_node().is_disabled());
     }
     harness.set_size(egui::vec2(1440.0, 1000.0));
     harness.step();
     edit_test_review_box(harness.state_mut());
+    harness.run_steps(4);
     let draft = harness.state().work.correction_draft.clone().unwrap();
     click(&mut harness, "Previous");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
@@ -3319,6 +3326,8 @@ fn reviewer_correction_edits_existing_keypoint_and_visibility_with_undo() {
         true,
     );
     let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     harness.set_size(egui::vec2(1500.0, 1100.0));
     harness.step();
     assert!(harness.state().work.correction_draft.is_some());
@@ -3946,6 +3955,8 @@ fn missing_object_history_is_read_only_navigable_and_separate_from_current_revie
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x:0.2,y:0.2,width:0.3,height:0.3 }), true);
     let mut harness = loaded_review_harness(api.clone());
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     enter_test_review_revision(harness.state_mut());
     let app = harness.state_mut();
     let task = app.selected_task().unwrap().clone();
@@ -4296,6 +4307,8 @@ fn reviewer_can_stage_multiple_additions_and_distinguish_unsaved_previews() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), false);
     let mut harness = loaded_review_harness(api.clone());
+    harness.state_mut().work.inspector_panel_collapsed = false;
+    harness.step();
     harness.set_size(egui::vec2(1440.0, 1000.0));
     harness.run_steps(4);
     click(&mut harness, "Approve");
