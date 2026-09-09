@@ -286,20 +286,6 @@ impl ReviewApi for DemoLabelloApi {
     }
 }
 
-impl AdjudicationApi for DemoLabelloApi {
-    fn record_adjudication<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        image_id: &'a ImageId,
-        adjudication: AdjudicationRecord,
-    ) -> crate::ApiFuture<'a, EventLogEntry> {
-        self.append_payload(
-            dataset_id,
-            image_id,
-            EventPayload::AdjudicationRecorded { adjudication },
-        )
-    }
-}
 
 impl OfflineApi for DemoLabelloApi {
     fn offline_bundle<'a>(

@@ -53,7 +53,8 @@ pub enum EventTypeV2WireSchema {
     TaskStateChanged,
     ReviewRecorded,
     ReviewerCorrectionRecorded,
-    AdjudicationRecorded,
+    #[serde(rename = "adjudication_recorded")]
+    LegacyAdjudicationRecorded,
     AssignmentUpdated,
 }
 
@@ -83,8 +84,9 @@ pub enum EventPayloadV2WireSchema {
         task_state: TaskState,
         assignments: Vec<Assignment>,
     },
-    AdjudicationRecorded {
-        adjudication: AdjudicationRecord,
+    #[serde(rename = "adjudication_recorded")]
+    LegacyAdjudicationRecorded {
+        adjudication: LegacyAdjudicationRecord,
     },
     AssignmentUpdated {
         assignment: Assignment,

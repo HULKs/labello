@@ -841,29 +841,7 @@ fn validate_workflow(
     use labello_domain::ReviewWorkflow;
 
     let review = &task.review;
-    let structurally_valid = match &review.workflow {
-        ReviewWorkflow::None => {
-            review.required_reviews == 0
-                && !review.allow_reviewer_corrections
-                && review.agreement_threshold.is_none()
-        }
-        ReviewWorkflow::Approval => {
-            review.required_reviews >= 1
-                && !review.allow_reviewer_corrections
-                && review.agreement_threshold.is_none()
-        }
-        ReviewWorkflow::IndependentAgreement => {
-            review.required_reviews >= 2
-                && !review.allow_reviewer_corrections
-                && review
-                    .agreement_threshold
-                    .as_ref()
-                    .is_some_and(|threshold| {
-                        threshold.threshold.is_finite()
-                            && (0.0..=1.0).contains(&threshold.threshold)
-                    })
-        }
-    };
+    let structurally_valid = review.is_current() && !review.allow_reviewer_corrections;
     let intent_valid = if task.manual_box_guide_migration.is_some() {
         review.workflow == ReviewWorkflow::Approval
     } else {

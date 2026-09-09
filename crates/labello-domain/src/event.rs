@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 use crate::{
-    AdjudicationRecord, AnnotationId, AnnotationVersion, Assignment, DatasetId, DatasetRole,
-    EventId, ImageId, ImportCoverage, ImportId, MigrationConfirmation, MigrationDependencyMarker,
-    MigrationDisposition, MigrationHash, MigrationPass, MigrationPassItem, MigrationTarget,
-    ObjectGroupId, ReviewRecord, ReviewerCorrectionRecord, SCHEMA_VERSION, TaskId, TaskState,
-    Timestamp, UserId,
+    AnnotationId, AnnotationVersion, Assignment, DatasetId, DatasetRole, EventId, ImageId,
+    ImportCoverage, ImportId, LegacyAdjudicationRecord, MigrationConfirmation,
+    MigrationDependencyMarker, MigrationDisposition, MigrationHash, MigrationPass,
+    MigrationPassItem, MigrationTarget, ObjectGroupId, ReviewRecord, ReviewerCorrectionRecord,
+    SCHEMA_VERSION, TaskId, TaskState, Timestamp, UserId,
 };
 
 pub const MAX_IMPORT_ANNOTATIONS_PER_EVENT: usize = 10_000;
@@ -44,7 +44,8 @@ pub enum EventType {
     ReviewRevisionCommitted,
     MissingObjectEvidenceRecorded,
     ReviewerCorrectionRecorded,
-    AdjudicationRecorded,
+    #[serde(rename = "adjudication_recorded")]
+    LegacyAdjudicationRecorded,
     AssignmentUpdated,
     ImportInitialized,
     ImportedTaskReopened,
@@ -71,7 +72,7 @@ impl std::fmt::Display for EventType {
             Self::ReviewRevisionCommitted => "review_revision_committed",
             Self::MissingObjectEvidenceRecorded => "missing_object_evidence_recorded",
             Self::ReviewerCorrectionRecorded => "reviewer_correction_recorded",
-            Self::AdjudicationRecorded => "adjudication_recorded",
+            Self::LegacyAdjudicationRecorded => "adjudication_recorded",
             Self::AssignmentUpdated => "assignment_updated",
             Self::ImportInitialized => "import_initialized",
             Self::ImportedTaskReopened => "imported_task_reopened",
@@ -134,8 +135,9 @@ pub enum EventPayload {
         task_state: TaskState,
         assignments: Vec<Assignment>,
     },
-    AdjudicationRecorded {
-        adjudication: AdjudicationRecord,
+    #[serde(rename = "adjudication_recorded")]
+    LegacyAdjudicationRecorded {
+        adjudication: LegacyAdjudicationRecord,
     },
     AssignmentUpdated {
         assignment: Assignment,
@@ -199,7 +201,7 @@ impl EventPayload {
             Self::ReviewRevisionCommitted { .. } => EventType::ReviewRevisionCommitted,
             Self::MissingObjectEvidenceRecorded { .. } => EventType::MissingObjectEvidenceRecorded,
             Self::ReviewerCorrectionRecorded { .. } => EventType::ReviewerCorrectionRecorded,
-            Self::AdjudicationRecorded { .. } => EventType::AdjudicationRecorded,
+            Self::LegacyAdjudicationRecorded { .. } => EventType::LegacyAdjudicationRecorded,
             Self::AssignmentUpdated { .. } => EventType::AssignmentUpdated,
             Self::ImportInitialized { .. } => EventType::ImportInitialized,
             Self::ImportedTaskReopened { .. } => EventType::ImportedTaskReopened,

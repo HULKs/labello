@@ -11,6 +11,13 @@ pub(super) fn validate_payload(
     image_id: &ImageId,
     payload: &EventPayload,
 ) -> ApiResult<()> {
+    if matches!(payload, EventPayload::LegacyAdjudicationRecorded { .. })
+        || matches!(payload, EventPayload::TaskStateChanged { task_state } if task_state.status == labello_domain::TaskStatus::LegacyAdjudicationRequired || task_state.outcome == Some(labello_domain::TaskOutcome::LegacyAdjudicated))
+    {
+        return Err(ApiError::BadRequest(
+            "historical workflow data cannot be authored".into(),
+        ));
+    }
     match payload {
         EventPayload::AnnotationVersionCreated { annotation, .. } => {
             if matches!(
@@ -73,7 +80,7 @@ pub(super) fn validate_payload(
         EventPayload::AnnotationDeleted { .. }
         | EventPayload::ReviewRecorded { .. }
         | EventPayload::ReviewerCorrectionRecorded { .. }
-        | EventPayload::AdjudicationRecorded { .. }
+        | EventPayload::LegacyAdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. } => {}
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
@@ -245,14 +252,9 @@ pub(super) fn required_role_for_payload(
         EventPayload::ReviewerCorrectionRecorded { .. } => Err(ApiError::BadRequest(
             "reviewer correction events are created by the correction endpoint only".to_string(),
         )),
-        EventPayload::AdjudicationRecorded { adjudication } => {
-            if adjudication.adjudicator_user_id != actor.user_id {
-                return Err(ApiError::Unauthorized(
-                    "cannot record adjudications for another user".to_string(),
-                ));
-            }
-            Ok(DatasetRole::Adjudicator)
-        }
+        EventPayload::LegacyAdjudicationRecorded { .. } => Err(ApiError::BadRequest(
+            "historical event type cannot be authored".into(),
+        )),
         EventPayload::AssignmentUpdated { .. } => Err(ApiError::BadRequest(
             "assignment events are created by assignment endpoints only".to_string(),
         )),
@@ -313,7 +315,7 @@ pub(super) fn validate_annotation_assignment_payload(
         }
         EventPayload::ReviewRecorded { .. }
         | EventPayload::ReviewerCorrectionRecorded { .. }
-        | EventPayload::AdjudicationRecorded { .. }
+        | EventPayload::LegacyAdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. }
         | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
@@ -383,7 +385,7 @@ pub(super) fn validate_admin_repair_payload(
         | EventPayload::AnnotationDeleted { .. }
         | EventPayload::TaskStateChanged { .. }
         | EventPayload::ReviewRecorded { .. }
-        | EventPayload::AdjudicationRecorded { .. } => {
+        | EventPayload::LegacyAdjudicationRecorded { .. } => {
             validate_payload(metadata, image_id, payload)
         }
         EventPayload::ReviewerCorrectionRecorded { .. }

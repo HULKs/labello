@@ -5,7 +5,6 @@ pub trait LabelloApi:
     + ImageApi
     + AnnotationApi
     + ReviewApi
-    + AdjudicationApi
     + OfflineApi
     + StatsApi
     + KeybindingApi
@@ -23,7 +22,6 @@ impl<T> LabelloApi for T where
         + ImageApi
         + AnnotationApi
         + ReviewApi
-        + AdjudicationApi
         + OfflineApi
         + StatsApi
         + KeybindingApi

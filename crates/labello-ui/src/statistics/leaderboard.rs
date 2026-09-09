@@ -260,25 +260,36 @@ impl LeaderboardState {
             return;
         };
         let today = labello_domain::now().date_naive();
-        ui.horizontal_wrapped(|ui| {
-            ui.selectable_value(&mut self.history, false, "Leaderboard");
-            ui.selectable_value(&mut self.history, true, "History graph");
-            ui.add_space(theme::SPACE_3);
-            egui::ComboBox::from_label("Period")
-                .selected_text(PERIODS[self.period])
-                .show_ui(ui, |ui| {
-                    for (index, label) in PERIODS.iter().enumerate() {
-                        ui.selectable_value(&mut self.period, index, *label);
-                    }
-                })
-                .response
-                .on_hover_text("UTC calendar days, including today. Last day starts at 00:00 UTC.");
-            ui.small(if self.period == 5 {
-                "(All recorded activity · UTC)".into()
-            } else {
-                format!("({} – {today} · UTC)", period_start(self.period, today))
-            });
-        });
+        let controls_layout = if ui.available_width() < 450.0 {
+            egui::Layout::top_down(egui::Align::Min)
+        } else {
+            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)
+        };
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), 44.0),
+            controls_layout,
+            |ui| {
+                ui.selectable_value(&mut self.history, false, "Leaderboard");
+                ui.selectable_value(&mut self.history, true, "History graph");
+                ui.add_space(theme::SPACE_3);
+                egui::ComboBox::from_label("Period")
+                    .selected_text(PERIODS[self.period])
+                    .show_ui(ui, |ui| {
+                        for (index, label) in PERIODS.iter().enumerate() {
+                            ui.selectable_value(&mut self.period, index, *label);
+                        }
+                    })
+                    .response
+                    .on_hover_text(
+                        "UTC calendar days, including today. Last day starts at 00:00 UTC.",
+                    );
+                ui.small(if self.period == 5 {
+                    "(All recorded activity · UTC)".into()
+                } else {
+                    format!("({} – {today} · UTC)", period_start(self.period, today))
+                });
+            },
+        );
         let start = period_start(self.period, today);
         let rows: Vec<_> = contributors
             .iter()
@@ -555,91 +566,102 @@ fn activity_chart(
     theme::card_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         let menu_width = ui.available_width().min(300.0);
+        let header_layout = if ui.available_width() < 450.0 {
+            egui::Layout::top_down(egui::Align::Min)
+        } else {
+            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true)
+        };
         let (daily, start, maximum) = ui
-            .horizontal_wrapped(|ui| {
-                ui.heading("Daily activity");
-                egui::ComboBox::from_id_salt("activity-person")
-                    .selected_text(
-                        activity_user
-                            .as_ref()
-                            .map_or("All people", |id| contributors[id].display_name.as_str()),
-                    )
-                    .width(210.0_f32.min(menu_width))
-                    .truncate()
-                    .show_ui(ui, |ui| {
-                        ui.set_width(menu_width);
-                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                        ui.selectable_value(activity_user, None, "All people");
-                        for (id, person) in contributors {
-                            ui.push_id(id, |ui| {
-                                if avatar::person(
-                                    ui,
-                                    person,
-                                    RichText::new(&person.display_name),
-                                    egui::vec2(ui.available_width(), 36.0),
-                                    Some(activity_user.as_ref() == Some(id)),
-                                )
-                                .clicked()
-                                {
-                                    *activity_user = Some(id.clone());
-                                }
-                            });
-                        }
-                    })
-                    .response
-                    .widget_info(|| {
-                        let mut info = egui::WidgetInfo::labeled(
-                            egui::WidgetType::ComboBox,
-                            true,
-                            "Activity for",
-                        );
-                        info.current_text_value = Some(
+            .allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 44.0),
+                header_layout,
+                |ui| {
+                    ui.heading("Daily activity");
+                    egui::ComboBox::from_id_salt("activity-person")
+                        .selected_text(
                             activity_user
                                 .as_ref()
-                                .map_or("All people", |id| contributors[id].display_name.as_str())
-                                .to_string(),
-                        );
-                        info
-                    });
-                let mut daily = BTreeMap::<NaiveDate, (usize, usize)>::new();
-                for (id, person) in contributors {
-                    if activity_user
-                        .as_ref()
-                        .is_some_and(|selected| selected != id)
-                    {
-                        continue;
-                    }
-                    for day in &person.history {
-                        if let Ok(date) = day.day.parse::<NaiveDate>()
-                            && date <= today
+                                .map_or("All people", |id| contributors[id].display_name.as_str()),
+                        )
+                        .width(210.0_f32.min(menu_width))
+                        .truncate()
+                        .show_ui(ui, |ui| {
+                            ui.set_width(menu_width);
+                            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                            ui.selectable_value(activity_user, None, "All people");
+                            for (id, person) in contributors {
+                                ui.push_id(id, |ui| {
+                                    if avatar::person(
+                                        ui,
+                                        person,
+                                        RichText::new(&person.display_name),
+                                        egui::vec2(ui.available_width(), 36.0),
+                                        Some(activity_user.as_ref() == Some(id)),
+                                    )
+                                    .clicked()
+                                    {
+                                        *activity_user = Some(id.clone());
+                                    }
+                                });
+                            }
+                        })
+                        .response
+                        .widget_info(|| {
+                            let mut info = egui::WidgetInfo::labeled(
+                                egui::WidgetType::ComboBox,
+                                true,
+                                "Activity for",
+                            );
+                            info.current_text_value = Some(
+                                activity_user
+                                    .as_ref()
+                                    .map_or("All people", |id| {
+                                        contributors[id].display_name.as_str()
+                                    })
+                                    .to_string(),
+                            );
+                            info
+                        });
+                    let mut daily = BTreeMap::<NaiveDate, (usize, usize)>::new();
+                    for (id, person) in contributors {
+                        if activity_user
+                            .as_ref()
+                            .is_some_and(|selected| selected != id)
                         {
-                            let counts = daily.entry(date).or_default();
-                            counts.0 += day.labeled;
-                            counts.1 += day.reviewed;
+                            continue;
+                        }
+                        for day in &person.history {
+                            if let Ok(date) = day.day.parse::<NaiveDate>()
+                                && date <= today
+                            {
+                                let counts = daily.entry(date).or_default();
+                                counts.0 += day.labeled;
+                                counts.1 += day.reviewed;
+                            }
                         }
                     }
-                }
-                let start = if start == NaiveDate::MIN {
-                    daily
-                        .keys()
-                        .next()
-                        .copied()
-                        .unwrap_or(today)
-                        .with_ordinal(1)
-                        .unwrap()
-                } else {
-                    start
-                };
-                let (total, maximum) = daily
-                    .range(start..=today)
-                    .map(|(_, (labeled, reviewed))| labeled + reviewed)
-                    .fold((0, 0), |(total, maximum), count| {
-                        (total + count, maximum.max(count))
-                    });
-                ui.small(format!("{total} activities"))
-                    .on_hover_text("Labeled tasks + reviews in the selected period.");
-                (daily, start, maximum)
-            })
+                    let start = if start == NaiveDate::MIN {
+                        daily
+                            .keys()
+                            .next()
+                            .copied()
+                            .unwrap_or(today)
+                            .with_ordinal(1)
+                            .unwrap()
+                    } else {
+                        start
+                    };
+                    let (total, maximum) = daily
+                        .range(start..=today)
+                        .map(|(_, (labeled, reviewed))| labeled + reviewed)
+                        .fold((0, 0), |(total, maximum), count| {
+                            (total + count, maximum.max(count))
+                        });
+                    ui.small(format!("{total} activities"))
+                        .on_hover_text("Labeled tasks + reviews in the selected period.");
+                    (daily, start, maximum)
+                },
+            )
             .inner;
         for year in start.year()..=today.year() {
             let first = start.max(NaiveDate::from_ymd_opt(year, 1, 1).unwrap());

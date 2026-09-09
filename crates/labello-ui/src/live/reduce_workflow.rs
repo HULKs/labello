@@ -48,9 +48,7 @@ impl LabelloApp {
                                         "No annotation work is currently available."
                                     }
                                     AppView::Review => "No reviews are currently waiting.",
-                                    AppView::Adjudicate => {
-                                        "No adjudications are currently waiting."
-                                    }
+
                                     _ => "No work is currently available.",
                                 }
                                 .to_string(),
@@ -298,9 +296,7 @@ impl LabelloApp {
                                         crate::app::PendingTransition::NextAssignment
                                             | crate::app::PendingTransition::Workflow(_)
                                             | crate::app::PendingTransition::View(
-                                                AppView::Annotate
-                                                    | AppView::Review
-                                                    | AppView::Adjudicate
+                                                AppView::Annotate | AppView::Review
                                             )
                                     )
                                 );
@@ -492,43 +488,6 @@ impl LabelloApp {
                                     .dataset_id
                                     .as_ref()
                                     .expect("correction mutations are dataset-scoped"),
-                                false,
-                            );
-                            self.runtime.error = Some(error.to_string());
-                        }
-                    }
-                }
-                UiMessage::AdjudicationFinished {
-                    request,
-                    operation_id,
-                    assignment_id,
-                    result,
-                } => {
-                    if !self.matches_operation(operation_id, &assignment_id) {
-                        return None;
-                    }
-                    self.work.active_operation_id = None;
-                    self.loading.saving = false;
-                    match result {
-                        Ok(()) => {
-                            self.runtime.error = None;
-                            self.request_stats();
-                            self.clear_current_image();
-                            self.assignment_availability_mutation_completed(
-                                request
-                                    .dataset_id
-                                    .as_ref()
-                                    .expect("adjudication mutations are dataset-scoped"),
-                                true,
-                            );
-                        }
-                        Err(error) => {
-                            self.work.pending_transition = None;
-                            self.assignment_availability_mutation_completed(
-                                request
-                                    .dataset_id
-                                    .as_ref()
-                                    .expect("adjudication mutations are dataset-scoped"),
                                 false,
                             );
                             self.runtime.error = Some(error.to_string());

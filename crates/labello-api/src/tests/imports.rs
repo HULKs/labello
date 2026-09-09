@@ -754,7 +754,7 @@ async fn imports_all_profiles_publish_atomically_and_remain_accessible_after_res
                             "edges": [{"from": "nose", "to": "tail"}],
                             "allowHidden": true, "allowAbsent": true
                         },
-                        "review": {"requiredReviews": 0, "workflow": "none", "allowReviewerCorrections": false, "agreementThreshold": null},
+                        "review": {"workflow": "none", "allowReviewerCorrections": false},
                         "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                     },
                     "workflowIntent": "authoritative_ground_truth"
@@ -877,7 +877,7 @@ async fn imports_all_profiles_publish_atomically_and_remain_accessible_after_res
                         "annotationType": "bounding_box", "classIds": ["person"],
                         "instructions": {"title": "Person envelopes", "exampleText": "Review envelopes", "exampleImages": []},
                         "skeleton": null,
-                        "review": {"requiredReviews": 1, "workflow": "approval", "allowReviewerCorrections": false, "agreementThreshold": null},
+                        "review": {"workflow": "approval", "allowReviewerCorrections": false},
                         "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                     },
                     "workflowIntent": "require_approval"
@@ -956,7 +956,7 @@ async fn imports_all_profiles_publish_atomically_and_remain_accessible_after_res
                                 "taskId": "bounding_box:person", "name": "Person guides", "annotationType": "bounding_box", "classIds": ["person"],
                                 "instructions": {"title": "Person guides", "exampleText": "Use imported guides", "exampleImages": []},
                                 "skeleton": null,
-                                "review": {"requiredReviews": 1, "workflow": "approval", "allowReviewerCorrections": false, "agreementThreshold": null},
+                                "review": {"workflow": "approval", "allowReviewerCorrections": false},
                                 "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                             },
                             "workflowIntent": "require_approval"
@@ -967,7 +967,7 @@ async fn imports_all_profiles_publish_atomically_and_remain_accessible_after_res
                                 "taskId": "skeleton:person", "name": "Person skeletons", "annotationType": "skeleton", "classIds": ["person"],
                                 "instructions": {"title": "Person skeletons", "exampleText": "Migrate every guide", "exampleImages": []},
                                 "skeleton": skeleton,
-                                "review": {"requiredReviews": 1, "workflow": "approval", "allowReviewerCorrections": false, "agreementThreshold": null},
+                                "review": {"workflow": "approval", "allowReviewerCorrections": false},
                                 "prelabelConfigIds": [],
                                 "manualBoxGuideMigration": {"guideTaskId": "bounding_box:person", "cardinality": "exactly_one", "allowExclusion": true, "sequence": "imported_spatial_order_v1"},
                                 "enabled": true
@@ -980,7 +980,7 @@ async fn imports_all_profiles_publish_atomically_and_remain_accessible_after_res
                                 "taskId": "bounding_box:vehicle", "name": "Vehicle seeds", "annotationType": "bounding_box", "classIds": ["vehicle"],
                                 "instructions": {"title": "Vehicle seeds", "exampleText": "Continue from imported seeds", "exampleImages": []},
                                 "skeleton": null,
-                                "review": {"requiredReviews": 1, "workflow": "approval", "allowReviewerCorrections": false, "agreementThreshold": null},
+                                "review": {"workflow": "approval", "allowReviewerCorrections": false},
                                 "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                             },
                             "workflowIntent": "seed_future_annotation"

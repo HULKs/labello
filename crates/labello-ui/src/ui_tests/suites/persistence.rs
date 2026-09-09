@@ -1536,7 +1536,7 @@ fn queue_saturation_rolls_back_dataset_admin_and_session_owners() {
 }
 
 #[test]
-fn queue_saturation_rolls_back_claim_release_review_and_adjudication() {
+fn queue_saturation_rolls_back_claim_release_review_and_correction() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
 
@@ -1589,14 +1589,7 @@ fn queue_saturation_rolls_back_claim_release_review_and_adjudication() {
     assert!(review.state().work.active_operation_id.is_none());
     assert!(review.state().work.correction_draft.is_some());
 
-    review.state_mut().view = AppView::Adjudicate;
-    review.state_mut().work.assignment.as_mut().unwrap().kind = AssignmentKind::Adjudication;
-    saturate_command_queue(review.state_mut());
-    review
-        .state_mut()
-        .request_adjudication(labello_domain::AdjudicationDecision::AcceptAnnotation);
-    assert!(!review.state().loading.saving);
-    assert!(review.state().work.active_operation_id.is_none());
+
 }
 
 #[test]

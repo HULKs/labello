@@ -833,3 +833,25 @@ fn statistics_overlay_resizes_using_immediate_repaints_without_waiting_for_refre
     assert_eq!(api.counts().release_assignment, counts.release_assignment);
     assert_eq!(api.counts().record_review, counts.record_review);
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|ctx| inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx));
+    harness.state_mut().work.tasks[0].name = "A long descriptive task name with several words to exercise wrapping in compact statistics cards".into();
+    for (width, height) in viewport_sizes().into_iter().chain([(390.0, 844.0), (320.0, 320.0)]) {
+        harness.set_size(egui::vec2(width, height));
+        harness.run();
+        let rect = harness.get_by_label("Dataset statistics").rect();
+        assert!(rect.left() >= -0.5 && rect.right() <= width + 0.5, "overflow at {width}: {rect:?}");
+        assert_label_inside(&harness, "Live Statistics", width, height);
+        if width >= 1288.0 {
+            let metric_bottom = harness.get_by_label("Metric Needs correction").rect().bottom();
+            let activity_top = harness.get_by_label("Daily activity").rect().top();
+            assert!(activity_top - metric_bottom < 80.0, "activity header reserves excess vertical space");
+        }
+    }
+}

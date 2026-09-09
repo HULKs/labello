@@ -19,6 +19,7 @@ impl DatasetRepository {
             if journal.phase == ArtifactMigrationPhase::Completed {
                 self.task_completion_cache
                     .invalidate("artifact_migration_completed_recovery");
+                self.upgrade_review_policy().await?;
                 self.migration_complete.store(true, Ordering::Release);
                 return Ok(());
             }
@@ -33,6 +34,7 @@ impl DatasetRepository {
             let config: DatasetConfig = read_toml(&self.dataset_path()).await?;
             labello_domain::validate_supported_schema_version(config.schema_version)?;
             if config.schema_version == SCHEMA_VERSION && !self.has_legacy_artifacts().await? {
+                self.upgrade_review_policy().await?;
                 self.migration_complete.store(true, Ordering::Release);
                 return Ok(());
             }
@@ -79,6 +81,7 @@ impl DatasetRepository {
         self.task_completion_cache
             .invalidate("artifact_migration_completed");
         self.assignment_availability_cache.invalidate();
+        self.upgrade_review_policy().await?;
         self.migration_complete.store(true, Ordering::Release);
         Ok(())
     }

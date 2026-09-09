@@ -161,7 +161,7 @@ pub(super) fn validate_companion_task(
     if state
         .task_states
         .get(&guide.task_id)
-        .is_some_and(|task_state| task_state.status == TaskStatus::AdjudicationRequired)
+        .is_some_and(|task_state| task_state.status == TaskStatus::LegacyAdjudicationRequired)
     {
         return Err(conflict(
             "the bounding-box workflow requires adjudication before companion reconciliation",

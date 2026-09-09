@@ -14,7 +14,7 @@ impl LabelloApp {
                 centered_scroll(ui, 1100.0, |ui| self.stats_view(ui, layout));
                 return;
             }
-            AppView::Annotate | AppView::Review | AppView::Adjudicate => {}
+            AppView::Annotate | AppView::Review => {}
         }
         if self.review_revision_active() && !self.review_revision_in_compact_context(ui.ctx()) {
             let explanation = "Revising review decisions on current geometry. The previous outcome stays effective until you commit. Geometry changes require the normal correction workflow.";

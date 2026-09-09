@@ -1,7 +1,5 @@
 use eframe::egui::{self, RichText};
-use labello_domain::{
-    AdjudicationDecision, AnnotationGeometry, AnnotationType, KeypointState, ReviewDecision,
-};
+use labello_domain::{AnnotationGeometry, AnnotationType, KeypointState, ReviewDecision};
 
 use crate::{
     app::{
@@ -446,7 +444,6 @@ fn view_label(view: AppView) -> &'static str {
         AppView::Setup => "Setup",
         AppView::Annotate => "Annotate",
         AppView::Review => "Review",
-        AppView::Adjudicate => "Adjudicate",
         AppView::Admin => "Admin",
         AppView::Stats => "Stats",
     }

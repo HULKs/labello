@@ -14,7 +14,7 @@ use labello_client::{
 };
 use labello_domain::{
     Actor, DatasetId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageExplorerItem,
-    ImageExplorerPage, PrelabelConfig, ReviewWorkflow, TaskDefinition, TaskStatus,
+    ImageExplorerPage, PrelabelConfig, TaskDefinition, TaskStatus,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -272,10 +272,6 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::record_correction),
         )
         .route(
-            "/datasets/{dataset_id}/images/{image_id}/adjudications",
-            post(workflow::record_adjudication),
-        )
-        .route(
             "/datasets/{dataset_id}/offline-bundle",
             get(workflow::offline_bundle),
         )
@@ -457,6 +453,9 @@ async fn set_dataset_roles(
 ) -> ApiResult<Json<DatasetUser>> {
     let actor = actor_from_headers(&state, &headers)?;
     request.user_id.validate_path_segment()?;
+    if request.roles.contains(&DatasetRole::LegacyAdjudicator) {
+        return Err(ApiError::BadRequest("unsupported dataset role".into()));
+    }
     let repo = state.repo(&dataset_id)?;
     let mut metadata = repo.load_dataset_config().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
@@ -570,7 +569,6 @@ async fn create_dataset(
             DatasetRole::DataAdmin,
             DatasetRole::Annotator,
             DatasetRole::Reviewer,
-            DatasetRole::Adjudicator,
         ]),
         assigned_at: labello_domain::now(),
         assigned_by: None,
@@ -1049,6 +1047,9 @@ fn validate_config_update(
     }
     let mut role_users = BTreeSet::new();
     for assignment in &request.role_assignments {
+        if assignment.roles.contains(&DatasetRole::LegacyAdjudicator) {
+            return Err(ApiError::BadRequest("unsupported dataset role".into()));
+        }
         assignment.user_id.validate_path_segment()?;
         if assignment.dataset_id != metadata.dataset_id {
             return Err(ApiError::BadRequest(format!(
@@ -1092,11 +1093,10 @@ fn validate_config_update(
 }
 
 fn validate_enabled_task(task: &TaskDefinition) -> ApiResult<()> {
-    if task.enabled && task.review.workflow == ReviewWorkflow::IndependentAgreement {
-        return Err(ApiError::BadRequest(format!(
-            "independent agreement workflow is not implemented for task {}",
-            task.task_id
-        )));
+    if !task.review.is_current() {
+        return Err(ApiError::BadRequest(
+            "unsupported review configuration".into(),
+        ));
     }
     if task.enabled && task.class_ids.len() != 1 {
         return Err(ApiError::BadRequest(format!(
@@ -1151,9 +1151,9 @@ mod report_tests {
         assert!(validate_enabled_task(&task).is_err());
         task.class_ids.truncate(1);
         assert!(validate_enabled_task(&task).is_ok());
-        task.review.workflow = ReviewWorkflow::IndependentAgreement;
+        task.review.workflow = labello_domain::ReviewWorkflow::LegacyIndependentAgreement;
         assert!(validate_enabled_task(&task).is_err());
         task.enabled = false;
-        assert!(validate_enabled_task(&task).is_ok());
+        assert!(validate_enabled_task(&task).is_err());
     }
 }

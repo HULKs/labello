@@ -49,7 +49,6 @@ pub(super) async fn build(
         roles: BTreeSet::from([
             DatasetRole::Annotator,
             DatasetRole::Reviewer,
-            DatasetRole::Adjudicator,
             DatasetRole::DataAdmin,
         ]),
         assigned_at: timestamp,

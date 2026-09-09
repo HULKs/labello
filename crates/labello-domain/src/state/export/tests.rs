@@ -196,7 +196,7 @@ fn edits_after_completion_and_prelabels_are_not_ground_truth() {
 fn approval_uses_current_effective_reviews_and_current_required_count() {
     let mut task = task();
     task.review.workflow = ReviewWorkflow::Approval;
-    task.review.required_reviews = 1;
+
     let mut submitted = state(&task, TaskOutcome::Approved);
     submitted.status = TaskStatus::Submitted;
     submitted.outcome = None;
@@ -232,12 +232,13 @@ fn approval_uses_current_effective_reviews_and_current_required_count() {
     ];
     let mut image = rebuild_state(ImageId::from("image"), &events).unwrap();
     assert_eq!(image.export_task_omission(&task, &events), None);
-    task.review.required_reviews = 2;
+    task.review.workflow = ReviewWorkflow::None;
     assert_eq!(
         image.export_task_omission(&task, &events),
         Some(ExportOmissionReason::ChangedReviewPolicy)
     );
-    task.review.required_reviews = 1;
+
+    task.review.workflow = ReviewWorkflow::Approval;
     image.superseded_review_ids.insert(review.review_id);
     assert_eq!(
         image.export_task_omission(&task, &events),

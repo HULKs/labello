@@ -163,7 +163,7 @@ async fn current_user_activity_counts_guided_migration_with_and_without_review()
                 .find(|task| task.task_id == fixture.task_id)
                 .unwrap();
             task.review.workflow = ReviewWorkflow::None;
-            task.review.required_reviews = 0;
+
             fixture
                 .repository
                 .save_dataset(&metadata)

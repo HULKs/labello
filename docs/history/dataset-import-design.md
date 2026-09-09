@@ -178,7 +178,7 @@ gate.
 - Merging annotations into a live Labello dataset.
 - Replacing or renaming an existing dataset in place.
 - Restoring native Labello snapshots or adopting copied native directories.
-- Importing historical users, roles, assignments, reviews, adjudications, or
+- Importing historical users, roles, assignments, reviews, or
   native event history from an external format.
 - Importing segmentation masks, polygons, oriented boxes, captions,
   classification labels, tracking IDs, or videos.
@@ -726,11 +726,10 @@ manual target with a direct source skeleton for the same object group; direct
 pose import uses the normal direct-skeleton path instead.
 
 Manual migration supports no review or the existing sequential approval
-workflow. Version 1 rejects independent-agreement review and requires reviewer
+workflow. Version 1 rejects unsupported review modes and requires reviewer
 corrections to be disabled; reviewers approve or reject exact items, while
 rejected work returns to an annotator for correction. This avoids claiming that
-the current correction and agreement implementations understand migration
-dispositions when they do not.
+geometry-correction commands understand migration dispositions when they do not.
 
 ### Skeleton Schema
 
@@ -1876,7 +1875,7 @@ out of scope.
   object identities.
 - Closed-world class absence and ground-truth/exhaustiveness attestation.
 - Manual exact-one mapping rejects incomplete/derived guide coverage, direct
-  source skeleton conflicts, independent agreement, and reviewer correction.
+  source skeleton conflicts, unsupported review modes, and reviewer correction.
 - COCO result arrays, duplicate IDs, broken references, sparse categories,
   invalid dimensions, boxes, areas, crowds, polygons/RLE limits, keypoint
   lengths, visibility, counts, and skeleton endpoints.
@@ -2015,7 +2014,7 @@ out of scope.
   skeleton. The final overview may additionally contain human-authored
   skeletons for objects that were absent from the imported guide set.
 - Exact-one manual migration cannot be configured over incomplete or derived
-  bounding-box coverage, direct source skeletons, independent-agreement review,
+  bounding-box coverage, direct source skeletons, unsupported review modes,
   or reviewer-correction mode.
 - The annotation client automatically focuses the first unresolved guide with
   surrounding context, advances only after durable resolution, reconstructs

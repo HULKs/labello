@@ -295,7 +295,7 @@ async fn development_headers_do_not_authenticate() {
 }
 
 #[tokio::test]
-async fn review_and_adjudication_actor_ids_must_match_caller() {
+async fn review_actor_ids_must_match_caller_and_retired_route_is_absent() {
     let temp = tempfile::tempdir().unwrap();
     let app = router(ApiState::new(temp.path()));
     create_dataset(&app).await;
@@ -359,7 +359,7 @@ async fn review_and_adjudication_actor_ids_must_match_caller() {
         )
         .await
         .unwrap();
-    assert_eq!(adjudication.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(adjudication.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

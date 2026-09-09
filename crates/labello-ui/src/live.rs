@@ -248,7 +248,6 @@ fn view_label(view: AppView) -> &'static str {
         AppView::Setup => "setup",
         AppView::Annotate => "annotation",
         AppView::Review => "review",
-        AppView::Adjudicate => "adjudication",
         AppView::Admin => "administration",
         AppView::Stats => "statistics",
     }

@@ -119,7 +119,7 @@ impl ImageState {
                     event,
                 )?;
             }
-            EventPayload::AdjudicationRecorded { adjudication } => {
+            EventPayload::LegacyAdjudicationRecorded { adjudication } => {
                 self.adjudications.push(adjudication.clone());
             }
             EventPayload::AssignmentUpdated { assignment } => {

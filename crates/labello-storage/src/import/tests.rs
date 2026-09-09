@@ -187,10 +187,9 @@ fn mapped_task(
         },
         skeleton,
         review: ReviewConfig {
-            required_reviews: 0,
             workflow: ReviewWorkflow::None,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         prelabel_config_ids: Vec::new(),
         manual_box_guide_migration,
@@ -955,9 +954,9 @@ async fn manual_box_guide_builds_spatial_targets_without_fabricated_skeletons() 
         .find(|task| task.manual_box_guide_migration.is_some())
         .unwrap();
     assert_eq!(guide_task.review.workflow, ReviewWorkflow::None);
-    assert_eq!(guide_task.review.required_reviews, 0);
+    assert!(guide_task.review.is_current());
     assert_eq!(migration_task.review.workflow, ReviewWorkflow::Approval);
-    assert_eq!(migration_task.review.required_reviews, 1);
+    assert!(migration_task.review.is_current());
     assert!(!migration_task.review.allow_reviewer_corrections);
     let image = repository
         .load_images_index()
@@ -1542,12 +1541,12 @@ async fn multiple_manual_categories_persist_independent_target_sets_and_stats() 
     for task_id in ["person-box", "car-box"] {
         let task = metadata.task(&TaskId::from(task_id)).unwrap();
         assert_eq!(task.review.workflow, ReviewWorkflow::None);
-        assert_eq!(task.review.required_reviews, 0);
+        assert!(task.review.is_current());
     }
     for task_id in ["person-skeleton", "car-skeleton"] {
         let task = metadata.task(&TaskId::from(task_id)).unwrap();
         assert_eq!(task.review.workflow, ReviewWorkflow::Approval);
-        assert_eq!(task.review.required_reviews, 1);
+        assert!(task.review.is_current());
         assert!(!task.review.allow_reviewer_corrections);
     }
     let image = repository
@@ -2129,10 +2128,9 @@ async fn invalid_manual_task_mapping_is_a_blocking_plan_not_a_panic() {
         },
         skeleton: None,
         review: ReviewConfig {
-            required_reviews: 0,
             workflow: ReviewWorkflow::None,
             allow_reviewer_corrections: false,
-            agreement_threshold: None,
+            legacy: None,
         },
         prelabel_config_ids: Vec::new(),
         manual_box_guide_migration: None,

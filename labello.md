@@ -78,27 +78,11 @@ US-08: Per-Task Review Configuration
 User story:
 As a data admin, I want to configure review requirements per task so that annotation quality can be controlled independently for each label type, class, or workflow.
 Acceptance criteria:
-- Admins can define the required number of reviews per task.
+- Admins can require one approval review or let annotation submission complete the task.
 - Admins can choose the review type per task.
-- Different tasks may have different review levels.
 - Different tasks may use different review workflows.
 - Review settings are applied when assigning work.
-- Review settings are applied when determining task completion.
-US-09: Independent Labeling With Adjudication
-User story:
-As a data admin, I want independent labeling review with adjudication by authorized adjudicators so that disagreements between annotators can be resolved by qualified users.
-Acceptance criteria:
-- Multiple annotators can label the same image/task independently.
-- Annotators cannot see each other’s labels before submission.
-- Agreement is calculated using configured metrics such as IoU or keypoint distance.
-- Bounding box agreement can be evaluated using IoU.
-- Keypoint or skeleton agreement can be evaluated using distance-based metrics.
-- Labels are automatically accepted when agreement satisfies the configured threshold.
-- Disagreements are routed to a user with the adjudicator role.
-- Only explicitly assigned adjudicators can resolve labeling disagreements.
-- Reviewer and adjudicator are separate roles.
-- Reviewer and adjudicator roles are assigned per dataset.
-- Only users explicitly assigned to the relevant dataset role can act as reviewers or adjudicators.
+- Final approval completes the task and review assignment in one transaction.
 US-10: Approval Review Workflow
 User story:
 As a data admin, I want approval review so that reviewers can approve or reject completed annotations.
@@ -200,15 +184,15 @@ Acceptance criteria:
 - The dataset can be used without copying image bytes into object storage.
 US-19: Versioned JSON Dataset Metadata
 User story:
-As a data admin, I want annotations, task state, reviews, adjudications, and audit metadata to be stored in versioned JSON files so that datasets remain portable and can be migrated in the future.
+As a data admin, I want annotations, task state, reviews, and audit metadata to be stored in versioned JSON files so that datasets remain portable and can be migrated in the future.
 Acceptance criteria:
 - The server creates and updates JSON metadata files for datasets and annotations.
 - JSON metadata includes a schema version.
 - JSON metadata includes dataset configuration, task definitions, label classes, and supported annotation types.
 - JSON metadata includes per-image task completion state.
-- JSON metadata includes labels, reviews, and adjudications.
+- JSON metadata includes labels and reviews.
 - Temporary prelabel suggestions are not persisted in dataset JSON unless accepted as annotations.
-- JSON metadata records who created, edited, reviewed, or adjudicated labels.
+- JSON metadata records who created, edited, or reviewed labels.
 - JSON metadata records timestamps for relevant actions.
 - Each image has a per-image current-state JSON file.
 - Each image has a per-image append-only event log.
@@ -221,7 +205,7 @@ Acceptance criteria:
 
 ## MVP Scope
 
-All listed user stories are part of the MVP. The MVP includes browser annotation, stylus input, offline annotation, task configuration, tutorials, per-task review configuration, independent labeling, adjudication, approval review, prelabeling, imbalance control, automatic assignment, statistics, GitHub OAuth, configurable keybindings, filesystem image storage, and versioned JSON metadata.
+All listed user stories are part of the MVP. The MVP includes browser annotation, stylus input, offline annotation, task configuration, tutorials, per-task review configuration, independent labeling, approval review, prelabeling, imbalance control, automatic assignment, statistics, GitHub OAuth, configurable keybindings, filesystem image storage, and versioned JSON metadata.
 
 The MVP should avoid adding a database unless it becomes necessary. The filesystem, per-image JSON state files, and per-image append-only event logs are the primary persistence mechanism.
 
@@ -342,18 +326,17 @@ Example image record:
 - Migrations are sequential only, for example `1 -> 2 -> 3`.
 - The system does not need to support arbitrary migration jumps such as `1 -> 4` directly.
 - Each migration step is deterministic and recorded in migration history.
-- JSON metadata includes dataset configuration, image records, task definitions, annotations, reviews, adjudications, task completion state, and per-image event logs.
+- JSON metadata includes dataset configuration, image records, task definitions, annotations, reviews, task completion state, and per-image event logs.
 - Dataset metadata is stored separately from per-image state.
 - Each image has a `state.json` file containing the current derived annotation/review/task state.
 - Each image has an `events.jsonl` file containing append-only events for that image.
 - Per-image state must be rebuildable from the per-image event log.
 - The per-image event log must be sufficient to reconstruct the full annotation/review state of an image at any event boundary.
-- It must be possible to reconstruct the image state after the first annotation, after later annotations, after edits, after reviews, after reviewer corrections, after adjudications, and after any other recorded event.
+- It must be possible to reconstruct the image state after the first annotation, after later annotations, after edits, after reviews, after reviewer corrections, and after any other recorded event.
 - `state.json` is only a latest-state cache and can always be rebuilt from `events.jsonl`.
 - Event payloads must contain enough data for replay without relying on the current `state.json`.
 - Annotation records include source, author, timestamps, task ID, class ID, annotation type, normalized geometry, and version.
 - Review records include reviewer identity, decision, timestamps, and target annotation or task.
-- Adjudication records include adjudicator identity, decision, timestamps, and resolution details.
 - File writes should be atomic to avoid corrupt partial JSON files.
 - Concurrent writes should be serialized per image or protected with file locking.
 - Schema migrations should be explicit and recorded.
@@ -451,10 +434,9 @@ Example normalized bounding box:
 ### Dataset-Specific Roles
 
 - Roles are assigned per dataset.
-- Dataset roles include annotator, reviewer, adjudicator, and data admin.
+- Dataset roles include annotator, reviewer, and data admin.
 - A user may have different roles in different datasets.
 - Only dataset-assigned reviewers may approve, reject, or correct annotations in that dataset.
-- Only dataset-assigned adjudicators may resolve independent-labeling disagreements in that dataset.
 
 ### Review Corrections
 
@@ -504,7 +486,7 @@ Example reviewer correction event:
 - Offline work creates local event log fragments.
 - During sync, the server validates permissions, assignment ownership, schema version, image identity, and event ordering.
 - Valid offline event fragments are merged into the server-side per-image event logs.
-- Conflicts are detected during merge and surfaced for correction or adjudication.
+- Conflicts are detected during merge and surfaced for correction.
 
 ## Supported Label Types
 

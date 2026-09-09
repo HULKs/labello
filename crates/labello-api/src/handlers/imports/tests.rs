@@ -385,7 +385,7 @@ mod tests {
                     "annotationType": "bounding_box", "classIds": ["person"],
                     "instructions": {"title": "Boxes", "exampleText": "Draw", "exampleImages": []},
                     "skeleton": null,
-                    "review": {"requiredReviews": 0, "workflow": "none", "allowReviewerCorrections": false, "agreementThreshold": null},
+                    "review": {"workflow": "none", "allowReviewerCorrections": false},
                     "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                 },
                 "workflowIntent": "authoritative_ground_truth"
@@ -561,7 +561,7 @@ mod tests {
                         "keypoints": [{"name": "center", "required": false}],
                         "edges": [], "allowHidden": false, "allowAbsent": true
                     },
-                    "review": {"requiredReviews": 1, "workflow": "approval", "allowReviewerCorrections": false, "agreementThreshold": null},
+                    "review": {"workflow": "approval", "allowReviewerCorrections": false},
                     "prelabelConfigIds": [],
                     "manualBoxGuideMigration": {
                         "guideTaskId": "person-box", "cardinality": "exactly_one",
@@ -581,7 +581,7 @@ mod tests {
                     "annotationType": "bounding_box", "classIds": ["car"],
                     "instructions": {"title": "Boxes", "exampleText": "Draw", "exampleImages": []},
                     "skeleton": null,
-                    "review": {"requiredReviews": 0, "workflow": "none", "allowReviewerCorrections": false, "agreementThreshold": null},
+                    "review": {"workflow": "none", "allowReviewerCorrections": false},
                     "prelabelConfigIds": [], "manualBoxGuideMigration": null, "enabled": true
                 },
                 "workflowIntent": "authoritative_ground_truth"

@@ -7,7 +7,7 @@ Status: Completed; historical work package
 - Preserve the existing canvas geometry, zoom, pan, touch, and review-focus
   algorithms while improving their visible controls and pointer feedback.
 - Keep one zoom, Pan, and Fit control cluster available in annotation, review,
-  correction, and adjudication workspaces, with compact-safe gesture hints.
+  and correction workspaces, with compact-safe gesture hints.
 - Use each one-class workflow's configured color for annotation geometry while
   retaining selection thickness, white handles, dashed drafts, and dashed
   prelabels as non-color cues.
@@ -26,7 +26,7 @@ Status: Completed; historical work package
 - Editable boxes and keypoints expose move, directional resize, crosshair, grab,
   and grabbing cursors. Middle-button panning reports the active grabbing state.
 - Pan, zoom percentage, zoom in/out, and Fit remain visible at every work phase.
-  Their buttons and shortcuts now operate in Review and Adjudicate as well as
+  Their buttons and shortcuts now operate in Review as well as
   Annotate, and medium review toolbars stack rather than overflow.
 - Scroll, pinch, Space, middle-drag, and double-click alternatives are exposed in
   concise tooltips that fit the 320-point viewport.

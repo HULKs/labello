@@ -430,7 +430,7 @@ fn task_workflow_and_review_target_v2_json_is_stable() {
             TaskStatus::Submitted,
             TaskStatus::Completed,
             TaskStatus::NeedsCorrection,
-            TaskStatus::AdjudicationRequired,
+            TaskStatus::LegacyAdjudicationRequired,
         ]
         .map(|status| serde_json::to_value(status).unwrap()),
         [
@@ -447,7 +447,7 @@ fn task_workflow_and_review_target_v2_json_is_stable() {
             TaskOutcome::AnnotationCompleted,
             TaskOutcome::Approved,
             TaskOutcome::ReviewerCorrected,
-            TaskOutcome::Adjudicated,
+            TaskOutcome::LegacyAdjudicated,
         ]
         .map(|outcome| serde_json::to_value(outcome).unwrap()),
         [

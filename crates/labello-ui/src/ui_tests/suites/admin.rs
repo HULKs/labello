@@ -367,7 +367,7 @@ fn admin_people_directory_saves_roles_and_protects_the_last_admin() {
     assert!(harness.query_by_label("People").is_some());
     select_admin_section(&mut harness, "People");
     assert!(harness.query_by_label("Reviewer Person").is_some());
-    let role_bounds = ["Annotator", "Reviewer", "Adjudicator", "Data admin"].map(|role| {
+    let role_bounds = ["Annotator", "Reviewer", "Data admin"].map(|role| {
         harness
             .get_by_role_and_label(
                 egui::accesskit::Role::CheckBox,

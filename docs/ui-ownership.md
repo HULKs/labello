@@ -18,7 +18,7 @@ explicit feature states:
 - `import`: the import wizard, source registration, planning, and job progress.
 - `navigation`: responsive application-drawer visibility, atomic app-bar
   collapse ownership, statistics-overlay visibility, and focus restoration.
-- `work`: assignment, annotation, review, adjudication, migration, canvas, and
+- `work`: assignment, annotation, review, migration, canvas, and
   edit-history state.
 
 Callers must name the feature owner. `LabelloApp` does not implement
@@ -64,7 +64,7 @@ Workspace rendering is grouped by the reason it changes:
 - `panels/app_bar.rs` and `panels/workspace_actions.rs`: global and workflow
   actions;
 - `panels/task_selector.rs`: task selection;
-- `panels/inspector.rs`: annotation, review, and adjudication controls;
+- `panels/inspector.rs`: annotation and review controls;
 - `panels/workspace.rs`: central workspace and canvas controls;
 - `statistics.rs`: the dataset statistics modal and its existing metric renderer;
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders

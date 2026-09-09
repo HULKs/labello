@@ -6,9 +6,8 @@ use labello_client::{
     LabelloApi, PrelabelSuggestionRequest,
 };
 use labello_domain::{
-    AdjudicationDecision, AdjudicationId, AdjudicationRecord, AnnotationId, Assignment,
-    AssignmentKind, EventPayload, PrelabelConfigId, ReviewDecision, ReviewId, ReviewRecord,
-    ReviewTarget,
+    AnnotationId, Assignment, AssignmentKind, EventPayload, PrelabelConfigId, ReviewDecision,
+    ReviewId, ReviewRecord, ReviewTarget,
 };
 
 use crate::{
@@ -435,30 +434,6 @@ impl LabelloApp {
                     result,
                 }
             }),
-            UiCommand::Adjudication {
-                request,
-                operation_id,
-                dataset_id,
-                assignment,
-                adjudication,
-            } => self.spawn_message(request.clone(), async move {
-                let assignment_id = assignment.assignment_id.clone();
-                let result = api
-                    .record_assigned_adjudication(
-                        &dataset_id,
-                        assignment_action(&assignment),
-                        adjudication,
-                    )
-                    .await
-                    .map(|_| ())
-                    .map_err(UiRequestError::from);
-                UiMessage::AdjudicationFinished {
-                    request,
-                    operation_id,
-                    assignment_id,
-                    result,
-                }
-            }),
             _ => {}
         }
     }
@@ -523,7 +498,6 @@ impl LabelloApp {
                     match self.view {
                         AppView::Annotate => "No annotation work is currently available.",
                         AppView::Review => "No reviews are currently waiting.",
-                        AppView::Adjudicate => "No adjudications are currently waiting.",
                         _ => "No work is currently available.",
                     }
                     .to_string(),
@@ -941,45 +915,6 @@ impl LabelloApp {
             phase,
             revision: None,
         })
-    }
-
-    pub(crate) fn request_adjudication(&mut self, decision: AdjudicationDecision) {
-        let (Some(assignment), Some(task)) =
-            (self.work.assignment.clone(), self.selected_task().cloned())
-        else {
-            return;
-        };
-        if assignment.kind != AssignmentKind::Adjudication
-            || self.loading.saving
-            || self.runtime.api.is_none()
-        {
-            return;
-        }
-        let operation_id = self.begin_operation();
-        let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
-        self.queue_command(UiCommand::Adjudication {
-            request,
-            operation_id,
-            dataset_id: self.config.dataset_id.clone(),
-            assignment,
-            adjudication: AdjudicationRecord {
-                adjudication_id: AdjudicationId::generate(),
-                task_id: task.task_id,
-                annotation_ids: self
-                    .work
-                    .annotations
-                    .iter()
-                    .filter(|annotation| {
-                        !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-                    })
-                    .map(|annotation| annotation.annotation_id.clone())
-                    .collect(),
-                adjudicator_user_id: self.config.user_id.clone(),
-                decision,
-                resolution: "Resolved in Labello UI".to_string(),
-                timestamp: labello_domain::now(),
-            },
-        });
     }
 
     fn begin_load(&mut self) -> u64 {

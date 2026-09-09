@@ -718,15 +718,15 @@ mod tests {
             .build_ui(|ui| {
                 ui.horizontal_wrapped(|ui| {
                     badge(ui, "Annotator", Intent::Info);
-                    badge(ui, "Adjudicator", Intent::Info);
+                    badge(ui, "Data admin", Intent::Info);
                 });
             });
 
         let annotator = harness.get_by_label("Annotator").rect();
-        let adjudicator = harness.get_by_label("Adjudicator").rect();
-        assert!(adjudicator.top() >= annotator.bottom());
+        let data_admin = harness.get_by_label("Data admin").rect();
+        assert!(data_admin.top() >= annotator.bottom());
         assert!(annotator.height() <= 32.0);
-        assert!(adjudicator.height() <= 32.0);
+        assert!(data_admin.height() <= 32.0);
     }
 
     #[test]

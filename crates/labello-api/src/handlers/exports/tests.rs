@@ -37,9 +37,10 @@ async fn fixture() -> (
     metadata.tasks = serde_json::from_value(serde_json::json!([
         {"taskId":"boxes","name":"Boxes","annotationType":"bounding_box","classIds":["person"],
         "instructions":{"title":"Boxes","exampleText":"","exampleImages":[]},"skeleton":null,
-        "review":{"workflow":"none","requiredReviews":1,"allowReviewerCorrections":false,"agreementThreshold":null},
+        "review":{"workflow":"none","allowReviewerCorrections":false},
         "prelabelConfigIds":[],"enabled":true}
-    ])).unwrap();
+    ]))
+    .unwrap();
     repository.initialize(metadata).await.unwrap();
     let original = repository.root().join("images/original.png");
     image::RgbImage::from_pixel(20, 20, image::Rgb([30, 60, 90]))

@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AdjudicationId, AnnotationId, AssignmentId, CorrectionId, ImageId, MigrationHash,
+    AnnotationId, AssignmentId, CorrectionId, ImageId, LegacyAdjudicationId, MigrationHash,
     ObjectGroupId, ReviewId, TaskId, Timestamp, UserId,
 };
 
@@ -64,7 +64,7 @@ pub struct ReviewerCorrectionRecord {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum AdjudicationDecision {
+pub enum LegacyAdjudicationDecision {
     AcceptAnnotation,
     RejectAnnotation,
     MergeAnnotations,
@@ -73,12 +73,12 @@ pub enum AdjudicationDecision {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct AdjudicationRecord {
-    pub adjudication_id: AdjudicationId,
+pub struct LegacyAdjudicationRecord {
+    pub adjudication_id: LegacyAdjudicationId,
     pub task_id: TaskId,
     pub annotation_ids: Vec<AnnotationId>,
     pub adjudicator_user_id: UserId,
-    pub decision: AdjudicationDecision,
+    pub decision: LegacyAdjudicationDecision,
     pub resolution: String,
     pub timestamp: Timestamp,
 }

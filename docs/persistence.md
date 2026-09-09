@@ -449,3 +449,37 @@ projection. Expiry is filtered on every cache read, independent of writes, and
 restart reconstructs the projection. A concurrent invalidation prevents a scan
 from publishing its cached result. Presence is a sampled view, not a transaction
 snapshot across datasets, and reading it never renews leases.
+
+## Review policy upgrade
+
+Dataset configuration records `reviewPolicyVersion = 1`. Older configurations
+without the marker upgrade under the repository's artifact-migration gate,
+after any version-2 artifact migration and before ordinary commands can proceed.
+The persisted schema remains version 3.
+
+The upgrade preserves existing event bytes. It appends task-state and assignment
+changes, rebuilds state caches, updates the generated schema, and publishes the
+normalized configuration last. An interrupted upgrade resumes from the original
+configuration and already committed image histories. Repeating it does not add
+another copy of the same state changes.
+
+A submitted task with a completed approval of every current object and its final
+full-image target becomes `Completed`. A historical final rejection returns it
+to `NeedsCorrection`. A final row lacking the current object decisions starts a
+fresh submitted round, allowing the same reviewer to finish the work. Object-only
+partial decisions remain in their original round. Retired pending states return
+to `NeedsCorrection`; their old decisions are not treated as approvals.
+Previously completed outcomes remain historical outcomes.
+
+Outstanding leases from the old review configuration and retired assignment
+kinds are cancelled as expired maintenance leases. Current authorized reviewers
+can claim unfinished work with fresh identities. Retired role memberships are
+removed without granting replacement roles. Other role memberships and tasks
+that complete without review remain unchanged.
+
+Captured historical review configurations retain their original serialization
+for event replay and target-fingerprint validation. They never control current
+scheduling or new task configuration. Completed historical reviews can be
+revisited when the ordinary ownership, history, target and configuration checks
+still hold after normalization. Snapshots and offline bundles retain audit
+history and the replayed current state.

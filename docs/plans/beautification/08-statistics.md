@@ -27,8 +27,8 @@ Status: Completed; historical work package
   data. Loaded refreshes use a quiet status, and refresh failures keep the last
   successful metrics with an explicit stale warning.
 - Task rows use subtle striping, fixed-width headers, and right-aligned
-  monospace counts. Columns follow the workflow from Pending through review and
-  correction to Finalized and Done; compact cards use the same sequence.
+  monospace counts. Columns show Pending, In progress, Awaiting review, Needs correction,
+  and Completed; compact cards use the same sequence.
 - Class rows use the same full-width aligned treatment while compact layouts
   retain touch-friendly cards.
 - Throughput is now a paired annotations/reviews bar chart for the latest 14

@@ -924,70 +924,6 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     assert_review_bar_paints(&harness, "Bounding boxes · Final check");
 }
 
-#[test]
-fn adjudication_primary_decisions_stay_visible_at_supported_viewports() {
-    let api = Rc::new(SpyApi::new());
-    seed_review_annotation(
-        &api,
-        AnnotationGeometry::BoundingBox(BoundingBox {
-            x: 0.2,
-            y: 0.2,
-            width: 0.3,
-            height: 0.3,
-        }),
-        false,
-    );
-    let mut harness = loaded_review_harness(api);
-    harness.state_mut().view = AppView::Adjudicate;
-    harness.state_mut().work.assignment.as_mut().unwrap().kind = AssignmentKind::Adjudication;
-    harness.step();
-
-    harness.key_press(egui::Key::Plus);
-    harness.step();
-    assert!(harness.state().work.canvas.current_zoom() > 1.0);
-    click(&mut harness, "Fit");
-    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
-
-    for (width, height) in viewport_sizes() {
-        harness.set_size(egui::vec2(width, height));
-        harness.step();
-        for label in ["Pan", "Fit"] {
-            assert_control_inside(
-                &harness,
-                label,
-                egui::accesskit::Role::Button,
-                width,
-                height,
-            );
-        }
-        let (accept, correct) = if LayoutMode::for_width(width) == LayoutMode::Compact {
-            ("Accept all", "Send back")
-        } else {
-            ("Accept all annotations", "Send back for correction")
-        };
-        for label in [accept, correct] {
-            assert_control_inside(
-                &harness,
-                label,
-                egui::accesskit::Role::Button,
-                width,
-                height,
-            );
-        }
-        if LayoutMode::for_width(width) != LayoutMode::Wide {
-            harness.state_mut().work.drawer = Some(Drawer::Inspector);
-            harness.step();
-            assert_eq!(
-                harness
-                    .query_all_by_role_and_label(egui::accesskit::Role::Button, accept)
-                    .count(),
-                1,
-                "adjudication action duplicated when the Inspector drawer opened"
-            );
-            harness.state_mut().work.drawer = None;
-        }
-    }
-}
 
 #[test]
 fn admin_geometry_keeps_compact_save_and_discard_in_the_header() {
@@ -1073,9 +1009,11 @@ fn stats_geometry_keeps_header_actions_and_equal_cards_in_view() {
         if LayoutMode::for_width(width) == LayoutMode::Compact {
             assert!(harness.query_by_label("Person boxes").is_some());
             let rows = [
-                "Pending: 1  Unreviewed: 1",
-                "Approved: 1  Rejected: 0",
-                "Finalized: 1  Done: 1",
+                "Pending: 1",
+                "In progress: 0",
+                "Awaiting review: 1",
+                "Needs correction: 0",
+                "Completed: 1",
             ]
             .map(|label| {
                 harness
@@ -1089,19 +1027,16 @@ fn stats_geometry_keeps_header_actions_and_equal_cards_in_view() {
                 "compact task statistics do not follow workflow order: {rows:?}"
             );
         } else {
-            assert!(harness.query_by_label("Done").is_some());
+            assert!(harness.query_all_by_label("Completed").next().is_some());
             assert!(harness.query_by_label("Completed tasks").is_some());
             if LayoutMode::for_width(width) == LayoutMode::Wide {
-                let header_y = harness.get_by_label("Done").rect().center().y;
+                let header_y = harness.get_by_label("Task").rect().center().y;
                 let columns = [
                     "Pending",
-                    "Unreviewed",
-                    "Reviewed",
-                    "Approved",
-                    "Rejected",
-                    "Corrected",
-                    "Finalized",
-                    "Done",
+                    "In progress",
+                    "Awaiting review",
+                    "Needs correction",
+                    "Completed",
                 ]
                 .map(|label| {
                     harness

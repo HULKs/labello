@@ -224,7 +224,7 @@ and planned mutation protocols.
 ### Bootstrap Administrators
 
 `bootstrapAdmins` grants only the server-level ability to create a dataset.
-Dataset access remains controlled by the annotator, reviewer, adjudicator, and
+Dataset access remains controlled by the annotator, reviewer, and
 data-admin roles stored with each dataset. Keep at least one reachable account
 in the list when dataset creation is required.
 

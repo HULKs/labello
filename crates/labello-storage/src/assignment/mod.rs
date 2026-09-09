@@ -326,7 +326,7 @@ impl DatasetRepository {
         let status = match task.review.workflow {
             ReviewWorkflow::None => TaskStatus::Completed,
             ReviewWorkflow::Approval => TaskStatus::Submitted,
-            ReviewWorkflow::IndependentAgreement => {
+            ReviewWorkflow::LegacyIndependentAgreement => {
                 return Err(StorageError::InvalidAssignment(format!(
                     "independent agreement workflow is not implemented for task {task_id}"
                 )));
@@ -409,7 +409,7 @@ impl DatasetRepository {
         let completion_status = match task.review.workflow {
             ReviewWorkflow::None => TaskStatus::Completed,
             ReviewWorkflow::Approval => TaskStatus::Submitted,
-            ReviewWorkflow::IndependentAgreement => {
+            ReviewWorkflow::LegacyIndependentAgreement => {
                 return Err(StorageError::InvalidAssignment(format!(
                     "independent agreement workflow is not implemented for task {task_id}"
                 )));
@@ -559,7 +559,7 @@ impl DatasetRepository {
                 )
             }
             AssignmentKind::Review => task_status == &TaskStatus::Submitted,
-            AssignmentKind::Adjudication => task_status == &TaskStatus::AdjudicationRequired,
+            AssignmentKind::LegacyAdjudication => false,
         };
         if !valid_task_status {
             return Err(StorageError::AssignmentConflict(format!(
@@ -694,7 +694,7 @@ fn role_for_kind(kind: &AssignmentKind) -> DatasetRole {
     match kind {
         AssignmentKind::Annotation => DatasetRole::Annotator,
         AssignmentKind::Review => DatasetRole::Reviewer,
-        AssignmentKind::Adjudication => DatasetRole::Adjudicator,
+        AssignmentKind::LegacyAdjudication => DatasetRole::LegacyAdjudicator,
     }
 }
 

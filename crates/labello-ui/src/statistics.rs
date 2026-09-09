@@ -202,21 +202,14 @@ impl LabelloApp {
             ("Images", self.datasets.stats.total_images),
             ("Completed", self.datasets.stats.completed_tasks),
             ("Pending", self.datasets.stats.pending_tasks),
-            ("Reviewed", self.datasets.stats.reviewed_tasks),
-            ("Unreviewed", self.datasets.stats.unreviewed_tasks),
-            ("Approved", self.datasets.stats.approved_tasks),
-            ("Rejected", self.datasets.stats.rejected_tasks),
+            ("In progress", self.datasets.stats.in_progress_tasks),
+            ("Awaiting review", self.datasets.stats.awaiting_review_tasks),
             (
-                if compact {
-                    "Corrected"
-                } else {
-                    "Reviewer corrected"
-                },
-                self.datasets.stats.reviewer_corrected_tasks,
+                "Needs correction",
+                self.datasets.stats.needs_correction_tasks,
             ),
-            ("Finalized", self.datasets.stats.finalized_tasks),
         ];
-        let minimum_card_width = if compact { 124.0 } else { 160.0 };
+        let minimum_card_width = if compact { 148.0 } else { 160.0 };
         let column_count = (((ui.available_width() + 10.0) / (minimum_card_width + 10.0)).floor()
             as usize)
             .clamp(1, 4);
@@ -311,18 +304,15 @@ impl LabelloApp {
                             )
                             .strong(),
                         );
-                        ui.label(format!(
-                            "Pending: {}  Unreviewed: {}  Reviewed: {}",
-                            stats.pending, stats.unreviewed, stats.reviewed
-                        ));
-                        ui.label(format!(
-                            "Approved: {}  Rejected: {}  Reviewer corrected: {}",
-                            stats.approved, stats.rejected, stats.reviewer_corrected
-                        ));
-                        ui.label(format!(
-                            "Finalized: {}  Done: {}",
-                            stats.finalized, stats.completed
-                        ));
+                        for (label, value) in [
+                            ("Pending", stats.pending),
+                            ("In progress", stats.in_progress),
+                            ("Awaiting review", stats.awaiting_review),
+                            ("Needs correction", stats.needs_correction),
+                            ("Completed", stats.completed),
+                        ] {
+                            ui.label(format!("{label}: {value}"));
+                        }
                     });
                 }
             } else {
@@ -416,22 +406,19 @@ fn stats_task_grid(
     task_names: &BTreeMap<TaskId, String>,
 ) {
     egui::Grid::new("stats-task-grid")
-        .num_columns(9)
+        .num_columns(6)
         .striped(true)
         .spacing([theme::SPACE_3, theme::SPACE_1])
         .show(ui, |ui| {
             stats_name_cell(ui, "Task", 180.0, true);
             for heading in [
                 "Pending",
-                "Unreviewed",
-                "Reviewed",
-                "Approved",
-                "Rejected",
-                "Corrected",
-                "Finalized",
-                "Done",
+                "In progress",
+                "Awaiting review",
+                "Needs correction",
+                "Completed",
             ] {
-                stats_number_cell(ui, heading, 84.0, true);
+                stats_number_cell(ui, heading, 130.0, true);
             }
             ui.end_row();
 
@@ -447,15 +434,12 @@ fn stats_task_grid(
                 );
                 for value in [
                     stats.pending,
-                    stats.unreviewed,
-                    stats.reviewed,
-                    stats.approved,
-                    stats.rejected,
-                    stats.reviewer_corrected,
-                    stats.finalized,
+                    stats.in_progress,
+                    stats.awaiting_review,
+                    stats.needs_correction,
                     stats.completed,
                 ] {
-                    stats_number_cell(ui, value, 84.0, false);
+                    stats_number_cell(ui, value, 130.0, false);
                 }
                 ui.end_row();
             }

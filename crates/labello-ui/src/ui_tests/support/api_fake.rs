@@ -214,7 +214,6 @@ pub(super) struct CallCounts {
     pub(super) rebuild_image: usize,
     pub(super) record_review: usize,
     pub(super) record_correction: usize,
-    pub(super) record_adjudication: usize,
     pub(super) current_user_activity: usize,
     pub(super) dataset_stats: usize,
     pub(super) get_keybindings: usize,
@@ -316,7 +315,6 @@ impl SpyState {
                 DatasetRole::DataAdmin,
                 DatasetRole::Annotator,
                 DatasetRole::Reviewer,
-                DatasetRole::Adjudicator,
             ]),
             assigned_at: now(),
             assigned_by: None,
@@ -354,7 +352,6 @@ impl SpyState {
                     DatasetRole::DataAdmin,
                     DatasetRole::Annotator,
                     DatasetRole::Reviewer,
-                    DatasetRole::Adjudicator,
                 ],
             },
             DatasetUser {
@@ -395,7 +392,6 @@ impl SpyState {
                 DatasetRole::DataAdmin,
                 DatasetRole::Annotator,
                 DatasetRole::Reviewer,
-                DatasetRole::Adjudicator,
             ],
             users,
             fail_me: false,
@@ -1041,15 +1037,13 @@ fn validate_spy_import_plan(
         let review_valid = match mapping.workflow_intent {
             labello_client::ImportWorkflowIntent::AuthoritativeGroundTruth => {
                 mapping.task.review.workflow == labello_domain::ReviewWorkflow::None
-                    && mapping.task.review.required_reviews == 0
             }
             labello_client::ImportWorkflowIntent::RequireApproval
             | labello_client::ImportWorkflowIntent::SeedFutureAnnotation => {
                 mapping.task.review.workflow == labello_domain::ReviewWorkflow::Approval
-                    && mapping.task.review.required_reviews >= 1
             }
         } && !mapping.task.review.allow_reviewer_corrections
-            && mapping.task.review.agreement_threshold.is_none();
+            && mapping.task.review.legacy.is_none();
         if !review_valid {
             return Err("API validation: task review workflow does not match intent".to_string());
         }
@@ -1285,7 +1279,6 @@ impl DatasetApi for SpyApi {
                 DatasetRole::DataAdmin,
                 DatasetRole::Annotator,
                 DatasetRole::Reviewer,
-                DatasetRole::Adjudicator,
             ]),
             assigned_at: timestamp,
             assigned_by: None,
@@ -1463,7 +1456,6 @@ impl ImageApi for SpyApi {
             related: [
                 AssignmentKind::Annotation,
                 AssignmentKind::Review,
-                AssignmentKind::Adjudication,
             ]
             .into_iter()
             .filter(|kind| kind != &request.kind)
@@ -2107,68 +2099,6 @@ impl ReviewApi for SpyApi {
                 },
             },
         )))
-    }
-}
-
-impl AdjudicationApi for SpyApi {
-    fn record_adjudication<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        image_id: &'a ImageId,
-        adjudication: AdjudicationRecord,
-    ) -> ApiFuture<'a, EventLogEntry> {
-        let mut state = self.state.borrow_mut();
-        state.counts.record_adjudication += 1;
-        let image_state = state
-            .states
-            .entry(image_id.clone())
-            .or_insert_with(|| ImageState::new(image_id.clone()));
-        let event = EventLogEntry::new(
-            image_state.current_sequence + 1,
-            image_id.clone(),
-            UserId::from("admin"),
-            DatasetRole::Adjudicator,
-            now(),
-            EventPayload::AdjudicationRecorded { adjudication },
-        );
-        image_state.apply_event(&event).unwrap();
-        ready(Ok(event))
-    }
-
-    fn record_assigned_adjudication<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        assignment: AssignmentActionRequest,
-        adjudication: AdjudicationRecord,
-    ) -> ApiFuture<'a, EventLogEntry> {
-        if !self
-            .state
-            .borrow()
-            .active_assignments
-            .iter()
-            .any(|active| assignment_matches(active, &assignment))
-        {
-            return ready(Err(ClientError::Demo("stale assignment".to_string())));
-        }
-        let mut state = self.state.borrow_mut();
-        state.counts.record_adjudication += 1;
-        let image_state = state
-            .states
-            .entry(assignment.image_id.clone())
-            .or_insert_with(|| ImageState::new(assignment.image_id.clone()));
-        let event = EventLogEntry::new(
-            image_state.current_sequence + 1,
-            assignment.image_id.clone(),
-            UserId::from("admin"),
-            DatasetRole::Adjudicator,
-            now(),
-            EventPayload::AdjudicationRecorded { adjudication },
-        );
-        image_state.apply_event(&event).unwrap();
-        state
-            .active_assignments
-            .retain(|active| !assignment_matches(active, &assignment));
-        ready(Ok(event))
     }
 }
 

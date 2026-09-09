@@ -177,3 +177,19 @@ but never fills in decisions for objects the reviewer has not visited. An
 incomplete marker-bearing revision is rejected locally before its retry request
 is frozen. Markers never create annotation
 versions or independently count as completed work.
+
+## Single-reviewer completion
+
+Approval tasks admit one active reviewer per image and task. That reviewer
+performs object-level decisions and the final full-image check. Final approval
+atomically records the decision, marks the task `Completed` with its approved
+outcome, completes the owned assignment, and cancels any outstanding competing
+review leases. Rejection returns work to `NeedsCorrection`. Reviewer geometry
+correction and decision revision retain their existing audited transactions.
+A task configured with review workflow `none` completes on annotation submission.
+
+Task statistics use five mutually exclusive states: Pending, In progress,
+Awaiting review, Needs correction, and Completed. Approved and reviewer-corrected
+completed tasks both count as Completed. Enabled-task eligibility and excluded
+import coverage retain the completion-denominator rules above. Review decisions
+remain in audit history and contributor activity.

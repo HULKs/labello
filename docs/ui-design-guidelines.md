@@ -115,7 +115,7 @@ and history.
   controls. A clipped visual label still requires a complete accessible name.
 - Keyboard-only users must be able to sign in, choose a dataset and task, claim
   and release work, create/edit/delete annotations, submit or skip an
-  assignment, complete review/adjudication decisions, edit and save
+  assignment, complete review decisions, edit and save
   administration forms, operate import decisions, open settings/help, and
   dismiss or confirm every modal. Canvas-only spatial placement may require a
   pointer, but all surrounding commands and any non-spatial alternative must

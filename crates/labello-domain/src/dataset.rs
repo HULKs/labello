@@ -55,6 +55,8 @@ impl DatasetMetadata {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasetConfig {
+    #[serde(default)]
+    pub review_policy_version: u32,
     pub schema_version: u32,
     pub dataset_id: DatasetId,
     pub name: String,
@@ -73,6 +75,7 @@ pub struct DatasetConfig {
 impl DatasetConfig {
     pub fn from_metadata(metadata: &DatasetMetadata) -> Self {
         Self {
+            review_policy_version: 1,
             schema_version: metadata.schema_version,
             dataset_id: metadata.dataset_id.clone(),
             name: metadata.name.clone(),

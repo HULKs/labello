@@ -246,7 +246,9 @@ impl DatasetRepository {
         }
         let original_context = state.review_assignment_contexts.get(assignment_id)
             .ok_or_else(|| conflict("this historical review has no captured revision context; claim current work instead"))?;
-        if original_context.task != *task {
+        let mut original_task = original_context.task.clone();
+        original_task.review.upgrade();
+        if original_task != *task {
             return Err(conflict("previous review task configuration changed"));
         }
         if state.review_round(task_id) != Some(&original_context.round) {
@@ -303,7 +305,8 @@ impl DatasetRepository {
             .iter()
             .any(|correction| correction.assignment_id == *assignment_id);
         if !own_correction
-            && original_context.target_fingerprint != state.review_target_fingerprint(task)
+            && original_context.target_fingerprint
+                != state.review_target_fingerprint(&original_context.task)
         {
             return Err(conflict(
                 "previous review targets or migration confirmation changed",

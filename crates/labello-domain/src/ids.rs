@@ -95,7 +95,7 @@ id_type!(UserId);
 id_type!(AnnotationId);
 id_type!(ReviewId);
 id_type!(CorrectionId);
-id_type!(AdjudicationId);
+id_type!(LegacyAdjudicationId);
 id_type!(AssignmentId);
 id_type!(EventId);
 id_type!(PrelabelConfigId);
@@ -130,12 +130,6 @@ impl ReviewId {
 impl CorrectionId {
     pub fn generate() -> Self {
         Self::new(format!("cor_{}", uuid::Uuid::now_v7().simple()))
-    }
-}
-
-impl AdjudicationId {
-    pub fn generate() -> Self {
-        Self::new(format!("adj_{}", uuid::Uuid::now_v7().simple()))
     }
 }
 
@@ -178,7 +172,6 @@ mod tests {
         assert!(AnnotationId::generate().validate_path_segment().is_ok());
         assert!(ReviewId::generate().validate_path_segment().is_ok());
         assert!(CorrectionId::generate().validate_path_segment().is_ok());
-        assert!(AdjudicationId::generate().validate_path_segment().is_ok());
         assert!(AssignmentId::generate().validate_path_segment().is_ok());
         assert!(
             ImageId::from_blake3_hex(&"a".repeat(64))

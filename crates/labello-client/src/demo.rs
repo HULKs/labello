@@ -1,14 +1,14 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use labello_domain::{
-    AdjudicationRecord, Assignment, DatasetId, DatasetMetadata, DatasetStats, EventLogEntry,
-    EventPayload, ImageId, ImageRecord, ImageState, ImportId, KeybindingSet, OfflineBundle,
-    OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, PrelabelSuggestion, ReviewRecord,
-    TaskDefinition, UserAccount, UserId,
+    Assignment, DatasetId, DatasetMetadata, DatasetStats, EventLogEntry, EventPayload, ImageId,
+    ImageRecord, ImageState, ImportId, KeybindingSet, OfflineBundle, OfflineSyncRequest,
+    OfflineSyncResult, PrelabelConfig, PrelabelSuggestion, ReviewRecord, TaskDefinition,
+    UserAccount, UserId,
 };
 
 use crate::{
-    AdjudicationApi, AnnotationApi, AnnotationBatchRequest, AppendEventRequest, AssignNextRequest,
+    AnnotationApi, AnnotationBatchRequest, AppendEventRequest, AssignNextRequest,
     AssignmentActionRequest, AuthApi, AuthOptions, ClientError, CorrectionRequest,
     CreateDatasetRequest, DatasetApi, DatasetSummary, DatasetUser, ImageApi, ImageFile,
     ImagePreview, ImportApi, IngestJob, IngestJobStatus, IngestReport, KeybindingApi,
