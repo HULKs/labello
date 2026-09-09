@@ -1,3 +1,5 @@
+mod interaction;
+
 use crate::app::{AppView, CorrectionDraft, LabelloApp, UiCommand};
 use labello_domain::{
     AnnotationGeometry, AnnotationId, AnnotationType, AnnotationVersion, AssignmentKind,
@@ -10,6 +12,12 @@ use labello_domain::{
 pub(crate) struct ReviewCorrectionsDraft {
     pub(crate) changes: Vec<ReviewCorrectionChange>,
     #[serde(default)]
+    pub(crate) reviewed: Vec<labello_domain::ReviewTarget>,
+    #[serde(default)]
+    pub(crate) needs_review: Vec<labello_domain::ReviewTarget>,
+    #[serde(default)]
+    pub(crate) position: Option<usize>,
+    #[serde(default)]
     pub(crate) reason: String,
     pub(crate) editor: Option<AnnotationVersion>,
     pub(crate) submission: Option<ReviewCorrectionSubmission>,
@@ -17,18 +25,20 @@ pub(crate) struct ReviewCorrectionsDraft {
 
 impl LabelloApp {
     pub(crate) fn has_review_corrections(&self) -> bool {
-        !self.work.review_corrections.changes.is_empty() || self.work.correction_draft.is_some()
+        !self.work.review_corrections.changes.is_empty() || self.review_editor_changed()
     }
 
     pub(crate) fn can_submit_review_corrections(&self) -> bool {
-        !self.work.review_corrections.changes.is_empty() && self.work.correction_draft.is_none()
+        self.review_overview()
+            && self.all_review_items_decided()
+            && self.has_review_corrections()
+            && self.review_editor_valid()
     }
 
     pub(crate) fn begin_review_correction(&mut self, annotation: AnnotationVersion) {
         if self.loading.saving || self.work.review_corrections.submission.is_some() {
             return;
         }
-        self.work.assignment_touched = true;
         self.work.selected_annotation = Some(annotation.annotation_id.clone());
         let geometry = self
             .work
@@ -80,6 +90,34 @@ impl LabelloApp {
             return;
         };
         if self.loading.saving || self.work.review_corrections.submission.is_some() {
+            return;
+        }
+        if editor.version > 0 && !draft.geometry_changed() {
+            let target = self.focused_review_target();
+            if let Some(target) = target {
+                let changes = self
+                    .work
+                    .review_corrections
+                    .changes
+                    .iter()
+                    .filter(|change| !self.change_matches_target(change, &target))
+                    .cloned()
+                    .collect();
+                if self.work.review_corrections.changes != changes {
+                    self.work
+                        .review_corrections
+                        .reviewed
+                        .retain(|old| old != &target);
+                    self.work
+                        .staged_review_decisions
+                        .retain(|review| review.target != target);
+                    if !self.work.review_corrections.needs_review.contains(&target) {
+                        self.work.review_corrections.needs_review.push(target);
+                    }
+                }
+                self.work.review_corrections.changes = changes;
+            }
+            self.discard_correction();
             return;
         }
         let mut annotation = editor.clone();
@@ -153,12 +191,34 @@ impl LabelloApp {
     }
 
     fn keep_review_change(&mut self, change: ReviewCorrectionChange) {
+        if self.work.review_corrections.changes.contains(&change) {
+            return;
+        }
         self.remove_staged_change(&change);
+        if let Some(target) = self
+            .review_object_targets()
+            .into_iter()
+            .find(|target| self.change_matches_target(&change, target))
+        {
+            self.work
+                .review_corrections
+                .reviewed
+                .retain(|old| old != &target);
+            self.work
+                .staged_review_decisions
+                .retain(|review| review.target != target);
+            if !self.work.review_corrections.needs_review.contains(&target) {
+                self.work.review_corrections.needs_review.push(target);
+            }
+        }
         self.work.review_corrections.changes.push(change);
         self.work.assignment_touched = true;
     }
 
     pub(crate) fn submit_staged_review_corrections(&mut self) -> bool {
+        if !self.retain_review_editor() {
+            return false;
+        }
         if !self.can_submit_review_corrections()
             || self.loading.saving
             || self.loading.image
@@ -210,192 +270,138 @@ impl LabelloApp {
         if self.view != AppView::Review || self.work.assignment.is_none() {
             return;
         }
-        let ready =
-            !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
-        if self.work.correction_draft.is_some() {
-            self.correction_actions(ui, ready);
-            return;
-        }
-        ui.separator();
-        ui.label(format!(
-            "{} unsaved corrections",
-            self.work.review_corrections.changes.len()
-        ));
-        if !self.work.review_corrections.changes.is_empty() {
-            ui.label("The canvas previews unsaved changes. Nothing is saved until submission.");
-            egui::CollapsingHeader::new("Unsaved changes").show(ui, |ui| {
-                let mut previews = Vec::new();
-                self.apply_staged_review_previews(&mut previews);
-                for (index, change) in self
-                    .work
-                    .review_corrections
-                    .changes
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                {
-                    ui.push_id(("staged", index), |ui| {
-                        let (label, id) = match &change {
-                            ReviewCorrectionChange::Add { annotation_id, .. } => {
-                                ("New annotation", Some(annotation_id))
-                            }
-                            ReviewCorrectionChange::Edit { annotation_id, .. } => {
-                                ("Changed annotation", Some(annotation_id))
-                            }
-                            ReviewCorrectionChange::Remove { .. } => ("Removed annotation", None),
-                            ReviewCorrectionChange::MigrationObject { .. } => {
-                                ("Changed migration object", None)
-                            }
-                        };
-                        ui.label(format!("{}: {label} · unsaved", index + 1));
-                        ui.horizontal_wrapped(|ui| {
-                            let editable =
-                                ready && self.work.review_corrections.submission.is_none();
-                            if let Some(id) = id {
-                                let annotation = self
-                                    .work
-                                    .current_state
-                                    .as_ref()
-                                    .and_then(|state| state.current_annotation(id))
-                                    .cloned()
-                                    .or_else(|| {
-                                        previews
-                                            .iter()
-                                            .find(|annotation| &annotation.annotation_id == id)
-                                            .cloned()
-                                    });
-                                if let Some(annotation) = annotation
-                                    && ui
-                                        .add_enabled(editable, egui::Button::new("Edit draft"))
-                                        .clicked()
-                                {
-                                    self.begin_review_correction(annotation);
-                                }
-                            }
-                            if ui
-                                .add_enabled(editable, egui::Button::new("Undo change"))
-                                .clicked()
-                            {
-                                self.remove_staged_change(&change);
-                            }
-                        });
-                    });
-                }
-            });
-        }
-        if self.work.review_corrections.submission.is_some() {
-            ui.label("Submission pending. Retry with the same corrections.");
-        } else {
-            egui::CollapsingHeader::new("Correct or remove objects").show(ui, |ui| {
-                let Some(task) = self.selected_task().cloned() else {
-                    return;
-                };
-                let Some(state) = self.work.current_state.clone() else {
-                    return;
-                };
-                let annotations = state
-                    .active_annotations()
-                    .filter(|annotation| annotation.task_id == task.task_id)
-                    .cloned()
-                    .collect::<Vec<_>>();
-                for (index, annotation) in annotations.into_iter().enumerate() {
-                    ui.push_id(&annotation.annotation_id, |ui| {
-                        ui.label(format!(
-                            "Object {}, persisted v{}",
-                            index + 1,
-                            annotation.version
-                        ));
-                        ui.horizontal_wrapped(|ui| {
-                            if ui
-                                .add_enabled(ready, egui::Button::new("Correct"))
-                                .clicked()
-                            {
-                                self.begin_review_correction(annotation.clone());
-                            }
-                            if annotation.object_group_id.is_none()
-                                || task.manual_box_guide_migration.is_none()
-                            {
-                                if ui.add_enabled(ready, egui::Button::new("Remove")).clicked() {
-                                    self.keep_review_change(ReviewCorrectionChange::Remove {
-                                        annotation_id: annotation.annotation_id.clone(),
-                                        expected_version: annotation.version,
-                                    });
-                                }
-                            } else if let Some(group) = &annotation.object_group_id {
-                                self.review_exclusion_menu(ui, group.clone(), ready);
-                            }
-                        });
-                    });
-                }
-                if let Some(set) = state.migration_target_sets.get(&task.task_id) {
-                    for target in &set.targets {
-                        if let Some(disposition) = state
-                            .migration_dispositions
-                            .get(&task.task_id)
-                            .and_then(|items| items.get(&target.object_group_id))
-                            && matches!(
-                                disposition.status,
-                                MigrationDispositionStatus::Excluded { .. }
-                            )
-                        {
-                            ui.push_id(&target.object_group_id, |ui| {
-                                ui.label(format!(
-                                    "Excluded object {}, persisted disposition v{}",
-                                    target.sequence_index + 1,
-                                    disposition.disposition_version
-                                ));
-                                self.review_exclusion_menu(
-                                    ui,
-                                    target.object_group_id.clone(),
-                                    ready,
-                                );
-                                if ui
-                                    .add_enabled(
-                                        ready,
-                                        egui::Button::new("Create skeleton for excluded object"),
-                                    )
-                                    .clicked()
-                                {
-                                    self.begin_new_review_object(Some((
-                                        target.reserved_skeleton_annotation_id.clone(),
-                                        target.object_group_id.clone(),
-                                    )));
-                                }
-                            });
-                        }
-                    }
-                }
-            });
+        let ready = !self.loading.saving
+            && !self.loading.image
+            && !self.work.migration.busy
+            && self.work.pending_transition.is_none()
+            && self.work.review_corrections.submission.is_none();
+        let position = self.review_position();
+        let count = self.review_object_targets().len();
+        ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(ready, egui::Button::new("Add missing annotation"))
+                .add_enabled(ready && position > 0, egui::Button::new("Previous item"))
                 .clicked()
             {
-                self.begin_new_review_object(None);
-            }
-        }
-        ui.horizontal_wrapped(|ui| {
-            if crate::theme::primary_button(
-                ui,
-                ready && self.can_submit_review_corrections(),
-                egui::Button::new("Submit corrections & reject"),
-            )
-            .clicked()
-            {
-                self.submit_staged_review_corrections();
+                self.cycle_review_item(-1);
             }
             if ui
                 .add_enabled(
-                    ready
-                        && self.work.review_corrections.submission.is_none()
-                        && self.has_review_corrections(),
-                    egui::Button::new("Discard staged changes"),
+                    ready && position < count,
+                    egui::Button::new(if position + 1 == count {
+                        "Overview"
+                    } else {
+                        "Next item"
+                    }),
                 )
                 .clicked()
             {
-                self.work.review_corrections = Default::default();
+                self.cycle_review_item(1);
             }
         });
-        ui.label("Corrections return this image to a fresh review round.");
+        if self.work.review_corrections.submission.is_some() {
+            ui.label("Submission pending. Retry with the same corrections.");
+        }
+        if self.work.correction_draft.is_some() {
+            self.correction_actions(ui, ready);
+        }
+        if let Some(target) = self.focused_review_target() {
+            match target {
+                labello_domain::ReviewTarget::AnnotationVersion {
+                    annotation_id,
+                    version,
+                } => {
+                    if let Some(group) = self
+                        .work
+                        .current_state
+                        .as_ref()
+                        .and_then(|state| state.current_annotation(&annotation_id))
+                        .and_then(|annotation| annotation.object_group_id.clone())
+                        .filter(|_| self.manual_migration_active())
+                    {
+                        self.review_exclusion_menu(ui, group, ready);
+                    } else if ui
+                        .add_enabled(ready, egui::Button::new("Remove item"))
+                        .clicked()
+                    {
+                        self.discard_correction();
+                        self.keep_review_change(ReviewCorrectionChange::Remove {
+                            annotation_id,
+                            expected_version: version,
+                        });
+                    }
+                }
+                labello_domain::ReviewTarget::MigrationDisposition {
+                    object_group_id, ..
+                } => {
+                    self.review_exclusion_menu(ui, object_group_id.clone(), ready);
+                    if self.work.correction_draft.is_none()
+                        && let Some(target) = self
+                            .selected_task()
+                            .and_then(|task| {
+                                self.work
+                                    .current_state
+                                    .as_ref()?
+                                    .migration_target_sets
+                                    .get(&task.task_id)
+                            })
+                            .and_then(|set| {
+                                set.targets
+                                    .iter()
+                                    .find(|target| target.object_group_id == object_group_id)
+                            })
+                            .cloned()
+                        && ui
+                            .add_enabled(
+                                ready,
+                                egui::Button::new("Create skeleton for excluded object"),
+                            )
+                            .clicked()
+                    {
+                        self.begin_new_review_object(Some((
+                            target.reserved_skeleton_annotation_id,
+                            object_group_id,
+                        )));
+                    }
+                }
+                _ => {}
+            }
+            if self.work.correction_draft.is_none()
+                && ui
+                    .add_enabled(ready, egui::Button::new("Reset item"))
+                    .clicked()
+            {
+                self.reset_review_item();
+            }
+        } else {
+            ui.label("Draw a missing box or click to begin a skeleton. Select an existing item to review it again.");
+            if !self.all_review_items_decided() {
+                ui.label("Review every item before submitting this image.");
+            }
+            if ui
+                .add_enabled(ready, egui::Button::new("New annotation"))
+                .on_hover_text("Start an annotation using keyboard-accessible controls.")
+                .clicked()
+                && self.retain_review_editor()
+            {
+                self.begin_new_review_object(None);
+            }
+            egui::CollapsingHeader::new("Review items").show(ui, |ui| {
+                for index in 0..count {
+                    if ui
+                        .add_enabled(
+                            ready,
+                            egui::Button::new(format!("Review item {}", index + 1)),
+                        )
+                        .clicked()
+                    {
+                        self.navigate_review_item(index);
+                    }
+                }
+            });
+        }
+        if self.has_review_corrections() {
+            ui.label("Corrections remain unsaved until you reject and submit from the overview.");
+        }
     }
 
     fn review_exclusion_menu(
@@ -442,6 +448,7 @@ impl LabelloApp {
         group: labello_domain::ObjectGroupId,
         reason: MigrationExclusionReason,
     ) {
+        self.discard_correction();
         let Some(task) = self.selected_task() else {
             return;
         };
@@ -466,7 +473,7 @@ impl LabelloApp {
         }
     }
 
-    fn begin_new_review_object(
+    pub(crate) fn begin_new_review_object(
         &mut self,
         canonical: Option<(AnnotationId, labello_domain::ObjectGroupId)>,
     ) {
@@ -539,29 +546,24 @@ impl LabelloApp {
         styles: &mut std::collections::BTreeMap<AnnotationId, crate::canvas::CanvasAnnotationStyle>,
     ) {
         for annotation in annotations {
-            let changed = self
-                .work
-                .correction_draft
-                .as_ref()
-                .is_some_and(|draft| draft.annotation_id == annotation.annotation_id)
-                || self
-                    .work
-                    .review_corrections
-                    .changes
-                    .iter()
-                    .any(|change| match change {
-                        ReviewCorrectionChange::Edit { annotation_id, .. }
-                        | ReviewCorrectionChange::Add { annotation_id, .. }
-                        | ReviewCorrectionChange::Remove { annotation_id, .. } => {
-                            annotation_id == &annotation.annotation_id
-                        }
-                        ReviewCorrectionChange::MigrationObject {
-                            object_group_id, ..
-                        } => {
-                            annotation.annotation_type == AnnotationType::Skeleton
-                                && annotation.object_group_id.as_ref() == Some(object_group_id)
-                        }
-                    });
+            let changed = self.work.correction_draft.as_ref().is_some_and(|draft| {
+                draft.annotation_id == annotation.annotation_id
+                    && (draft.expected_version == 0 || draft.geometry_changed())
+            }) || self.work.review_corrections.changes.iter().any(|change| {
+                match change {
+                    ReviewCorrectionChange::Edit { annotation_id, .. }
+                    | ReviewCorrectionChange::Add { annotation_id, .. }
+                    | ReviewCorrectionChange::Remove { annotation_id, .. } => {
+                        annotation_id == &annotation.annotation_id
+                    }
+                    ReviewCorrectionChange::MigrationObject {
+                        object_group_id, ..
+                    } => {
+                        annotation.annotation_type == AnnotationType::Skeleton
+                            && annotation.object_group_id.as_ref() == Some(object_group_id)
+                    }
+                }
+            });
             if changed {
                 styles.insert(
                     annotation.annotation_id.clone(),
@@ -693,6 +695,17 @@ impl LabelloApp {
         keypoint.state = KeypointState::Visible;
         draft.geometry_history.push(draft.edited_geometry.clone());
         draft.edited_geometry = geometry;
+        if let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry {
+            draft.selected_keypoint = skeleton
+                .keypoints
+                .iter()
+                .enumerate()
+                .skip(index + 1)
+                .find(|(_, keypoint)| keypoint.point.is_none())
+                .map(|(index, _)| index)
+                .or(Some(index));
+        }
+        self.work.assignment_touched = true;
     }
 }
 

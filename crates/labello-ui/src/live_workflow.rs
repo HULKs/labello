@@ -779,9 +779,11 @@ impl LabelloApp {
         if self.loading.image || self.work.pending_transition.is_some() {
             return;
         }
-        if decision == ReviewDecision::Approved && self.work.correction_draft.is_some() {
-            self.runtime.error =
-                Some("Discard correction mode before approving this object.".to_string());
+        if decision == ReviewDecision::Rejected {
+            self.reject_review_item();
+            return;
+        }
+        if !self.review_can_approve() || !self.retain_review_editor() {
             return;
         }
         let (Some(assignment), Some(task)) =
@@ -818,6 +820,7 @@ impl LabelloApp {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn request_correction(&mut self) {
         self.stage_review_correction();
     }
@@ -846,9 +849,9 @@ impl LabelloApp {
         phase: ReviewPhase,
     ) -> bool {
         if decision == ReviewDecision::Rejected {
-            return self.submit_staged_review_corrections();
+            return self.reject_review_item();
         }
-        if self.has_review_corrections() {
+        if !self.review_can_approve() {
             self.runtime.error =
                 Some("Submit or discard the unsaved corrections before approving.".into());
             return false;

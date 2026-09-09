@@ -8,6 +8,10 @@ impl LabelloApp {
         }
     }
 
+    fn discard_review_action(&mut self, ui: &mut egui::Ui) {
+        if self.view == AppView::Review && ui.add_enabled(self.has_review_corrections() && self.work.review_corrections.submission.is_none() && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none(), egui::Button::new(if LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Wide { "Discard corrections" } else { "Discard" })).clicked() { self.discard_all_review_corrections(); }
+    }
+
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         if !self.work_view() {
             return;
@@ -60,7 +64,6 @@ impl LabelloApp {
         }
         if layout != LayoutMode::Wide
             && self.view == AppView::Review
-            && self.work.correction_draft.is_none()
         {
             let review_layout = self.compact_review_row_layout(ui);
             let add_contents = |ui: &mut egui::Ui| {
@@ -97,7 +100,7 @@ impl LabelloApp {
             });
             return;
         }
-        if self.view == AppView::Review && self.work.correction_draft.is_none() {
+        if self.view == AppView::Review {
             ui.horizontal_wrapped(|ui| {
                 let review_layout = self.compact_review_row_layout(ui);
                 self.review_decision_buttons(ui, review_layout.shortcut_decisions, true);

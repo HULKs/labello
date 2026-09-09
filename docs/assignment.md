@@ -160,6 +160,16 @@ comment-only changes, unchanged exclusion reasons, bare rejection, and new
 missing-object markers cannot reject work. The legacy `allowReviewerCorrections`
 configuration field remains readable but no longer gates approval review.
 
+The review UI edits the focused item directly. Approve is available for an
+unchanged item; Reject retains a valid correction locally and advances. Earlier
+corrections do not disable approval of another unchanged item. Reset restores the
+item and requires a new decision. Navigation alone records no decision.
+The final overview permits adding missing annotations and revisiting existing
+items. Once every original item has a decision, it submits approval if there are
+no corrections, or submits the complete correction batch with rejection. Invalid
+or unfinished additions block submission. No corrected-item rejection reaches the
+server before this overview submission.
+
 The transaction holds the configuration guard and image lock, reloads state,
 checks the exact reviewer lease, captured round, task definition and target
 fingerprint, validates the complete correction batch, then publishes all changes,

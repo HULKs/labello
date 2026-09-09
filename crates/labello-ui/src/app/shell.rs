@@ -15,13 +15,9 @@ impl eframe::App for LabelloApp {
         self.retry_prefetch_if_due(ui.ctx());
         self.sync_review_selection();
         self.sync_missing_objects();
-        self.work.canvas.require_pan_mode(
-            self.view == AppView::Review
-                && self.work.current.is_some()
-                && self.work.correction_draft.is_none()
-                && !(self.missing_objects_editable() && (self.work.missing_objects.placing || self.has_missing_object_draft())),
-        );
+        self.work.canvas.require_pan_mode(false);
         self.sync_manual_migration();
+        self.sync_review_editor();
         self.start_next_persistence_command();
         self.start_setup_load();
         if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {

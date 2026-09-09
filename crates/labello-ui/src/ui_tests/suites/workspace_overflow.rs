@@ -327,8 +327,8 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     let identity = if context.workflow_name == context.class_name {
         context.workflow_name.clone()
     } else { format!("{} · {}", context.workflow_name, context.class_name) };
-    assert_review_bar_paints(&harness, &format!("Revising · {identity}"));
-    assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+    assert_review_bar_paints(&harness, &format!("Revising · {identity} · Bounding boxes"));
+    assert_review_bar_paints(&harness, "Item 1 / 1");
     let details = harness.get_by_label_contains("Review details: Workflow:");
     assert!(details.accesskit_node().label().unwrap().contains("Review revision mode"));
     assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_none());
@@ -363,7 +363,7 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
         assert_eq!(after, before, "availability must not displace required review context: revision={revision}");
         assert_eq!(harness.get_by_label("Workspace context bar").rect(), bar);
         assert!(after.height() >= 44.0);
-        assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+        assert_review_bar_paints(&harness, "Item 1 / 1");
         let details = harness.get_by_label_contains("Review details: Workflow:").rect();
         let spinner = harness.get_by_label("Loading workflow assignment availability").rect();
         assert!(details.contains_rect(spinner), "loading feedback shares the identity line: {spinner:?} in {details:?}");

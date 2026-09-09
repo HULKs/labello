@@ -17,22 +17,15 @@ impl ReviewBarContent {
             } else {
                 identity
             };
-            let phase = if context.unsaved_corrections > 0 {
-                format!("{} unsaved corrections", context.unsaved_corrections)
-            } else if context.correction.is_some() {
-                "Correction mode".to_string()
-            } else if matches!(context.phase, crate::review_context::ReviewContextPhase::FullImage { .. }) {
-                "Final check".to_string()
-            } else {
-                context.phase_label()
+            let phase = match context.phase {
+                crate::review_context::ReviewContextPhase::Object { number, total, .. } => format!("Item {number} / {total}"),
+                crate::review_context::ReviewContextPhase::FullImage { .. } => "Image overview".to_string(),
             };
+            let phase = if context.unsaved_corrections > 0 { format!("{phase} · {} {}", context.unsaved_corrections, if context.unsaved_corrections == 1 { "correction" } else { "corrections" }) } else { phase };
             Self {
-                identity,
-                type_and_phase: Some((context.type_label().to_string(), phase)),
-                accessible: format!(
-                    "Review details: {}. Open Inspector for full details.",
-                    context.accessible_summary()
-                ),
+                identity: phase,
+                type_and_phase: Some((identity, context.type_label().to_string())),
+                accessible: format!("Review details: {}. Toggle Inspector.", context.accessible_summary()),
             }
         } else {
             let message = if app.loading.image
@@ -65,8 +58,8 @@ struct ReviewBarText {
 impl ReviewBarText {
     fn measure(ctx: &egui::Context, content: &ReviewBarContent, width: f32, availability_loading: bool) -> Self {
         let width = width.floor().max(44.0);
-        let inner_width = (width - 12.0).max(1.0);
-        let font = egui::TextStyle::Body.resolve(&ctx.global_style());
+        let inner_width = (width - 44.0).max(1.0);
+
         let layout = |text: String, truncate: bool| {
             let line_width = if truncate && availability_loading {
                 (inner_width - 24.0).max(1.0)
@@ -74,8 +67,8 @@ impl ReviewBarText {
                 inner_width
             };
             let mut job =
-                egui::text::LayoutJob::simple(text, font.clone(), theme::TEXT, line_width);
-            if truncate {
+                egui::text::LayoutJob::simple(text, if truncate { egui::TextStyle::Button } else { egui::TextStyle::Small }.resolve(&ctx.global_style()), if truncate { theme::TEXT } else { theme::TEXT_MUTED }, line_width);
+            {
                 job.wrap.max_rows = 1;
                 job.wrap.break_anywhere = true;
                 job.wrap.overflow_character = Some('…');
@@ -84,7 +77,7 @@ impl ReviewBarText {
         };
         let mut lines = vec![layout(content.identity.clone(), true)];
         if let Some((kind, phase)) = &content.type_and_phase {
-            // Keep the full type and phase. Only the identity line may truncate.
+            // Full identity remains available through the tooltip and inspector.
             lines.push(layout(format!("{kind} · {phase}"), false));
         }
         let height = (lines.iter().map(|line| line.size().y).sum::<f32>() + 8.0).max(44.0);
@@ -107,7 +100,7 @@ impl LabelloApp {
 
     fn review_summary_width(&self, ctx: &egui::Context, layout: LayoutMode, available: f32) -> f32 {
         if layout == LayoutMode::Wide {
-            available.min(340.0)
+            available.min(380.0)
         } else {
             let spacing = ctx.global_style().spacing.item_spacing.x;
             available - 44.0 - spacing
@@ -130,7 +123,7 @@ impl LabelloApp {
         let width = self.review_summary_width(ctx, layout, viewport_width - 28.0);
         let text = ReviewBarText::measure(ctx, &content, width, self.review_inline_availability_loading(layout));
         text.height
-            + 12.0
+            + 4.0
             + if layout == LayoutMode::Wide {
                 0.0
             } else {
@@ -153,17 +146,19 @@ impl LabelloApp {
                     self.review_details_button(ui, &content, &text);
                     self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
                 });
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                     self.previous_review_action(ui);
+                    self.discard_review_action(ui);
                 });
             })
         } else {
             workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 self.review_details_button(ui, &content, &text);
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                     self.previous_review_action(ui);
+                    self.discard_review_action(ui);
                 });
                 if !self.manual_migration_active() {
                     ui.separator();
@@ -211,7 +206,9 @@ impl LabelloApp {
             })
             .inner;
         if let Some(rect) = choice.rect(id) {
-            let mut pos = rect.min;
+            let mut pos = rect.min + egui::vec2(2.0, 2.0);
+            let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.right() - 12.0, rect.center().y), egui::vec2(18.0, 18.0));
+            paint_side_panel_toggle_icon(ui, icon_rect, !selected, true, theme::TEXT_MUTED);
             for line in &text.lines {
                 ui.painter().galley(pos, line.clone(), theme::TEXT);
                 pos.y += line.size().y;
@@ -220,7 +217,7 @@ impl LabelloApp {
                 let line_height = text.lines[0].size().y;
                 let side = 16.0_f32.min(line_height);
                 let spinner_rect = egui::Rect::from_min_size(
-                    egui::pos2(rect.right() - side, rect.top() + (line_height - side) / 2.0),
+                    egui::pos2(rect.right() - 28.0 - side, rect.top() + (line_height - side) / 2.0),
                     egui::vec2(side, side),
                 );
                 // The identity line already reserves this slot; do not advance the row cursor.
@@ -259,10 +256,11 @@ impl LabelloApp {
         }
         if response.clicked() {
             self.work.show_tutorial = false;
+            ui.ctx().request_repaint();
             if LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Wide {
-                self.work.inspector_panel_collapsed = false;
+                self.work.inspector_panel_collapsed = selected;
             } else {
-                self.work.drawer = Some(Drawer::Inspector);
+                self.work.drawer = (!selected).then_some(Drawer::Inspector);
                 self.work.review_details_focus_return = Some(response.id);
             }
         }

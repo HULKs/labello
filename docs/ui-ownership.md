@@ -270,15 +270,26 @@ save status in its details, rather than retaining a success label. The
 Previous review control belongs to the workspace context toolbar, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
 
-Normal and revision review use the same staged correction owner. Persisted
-annotations remain unchanged while the canvas previews unsaved edits, additions
-and removals. Amber previews and a compact toolbar count distinguish unsaved
-work from persisted annotations. Correction success advances the assignment only after the server
-commits; failure retains the draft and frozen retry request. Approval is disabled
-while corrections exist, and rejection buttons and shortcuts require a substantive
-staged change. Local browser records include the staged changes and request;
-assignment and round validation prevent cross-workspace recovery. Historical
-missing-object locations are read-only and never offered as active rejection input.
+Normal and revision review use the same correction owner. Its interaction module
+owns item position, locally decided targets, targets requiring another decision,
+editor validity, navigation, reset, and aggregate overview eligibility. Ordinary
+unchanged-item approvals retain the existing server command; corrected-item
+rejections remain local until overview submission. Revision approvals retain their
+existing staged decision owner. Opening the automatic editor does not mark work
+changed. Only actual differences enable rejection or receive amber preview styling.
+Persisted annotations remain unchanged while the canvas previews edits, additions,
+removals and migration replacements. Reset invalidates the affected local decision,
+and earlier corrections do not block approval of another unchanged item.
+
+The overview is the only correction submission point and requires a decision for
+every original target and valid geometry. Correction success advances the assignment
+after the server commits; failure retains the draft and frozen request. Local browser
+records include position, local decisions, reset targets, changes and retry request;
+assignment, round and sequence validation prevent cross-workspace recovery.
+Historical missing-object locations remain read-only. The second-bar review indicator
+owns its measured two-line presentation and toggles the existing Inspector panel or
+drawer, retaining focus-return behavior. It shows item position before workflow
+identity, and keeps Discard corrections immediately after Previous.
 
 ## Dataset export administration
 

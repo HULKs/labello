@@ -288,29 +288,14 @@ impl LabelloApp {
     }
 
     fn review_actions(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
-        let ready = self.work.assignment.is_some() && !self.loading.saving
-            && !self.loading.image && self.work.pending_transition.is_none();
-        if self.work.correction_draft.is_some() {
-            return;
-        }
         let (_, _, explanation) = self.review_phase();
         ui.label(explanation);
-        if self.can_correct_review_object() {
-            ui.add_space(8.0);
-            if ui
-                .add_enabled(ready, egui::Button::new("Correct object"))
-                .on_hover_text("Edit this existing object without returning it to the annotator.")
-                .clicked()
-            {
-                self.start_correction();
-            }
-        }
         if show_primary_actions {
             ui.horizontal_wrapped(|ui| self.review_decision_buttons(ui, false, false));
         }
     }
 
-    fn review_decision_buttons(
+    pub(crate) fn review_decision_buttons(
         &mut self,
         ui: &mut egui::Ui,
         shortcut_only: bool,
@@ -318,8 +303,6 @@ impl LabelloApp {
     ) {
         let ready = self.work.assignment.is_some() && !self.loading.saving
             && !self.loading.image && self.work.pending_transition.is_none();
-        let compact =
-            LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Compact;
         let approve_shortcut = self.shortcut_text(
             ui.ctx(),
             labello_domain::UserAction::AcceptReviewObject,
@@ -328,31 +311,11 @@ impl LabelloApp {
             ui.ctx(),
             labello_domain::UserAction::RejectReviewObject,
         );
-        let revision = self.review_revision_active();
-        let (approve, reject) = if revision && self.current_review_annotation().is_none() {
-            if fill_width {
-                ("Commit yes".to_string(), "Commit no".to_string())
-            } else {
-                ("Commit approval".to_string(), "Submit & reject".to_string())
-            }
-        } else if revision && !shortcut_only {
-            ("Stage approval".to_string(), "Submit & reject".to_string())
+        let (approve, reject) = if self.review_overview() {
+            ("Submit approval".to_string(), if fill_width { "Reject & submit" } else { "Reject & submit corrections" }.to_string())
         } else if shortcut_only {
-            (
-                shortcut_button_label(&approve_shortcut, "Accept"),
-                shortcut_button_label(&reject_shortcut, "Reject"),
-            )
-        } else if compact || fill_width {
-            ("Accept".to_string(), "Reject".to_string())
-        } else if self.current_review_annotation().is_none() {
-            ("Complete review".to_string(), "Send back".to_string())
-        } else {
-            (
-                "Approve object".to_string(),
-                "Submit & reject".to_string(),
-            )
-        };
-        let reject = if self.has_missing_object_draft() { format!("{reject} ({})", self.work.missing_objects.locations.len()) } else { reject };
+            (shortcut_button_label(&approve_shortcut, "Approve"), shortcut_button_label(&reject_shortcut, "Reject"))
+        } else { ("Approve".to_string(), "Reject".to_string()) };
         let button_width = fill_width
             .then(|| ((ui.available_size_before_wrap().x - ui.spacing().item_spacing.x) / 2.0).floor().max(44.0));
         let approve_button = egui::Button::new(&approve).min_size(egui::vec2(
@@ -363,31 +326,35 @@ impl LabelloApp {
             button_width.unwrap_or_default(),
             if fill_width { 44.0 } else { 0.0 },
         ));
-        let can_approve = ready && !(revision && self.work.review_rejected) && !self.has_review_corrections();
-        if theme::primary_button(ui, can_approve, approve_button)
+        let can_approve = ready && !self.work.migration.busy && self.review_can_approve();
+        let approve_response = if can_approve { theme::primary_button(ui, true, approve_button) } else { theme::quiet_button(ui, false, approve_button) };
+        if approve_response
             .on_hover_text(format!(
                 "Accept review object ({})",
                 shortcut_button_label(&approve_shortcut, "Accept")
             ))
             .clicked()
         {
-            self.request_review(ReviewDecision::Approved);
+            if self.manual_migration_active() { self.trigger_migration_review_action(ReviewDecision::Approved); } else { self.request_review(ReviewDecision::Approved); }
         }
-        if theme::danger_button(ui, ready && self.can_submit_review_corrections(), reject_button)
+        if theme::danger_button(ui, ready && !self.work.migration.busy && self.review_can_reject(), reject_button)
             .on_hover_text(format!(
                 "Reject review object ({})",
                 shortcut_button_label(&reject_shortcut, "Reject")
             ))
             .clicked()
         {
-            self.request_review(ReviewDecision::Rejected);
+            self.reject_review_item();
         }
     }
 
     pub(crate) fn correction_actions(&mut self, ui: &mut egui::Ui, ready: bool) {
         ui.separator();
-        ui.heading("Correction mode");
-        ui.label("Edit the highlighted preview, then keep it to correct another object.");
+        ui.horizontal_wrapped(|ui| {
+            if ui.add_enabled(ready, egui::Button::new("Reset item")).clicked() { self.reset_review_item(); }
+            if self.review_overview() && ui.add_enabled(ready && self.review_editor_valid(), egui::Button::new("Back to overview")).clicked() { self.retain_review_editor(); }
+        });
+        ui.label("Edit the highlighted item directly on the canvas.");
 
         let skeleton_keypoints = self.work.correction_draft.as_ref().and_then(|draft| {
             let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry else {
@@ -446,35 +413,6 @@ impl LabelloApp {
             });
         }
 
-        let (can_undo, geometry_changed) = self
-            .work
-            .correction_draft
-            .as_ref()
-            .map(|draft| (!draft.geometry_history.is_empty(), draft.geometry_changed()))
-            .unwrap_or_default();
-        ui.add_space(theme::SPACE_2);
-        ui.label(RichText::new("Actions").strong().color(theme::TEXT_MUTED));
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(ready && can_undo, egui::Button::new("Undo correction"))
-                .clicked()
-            {
-                self.undo_correction();
-            }
-            if theme::danger_button(ui, ready, egui::Button::new("Discard correction")).clicked() {
-                self.discard_correction();
-            }
-            if theme::primary_button(
-                ui,
-                ready && (geometry_changed || self.work.correction_draft.as_ref().is_some_and(|draft| draft.expected_version == 0)),
-                egui::Button::new("Keep correction"),
-            )
-            .on_disabled_hover_text("Move, resize, or change a keypoint before keeping the correction.")
-            .clicked()
-            {
-                self.request_correction();
-            }
-        });
     }
 
     fn correction_keypoint_state(&mut self, ui: &mut egui::Ui, ready: bool) {

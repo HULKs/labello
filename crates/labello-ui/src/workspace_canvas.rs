@@ -61,8 +61,15 @@ impl LabelloApp {
                     && self.work.pending_transition.is_none();
                 interaction
             });
-            let mut interaction = correction_interaction
-                .unwrap_or_else(|| CanvasInteraction::annotations(annotator_editable));
+            let overview_editable = self.view == AppView::Review
+                && self.review_overview()
+                && !self.loading.saving
+                && !self.loading.image
+                && self.work.pending_transition.is_none()
+                && self.work.review_corrections.submission.is_none();
+            let mut interaction = correction_interaction.unwrap_or_else(|| {
+                CanvasInteraction::annotations(annotator_editable || overview_editable)
+            });
             if correction_interaction.is_none()
                 && annotator_editable
                 && self.work.tool == Tool::Keypoints
@@ -77,7 +84,13 @@ impl LabelloApp {
                         .iter()
                         .find(|annotation| !annotation.deleted && &annotation.annotation_id == id)
                 });
-                self.work.canvas.set_review_focus(review_annotation);
+                self.work
+                    .canvas
+                    .set_review_focus(if self.review_overview() {
+                        None
+                    } else {
+                        review_annotation
+                    });
             } else {
                 self.work.canvas.clear_review_focus();
             }
@@ -133,6 +146,23 @@ impl LabelloApp {
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_keypoint(edit),
                     Some(CanvasAction::SelectKeypoint(_)) => {}
                     None => {}
+                }
+            } else if overview_editable && self.work.correction_draft.is_none() {
+                match action {
+                    Some(CanvasAction::CreateBoundingBox(bbox)) => {
+                        self.begin_new_review_object(None);
+                        if let Some(draft) = self.work.correction_draft.as_mut() {
+                            draft.edited_geometry =
+                                labello_domain::AnnotationGeometry::BoundingBox(bbox);
+                        }
+                        self.retain_review_editor();
+                    }
+                    Some(CanvasAction::PlaceKeypoint(point)) => {
+                        self.begin_new_review_object(None);
+                        self.place_review_correction_keypoint(point);
+                    }
+                    Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                    _ => {}
                 }
             } else if self.work.correction_draft.is_some() {
                 match action {

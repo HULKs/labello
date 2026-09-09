@@ -259,7 +259,11 @@ impl LabelloApp {
                 return None;
             }
         }
-        let correction = if let Some(draft) = &self.work.correction_draft {
+        let correction = if let Some(draft) = self.work.correction_draft.as_ref().filter(|draft| {
+            draft.expected_version == 0
+                || draft.geometry_changed()
+                || !draft.reason.trim().is_empty()
+        }) {
             if let Some(editor) = &self.work.review_corrections.editor {
                 Some(CorrectionContext {
                     base_version: editor.version,
@@ -317,7 +321,17 @@ impl LabelloApp {
             revision_mode: self.review_revision_active(),
             staged_decision: self
                 .staged_review_decision(&target)
-                .map(|review| review.decision.clone()),
+                .map(|review| review.decision.clone())
+                .or_else(|| {
+                    (self.work.review_corrections.reviewed.contains(&target)
+                        && self
+                            .work
+                            .review_corrections
+                            .changes
+                            .iter()
+                            .any(|change| self.change_matches_target(change, &target)))
+                    .then_some(ReviewDecision::Rejected)
+                }),
             correction,
             preview_unavailable: self.work.current_texture.is_none(),
             unsaved_corrections: self.work.review_corrections.changes.len(),

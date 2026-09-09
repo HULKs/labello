@@ -93,8 +93,7 @@ impl LabelloApp {
                 .retain(|old| old.target != target);
             self.work.staged_review_decisions.push(review);
             if phase == ReviewPhase::Object && decision == ReviewDecision::Approved {
-                self.work.review_index += 1;
-                self.work.migration.review_index += 1;
+                self.finish_local_review_item();
                 self.sync_review_selection();
                 return true;
             }

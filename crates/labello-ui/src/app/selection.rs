@@ -294,7 +294,6 @@ impl LabelloApp {
     pub(crate) fn workspace_actions_height(&self, layout: LayoutMode, viewport: egui::Vec2) -> f32 {
         if layout == LayoutMode::Compact
             && self.view == AppView::Review
-            && self.work.correction_draft.is_none()
         {
             let minimum_single_row_width = 98.0;
             if viewport.x < minimum_single_row_width {

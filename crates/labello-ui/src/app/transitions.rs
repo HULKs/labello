@@ -24,7 +24,7 @@ impl LabelloApp {
         self.work.assignment_touched
             || self.work.edit_generation != 0
             || matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
-            || self.work.correction_draft.is_some()
+            || self.review_editor_changed()
             || self.has_review_corrections()
             || self.migration_has_unsaved_input()
             || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty())
@@ -280,6 +280,7 @@ impl LabelloApp {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn can_correct_review_object(&self) -> bool {
         self.view == AppView::Review
             && self.work.review_corrections.submission.is_none()
@@ -308,6 +309,7 @@ impl LabelloApp {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn start_correction(&mut self) {
         if let Some(annotation) = self.current_review_annotation().cloned() {
             self.begin_review_correction(annotation);
@@ -337,6 +339,7 @@ impl LabelloApp {
         }
         draft.geometry_history.push(draft.edited_geometry.clone());
         draft.edited_geometry = geometry;
+        self.work.assignment_touched = true;
         self.runtime.error = None;
     }
 

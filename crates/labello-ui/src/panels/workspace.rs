@@ -404,6 +404,7 @@ impl LabelloApp {
             let show_refocus = self.view == AppView::Review || self.manual_migration_active();
             let dense = show_refocus
                 && (layout != LayoutMode::Wide || ui.ctx().content_rect().width() < 1366.0);
+            if self.view != AppView::Review {
             let pan_shortcut =
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::TogglePanMode);
             let pan_drag_shortcut =
@@ -429,6 +430,8 @@ impl LabelloApp {
                 .clicked()
             {
                 self.trigger_user_action(labello_domain::UserAction::TogglePanMode);
+            }
+
             }
 
             if show_refocus {
@@ -473,7 +476,7 @@ impl LabelloApp {
 
             if layout == LayoutMode::Wide {
                 self.workflow_panel_toggle(ui);
-                self.inspector_panel_toggle(ui);
+                if self.view != AppView::Review { self.inspector_panel_toggle(ui); }
             }
         });
     }

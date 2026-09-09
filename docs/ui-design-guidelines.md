@@ -153,8 +153,9 @@ has been recorded.
 - **Workspace:** preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
-  pinch instructions in Settings. Keep Pan mode active during approval decisions
-  and return primary drag to object editing during reviewer correction; place review phase
+  pinch instructions in Settings. Review opens each focused item for direct editing. Primary drag edits the item;
+  modifier-drag and middle-drag remain available for panning. Omit the Pan button
+  in review; place review phase
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
@@ -180,7 +181,24 @@ has been recorded.
   "Final check / Full image" and omit object-only fields. Migration distinguishes
   annotated dispositions, excluded objects, discovered skeletons and confirmation;
   excluded objects show disposition version without inventing an annotation version.
-  Correction mode shows the base persisted version and whether input is unsaved.
+  Actual edits show the base persisted version and unsaved input; opening an item
+  alone is not a correction. The second-bar indicator leads with item position or
+  Image overview, followed by workflow, class and geometry type. Its panel icon and
+  selected state reflect Inspector visibility, and activating it toggles the panel.
+  Long identity text truncates within the indicator while the tooltip and Inspector
+  retain the complete accessible identity. Keep the current position visible when
+  corrections exist. Put Discard corrections immediately after Previous in the
+  second bar, using Discard in compact layouts.
+  Approve and Reject evaluate the focused item independently. An unchanged item
+  enables Approve; a valid correction enables Reject. Reject retains changes locally
+  and advances. Previous item, Next item and Overview navigate without recording a
+  decision. Reset item restores the original annotation or disposition and requires
+  another decision. Discard corrections resets every changed item for review.
+  The overview permits drawing missing annotations and revisiting existing items.
+  Once every original item has a decision, Submit approval is enabled if no
+  corrections remain; otherwise Reject and submit corrections is enabled. Invalid
+  or unfinished additions block both submission actions. Only the overview submits
+  corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
   existing identity line. The full accessible details explain that geometry is
   unchanged; no redundant caption row consumes canvas space. If target context

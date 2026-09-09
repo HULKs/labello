@@ -1930,7 +1930,7 @@ fn dragging_a_persisted_skeleton_keypoint_saves_a_new_annotation_version() {
 }
 
 #[test]
-fn correction_mode_blocks_review_shortcuts_and_saturation_never_discards_the_draft() {
+fn corrected_item_shortcuts_stage_locally_and_saturated_submission_retains_changes() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(
         &api,
@@ -1943,7 +1943,7 @@ fn correction_mode_blocks_review_shortcuts_and_saturation_never_discards_the_dra
         true,
     );
     let mut harness = loaded_review_harness(api.clone());
-    harness.state_mut().start_correction();
+    edit_test_review_box(harness.state_mut());
     assert!(harness.state().work.correction_draft.is_some());
 
     harness.key_press(egui::Key::Y);
@@ -1951,22 +1951,19 @@ fn correction_mode_blocks_review_shortcuts_and_saturation_never_discards_the_dra
     harness.key_press(egui::Key::N);
     harness.step();
     assert_eq!(api.counts().record_review, 0);
-    assert!(harness.state().work.correction_draft.is_some());
-
+    assert!(harness.state().review_overview());
+    assert!(harness.state().has_review_corrections());
+    assert_eq!(api.counts().record_correction, 0);
     saturate_command_queue(harness.state_mut());
-    harness
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    assert!(harness.state().work.correction_draft.is_some());
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert!(harness.state().has_review_corrections());
     assert!(!harness.state().loading.saving);
-
+    let submission = harness.state().work.review_corrections.submission.clone();
     harness.state_mut().runtime.commands.clear();
     harness.state_mut().runtime.active_requests.clear();
-    harness
-        .state_mut()
-        .request_review(labello_domain::ReviewDecision::Rejected);
-    assert!(harness.state().work.correction_draft.is_some());
-    assert!(!harness.state().loading.saving);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Rejected);
+    assert!(harness.state().loading.saving);
+    assert_eq!(harness.state().work.review_corrections.submission, submission);
 }
 
 #[test]
@@ -2079,4 +2076,34 @@ fn zoom_help_shows_configured_keys_and_gestures_without_workspace_widgets() {
     }
     assert!(harness.query_by_label("Zoom in with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
     assert!(harness.query_by_label("Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
+}
+
+#[test]
+fn browser_review_recovery_preserves_local_decisions_without_marking_an_untouched_editor_dirty() {
+    use crate::persistence::{DraftRecovery, DraftValidation, ReviewDraft, StorageIdentity, StoredCorrectionDraft, WorkDraft, WorkDraftPayload};
+    for changed in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+        let mut harness = loaded_review_harness(api);
+        if changed { edit_test_review_box(harness.state_mut()); harness.state_mut().reject_review_item(); }
+        let app = harness.state_mut();
+        let identity = StorageIdentity::new(&app.config.api_base_url, app.config.user_id.clone()).unwrap();
+        let expected = app.work.review_corrections.clone();
+        let draft = WorkDraft::new(&identity, app.config.dataset_id.clone(), app.work.assignment.as_ref().unwrap(), app.work.current_state.as_ref().unwrap().current_sequence, 0, WorkDraftPayload::Review(ReviewDraft {
+            target_annotation: app.work.selected_annotation.clone(),
+            correction: app.work.correction_draft.as_ref().map(StoredCorrectionDraft::from),
+            staged_corrections: Box::new(expected.clone()),
+        }));
+        let round_trip: WorkDraft = serde_json::from_str(&serde_json::to_string(&draft).unwrap()).unwrap();
+        app.work.review_corrections = Default::default();
+        app.work.correction_draft = None;
+        app.work.review_index = 0;
+        app.work.assignment_touched = false;
+        app.runtime.persistence.recovery = Some(DraftRecovery::Work(Box::new(round_trip), DraftValidation::Valid));
+        app.recover_browser_draft();
+        assert_eq!(app.work.review_corrections, expected);
+        assert_eq!(app.has_review_corrections(), changed);
+        assert_eq!(app.assignment_has_work(), changed);
+        assert_eq!(app.review_overview(), changed);
+    }
 }

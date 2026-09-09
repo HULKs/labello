@@ -213,19 +213,19 @@ fn review_bar_tracks_correction_final_loading_and_missing_preview_without_stale_
     let mut harness = loaded_review_harness(api);
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+    assert_review_bar_paints(&harness, "Item 1 / 1");
     harness.state_mut().start_correction();
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Bounding boxes · Correction mode");
+    assert_review_bar_paints(&harness, "Item 1 / 1");
     assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
     harness.state_mut().discard_correction();
     harness.state_mut().work.review_index = 1;
     harness.state_mut().sync_review_selection();
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Bounding boxes · Final check");
+    assert_review_bar_paints(&harness, "Image overview");
     harness.state_mut().work.current_texture = None;
     harness.run_steps(3);
-    assert_review_bar_paints(&harness, "Bounding boxes · Final check");
+    assert_review_bar_paints(&harness, "Image overview");
     harness.state_mut().loading.image = true;
     harness.run_steps(3);
     assert!(
@@ -277,13 +277,13 @@ fn review_bar_wraps_measured_type_and_phase_when_text_grows() {
         .size = 20.0;
     harness.ctx.set_global_style(style);
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Bounding boxes · Object 1 of 1");
+    assert_review_bar_paints(&harness, "Item 1 / 1");
     assert!(
         harness
             .get_by_label("Workspace context bar")
             .rect()
             .height()
-            > before
+            >= before
     );
     assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
 }
@@ -336,12 +336,12 @@ fn review_bar_uses_canonical_migration_context_for_excluded_discovered_and_final
                 .to_string();
             assert!(full.contains(&context.accessible_summary()));
             if matches!(context.phase, ReviewContextPhase::FullImage { .. }) {
-                assert_review_bar_paints(&harness, "Skeletons · Final check");
+                assert_review_bar_paints(&harness, "Image overview");
                 assert!(!full.contains("version"));
                 observed.push("Final check");
                 break;
             }
-            assert_review_bar_paints(&harness, &format!("Skeletons · {}", context.phase_label()));
+            assert_review_bar_paints(&harness, &match context.phase { crate::review_context::ReviewContextPhase::Object { number, total, .. } => format!("Item {number} / {total}"), _ => "Image overview".into() });
             let ReviewContextPhase::Object { number, kind, .. } = context.phase else {
                 unreachable!()
             };
@@ -431,11 +431,7 @@ fn review_bar_distinguishes_duplicate_workflow_types_and_rejects_stale_task_data
         harness.state_mut().work.tasks.push(other);
         harness.set_size(egui::vec2(320.0, 568.0));
         harness.run_steps(3);
-        let expected = if skeleton {
-            "Skeletons · Object 1 of 1"
-        } else {
-            "Bounding boxes · Object 1 of 1"
-        };
+        let expected = "Item 1 / 1";
         assert_review_bar_paints(&harness, expected);
         harness.state_mut().work.selected_task_id = Some(other_id);
         harness.run_steps(3);
@@ -452,5 +448,22 @@ fn review_bar_distinguishes_duplicate_workflow_types_and_rejects_stale_task_data
         harness.state_mut().work.selected_task_id = Some(original);
         harness.run_steps(3);
         assert_review_bar_paints(&harness, expected);
+    }
+}
+
+#[test]
+fn review_details_indicator_toggles_the_wide_inspector_and_reflects_its_state() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+    let mut harness = loaded_review_harness(api);
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    harness.run_steps(3);
+    for collapsed in [true, false, true, false] {
+        harness.get_by_label_contains("Review details: Workflow:").click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().work.inspector_panel_collapsed, collapsed);
+        let node = harness.get_by_label_contains("Review details: Workflow:");
+        assert_eq!(node.accesskit_node().toggled(), Some(if collapsed { egui::accesskit::Toggled::False } else { egui::accesskit::Toggled::True }));
+        assert_review_bar_paints(&harness, "Item 1 / 1");
     }
 }

@@ -139,6 +139,13 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
+        if self.view == AppView::Review && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none() {
+            match action {
+                UserAction::SelectPreviousObject => { self.cycle_review_item(-1); return; }
+                UserAction::SelectNextObject => { self.cycle_review_item(1); return; }
+                _ => {}
+            }
+        }
         if self.manual_migration_active() {
             match action {
                 UserAction::NextImage => {
@@ -341,12 +348,12 @@ impl LabelloApp {
                 self.refocus_active_object();
             }
             UserAction::AcceptReviewObject
-                if self.view == AppView::Review && self.work.correction_draft.is_none() =>
+                if self.view == AppView::Review =>
             {
                 self.request_review(labello_domain::ReviewDecision::Approved);
             }
             UserAction::RejectReviewObject
-                if self.view == AppView::Review && self.work.correction_draft.is_none() =>
+                if self.view == AppView::Review =>
             {
                 self.request_review(labello_domain::ReviewDecision::Rejected);
             }

@@ -10,7 +10,7 @@ use eframe::egui::{self, RichText};
 use crate::{
     app::{AppView, LabelloApp, MigrationAction, UiCommand},
     canvas::{CanvasAction, CanvasAnnotationStyle, CanvasInteraction, show_canvas_colored},
-    panels::{keypoint_placement_mode, shortcut_button_label},
+    panels::keypoint_placement_mode,
     theme,
 };
 
@@ -423,6 +423,22 @@ impl LabelloApp {
                 && !self.loading.image
                 && self.work.pending_transition.is_none();
         }
+        if self.view == AppView::Review && self.work.correction_draft.is_none() {
+            interaction = CanvasInteraction::annotations(
+                self.review_overview()
+                    && !self.loading.saving
+                    && !self.loading.image
+                    && !self.work.migration.busy
+                    && self.work.pending_transition.is_none()
+                    && self.work.review_corrections.submission.is_none(),
+            );
+            interaction.allow_create = self.review_overview();
+            selectable_annotations.extend(
+                annotations
+                    .iter()
+                    .map(|annotation| annotation.annotation_id.clone()),
+            );
+        }
         self.style_review_correction_previews(&annotations, &mut annotation_styles);
         let action = show_canvas_colored(
             ui,
@@ -448,6 +464,17 @@ impl LabelloApp {
                 Some(CanvasAction::SelectKeypoint(selection)) => {
                     self.select_correction_keypoint(selection.keypoint_index)
                 }
+                _ => {}
+            }
+            return;
+        }
+        if self.view == AppView::Review {
+            match action {
+                Some(CanvasAction::PlaceKeypoint(point)) if self.review_overview() => {
+                    self.begin_new_review_object(None);
+                    self.place_review_correction_keypoint(point);
+                }
+                Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
                 _ => {}
             }
             return;
@@ -1193,71 +1220,8 @@ impl LabelloApp {
         compact: bool,
         shortcut_only: bool,
     ) {
-        let approve_shortcut =
-            self.shortcut_text(ui.ctx(), labello_domain::UserAction::AcceptReviewObject);
-        let reject_shortcut =
-            self.shortcut_text(ui.ctx(), labello_domain::UserAction::RejectReviewObject);
-        let revision = self.review_revision_active();
-        let final_phase = matches!(
-            target,
-            labello_client::MigrationReviewTarget::Confirmation { .. }
-        );
-        let (approve, reject) = if revision && final_phase {
-            ("Commit approval".to_string(), "Submit & reject".to_string())
-        } else if revision && !shortcut_only {
-            ("Stage approval".to_string(), "Submit & reject".to_string())
-        } else if shortcut_only {
-            (
-                shortcut_button_label(&approve_shortcut, "Accept"),
-                shortcut_button_label(&reject_shortcut, "Reject"),
-            )
-        } else if compact {
-            ("Accept".to_string(), "Reject".to_string())
-        } else {
-            (
-                "Approve migration item".to_string(),
-                "Submit & reject".to_string(),
-            )
-        };
-        let button_width =
-            compact.then(|| ((ui.available_width() - ui.spacing().item_spacing.x) / 2.0).max(44.0));
-        let approve_button = egui::Button::new(approve).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if compact { 44.0 } else { 0.0 },
-        ));
-        let reject_button = egui::Button::new(reject).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if compact { 44.0 } else { 0.0 },
-        ));
-        let ready = !self.work.migration.busy && !self.loading.saving;
-        if theme::primary_button(
-            ui,
-            ready && !(revision && self.work.review_rejected) && !self.has_review_corrections(),
-            approve_button,
-        )
-        .on_hover_text(format!("Accept migration item ({approve_shortcut})"))
-        .clicked()
-        {
-            self.request_review_migration(
-                task_id.clone(),
-                target.clone(),
-                labello_domain::ReviewDecision::Approved,
-            );
-        }
-        if theme::danger_button(
-            ui,
-            ready && self.can_submit_review_corrections(),
-            reject_button,
-        )
-        .on_hover_text(format!("Reject migration item ({reject_shortcut})"))
-        .clicked()
-        {
-            self.request_review_migration(
-                task_id,
-                target,
-                labello_domain::ReviewDecision::Rejected,
-            );
-        }
+        let _ = (task_id, target);
+        self.review_decision_buttons(ui, shortcut_only, compact);
     }
 
     pub(crate) fn migration_workspace_actions(&mut self, ui: &mut egui::Ui, compact: bool) {
@@ -1994,39 +1958,15 @@ impl LabelloApp {
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
-        // Completion advances the task timestamp past its object approvals. Keep
-        // the outgoing review position until the next assignment is installed.
+        if let Some(position) = self.work.review_corrections.position {
+            return position;
+        }
         if self.work.assignment.as_ref().is_some_and(|assignment| {
-            assignment.kind == labello_domain::AssignmentKind::Review
-                && assignment.status == labello_domain::AssignmentStatus::Completed
+            assignment.status == labello_domain::AssignmentStatus::Completed
         }) {
             return self.work.migration.review_index;
         }
-        let (Some(state), Some(task)) = (self.work.current_state.as_ref(), self.selected_task())
-        else {
-            return 0;
-        };
-        let Ok(targets) = state.review_object_targets(task) else {
-            return 0;
-        };
-        let object_count = targets.len();
-        if self.review_revision_active() && self.work.review_rejected {
-            return object_count;
-        }
-        targets
-            .iter()
-            .take(object_count)
-            .position(|target| {
-                let review = if self.review_revision_active() {
-                    self.staged_review_decision(target)
-                } else {
-                    state.effective_review_for_target(&task.task_id, target, &self.config.user_id)
-                };
-                review.is_none_or(|review| {
-                    review.decision != labello_domain::ReviewDecision::Approved
-                })
-            })
-            .unwrap_or(object_count)
+        self.next_review_position()
     }
 
     fn migration_targets(&self) -> Vec<labello_domain::MigrationTarget> {
@@ -3006,10 +2946,10 @@ impl LabelloApp {
         decision: labello_domain::ReviewDecision,
     ) {
         if decision == labello_domain::ReviewDecision::Rejected {
-            self.submit_staged_review_corrections();
+            self.reject_review_item();
             return;
         }
-        if self.has_review_corrections() {
+        if !self.review_can_approve() || !self.retain_review_editor() {
             return;
         }
         let Some(assignment) = self.work.assignment.clone() else {
