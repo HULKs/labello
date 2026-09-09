@@ -188,8 +188,13 @@ has been recorded.
   Size the indicator to its text and panel icon, capped by the available width.
   Long identity text truncates within the indicator while the tooltip and Inspector
   retain the complete accessible identity. Keep the current position visible when
-  corrections exist. Put Discard corrections immediately after Previous in the
-  second bar, using Discard in compact layouts.
+  corrections exist. The Inspector starts closed. On mobile, keep the item/Inspector
+  indicator, Refocus, Fit and workflow toggle in one top row. Put Previous, Discard
+  and Skip in a permanently visible second bottom row beneath the decision buttons;
+  use Discard corrections on wide screens. Skip is not hidden in the navigation menu.
+  Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
+  width, retaining accessible names and tooltips. Short empty states scroll to keep
+  retry actions reachable.
   Approve and Reject evaluate the focused item independently. An unchanged item
   enables Approve; a valid correction enables Reject. Reject retains changes locally
   and advances. Previous item, Next item and Overview retain valid corrections, which
@@ -213,7 +218,7 @@ has been recorded.
   Workspace secondary actions use measured button atoms, including the current
   font, icons and shortcuts, in the space left after preceding controls and badges.
   Preserve each workflow's primary controls and secondary order. Show the longest
-  secondary prefix that fits with an overflow trigger for the remaining tail; omit
+  secondary prefix that fits, trying icons before an overflow trigger for the remaining tail; omit
   the trigger when everything fits. Required controls wrap and the panel reserves
   their actual height. Migration Previous object leads its secondary action order;
   short migration annotation bars remove spare vertical padding so confirmation
@@ -225,8 +230,8 @@ has been recorded.
   filename text and secondary controls. Only the identity line may truncate; type
   and phase wrap at their measured text width and the shell reserves the resulting
   height. At compact sizes, the summary opens Inspector details by touch or keyboard,
-  a separate Workflow control stays reachable, and canvas controls occupy a second
-  row. Compact availability feedback shares the truncatable identity line; it
+  a separate Workflow control stays reachable, and canvas controls share the same
+  row. Annotation also keeps canvas and panel controls together in one compact row. Compact availability feedback shares the truncatable identity line; it
   must not take width from the full type/phase line or add a context row.
   Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.

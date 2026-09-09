@@ -85,18 +85,19 @@ pub(crate) fn workspace_secondary_actions(
         data.get_temp::<WorkspaceOverflowFocus>(owner)
             .unwrap_or_default()
     });
-    let more_button = egui::Button::new(more_label)
-        .min_size(egui::Vec2::splat(44.0))
-        .wrap_mode(egui::TextWrapMode::Extend);
-    let more_width = workspace_button_size(ui, &more_button).x;
-    let widths: Vec<_> = actions
+    let mut widths: Vec<_> = actions
         .iter()
         .map(|action| workspace_button_size(ui, &action.button()).x)
         .collect();
     let available = ui.available_size_before_wrap().x;
     let total = widths.iter().sum::<f32>()
         + ui.spacing().item_spacing.x * widths.len().saturating_sub(1) as f32;
-    if total > available && more_width > available {
+    let icon_only = total > available;
+    let more_button = egui::Button::new(if icon_only { "" } else { more_label })
+        .min_size(egui::Vec2::splat(44.0)).wrap_mode(egui::TextWrapMode::Extend);
+    let more_width = workspace_button_size(ui, &more_button).x;
+    if icon_only { widths.fill(44.0); }
+    if icon_only && more_width > available {
         ui.end_row();
     }
     let prefix = workspace_inline_prefix(
@@ -138,9 +139,18 @@ pub(crate) fn workspace_secondary_actions(
                 } else {
                     action.button()
                 };
-                let response = ui
-                    .add_enabled(action.enabled, button)
-                    .on_hover_text(action.help);
+                let response = if icon_only && !menu {
+                    use labello_domain::UserAction;
+                    let icon = match action.command {
+                        WorkspaceCommand::User(UserAction::PreviousImage | UserAction::SelectPreviousObject) => WorkspaceActionIcon::Previous,
+                        WorkspaceCommand::User(UserAction::UndoEdit) => WorkspaceActionIcon::Undo,
+                        WorkspaceCommand::User(UserAction::RedoEdit) => WorkspaceActionIcon::Redo,
+                        WorkspaceCommand::User(UserAction::SaveAnnotations) => WorkspaceActionIcon::Save,
+                        WorkspaceCommand::User(UserAction::SkipAssignment) => WorkspaceActionIcon::Skip,
+                        _ => WorkspaceActionIcon::Next,
+                    };
+                    workspace_action_button(ui, action.enabled, &action.label, icon, Some(44.0), theme::Intent::Neutral)
+                } else { ui.add_enabled(action.enabled, button) }.on_hover_text(action.help);
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(
                         egui::WidgetType::Button,
@@ -170,6 +180,14 @@ pub(crate) fn workspace_secondary_actions(
                 ui.add(more_button)
             })
             .inner;
+        if icon_only {
+            let color = ui.style().interact(&response).fg_stroke.color;
+            for x in [-6.0, 0.0, 6.0] {
+                ui.painter().circle_filled(response.rect.center() + egui::vec2(x, 0.0), 2.0, color);
+            }
+        }
+        let response = response.on_hover_text(more_label);
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, more_label));
         focus.trigger = Some(response.id);
         if moved.is_some() {
             response.request_focus();

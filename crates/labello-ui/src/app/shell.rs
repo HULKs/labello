@@ -48,7 +48,7 @@ impl eframe::App for LabelloApp {
         let layout = LayoutMode::for_width(ui.available_width());
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
         let compact_action_height = (self.work_view()
-            && (layout != LayoutMode::Wide || self.manual_migration_active()))
+            && (layout != LayoutMode::Wide || self.manual_migration_active() || self.view == AppView::Review))
         .then(|| self.workspace_actions_height(layout, viewport));
         egui::Panel::top("app_bar")
             .exact_size(56.0)
@@ -73,7 +73,7 @@ impl eframe::App for LabelloApp {
                     .map(|state| state.size().y);
                 let actions = egui::Panel::bottom(actions_id)
                     .min_size(action_height)
-                    .frame(if Self::short_viewport(viewport) && self.manual_migration_active() && self.view == AppView::Annotate {
+                    .frame(if Self::short_viewport(viewport) && (self.view == AppView::Review || self.manual_migration_active() && self.view == AppView::Annotate) {
                         theme::top_bar_frame().inner_margin(egui::Margin::symmetric(14, 0))
                     } else { theme::top_bar_frame() })
                     .show(ui, |ui| {
@@ -140,7 +140,7 @@ impl eframe::App for LabelloApp {
                                         top: 0,
                                         bottom: 0,
                                     })
-                                    .show(ui, |ui| self.right_panel(ui, true));
+                                    .show(ui, |ui| self.right_panel(ui, self.view != AppView::Review));
                             });
                     });
             } else {

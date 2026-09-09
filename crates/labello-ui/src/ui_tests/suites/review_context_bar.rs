@@ -59,6 +59,12 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
         let bar = harness.get_by_label("Workspace context bar").rect();
         assert!(bar.contains_rect(rect));
         let canvas = harness.get_by_label("Annotation canvas").rect();
+        for label in ["Skip", if width >= 1100.0 { "Discard corrections" } else { "Discard" }] {
+            let action = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+            assert!(action.top() >= canvas.bottom(), "{label} must be below the canvas");
+            assert!(action.bottom() <= height, "{label} must fit the viewport");
+            assert!(action.height() >= 44.0);
+        }
         assert!(canvas.height() >= 44.0, "{width}x{height}: {canvas:?}");
         assert!(
             bar.bottom() <= canvas.top() + 0.5,
@@ -72,6 +78,10 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
             height,
         );
         if width < 1100.0 {
+            let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
+            let refocus = harness.get_by_label_contains("Refocus object").rect();
+            assert!((fit.center().y - rect.center().y).abs() < 1.0);
+            assert!((refocus.center().y - rect.center().y).abs() < 1.0);
             assert_control_inside(
                 &harness,
                 "Workflow",
@@ -458,12 +468,85 @@ fn review_details_indicator_toggles_the_wide_inspector_and_reflects_its_state() 
     let mut harness = loaded_review_harness(api);
     harness.set_size(egui::vec2(1440.0, 1000.0));
     harness.run_steps(3);
-    for collapsed in [true, false, true, false] {
+    assert!(harness.state().work.inspector_panel_collapsed);
+    for collapsed in [false, true, false, true] {
         harness.get_by_label_contains("Review details: Workflow:").click();
         harness.run_steps(3);
         assert_eq!(harness.state().work.inspector_panel_collapsed, collapsed);
         let node = harness.get_by_label_contains("Review details: Workflow:");
         assert_eq!(node.accesskit_node().toggled(), Some(if collapsed { egui::accesskit::Toggled::False } else { egui::accesskit::Toggled::True }));
         assert_review_bar_paints(&harness, "Item 1 / 1");
+    }
+}
+
+#[test]
+fn mobile_review_footer_stays_visible_across_review_kinds_and_phases() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [InspectorPreset::Review, InspectorPreset::ReviewCorrection, InspectorPreset::MigrationReview, InspectorPreset::MigrationDiscoveryReview] {
+        let mut app = inspector_presets::build(preset, &egui::Context::default());
+        app.work.previous_assignment = app.work.assignment.clone();
+        let mut harness = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
+        for position in [0, harness.state().review_object_targets().len()] {
+            harness.state_mut().navigate_review_item(position);
+            for (width, height) in [(320.0, 320.0), (320.0, 568.0), (390.0, 844.0), (844.0, 390.0), (768.0, 1024.0)] {
+                harness.set_size(egui::vec2(width, height));
+                harness.run_steps(4);
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                assert!(canvas.height() >= 44.0, "{preset:?} {width}x{height}: {canvas:?}");
+                let mut row_y: Option<f32> = None;
+                for label in ["Previous", "Discard", "Skip"] {
+                    let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+                    assert!(rect.top() >= canvas.bottom() && rect.bottom() <= height);
+                    assert!(rect.left() >= 0.0 && rect.right() <= width);
+                    assert!(rect.height() >= 44.0);
+                    if let Some(y) = row_y { assert!((rect.center().y - y).abs() < 1.0); }
+                    row_y = Some(rect.center().y);
+                }
+                let indicator = harness.get_by_label_contains("Review details:").rect();
+                let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
+                assert!((indicator.center().y - fit.center().y).abs() < 1.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn mobile_review_icon_fallback_keeps_large_text_actions_in_their_rows() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_review_harness(api);
+    harness.state_mut().work.previous_assignment = harness.state().work.assignment.clone();
+    harness.set_size(egui::vec2(390.0, 844.0));
+    harness.ctx.global_style_mut(|style| { style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(36.0)); });
+    harness.run_steps(4);
+    for label in ["Submit approval", "Reject & submit", "Previous", "Discard", "Skip", "Fit"] {
+        let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+        assert!(rect.left() >= 0.0 && rect.right() <= 390.0);
+        assert!(rect.height() >= 44.0 && rect.height() < 60.0, "{label}: {rect:?}");
+    }
+}
+
+#[test]
+fn mobile_annotation_and_migration_toolbars_keep_large_text_controls_inline() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [InspectorPreset::Annotation, InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut harness = Harness::builder().with_size(egui::vec2(320.0, 568.0)).build_eframe(|_| app);
+        for font_size in [16.0, 36.0] {
+            harness.ctx.global_style_mut(|style| { style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(font_size)); });
+            harness.run_steps(4);
+            let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
+            for label in ["Pan", "Workflow", "Inspector"] {
+                let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+                assert!((rect.center().y - fit.center().y).abs() < 1.0, "{preset:?}: {label} {rect:?} {fit:?}");
+                assert!(rect.left() >= 0.0 && rect.right() <= 320.0, "{preset:?}: {label} {rect:?}");
+            }
+            let primary = harness.get_by_label_contains(match preset {
+                InspectorPreset::Annotation => "Submit & next",
+                InspectorPreset::MigrationObject => "Save & next",
+                _ => "Confirm & finish",
+            }).rect();
+            assert!(primary.left() >= 0.0 && primary.right() <= 320.0, "{preset:?}: {primary:?}");
+            assert!(primary.height() >= 44.0 && primary.height() < 60.0);
+        }
     }
 }

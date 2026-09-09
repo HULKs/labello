@@ -318,16 +318,8 @@ impl LabelloApp {
         } else { ("Approve".to_string(), "Reject".to_string()) };
         let button_width = fill_width
             .then(|| ((ui.available_size_before_wrap().x - ui.spacing().item_spacing.x) / 2.0).floor().max(44.0));
-        let approve_button = egui::Button::new(&approve).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if fill_width { 44.0 } else { 0.0 },
-        ));
-        let reject_button = egui::Button::new(&reject).min_size(egui::vec2(
-            button_width.unwrap_or_default(),
-            if fill_width { 44.0 } else { 0.0 },
-        ));
         let can_approve = ready && !self.work.migration.busy && self.review_can_approve();
-        let approve_response = if can_approve { theme::primary_button(ui, true, approve_button) } else { theme::quiet_button(ui, false, approve_button) };
+        let approve_response = workspace_action_button(ui, can_approve, &approve, WorkspaceActionIcon::Approve, button_width, theme::Intent::Accent);
         if approve_response
             .on_hover_text(format!(
                 "Accept review object ({})",
@@ -337,7 +329,7 @@ impl LabelloApp {
         {
             if self.manual_migration_active() { self.trigger_migration_review_action(ReviewDecision::Approved); } else { self.request_review(ReviewDecision::Approved); }
         }
-        if theme::danger_button(ui, ready && !self.work.migration.busy && self.review_can_reject(), reject_button)
+        if workspace_action_button(ui, ready && !self.work.migration.busy && self.review_can_reject(), &reject, WorkspaceActionIcon::Reject, button_width, theme::Intent::Error)
             .on_hover_text(format!(
                 "Reject review object ({})",
                 shortcut_button_label(&reject_shortcut, "Reject")

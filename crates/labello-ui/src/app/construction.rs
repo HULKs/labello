@@ -77,7 +77,7 @@ impl LabelloApp {
             drawer: None,
             review_details_focus_return: None,
             workflow_panel_collapsed: false,
-            inspector_panel_collapsed: false,
+            inspector_panel_collapsed: true,
             show_settings: false,
             shortcut_settings: ShortcutSettingsState::default(),
             next_operation_id: 0,

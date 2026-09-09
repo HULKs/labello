@@ -107,7 +107,7 @@ impl LabelloApp {
             available.min(380.0)
         } else {
             let spacing = ctx.global_style().spacing.item_spacing.x;
-            available - 44.0 - spacing
+            available - 3.0 * (44.0 + spacing)
         }
     }
 
@@ -126,13 +126,7 @@ impl LabelloApp {
         let content = ReviewBarContent::from_app(self);
         let width = self.review_summary_width(ctx, layout, viewport_width - 28.0);
         let text = ReviewBarText::measure(ctx, &content, width, self.review_inline_availability_loading(layout));
-        text.height
-            + 4.0
-            + if layout == LayoutMode::Wide {
-                0.0
-            } else {
-                44.0
-            }
+        text.height + 4.0
     }
 
     fn review_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -144,30 +138,17 @@ impl LabelloApp {
             self.work.review_details_focus_return = None;
         }
         let response = if layout != LayoutMode::Wide {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.horizontal(|ui| {
-                    self.review_details_button(ui, &content, &text);
-                    self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
-                });
-                ui.horizontal_wrapped(|ui| {
-                    ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
-                    self.previous_review_action(ui);
-                    self.discard_review_action(ui);
-                });
+            ui.horizontal(|ui| {
+                self.review_details_button(ui, &content, &text);
+                ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
+                self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
             })
         } else {
             workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
                 self.review_details_button(ui, &content, &text);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
-                    self.previous_review_action(ui);
-                    self.discard_review_action(ui);
                 });
-                if !self.manual_migration_active() {
-                    ui.separator();
-                    self.workspace_actions(ui, layout);
-                }
                 if let Some(current) = self.work.current.as_ref()
                     && ui.available_size_before_wrap().x >= 80.0
                 {

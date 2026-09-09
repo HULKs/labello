@@ -88,36 +88,14 @@ fn overflow_probe() -> Harness<'static, OverflowProbe> {
 #[test]
 fn workspace_overflow_measures_each_promotion_and_final_trigger_removal() {
     let mut harness = overflow_probe();
-    harness.run_steps(3);
-    let widths = harness.state().widths.clone();
-    let gap = harness.state().gap;
-    let more = harness.state().more;
-    let thresholds = [
-        widths[0] + gap + more,
-        widths[0] + widths[1] + 2.0 * gap + more,
-        widths.iter().sum::<f32>() + 2.0 * gap,
-    ];
-    assert!(thresholds.windows(2).all(|pair| pair[0] < pair[1]));
-    for (promotion, threshold) in thresholds.into_iter().enumerate() {
-        for delta in [-1.0, 0.0, 1.0] {
-            let available = threshold + delta;
-            harness.state_mut().width = available;
-            harness.run_steps(4);
-            let expected = promotion + usize::from(delta >= 0.0);
-            let labels = ["Undo", "Redo the deliberately", "Save"];
-            for (index, label) in labels.into_iter().enumerate() {
-                assert_eq!(
-                    harness.query_by_label_contains(label).is_some(),
-                    index < expected,
-                    "width={available} index={index} prefix={expected}"
-                );
-            }
-            assert_eq!(
-                harness.query_by_label("More actions").is_some(),
-                expected < widths.len()
-            );
-            assert!(harness.state().clicked.is_empty());
+    for (available, expected) in [(97.0, 0), (98.0, 1), (151.0, 1), (152.0, 3), (1500.0, 3)] {
+        harness.state_mut().width = available;
+        harness.run_steps(4);
+        for (index, label) in ["Undo", "Redo the deliberately", "Save"].into_iter().enumerate() {
+            assert_eq!(harness.query_by_label_contains(label).is_some(), index < expected, "{available}: {label}");
         }
+        assert_eq!(harness.query_by_label("More actions").is_some(), expected < 3);
+        assert!(harness.state().clicked.is_empty());
     }
 }
 
@@ -173,8 +151,8 @@ fn workspace_overflow_remeasures_changed_shortcuts_and_never_reserves_an_empty_m
     assert!(harness.query_by_label("More actions").is_none());
     harness.state_mut().actions[0].shortcut = "Ctrl+Alt+Shift+Backspace".into();
     harness.run_steps(3);
-    assert!(harness.query_by_label_contains("Go").is_none());
-    assert!(harness.query_by_label("More actions").is_some());
+    assert!(harness.query_by_label_contains("Go").is_some(), "the icon retains its accessible name");
+    assert!(harness.query_by_label("More actions").is_none());
     harness.state_mut().width = harness.state().widths[0];
     harness.run_steps(3);
     assert!(harness.query_by_label_contains("Go").is_some());
@@ -266,7 +244,7 @@ fn workspace_overflow_resizing_keeps_primary_controls_context_and_settled_canvas
 fn workspace_overflow_long_menu_actions_stay_inside_a_short_viewport() {
     let mut harness = overflow_probe();
     harness.set_size(egui::vec2(320.0, 320.0));
-    harness.state_mut().width = 200.0;
+    harness.state_mut().width = 97.0;
     harness.state_mut().actions[1].label =
         "A much longer translated redo action that explains what will change".into();
     harness.run_steps(4);

@@ -267,7 +267,7 @@ After confirmation the transition modal closes, but its pending transition remai
 to block conflicting actions and correction edits until loading finishes. Runtime failures
 show Error in the workspace status control, with the full error and annotation
 save status in its details, rather than retaining a success label. The
-Previous review control belongs to the workspace context toolbar, including
+Previous review control belongs to the shared review footer, including
 migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
 
 Normal and revision review use the same correction owner. Its interaction module
@@ -291,7 +291,9 @@ assignment, round and sequence validation prevent cross-workspace recovery.
 Historical missing-object locations remain read-only. The second-bar review indicator
 owns its measured two-line presentation and toggles the existing Inspector panel or
 drawer, retaining focus-return behavior. It shows item position before workflow
-identity, and keeps Discard corrections immediately after Previous.
+identity. The shared review footer owns decision buttons and Previous, Discard and
+Skip across ordinary, migration and revision review. Compact layouts keep navigation
+and discard actions in a second bottom row. The Inspector starts closed.
 
 ## Dataset export administration
 

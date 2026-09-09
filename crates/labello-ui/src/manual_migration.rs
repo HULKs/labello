@@ -10,7 +10,7 @@ use eframe::egui::{self, RichText};
 use crate::{
     app::{AppView, LabelloApp, MigrationAction, UiCommand},
     canvas::{CanvasAction, CanvasAnnotationStyle, CanvasInteraction, show_canvas_colored},
-    panels::keypoint_placement_mode,
+    panels::{WorkspaceActionIcon, keypoint_placement_mode, workspace_toolbar_button},
     theme,
 };
 
@@ -764,7 +764,7 @@ impl LabelloApp {
             }
         }
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_object_navigation_button(ui);
             self.migration_assignment_section(ui);
         }
@@ -984,7 +984,7 @@ impl LabelloApp {
                 if discovered == 1 { "object" } else { "objects" }
             ));
             if show_primary_action {
-                self.migration_discovered_edit_actions(ui, false);
+                self.migration_discovered_edit_actions(ui, false, None);
             }
         }
         let confirmation = if expected == 0 {
@@ -994,7 +994,7 @@ impl LabelloApp {
         };
         ui.label(confirmation);
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_object_navigation_button(ui);
             self.migration_assignment_section(ui);
         }
@@ -1116,7 +1116,7 @@ impl LabelloApp {
             }
         }
         if show_primary_action {
-            self.migration_primary_button(ui, false);
+            self.migration_primary_button(ui, false, None);
             self.migration_assignment_section(ui);
         }
     }
@@ -1231,15 +1231,33 @@ impl LabelloApp {
             }
             return;
         }
+        let extra_actions = usize::from(
+            self.work.migration.adding_missing_object || self.migration_can_add_missing_object(),
+        ) + usize::from(
+            self.work.migration.editing_missing_annotation_id.is_some(),
+        ) + usize::from(self.migration_keypoint_undo_available())
+            + usize::from(
+                !self.discovered_migration_skeletons().is_empty()
+                    && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)),
+            );
+        let count = (1 + extra_actions) as f32;
+        let width = Some(
+            ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
+                .floor()
+                .max(44.0),
+        );
         if let Some(group_id) = self.work.migration.inspected_group_id.clone() {
-            if theme::primary_button(
+            if workspace_toolbar_button(
                 ui,
                 !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
-                egui::Button::new(if compact {
+                if compact {
                     "Edit object"
                 } else {
                     "Edit this object"
-                }),
+                },
+                WorkspaceActionIcon::Save,
+                width,
+                theme::Intent::Accent,
             )
             .clicked()
             {
@@ -1250,46 +1268,50 @@ impl LabelloApp {
             if !adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
             {
-                self.migration_discovered_edit_actions(ui, compact);
+                self.migration_discovered_edit_actions(ui, compact, width);
             }
             if (adding_missing_object || self.migration_can_add_missing_object())
-                && ui
-                    .add_enabled(
-                        !self.work.migration.busy,
-                        egui::Button::new(if adding_missing_object {
-                            if self.work.migration.editing_missing_annotation_id.is_some() {
-                                "Cancel editing object"
-                            } else {
-                                "Cancel adding object"
-                            }
-                        } else {
-                            "Add missing object"
-                        })
-                        .shortcut_text(crate::theme::button_shortcut(
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::AddMissingObject,
-                            ),
-                        )),
-                    )
-                    .on_hover_text(if adding_missing_object {
+                && workspace_toolbar_button(
+                    ui,
+                    !self.work.migration.busy,
+                    if adding_missing_object {
                         if self.work.migration.editing_missing_annotation_id.is_some() {
-                            "Discard changes to this added missing-object skeleton."
+                            "Cancel editing object"
                         } else {
-                            "Discard this unsaved missing-object skeleton."
+                            "Cancel adding object"
                         }
                     } else {
-                        "Add a skeleton for an object that had no imported guide."
-                    })
-                    .clicked()
+                        "Add missing object"
+                    },
+                    if adding_missing_object {
+                        WorkspaceActionIcon::Discard
+                    } else {
+                        WorkspaceActionIcon::Add
+                    },
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text(if adding_missing_object {
+                    if self.work.migration.editing_missing_annotation_id.is_some() {
+                        "Discard changes to this added missing-object skeleton."
+                    } else {
+                        "Discard this unsaved missing-object skeleton."
+                    }
+                } else {
+                    "Add a skeleton for an object that had no imported guide."
+                })
+                .clicked()
             {
                 self.trigger_missing_migration_object_action();
             }
             if let Some(annotation_id) = self.work.migration.editing_missing_annotation_id.clone()
-                && theme::danger_button(
+                && workspace_toolbar_button(
                     ui,
                     !self.work.migration.busy,
-                    egui::Button::new("Remove added object"),
+                    "Remove added object",
+                    WorkspaceActionIcon::Remove,
+                    width,
+                    theme::Intent::Error,
                 )
                 .on_hover_text(
                     "Remove this added missing-object skeleton. You can add it again if needed.",
@@ -1298,15 +1320,19 @@ impl LabelloApp {
             {
                 self.request_delete_migration_skeleton(annotation_id);
             }
-            self.migration_primary_button(ui, compact);
+            self.migration_primary_button(ui, compact, width);
             if self.migration_keypoint_undo_available() {
-                let response = ui.add_enabled(
+                let response = workspace_toolbar_button(
+                    ui,
                     self.migration_keypoint_undo_enabled(),
-                    egui::Button::new(if compact {
+                    if compact {
                         "Undo"
                     } else {
                         "Undo last keypoint"
-                    }),
+                    },
+                    WorkspaceActionIcon::Undo,
+                    width,
+                    theme::Intent::Neutral,
                 );
                 response.widget_info(|| {
                     egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Undo last keypoint")
@@ -1474,24 +1500,30 @@ impl LabelloApp {
         }
     }
 
-    fn migration_discovered_edit_actions(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn migration_discovered_edit_actions(
+        &mut self,
+        ui: &mut egui::Ui,
+        compact: bool,
+        width: Option<f32>,
+    ) {
         let skeletons = self.discovered_migration_skeletons();
         match skeletons.as_slice() {
             [] => {}
             [skeleton] => {
-                if ui
-                    .add_enabled(
-                        !self.work.migration.busy,
-                        egui::Button::new(if compact {
-                            "Edit added"
-                        } else {
-                            "Edit added object 1"
-                        }),
-                    )
-                    .on_hover_text(
-                        "Edit the skeleton for the object added during full-image review.",
-                    )
-                    .clicked()
+                if workspace_toolbar_button(
+                    ui,
+                    !self.work.migration.busy,
+                    if compact {
+                        "Edit added"
+                    } else {
+                        "Edit added object 1"
+                    },
+                    WorkspaceActionIcon::Save,
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text("Edit the skeleton for the object added during full-image review.")
+                .clicked()
                 {
                     self.begin_edit_missing_migration_object(skeleton.annotation_id.clone());
                 }
@@ -1499,7 +1531,12 @@ impl LabelloApp {
             _ => {
                 ui.add_enabled_ui(!self.work.migration.busy, |ui| {
                     egui::ComboBox::from_id_salt("migration-edit-added-object")
-                        .selected_text("Edit added object")
+                        .selected_text(if width.is_some_and(|width| width < 150.0) {
+                            "..."
+                        } else {
+                            "Edit added object"
+                        })
+                        .width(width.unwrap_or(150.0))
                         .show_ui(ui, |ui| {
                             for (index, skeleton) in skeletons.into_iter().enumerate() {
                                 if ui
@@ -1512,6 +1549,15 @@ impl LabelloApp {
                                     ui.close();
                                 }
                             }
+                        })
+                        .response
+                        .on_hover_text("Edit added object")
+                        .widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::ComboBox,
+                                !self.work.migration.busy,
+                                "Edit added object",
+                            )
                         });
                 });
             }
@@ -1617,7 +1663,7 @@ impl LabelloApp {
         self.migration_assignment_buttons(ui);
     }
 
-    fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn migration_primary_button(&mut self, ui: &mut egui::Ui, compact: bool, width: Option<f32>) {
         let Some((action, enabled)) = self.migration_primary_action() else {
             return;
         };
@@ -1628,13 +1674,23 @@ impl LabelloApp {
         } else {
             action.label(compact)
         };
-        let response = theme::primary_button(
+        let response = workspace_toolbar_button(
             ui,
             enabled,
-            egui::Button::new(label).shortcut_text(crate::theme::button_shortcut(
-                self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage),
-            )),
-        );
+            label,
+            match &action {
+                MigrationPrimaryAction::Confirm { .. } => WorkspaceActionIcon::Approve,
+                MigrationPrimaryAction::KeepDisposition(_) => WorkspaceActionIcon::Next,
+                _ => WorkspaceActionIcon::Save,
+            },
+            width,
+            theme::Intent::Accent,
+        )
+        .on_hover_text(format!(
+            "{} ({})",
+            label,
+            self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage)
+        ));
         let overview_visible = if crate::app::LayoutMode::for_width(ui.ctx().content_rect().width())
             == crate::app::LayoutMode::Wide
         {
