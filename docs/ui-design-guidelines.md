@@ -319,7 +319,7 @@ has been recorded.
   selector and Previous/Next day buttons with visible counts, alongside calendar
   hover details. At enlarged browser zoom, stack the modal header and selector
   labels. Compact rankings use a bounded sort picker, a 44-point direction
-  button, and wrapping score-first summaries. Keep history
+  button, and wrapping score-first summaries. Keep flame and day count beside each contributor. Keep history
   comparison controls below the metric choices and selected names in bounded rows.
   Show acceptance as a percentage with review counts.
   Show avatars beside names with initials

@@ -63,7 +63,8 @@ impl LabelloApp {
             bar_rect.center(),
             egui::vec2(dataset_width + 18.0, bar_rect.height()),
         );
-        let required_right_width = status_width + actions.len() as f32 * (44.0 + spacing);
+        let streak_width = if self.streak_available() { 60.0 + spacing } else { 0.0 };
+        let required_right_width = status_width + actions.len() as f32 * (44.0 + spacing) + streak_width;
         let navigation_budget = if self.work_view() {
             bar_rect.width() - required_right_width - 180.0 - 2.0 * side_gap
         } else { dataset_rect.left() - bar_rect.left() - side_gap };
@@ -183,6 +184,11 @@ impl LabelloApp {
             for action in &actions {
                 self.app_bar_icon_button(&mut right_ui, *action);
             }
+        }
+        if drawer_navigation && !self.work_view() {
+            self.streak_indicator(&mut left_ui);
+        } else {
+            self.streak_indicator(&mut right_ui);
         }
         if self.work_view() {
             self.connection_indicator(&mut right_ui);
