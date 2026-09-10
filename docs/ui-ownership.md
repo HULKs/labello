@@ -292,6 +292,11 @@ dragging an earlier point of an unfinished addition does not overwrite it on new
 placement. Both ordinary and migration canvas adapters
 allow overview selection while an addition is open; navigation retains a valid
 editor or blocks an incomplete one before reopening the selected item.
+The existing `DeleteAnnotation` binding is also WorkImage-scoped. Review dispatch
+consumes it before annotation-mode migration handling and reuses the reset owner
+only for a selected, version-zero overview editor. It discards that whole local
+addition and clears selection; busy/frozen, dragging and keyboard-focus guards
+prevent mutation. Existing reviewed objects and other additions remain unchanged.
 
 The overview is the only correction submission point and requires a decision for
 every original target and valid geometry. Correction success advances the assignment

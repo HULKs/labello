@@ -215,6 +215,9 @@ has been recorded.
   locally so the next click can start another; a one-keypoint skeleton takes one click.
   Reselecting or dragging an addition does not redirect new placement into an occupied
   keypoint: empty-space clicks fill unplaced points or start another object after completion.
+  The configured Delete annotation shortcut discards a selected overview addition
+  locally (the whole object, including multi-point skeletons), not other additions
+  or persisted review targets. Busy states, text focus and open overlays block it.
   Clicking a previously approved or corrected item reopens it with its retained edits.
   Once every original item has a decision, Approve (also Space) submits approval if no
   corrections remain; otherwise Submit correction submits a fresh review round. Invalid

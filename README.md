@@ -254,7 +254,9 @@ submits approval when nothing changed, or saves accumulated corrections and retu
 the image to a fresh review round. Rejection always requires
 a substantive change. Existing Y/N shortcuts remain available. Completing a missing
 skeleton keeps it locally so another can be added; click a previously approved or
-corrected item in the overview to revisit it.
+corrected item in the overview to revisit it. Select a locally added object and use
+the configured **Delete annotation** shortcut (`Delete` by default) to discard the
+whole addition without affecting other objects.
 Saving corrections never completes the task. The same reviewer may claim the
 new round, but must review its current objects and final image again; earlier
 approvals do not count. Unsaved previews are identified in the inspector, and
