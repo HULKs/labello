@@ -1,4 +1,139 @@
 #[test]
+fn daily_flame_threshold_motion_and_header_fit() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.loading.stats);
+    harness.state_mut().runtime.api = None;
+    let today = labello_domain::now().date_naive();
+    let user = harness.state().config.user_id.clone();
+    harness.state_mut().datasets.stats.contributors = Some(BTreeMap::from([(
+        user.clone(), labello_domain::ContributorStats {
+            display_name: "Daily labeller".into(),
+            history: vec![
+                labello_domain::ContributorDay { day: (today - chrono::Days::new(1)).to_string(), labeled: 20, ..Default::default() },
+                labello_domain::ContributorDay { day: today.to_string(), labeled: 19, ..Default::default() },
+            ],
+            ..Default::default()
+        },
+    )]));
+    crate::set_reduced_motion(&harness.ctx, false);
+    harness.step();
+    let identity = egui::Id::new(("daily-flame", &harness.state().config.dataset_id, &user,
+        harness.state().auth_epoch, harness.state().workspace_epoch, today));
+    assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 labels today · Flame unlit").rect().height() >= 44.0);
+    harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 20;
+    harness.step();
+    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 20/20 labels today · Flame lit").is_some());
+    assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
+    for _ in 0..60 { harness.step(); }
+    assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_none()));
+    crate::set_reduced_motion(&harness.ctx, true);
+    harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 19;
+    harness.step();
+    harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 20;
+    harness.step();
+    assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_none()));
+    for (width, height) in [(320.,320.), (390.,844.), (600.,800.), (1288.,820.), (1440.,1000.)] {
+        harness.set_size(egui::vec2(width, height));
+        harness.step();
+        let flame = harness.get_by_label_contains("Your streak: 2 day streak").rect();
+        assert!(flame.top() >= 0.0 && flame.bottom() <= 56.0 && flame.left() >= 0.0 && flame.right() <= width, "flame outside header at {width}: {flame:?}");
+        assert_visible_controls_clamped(&harness, width, height);
+    }
+    harness.state_mut().datasets.stats_error = Some("Unavailable".into());
+    harness.step();
+    assert!(harness.query_by_label_contains("Last refresh failed; progress may be stale").is_some());
+    harness.state_mut().datasets.stats.contributors = None;
+    harness.step();
+    assert!(harness.query_by_label_contains("Daily streak unavailable").is_some());
+    harness.get_by_label_contains("Daily streak unavailable").focus();
+    harness.step();
+    harness.key_press(egui::Key::Enter);
+    harness.step();
+    assert!(harness.query_by_label("Close statistics").is_some());
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    harness.step();
+    assert!(harness.get_by_label_contains("Daily streak unavailable").is_focused());
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn leaderboard_streak_sort_and_inline_name_layout() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|ctx| {
+        crate::inspector_presets::build(crate::inspector_presets::InspectorPreset::StreakLit, &ctx.egui_ctx)
+    });
+    harness.get_by_label("Sort by Streak").scroll_to_me();
+    harness.run_steps(4);
+    harness.get_by_label("Sort by Streak").click();
+    harness.run_steps(3);
+    assert_eq!(harness.get_by_label("Sort by Streak").value().as_deref(), Some("Descending"));
+    let flames: Vec<_> = harness.query_all_by_label_contains("Taylor: 4 day streak").collect();
+    let names: Vec<_> = harness.query_all_by_label("Taylor").filter(|node| node.rect().height() == 44.0).collect();
+    assert_eq!(flames.len(), 2);
+    for (name, flame) in names.iter().zip(&flames) {
+        assert!(name.rect().right() <= flame.rect().left());
+        assert!((name.rect().center().y - flame.rect().center().y).abs() <= 1.0);
+    }
+    let first = flames[0].rect().top();
+    assert!(first < harness.get_by_label_contains("Charlie: 0 day streak").rect().top());
+    harness.get_by_label("Sort by Streak").click();
+    harness.run_steps(3);
+    assert_eq!(harness.get_by_label("Sort by Streak").value().as_deref(), Some("Ascending"));
+    assert!(harness.get_by_label_contains("Charlie: 0 day streak").rect().top()
+        < harness.query_all_by_label_contains("Taylor: 4 day streak").next().unwrap().rect().top());
+    for width in [320.0, 390.0, 600.0] {
+        harness.set_size(egui::vec2(width, 844.0));
+        harness.run_steps(4);
+        harness.get_by_label("Ranking order").scroll_to_me();
+        harness.run_steps(4);
+        let order = harness.get_by_label("Ranking order").rect();
+        assert!(order.height() >= 44.0 && order.right() <= width);
+        harness.get_by_label("Ranking order").focus();
+        harness.key_press(egui::Key::Space);
+        harness.run_steps(3);
+        harness.get_by_label("Sort by Streak").focus();
+        harness.key_press(egui::Key::Space);
+        harness.run_steps(3);
+        assert_eq!(harness.get_by_label("Ranking order").value().as_deref(), Some("Streak ▼"));
+        harness.key_press(egui::Key::Escape);
+        harness.run_steps(3);
+        assert!(harness.state().navigation.statistics.open);
+        harness.get_by_label("Ranking order").click();
+        harness.run_steps(3);
+        harness.get_by_label("Sort by Streak").click();
+        harness.run_steps(3);
+        assert_eq!(harness.get_by_label("Ranking order").value().as_deref(), Some("Streak ▲"));
+        let name = harness.get_by_label("#3  Charlie").rect();
+        let flame = harness.get_by_label_contains("Charlie: 0 day streak").rect();
+        assert!(name.right() <= flame.left());
+        assert!(flame.right() <= width, "streak clipped at {width}: {flame:?}");
+        assert!((name.center().y - flame.center().y).abs() <= 1.0);
+    }
+}
+
+#[test]
+fn daily_flame_refreshes_without_statistics_and_retains_a_followup() {
+    let mut harness = live_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.datasets.summaries.is_empty());
+    step_until(&mut harness, 20, |app| !app.loading.stats);
+    let app = harness.state_mut();
+    assert!(app.datasets.metadata.is_none());
+    assert!(!app.statistics_visible());
+    app.request_stats();
+    let request = app.runtime.commands.iter().rev().find_map(|command| match command {
+        UiCommand::Stats { request, .. } => Some(request.clone()), _ => None,
+    }).unwrap();
+    app.request_stats();
+    assert!(app.datasets.refresh_stats_after_load);
+    app.runtime.tx.send(UiMessage::StatsLoaded { request, result: Ok(stats(20)) }).unwrap();
+    app.process_messages(&egui::Context::default());
+    assert!(!app.datasets.refresh_stats_after_load);
+    assert!(app.loading.stats);
+    assert_eq!(app.datasets.stats.total_images, 20);
+    assert_eq!(app.runtime.commands.iter().filter(|command| matches!(command, UiCommand::Stats { .. })).count(), 2);
+}
+
+#[test]
 fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() {
     for review in [false, true] {
         for compact in [false, true] {
@@ -400,7 +535,8 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
     harness.state_mut().auth_epoch += 1;
     harness.run_steps(3);
     assert!(harness.query_by_label("Sort by Rank").is_none());
-    assert!(harness.query_by_label("Sort by Labeled").is_some());
+    assert!(harness.query_by_label("Sort by Labeled").is_some()
+        || harness.query_by_label("Ranking order").is_some());
     assert!(
         harness
             .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
@@ -863,10 +999,6 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
             "Next day",
             "History graph",
             "Period",
-            "Sort by Person",
-            "Sort by Labeled",
-            "Sort by Reviewed",
-            "Sort by Acceptance",
         ] {
             harness.get_by_label(label).scroll_to_me();
             harness.run_steps(4);
@@ -879,6 +1011,25 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
                 rect.height() >= 44.0,
                 "{label} has a short touch target: {rect:?}"
             );
+        }
+        if harness.query_by_label("Ranking order").is_some() {
+            harness.get_by_label("Ranking order").scroll_to_me();
+            harness.run_steps(4);
+            assert!(viewport.contains_rect(harness.get_by_label("Ranking order").rect()));
+            harness.get_by_label("Ranking order").click();
+            harness.run_steps(3);
+        }
+        for label in ["Sort by Person", "Sort by Streak", "Sort by Labeled", "Sort by Reviewed", "Sort by Acceptance"] {
+            harness.get_by_label(label).scroll_to_me();
+            harness.run_steps(4);
+            let rect = harness.get_by_label(label).rect();
+            assert!(viewport.contains_rect(rect), "{label} unreachable at {size:?}: {rect:?}");
+            assert!(rect.height() >= 44.0);
+        }
+        if harness.query_by_label("Ranking order").is_some() {
+            harness.key_press(egui::Key::Escape);
+            harness.run_steps(3);
+            assert!(harness.state().navigation.statistics.open);
         }
         let name = if size.x < 700.0 {
             "#5  Alexandra Long Contributor Name"
