@@ -61,6 +61,11 @@ impl DatasetRepository {
             let cached = self.stats_cache.value.lock().await;
             if let Some(cached) = cached.as_ref()
                 && cached.generation == requested_generation
+                && cached
+                    .stats
+                    .scoring_focus
+                    .as_ref()
+                    .is_some_and(|focus| focus.contains(labello_domain::now()))
             {
                 return Ok(cached.stats.clone());
             }
@@ -81,6 +86,11 @@ impl DatasetRepository {
             let cached = self.stats_cache.value.lock().await;
             if let Some(cached) = cached.as_ref()
                 && cached.generation == generation
+                && cached
+                    .stats
+                    .scoring_focus
+                    .as_ref()
+                    .is_some_and(|focus| focus.contains(labello_domain::now()))
             {
                 return Ok(cached.stats.clone());
             }

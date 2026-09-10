@@ -1237,6 +1237,8 @@ fn statistics_preset() -> LabelloApp {
     let mut app = setup_preset();
     app.open_statistics();
     app.datasets.stats = DatasetStats {
+        scoring_version: Some(1),
+        scoring_focus: None,
         total_images: 24,
         completed_tasks: 18,
         pending_tasks: 0,
@@ -1294,6 +1296,13 @@ fn statistics_preset() -> LabelloApp {
                         .map(|day| {
                             let activity = [1, 0, 1, 3, 0, 0, 2][(39 - day) as usize % 7];
                             labello_domain::ContributorDay {
+                                score: labello_domain::ScoreDay {
+                                    labels: ((index + 1) * 6 * activity) as u64,
+                                    labeling: ((index + 1) * 6 * activity * 2200) as i64,
+                                    reviewing: ((5 - index) * 2 * activity * 600) as i64,
+                                    deductions: (usize::from(index > 0) * activity * 1000) as i64,
+                                    corrections: 0,
+                                },
                                 day: (labello_domain::now().date_naive()
                                     - chrono::Days::new(39 - day))
                                 .to_string(),

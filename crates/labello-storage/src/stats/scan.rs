@@ -6,6 +6,8 @@ impl DatasetRepository {
     pub(super) async fn compute_dataset_stats(&self) -> StorageResult<DatasetStats> {
         let metadata = self.load_dataset().await?;
         let mut aggregation = StatsAggregation::new(&metadata);
+        let mut scoring = labello_domain::ScoringProjection::default();
+        let focus = self.scoring_focus(labello_domain::now()).await?;
 
         let mut image_ids = metadata.images.keys().cloned();
         let mut workers = tokio::task::JoinSet::new();
@@ -22,6 +24,7 @@ impl DatasetRepository {
             })??;
             aggregation.record_image(&metadata, &state);
             aggregation.record_contributors(&state, &events);
+            scoring.record_image(&state, &events);
             if let Some(image_id) = image_ids.next() {
                 let repository = self.clone();
                 workers
@@ -29,6 +32,13 @@ impl DatasetRepository {
             }
         }
 
-        Ok(aggregation.finish())
+        let mut stats = aggregation.finish();
+        scoring.finish(
+            stats.contributors.as_mut().expect("contributors supported"),
+            &focus,
+        );
+        stats.scoring_version = Some(labello_domain::stats::scoring::SCORING_VERSION);
+        stats.scoring_focus = focus.last().cloned();
+        Ok(stats)
     }
 }

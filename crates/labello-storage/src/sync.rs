@@ -362,6 +362,7 @@ impl DatasetRepository {
             resequenced.push(event);
         }
         crate::assignment::finalize_review_transaction(state, &mut next_state, &mut resequenced)?;
+        self.prepare_scoring_focus(&resequenced).await?;
         let history_commit = self.review_history_commit(state, &next_state, None).await?;
         self.append_events_atomic(image_id, &resequenced).await?;
         history_commit.observe();

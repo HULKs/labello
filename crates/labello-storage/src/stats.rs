@@ -22,6 +22,7 @@ mod activity;
 mod aggregation;
 mod cache;
 mod contributors;
+pub(crate) mod focus;
 mod scan;
 
 use aggregation::StatsAggregation;
@@ -74,6 +75,8 @@ mod tests {
         );
 
         let expected = DatasetStats {
+            scoring_version: Some(1),
+            scoring_focus: first.as_ref().unwrap().scoring_focus.clone(),
             contributors: Some(BTreeMap::new()),
             ..Default::default()
         };

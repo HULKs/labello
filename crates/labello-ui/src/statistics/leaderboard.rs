@@ -18,7 +18,14 @@ const PERIODS: [&str; 6] = [
     "Last year",
     "Overall",
 ];
-const METRICS: [&str; 3] = ["Labeled", "Reviewed", "Acceptance"];
+const METRICS: [&str; 4] = ["Labeled", "Reviewed", "Acceptance", "Score"];
+const METRIC_WIDTHS: [f32; 4] = [100.0, 110.0, 160.0, 90.0];
+const PODIUM_TITLES: [&str; 4] = [
+    "Most labeled",
+    "Most reviewed",
+    "Highest acceptance",
+    "Highest score",
+];
 const PODIUM_BLUES: [egui::Color32; 3] = [
     egui::Color32::from_rgb(59, 130, 246),
     theme::INFO,
@@ -52,10 +59,10 @@ impl Default for LeaderboardState {
             identity: None,
             period: 5,
             history: false,
-            metric: 0,
+            metric: 3,
             sort_by_name: false,
             sort_descending: true,
-            ranking_metric: 0,
+            ranking_metric: 3,
             selected: None,
             people_filter: String::new(),
             activity_user: None,
@@ -76,6 +83,7 @@ fn period_start(period: usize, today: NaiveDate) -> NaiveDate {
 }
 
 fn add(total: &mut ContributorDay, day: &ContributorDay) {
+    total.score.add(&day.score);
     total.labeled += day.labeled;
     total.reviewed += day.reviewed;
     total.accepted += day.accepted;
@@ -84,6 +92,7 @@ fn add(total: &mut ContributorDay, day: &ContributorDay) {
 
 fn value(day: &ContributorDay, metric: usize) -> Option<f64> {
     match metric {
+        3 => Some(labello_domain::displayed_score(day.score.total()) as f64),
         0 => Some(day.labeled as f64),
         1 => Some(day.reviewed as f64),
         _ => (day.accepted + day.rejected > 0)
@@ -93,6 +102,7 @@ fn value(day: &ContributorDay, metric: usize) -> Option<f64> {
 
 fn display(day: &ContributorDay, metric: usize) -> String {
     match metric {
+        3 => labello_domain::displayed_score(day.score.total()).to_string(),
         0 => day.labeled.to_string(),
         1 => day.reviewed.to_string(),
         _ => value(day, metric).map_or_else(
@@ -110,6 +120,7 @@ fn display(day: &ContributorDay, metric: usize) -> String {
 
 fn compare(a: &ContributorDay, b: &ContributorDay, metric: usize) -> Ordering {
     match metric {
+        3 => a.score.total().cmp(&b.score.total()),
         0 => a.labeled.cmp(&b.labeled),
         1 => a.reviewed.cmp(&b.reviewed),
         _ => {
@@ -228,20 +239,73 @@ impl LeaderboardState {
         ranked
     }
 
-    pub(crate) fn show_activity(
-        &mut self,
-        ui: &mut egui::Ui,
-        stats: &DatasetStats,
-        identity: (&DatasetId, &UserId, u64),
-    ) {
-        if self.identity.as_ref().is_none_or(|(dataset, user, epoch)| {
-            dataset != identity.0 || user != identity.1 || *epoch != identity.2
-        }) {
-            *self = Self {
-                identity: Some((identity.0.clone(), identity.1.clone(), identity.2)),
-                ..Default::default()
-            };
-        }
+    fn compact_sort(&mut self, ui: &mut egui::Ui, metrics: &[usize]) {
+        let previous = (!self.sort_by_name).then_some(self.ranking_metric);
+        let mut selected = previous;
+        let label = previous.map_or("Person", |metric| METRICS[metric]);
+        let width = if ui.available_width() < 180.0 {
+            ui.available_width()
+        } else {
+            ui.available_width() - 44.0 - ui.spacing().item_spacing.x
+        };
+        ui.horizontal_wrapped(|ui| {
+            egui::ComboBox::from_id_salt("ranking-sort")
+                .selected_text(format!("Sort: {label}"))
+                .width(width)
+                .truncate()
+                .show_ui(ui, |ui| {
+                    ui.set_min_width(width);
+                    for &metric in metrics {
+                        ui.selectable_value(&mut selected, Some(metric), METRICS[metric]);
+                    }
+                    ui.selectable_value(&mut selected, None, "Person");
+                })
+                .response
+                .widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(
+                        egui::WidgetType::ComboBox,
+                        true,
+                        "Sort rankings",
+                    );
+                    info.current_text_value = Some(label.into());
+                    info
+                });
+            if selected != previous {
+                self.sort_by_name = selected.is_none();
+                self.sort_descending = selected.is_some();
+                if let Some(metric) = selected {
+                    self.ranking_metric = metric;
+                }
+            }
+            let response = ui.add_sized(
+                [44.0, 44.0],
+                egui::Button::new(if self.sort_descending { "↓" } else { "↑" }),
+            );
+            if response.clicked() {
+                self.sort_descending = !self.sort_descending;
+            }
+            response
+                .on_hover_text("Reverse ranking order")
+                .widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        true,
+                        "Reverse ranking order",
+                    );
+                    info.current_text_value = Some(
+                        if self.sort_descending {
+                            "Descending"
+                        } else {
+                            "Ascending"
+                        }
+                        .into(),
+                    );
+                    info
+                });
+        });
+    }
+
+    pub(crate) fn show_activity(&mut self, ui: &mut egui::Ui, stats: &DatasetStats) {
         if let Some(contributors) = &stats.contributors {
             let today = labello_domain::now().date_naive();
             activity_chart(
@@ -256,13 +320,58 @@ impl LeaderboardState {
         }
     }
 
-    pub(crate) fn show(&mut self, ui: &mut egui::Ui, stats: &DatasetStats) {
+    pub(crate) fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        stats: &DatasetStats,
+        identity: (&DatasetId, &UserId, u64),
+    ) {
+        if self.identity.as_ref().is_none_or(|(dataset, user, epoch)| {
+            dataset != identity.0 || user != identity.1 || *epoch != identity.2
+        }) {
+            *self = Self {
+                identity: Some((identity.0.clone(), identity.1.clone(), identity.2)),
+                ..Default::default()
+            };
+        }
         ui.heading("Contributor leaderboard");
         let Some(contributors) = &stats.contributors else {
             ui.label("Contributor statistics are unavailable from this server.");
             return;
         };
         let today = labello_domain::now().date_naive();
+        let scoring = stats.scoring_version == Some(1);
+        if !scoring {
+            ui.label("Contribution scores are unavailable from this server.");
+            if self.metric == 3 {
+                self.metric = 0;
+            }
+            if self.ranking_metric == 3 {
+                self.ranking_metric = 0;
+            }
+        }
+        let metrics: &[usize] = if scoring { &[3, 0, 1, 2] } else { &[0, 1, 2] };
+        let mut daily_status = None;
+        if scoring {
+            let labels = contributors
+                .get(identity.1)
+                .and_then(|person| {
+                    person
+                        .history
+                        .iter()
+                        .find(|day| day.day == today.to_string())
+                })
+                .map_or(0, |day| day.score.labels);
+            let next = if labels >= 500 {
+                "Daily maximum reached".into()
+            } else {
+                format!("Next tier at {} labels", (labels / 100 + 1) * 100)
+            };
+            daily_status = Some(format!(
+                "{labels} labels today · ×{:.2} · {next}",
+                labello_domain::daily_multiplier(labels) as f64 / 100.0
+            ));
+        }
         ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.history, false, "Leaderboard");
             ui.selectable_value(&mut self.history, true, "History graph");
@@ -288,25 +397,20 @@ impl LeaderboardState {
                         add(&mut total, day);
                     }
                 }
-                (total.labeled + total.reviewed + total.accepted + total.rejected > 0).then_some(
-                    Row {
-                        id,
-                        name: &contributor.display_name,
-                        person: contributor,
-                        total,
-                    },
-                )
+                (total.labeled + total.reviewed + total.accepted + total.rejected > 0
+                    || total.score != Default::default())
+                .then_some(Row {
+                    id,
+                    name: &contributor.display_name,
+                    person: contributor,
+                    total,
+                })
             })
             .collect();
         if contributors.is_empty() {
             ui.label("No contributor activity yet.");
             return;
         }
-        ui.collapsing(if ui.available_width() < 230.0 { "Score rules" } else { "How scores are counted" }, |ui| {
-            ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
-            ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
-            ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
-        });
         if self.history {
             let selected = self.selected.get_or_insert_with(|| {
                 sorted(&rows, self.metric)
@@ -319,10 +423,13 @@ impl LeaderboardState {
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.heading("History");
+                if let Some(status) = &daily_status {
+                    ui.label(status);
+                }
                 let menu_width = ui.available_width().min(240.0);
                 ui.horizontal_wrapped(|ui| {
-                    for (index, label) in METRICS.iter().enumerate() {
-                        ui.selectable_value(&mut self.metric, index, *label);
+                    for &metric in metrics {
+                        ui.selectable_value(&mut self.metric, metric, METRICS[metric]);
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
@@ -437,45 +544,36 @@ impl LeaderboardState {
         } else if rows.is_empty() {
             ui.label("No contributor activity in this period.");
         } else {
-            if ui.available_width() >= 850.0 {
-                ui.columns(3, |columns| {
-                    for (metric, column) in columns.iter_mut().enumerate() {
-                        podium(column, &rows, metric);
-                    }
-                });
-            } else {
-                ui.collapsing(
-                    if ui.available_width() < 200.0 {
-                        "Podiums"
-                    } else {
-                        "Podium highlights"
-                    },
-                    |ui| {
-                        for metric in 0..3 {
-                            compact_podium(ui, &rows, metric);
-                        }
-                    },
-                );
+            if scoring {
+                podium(ui, &rows, 3);
             }
             ui.add_space(theme::SPACE_3);
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.heading("Rankings");
-                if ui.available_width() >= 600.0 {
-                    let name_width =
-                        ui.available_width() - 446.0 - 4.0 * ui.spacing().item_spacing.x;
+                if let Some(status) = &daily_status {
+                    ui.label(status);
+                }
+                if ui.available_width() >= 720.0 {
+                    let name_width = ui.available_width()
+                        - 76.0
+                        - metrics
+                            .iter()
+                            .map(|&metric| METRIC_WIDTHS[metric])
+                            .sum::<f32>()
+                        - (metrics.len() + 1) as f32 * ui.spacing().item_spacing.x;
                     egui::Grid::new("contributor-table")
-                        .num_columns(5)
+                        .num_columns(metrics.len() + 2)
                         .striped(true)
                         .show(ui, |ui| {
                             super::stats_number_cell(ui, "Rank", 76.0, true);
                             self.sort_header(ui, None, "Person", name_width);
-                            for (metric, label) in METRICS.iter().enumerate() {
+                            for &metric in metrics {
                                 self.sort_header(
                                     ui,
                                     Some(metric),
-                                    label,
-                                    [100.0, 110.0, 160.0][metric],
+                                    METRICS[metric],
+                                    METRIC_WIDTHS[metric],
                                 );
                             }
                             ui.end_row();
@@ -493,11 +591,11 @@ impl LeaderboardState {
                                     egui::vec2(name_width, 44.0),
                                     None,
                                 );
-                                for metric in 0..3 {
+                                for &metric in metrics {
                                     super::stats_number_cell(
                                         ui,
                                         display(&row.total, metric),
-                                        [100.0, 110.0, 160.0][metric],
+                                        METRIC_WIDTHS[metric],
                                         false,
                                     );
                                 }
@@ -505,24 +603,7 @@ impl LeaderboardState {
                             }
                         });
                 } else {
-                    if ui.available_width() < 210.0 {
-                        self.sort_header(ui, None, "Person", ui.available_width());
-                        for (metric, label) in METRICS.iter().enumerate() {
-                            self.sort_header(ui, Some(metric), label, ui.available_width());
-                        }
-                    } else {
-                        let sort_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                        egui::Grid::new("compact-ranking-sort")
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                self.sort_header(ui, None, "Person", sort_width);
-                                self.sort_header(ui, Some(0), METRICS[0], sort_width);
-                                ui.end_row();
-                                self.sort_header(ui, Some(1), METRICS[1], sort_width);
-                                self.sort_header(ui, Some(2), METRICS[2], sort_width);
-                                ui.end_row();
-                            });
-                    }
+                    self.compact_sort(ui, metrics);
                     for (rank, row) in self.table_rows(&rows) {
                         let rank = if value(&row.total, self.ranking_metric).is_some() {
                             format!("#{rank}")
@@ -538,13 +619,53 @@ impl LeaderboardState {
                             None,
                         )
                         .on_hover_text(row.id.as_str());
-                        for (metric, label) in METRICS.iter().enumerate() {
-                            ui.label(format!("{label}: {}", display(&row.total, metric)));
+                        ui.scope(|ui| {
+                            ui.spacing_mut().interact_size.y = 20.0;
+                            ui.horizontal_wrapped(|ui| {
+                                for &metric in metrics {
+                                    let label = RichText::new(format!(
+                                        "{}: {}",
+                                        METRICS[metric],
+                                        display(&row.total, metric),
+                                    ));
+                                    ui.label(if metric == 3 {
+                                        label.strong()
+                                    } else {
+                                        label.color(theme::TEXT_MUTED)
+                                    });
+                                }
+                            });
+                        });
+                    }
+                }
+            });
+            ui.collapsing("Other highlights", |ui| {
+                if ui.available_width() >= 850.0 {
+                    ui.columns(3, |columns| {
+                        for (metric, column) in columns.iter_mut().enumerate() {
+                            podium(column, &rows, metric);
+                        }
+                    });
+                } else {
+                    for metric in 0..3 {
+                        podium(ui, &rows, metric);
+                        if metric < 2 {
+                            ui.add_space(theme::SPACE_3);
                         }
                     }
                 }
             });
         }
+        ui.collapsing(if ui.available_width() < 230.0 { "Score rules" } else { "How scores are counted" }, |ui| {
+            if scoring {
+                ui.label("Points: one keypoint 10, each additional keypoint +5; bounding box 20. Submission earns points once per label. Manual +10%, focus workflow +25%; bonuses add together. Every 100 labels today increases subsequent label points by 10%, up to ×1.50 after 500. Days use UTC.");
+                ui.label("Reviewing a label earns 30% of its base value once per reviewer. Rejection deducts 50% once per label; an accepted geometry correction earns its author 20% once. Correction never refunds the rejection. Review and correction points receive no bonuses or daily-tier progress.");
+                ui.label("Score = 10 × square root of total points, rounded down. Rankings use exact points. Periods include deductions made during that period, so period scores can be negative. Historical work earns points; focus bonuses begin when scoring is activated.");
+            }
+            ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
+            ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
+            ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
+        });
     }
 }
 
@@ -824,36 +945,11 @@ fn activity_chart(
     });
 }
 
-fn compact_podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
-    ui.label(
-        RichText::new(["Most labeled", "Most reviewed", "Highest acceptance"][metric]).strong(),
-    );
-    for (rank, row) in sorted(rows, metric)
-        .into_iter()
-        .filter(|(_, row)| {
-            value(&row.total, metric).is_some_and(|value| metric == 2 || value > 0.0)
-        })
-        .take(3)
-    {
-        avatar::person(
-            ui,
-            row.person,
-            RichText::new(format!("#{rank} {}", row.name)),
-            egui::vec2(ui.available_width(), 28.0),
-            None,
-        );
-        ui.label(display(&row.total, metric));
-    }
-}
-
 fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
     ui.push_id(("podium", metric), |ui| {
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(
-                RichText::new(["Most labeled", "Most reviewed", "Highest acceptance"][metric])
-                    .strong(),
-            );
+            ui.label(RichText::new(PODIUM_TITLES[metric]).strong());
             let winners: Vec<_> = sorted(rows, metric)
                 .into_iter()
                 .filter(|(_, row)| {
@@ -869,10 +965,15 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                 ui.label("No ranked activity");
                 return;
             }
+            let compact = ui.available_width() < 600.0;
             ui.columns(3, |columns| {
                 for (column, index) in columns.iter_mut().zip([1, 0, 2]) {
-                    let height = [96.0, 68.0, 48.0][index];
-                    column.add_space(166.0 - height);
+                    let height = if compact {
+                        [64.0, 48.0, 36.0][index]
+                    } else {
+                        [96.0, 68.0, 48.0][index]
+                    };
+                    column.add_space(if compact { 134.0 } else { 166.0 } - height);
                     if let Some((rank, row)) = winners.get(index) {
                         let (rect, response) = column.allocate_exact_size(
                             egui::vec2(column.available_width(), height),
@@ -885,7 +986,7 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                         );
                         let avatar_rect = egui::Rect::from_center_size(
                             rect.center_top() - egui::vec2(0.0, 26.0),
-                            egui::Vec2::splat(40.0),
+                            egui::Vec2::splat(column.available_width().min(40.0)),
                         );
                         avatar::paint(column, row.person, avatar_rect);
                         if *rank == 1 {
@@ -935,16 +1036,35 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                             } else {
                                 display(&row.total, metric)
                             };
-                            column.label(RichText::new(score).size(18.0).strong());
-                            column.small(if metric == 2 {
+                            let score_size = if metric == 3 && column.available_width() >= 80.0 {
+                                24.0
+                            } else {
+                                18.0
+                            };
+                            column
+                                .add_sized(
+                                    [column.available_width(), score_size + 6.0],
+                                    egui::Label::new(
+                                        RichText::new(&score).size(score_size).strong(),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(score);
+                            let caption = if metric == 2 {
                                 format!(
                                     "{}/{}",
                                     row.total.accepted,
                                     row.total.accepted + row.total.rejected
                                 )
                             } else {
-                                ["tasks", "reviews"][metric].into()
-                            });
+                                ["tasks", "reviews", "", "score"][metric].into()
+                            };
+                            column
+                                .add_sized(
+                                    [column.available_width(), 18.0],
+                                    egui::Label::new(RichText::new(&caption).small()).truncate(),
+                                )
+                                .on_hover_text(caption);
                         });
                     } else {
                         column.add_space(height);
@@ -1017,6 +1137,15 @@ fn history_chart(
             .filter_map(|day| value(day, metric))
             .fold(1.0_f64, f64::max)
     };
+    let minimum = if metric == 3 {
+        series
+            .iter()
+            .flat_map(|(_, days)| days)
+            .filter_map(|day| value(day, metric))
+            .fold(0.0_f64, f64::min)
+    } else {
+        0.0
+    };
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), 245.0),
         egui::Sense::hover(),
@@ -1043,7 +1172,7 @@ fn history_chart(
         painter.text(
             egui::pos2(plot.left() - 4.0, y),
             egui::Align2::RIGHT_CENTER,
-            format!("{:.0}", maximum * fraction as f64),
+            format!("{:.0}", minimum + (maximum - minimum) * fraction as f64),
             font.clone(),
             theme::TEXT_MUTED,
         );
@@ -1071,7 +1200,7 @@ fn history_chart(
             };
             let point = egui::pos2(
                 plot.left() + plot.width() * (*date - start).num_days() as f32 / span,
-                plot.bottom() - plot.height() * (v / maximum) as f32,
+                plot.bottom() - plot.height() * ((v - minimum) / (maximum - minimum)) as f32,
             );
             if let Some(prev) = previous {
                 let corner = egui::pos2(point.x, prev.y);
@@ -1140,6 +1269,21 @@ fn history_chart(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn score_aggregation_ranks_exact_points_even_when_display_rounds_to_a_tie() {
+        let mut first = ContributorDay::default();
+        first.score.labeling = 10_000;
+        let mut second = first.clone();
+        second.score.labeling += 1;
+        assert_eq!(display(&first, 3), display(&second, 3));
+        assert_eq!(compare(&first, &second, 3), Ordering::Less);
+        let mut deduction = ContributorDay::default();
+        deduction.score.deductions = 1_000;
+        add(&mut first, &deduction);
+        assert_eq!(first.score.total(), 9_000);
+        assert_eq!(display(&deduction, 3), "-31");
+    }
 
     #[test]
     fn periods_and_acceptance_use_calendar_boundaries_and_review_counts() {

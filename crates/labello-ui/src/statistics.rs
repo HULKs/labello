@@ -57,8 +57,13 @@ impl LabelloApp {
             return;
         }
         let screen = ctx.content_rect();
-        let width = (screen.width() - 56.0).clamp(120.0, 1050.0);
-        let max_height = (screen.height() - 56.0).max(160.0);
+        let inset = if LayoutMode::for_width(screen.width()) == LayoutMode::Compact {
+            40.0
+        } else {
+            56.0
+        };
+        let width = (screen.width() - inset).clamp(120.0, 1050.0);
+        let max_height = (screen.height() - inset).max(160.0);
         let id = egui::Id::new("statistics-overlay");
         let resized = ctx.data_mut(|data| {
             let viewport_id = id.with("viewport");
@@ -141,11 +146,13 @@ impl LabelloApp {
         let has_data = self.datasets.last_stats_completion.is_some();
         let initial_loading = self.loading.stats && !has_data;
         ui.horizontal_wrapped(|ui| {
-            ui.label(
-                RichText::new("Live Statistics")
-                    .size(theme::PAGE_TITLE_SIZE)
-                    .strong(),
-            );
+            if layout != LayoutMode::Compact || !self.navigation.statistics.open {
+                ui.label(
+                    RichText::new("Live Statistics")
+                        .size(theme::PAGE_TITLE_SIZE)
+                        .strong(),
+                );
+            }
             if has_data
                 && theme::quiet_button(ui, !self.loading.stats, egui::Button::new("Refresh now"))
                     .on_hover_text(
@@ -222,7 +229,7 @@ impl LabelloApp {
             .map(|class| (class.class_id.clone(), class.name.clone()))
             .collect::<BTreeMap<_, _>>();
         ui.add_space(8.0);
-        self.datasets.leaderboard.show_activity(
+        self.datasets.leaderboard.show(
             ui,
             &self.datasets.stats,
             (
@@ -231,7 +238,10 @@ impl LabelloApp {
                 self.auth_epoch,
             ),
         );
-        self.datasets.leaderboard.show(ui, &self.datasets.stats);
+        ui.add_space(theme::SPACE_5);
+        self.datasets
+            .leaderboard
+            .show_activity(ui, &self.datasets.stats);
         ui.add_space(theme::SPACE_5);
         ui.heading("Dataset totals");
         let metrics = [

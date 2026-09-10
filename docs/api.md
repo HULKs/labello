@@ -140,6 +140,16 @@ Optional `DatasetStats.contributors` maps user IDs to `displayName`, optional
 `day`, `labeled`, `reviewed`, `accepted`, and `rejected`. An empty map means no
 activity; an absent field means contributor statistics are unavailable.
 
+`DatasetStats.scoringVersion = 1` advertises contribution scoring. Each history
+row adds a defaultable `score` object: `labels` is a count, and `labeling`,
+`reviewing`, `deductions`, and `corrections` are integer hundredths of a point.
+Net points are labeling + reviewing + corrections - deductions. Optional
+`scoringFocus` contains `startsAt`, `endsAt`, and nullable `taskId`; an expired
+selection must not be advertised as active. Missing scoring support is distinct
+from zero points. Policy and historical credit are defined in
+[Contribution scoring](scoring.md). These fields use the existing authenticated,
+dataset-authorized statistics endpoint.
+
 Counts derive from existing events: labeling counts first image–task submissions
 per person; reviews count distinct decisions; accepted/rejected counts belong to
 the reviewed human work. Corrections count as rejections; imports and automatic

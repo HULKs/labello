@@ -62,6 +62,7 @@ pub struct DatasetRepository {
     pub(crate) presence_cache: Arc<AsyncMutex<Option<crate::assignment::presence::CachedPresence>>>,
     pub(crate) assignment_cursors: Arc<Mutex<BTreeMap<String, usize>>>,
     pub(crate) stats_cache: Arc<StatsCache>,
+    pub(crate) scoring: Arc<AsyncMutex<Option<crate::stats::focus::FocusHistory>>>,
     pub(crate) task_completion_cache: Arc<TaskCompletionCache>,
     pub(crate) assignment_availability_cache: Arc<AssignmentAvailabilityCache>,
     #[cfg(test)]
@@ -100,6 +101,7 @@ impl DatasetRepository {
             presence_cache: Arc::default(),
             assignment_cursors: Arc::new(Mutex::new(BTreeMap::new())),
             stats_cache: Arc::new(StatsCache::default()),
+            scoring: Arc::default(),
             task_completion_cache: Arc::new(TaskCompletionCache::default()),
             assignment_availability_cache: Arc::new(AssignmentAvailabilityCache::default()),
             #[cfg(test)]

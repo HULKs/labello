@@ -204,6 +204,9 @@ impl eframe::App for LabelloApp {
                 .unwrap_or(std::time::Duration::from_secs(3));
             ui.ctx().request_repaint_after(until_refresh);
         }
+        if self.view == AppView::Annotate && self.runtime.api.is_some() && !self.loading.stats {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs(1));
+        }
         if self.work_view() && self.runtime.api.is_some() && !self.work.availability.loading {
             let until_refresh = if self.work.availability.checked_at.is_some() {
                 self.assignment_availability_cache_age()

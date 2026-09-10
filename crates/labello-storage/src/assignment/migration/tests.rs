@@ -4490,6 +4490,17 @@ async fn review_corrections_cover_exclusions_canonical_skeletons_and_discovery_c
             assert_eq!(link.skeleton_version, cycle - 1);
             assert!(after.migration_companion_is_derived(&discovery));
         }
+        let stats = fixture.repository.dataset_stats().await.unwrap();
+        let contributors = stats.contributors.unwrap();
+        let author = &contributors[&fixture.annotator].history[0].score;
+        assert_eq!(author.labels, 1);
+        assert_eq!(author.deductions, 500);
+        assert_eq!(
+            contributors[&fixture.reviewers[0]].history[0]
+                .score
+                .corrections,
+            0
+        );
         if cycle == 4 {
             let link = &after.migration_companions[&discovery];
             assert!(
@@ -4528,4 +4539,42 @@ async fn review_corrections_cover_exclusions_canonical_skeletons_and_discovery_c
         assert_ne!(next.assignment_id, assignment.assignment_id);
         assignment = next;
     }
+    let state = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&assignment),
+            &MigrationReviewTarget::Disposition {
+                object_group_id: group.clone(),
+                disposition_version: state.migration_dispositions[&fixture.task_id][&group]
+                    .disposition_version,
+            },
+            ReviewDecision::Approved,
+            None,
+            "approve-corrected-skeleton",
+        )
+        .await
+        .unwrap();
+    let contributors = fixture
+        .repository
+        .dataset_stats()
+        .await
+        .unwrap()
+        .contributors
+        .unwrap();
+    assert_eq!(
+        contributors[&fixture.annotator].history[0].score.deductions,
+        500
+    );
+    assert_eq!(
+        contributors[&fixture.reviewers[0]].history[0]
+            .score
+            .corrections,
+        200
+    );
 }
