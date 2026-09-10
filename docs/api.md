@@ -148,6 +148,8 @@ decisions count on commit and retain earlier activity. Clients
 calculate periods, ranks, and acceptance percentages. Existing response fields,
 authorization, and persisted formats remain unchanged.
 
+Clients derive labeling streaks from contributor history.
+
 Role mutation retains bootstrap-administrator protections implemented by the
 handler; a data administrator cannot use this route to bypass those rules.
 

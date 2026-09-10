@@ -20,7 +20,9 @@ Labello currently supports:
 - dataset, task, class, text-tutorial, role, and keybinding administration;
 - filesystem image ingestion, duplicate detection, statistics, and snapshots;
 - dataset contributor leaderboards, top-three podiums and selectable user history
-  in Statistics, with labeling/review counts and acceptance percentages;
+  in Statistics, with labeling/review counts, acceptance percentages, and daily
+  streaks (20 distinct image/task submissions per dataset per UTC day), shown
+  with leaderboard and top-bar flames;
 - atomic new-dataset import for explicit YOLO detection/pose and COCO
   instances/keypoints ground-truth profiles;
 - original-image detection and pose dataset export with explicit

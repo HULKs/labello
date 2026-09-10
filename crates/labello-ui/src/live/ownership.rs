@@ -422,6 +422,7 @@ impl LabelloApp {
         self.work.image_transfers.cancel_all();
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
+        self.datasets.refresh_stats_after_load = false;
         self.loading.session = false;
         self.loading.logout = false;
         self.loading.datasets = false;

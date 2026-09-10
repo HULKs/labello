@@ -318,12 +318,16 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_stats(&mut self) {
-        if self.loading.stats
-            || self.runtime.api.is_none()
-            || !self.statistics_visible()
+        if self.runtime.api.is_none()
+            || (!self.statistics_visible() && !self.streak_available())
         {
             return;
         }
+        if self.loading.stats {
+            self.datasets.refresh_stats_after_load = true;
+            return;
+        }
+        self.datasets.refresh_stats_after_load = false;
         let dataset_id = self.config.dataset_id.clone();
         let request = self.request_identity(Some(dataset_id.clone()));
         self.datasets.stats_request_id = request.request_id;

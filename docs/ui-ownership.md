@@ -70,6 +70,7 @@ Workspace rendering is grouped by the reason it changes:
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
   `statistics/avatar.rs` owns public avatar loading, caching and shared person rows;
+  `statistics/streak.rs` renders daily flames from the domain streak projection;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -187,6 +188,12 @@ failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
 Statistics data, remote status, and active request identity remain dataset-owned.
+The domain derives streaks from contributor history; `statistics/streak.rs` owns
+flame rendering and reduced-motion-aware goal animation. The app-bar flame opens
+Statistics; leaderboard state owns streak sorting. Background statistics refresh
+runs every 30 seconds (three while open), with saves requesting a refresh and
+in-flight requests coalescing into one follow-up. Existing epoch gates reject
+stale responses.
 The shared statistics renderer orders activity and rankings before aggregates.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar

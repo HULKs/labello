@@ -196,12 +196,12 @@ impl eframe::App for LabelloApp {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(500));
         }
-        if self.statistics_visible() && !self.loading.stats {
+        if (self.statistics_visible() || self.streak_available()) && !self.loading.stats {
             let until_refresh = self
                 .datasets
                 .last_stats_attempt
-                .map(|attempt| std::time::Duration::from_secs(3).saturating_sub(attempt.elapsed()))
-                .unwrap_or(std::time::Duration::from_secs(3));
+                .map(|attempt| self.statistics_refresh_interval().saturating_sub(attempt.elapsed()))
+                .unwrap_or(self.statistics_refresh_interval());
             ui.ctx().request_repaint_after(until_refresh);
         }
         if self.work_view() && self.runtime.api.is_some() && !self.work.availability.loading {
