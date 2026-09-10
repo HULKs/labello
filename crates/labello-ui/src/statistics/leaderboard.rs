@@ -5,7 +5,9 @@ use std::{
 
 use chrono::{Datelike, Days, Months, NaiveDate};
 use eframe::egui::{self, RichText};
-use labello_domain::{ContributorDay, ContributorStats, DatasetId, DatasetStats, UserId};
+use labello_domain::{
+    ContributorDay, ContributorStats, DatasetId, DatasetStats, LabelStreak, UserId,
+};
 
 use super::avatar;
 use crate::theme;
@@ -19,6 +21,7 @@ const PERIODS: [&str; 6] = [
     "Overall",
 ];
 const METRICS: [&str; 3] = ["Labeled", "Reviewed", "Acceptance"];
+const STREAK: usize = 3;
 const PODIUM_BLUES: [egui::Color32; 3] = [
     egui::Color32::from_rgb(59, 130, 246),
     theme::INFO,
@@ -128,12 +131,27 @@ struct Row<'a> {
     name: &'a str,
     person: &'a ContributorStats,
     total: ContributorDay,
+    streak: LabelStreak,
+}
+
+impl Row<'_> {
+    fn compare(&self, other: &Self, metric: usize) -> Ordering {
+        if metric == STREAK {
+            self.streak.days.cmp(&other.streak.days)
+        } else {
+            compare(&self.total, &other.total, metric)
+        }
+    }
+
+    fn is_rated(&self, metric: usize) -> bool {
+        metric == STREAK || value(&self.total, metric).is_some()
+    }
 }
 
 fn sorted<'a>(rows: &'a [Row<'a>], metric: usize) -> Vec<(usize, &'a Row<'a>)> {
     let mut rows: Vec<_> = rows.iter().collect();
     rows.sort_by(|a, b| {
-        compare(&b.total, &a.total, metric)
+        b.compare(a, metric)
             .then_with(|| {
                 if metric == 2 {
                     (b.total.accepted + b.total.rejected)
@@ -148,7 +166,7 @@ fn sorted<'a>(rows: &'a [Row<'a>], metric: usize) -> Vec<(usize, &'a Row<'a>)> {
     rows.iter()
         .enumerate()
         .map(|(index, row)| {
-            if index > 0 && compare(&rows[index - 1].total, &row.total, metric) != Ordering::Equal {
+            if index > 0 && rows[index - 1].compare(row, metric) != Ordering::Equal {
                 rank = index + 1;
             }
             (rank, *row)
@@ -219,9 +237,8 @@ impl LeaderboardState {
         } else if !self.sort_descending {
             // Preserve tie order and keep unrated entries last when reversing scores.
             ranked.sort_by(|(a_rank, a), (b_rank, b)| {
-                value(&b.total, self.ranking_metric)
-                    .is_some()
-                    .cmp(&value(&a.total, self.ranking_metric).is_some())
+                b.is_rated(self.ranking_metric)
+                    .cmp(&a.is_rated(self.ranking_metric))
                     .then_with(|| b_rank.cmp(a_rank))
             });
         }
@@ -294,6 +311,7 @@ impl LeaderboardState {
                         name: &contributor.display_name,
                         person: contributor,
                         total,
+                        streak: contributor.label_streak(today),
                     },
                 )
             })
@@ -306,6 +324,7 @@ impl LeaderboardState {
             ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
             ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
             ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
+            ui.label("Streak: reach 20 labeled submissions per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
         });
         if self.history {
             let selected = self.selected.get_or_insert_with(|| {
@@ -461,15 +480,16 @@ impl LeaderboardState {
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.heading("Rankings");
-                if ui.available_width() >= 600.0 {
+                if ui.available_width() >= 750.0 {
                     let name_width =
-                        ui.available_width() - 446.0 - 4.0 * ui.spacing().item_spacing.x;
+                        ui.available_width() - 536.0 - 5.0 * ui.spacing().item_spacing.x;
                     egui::Grid::new("contributor-table")
-                        .num_columns(5)
+                        .num_columns(6)
                         .striped(true)
                         .show(ui, |ui| {
                             super::stats_number_cell(ui, "Rank", 76.0, true);
                             self.sort_header(ui, None, "Person", name_width);
+                            self.sort_header(ui, Some(STREAK), "Streak", 90.0);
                             for (metric, label) in METRICS.iter().enumerate() {
                                 self.sort_header(
                                     ui,
@@ -480,7 +500,7 @@ impl LeaderboardState {
                             }
                             ui.end_row();
                             for (rank, row) in self.table_rows(&rows) {
-                                let rank = if value(&row.total, self.ranking_metric).is_some() {
+                                let rank = if row.is_rated(self.ranking_metric) {
                                     rank.to_string()
                                 } else {
                                     "—".into()
@@ -493,6 +513,7 @@ impl LeaderboardState {
                                     egui::vec2(name_width, 44.0),
                                     None,
                                 );
+                                ui.horizontal(|ui| super::streak::badge(ui, row.streak, row.name));
                                 for metric in 0..3 {
                                     super::stats_number_cell(
                                         ui,
@@ -505,39 +526,63 @@ impl LeaderboardState {
                             }
                         });
                 } else {
-                    if ui.available_width() < 210.0 {
-                        self.sort_header(ui, None, "Person", ui.available_width());
-                        for (metric, label) in METRICS.iter().enumerate() {
-                            self.sort_header(ui, Some(metric), label, ui.available_width());
-                        }
+                    let metric = if self.sort_by_name {
+                        "Person"
+                    } else if self.ranking_metric == STREAK {
+                        "Streak"
                     } else {
-                        let sort_width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                        egui::Grid::new("compact-ranking-sort")
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                self.sort_header(ui, None, "Person", sort_width);
-                                self.sort_header(ui, Some(0), METRICS[0], sort_width);
-                                ui.end_row();
-                                self.sort_header(ui, Some(1), METRICS[1], sort_width);
-                                self.sort_header(ui, Some(2), METRICS[2], sort_width);
-                                ui.end_row();
-                            });
-                    }
+                        METRICS[self.ranking_metric]
+                    };
+                    let direction = if self.sort_descending { "▼" } else { "▲" };
+                    let selection = format!("{metric} {direction}");
+                    egui::ComboBox::from_id_salt("compact-ranking-sort")
+                        .selected_text(&selection)
+                        .width(ui.available_width())
+                        .height(240.0)
+                        .truncate()
+                        .show_ui(ui, |ui| {
+                            let width = ui.available_width();
+                            self.sort_header(ui, None, "Person", width);
+                            self.sort_header(ui, Some(STREAK), "Streak", width);
+                            for (metric, label) in METRICS.iter().enumerate() {
+                                self.sort_header(ui, Some(metric), label, width);
+                            }
+                        })
+                        .response
+                        .on_hover_text(
+                            "Sort rankings. Select the current order again to reverse it.",
+                        )
+                        .widget_info(|| {
+                            let mut info = egui::WidgetInfo::labeled(
+                                egui::WidgetType::ComboBox,
+                                true,
+                                "Ranking order",
+                            );
+                            info.current_text_value = Some(selection.clone());
+                            info
+                        });
                     for (rank, row) in self.table_rows(&rows) {
-                        let rank = if value(&row.total, self.ranking_metric).is_some() {
+                        let rank = if row.is_rated(self.ranking_metric) {
                             format!("#{rank}")
                         } else {
                             "—".into()
                         };
                         ui.separator();
-                        avatar::person(
-                            ui,
-                            row.person,
-                            RichText::new(format!("{rank}  {}", row.name)).strong(),
-                            egui::vec2(0.0, 28.0),
-                            None,
-                        )
-                        .on_hover_text(row.id.as_str());
+                        let width = ui.available_width();
+                        ui.horizontal_wrapped(|ui| {
+                            let badge_width = super::streak::badge_width(ui, row.streak);
+                            let name_width =
+                                (width - badge_width - ui.spacing().item_spacing.x).max(44.0);
+                            avatar::person(
+                                ui,
+                                row.person,
+                                RichText::new(format!("{rank}  {}", row.name)).strong(),
+                                egui::vec2(name_width, 28.0),
+                                None,
+                            )
+                            .on_hover_text(row.id.as_str());
+                            super::streak::badge(ui, row.streak, row.name);
+                        });
                         for (metric, label) in METRICS.iter().enumerate() {
                             ui.label(format!("{label}: {}", display(&row.total, metric)));
                         }
@@ -1140,6 +1185,43 @@ fn history_chart(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streak_sort_ranks_ties_and_zero_days_independently_of_label_totals() {
+        let ids = ["a", "b", "c", "d"].map(UserId::from);
+        let person = ContributorStats::default();
+        let rows: Vec<_> = [0, 4, 2, 4]
+            .into_iter()
+            .enumerate()
+            .map(|(index, days)| Row {
+                id: &ids[index],
+                name: ids[index].as_str(),
+                person: &person,
+                total: ContributorDay {
+                    labeled: 100 - index,
+                    ..Default::default()
+                },
+                streak: LabelStreak {
+                    days,
+                    labeled_today: 0,
+                },
+            })
+            .collect();
+        let mut state = LeaderboardState {
+            ranking_metric: STREAK,
+            ..Default::default()
+        };
+        let order = |state: &LeaderboardState| {
+            state
+                .table_rows(&rows)
+                .into_iter()
+                .map(|(rank, row)| (rank, row.id.as_str()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(order(&state), [(1, "b"), (1, "d"), (3, "c"), (4, "a")]);
+        state.sort_descending = false;
+        assert_eq!(order(&state), [(4, "a"), (3, "c"), (1, "b"), (1, "d")]);
+    }
 
     #[test]
     fn periods_and_acceptance_use_calendar_boundaries_and_review_counts() {

@@ -28,6 +28,9 @@ impl LabelloApp {
                         }
                         Err(error) => self.datasets.stats_error = Some(error.to_string()),
                     }
+                    if std::mem::take(&mut self.datasets.refresh_stats_after_load) {
+                        self.request_stats();
+                    }
                 }
                 UiMessage::AssignmentAvailabilityLoaded { result, .. } => {
                     self.work.availability.loading = false;

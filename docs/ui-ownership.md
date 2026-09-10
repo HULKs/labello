@@ -70,6 +70,7 @@ Workspace rendering is grouped by the reason it changes:
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
   `statistics/avatar.rs` owns public avatar loading, caching and shared person rows;
+  `statistics/streak.rs` renders daily flames from the domain streak projection;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -187,6 +188,27 @@ failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
 Statistics data, remote status, and active request identity remain dataset-owned.
+Authenticated users with an accessible selected dataset see a daily flame in the application
+bar. Statistics refresh every 30 seconds with the modal closed, every three
+seconds while open, and after successful saves. A refresh requested during an
+in-flight load coalesces into one follow-up load. Existing request and epoch
+gates reject obsolete samples. Unavailable and stale progress are explicitly
+described by the flame control, which opens Statistics for details and retry.
+The current streak counts consecutive UTC days with at least 20 distinct
+image/task submissions in this dataset. Yesterday's streak remains extendable
+until today ends; the flame is gray until today's goal is reached. Rankings
+display each person's current flame and streak independently of the period
+filter. The sortable Streak column sits beside the person's name on wide layouts;
+compact rows reserve the measured flame/count width beside the name and keep the
+flame/count together. A touch-sized Ranking order menu replaces the sorting grid
+on compact rankings. Selecting
+Streak sorts current streak length longest first; selecting it again reverses
+the order. Equal lengths share rank, including zero-day streaks.
+The domain projection uses the existing contributor history; no new
+persistent counter or wire field is required. A newly reached goal produces a
+single 700 ms pulse, suppressed for reduced or unknown motion preferences.
+Initial loads, account/dataset changes and refreshes of an already lit flame
+do not replay the celebration.
 The shared statistics renderer orders activity and rankings before aggregates.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar
