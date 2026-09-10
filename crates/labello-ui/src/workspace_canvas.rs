@@ -70,6 +70,8 @@ impl LabelloApp {
                 self.view == AppView::Annotate && self.work.pending_transition.is_none();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
                 let mut interaction = CanvasInteraction::correction(draft.selected_keypoint);
+                interaction.allow_selection =
+                    self.view == AppView::Review && self.review_overview();
                 interaction.allow_create = matches!(
                     draft.edited_geometry,
                     labello_domain::AnnotationGeometry::Skeleton(_)
@@ -207,9 +209,8 @@ impl LabelloApp {
                         }
                     }
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
-                    Some(CanvasAction::CreateBoundingBox(_))
-                    | Some(CanvasAction::Select(_))
-                    | None => {}
+                    Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                    Some(CanvasAction::CreateBoundingBox(_)) | None => {}
                 }
             }
         } else {

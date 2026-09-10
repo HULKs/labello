@@ -202,16 +202,26 @@ has been recorded.
   Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
   width, retaining accessible names and tooltips. Short empty states scroll to keep
   retry actions reachable.
-  Approve and Reject evaluate the focused item independently. An unchanged item
-  enables Approve; a valid correction enables Reject. Reject retains changes locally
-  and advances. Previous item, Next item and Overview retain valid corrections, which
+  The primary action evaluates the focused item independently: Approve for an
+  unchanged item, or Submit correction to retain a valid correction locally; either
+  advances to the next item. Space uses this same action
+  through the configurable Submit and next binding; existing Y/N bindings
+  remain supported. Previous item, Next item and Overview retain valid corrections, which
   satisfy the corrected item's rejection requirement. Unchanged items still require
   explicit approval. Reset item restores the original annotation or disposition and requires
   another decision. Discard corrections resets every changed item for review.
-  The overview permits drawing missing annotations and revisiting existing items.
-  Once every original item has a decision, Submit approval is enabled if no
-  corrections remain; otherwise Reject and submit corrections is enabled. Invalid
-  or unfinished additions block both submission actions. Only the overview submits
+  The overview permits drawing missing annotations and revisiting existing items,
+  including while a valid addition is open. Completing a new skeleton retains it
+  locally so the next click can start another; a one-keypoint skeleton takes one click.
+  Reselecting or dragging an addition does not redirect new placement into an occupied
+  keypoint: empty-space clicks fill unplaced points or start another object after completion.
+  The configured Delete annotation shortcut discards a selected overview addition
+  locally (the whole object, including multi-point skeletons), not other additions
+  or persisted review targets. Busy states, text focus and open overlays block it.
+  Clicking a previously approved or corrected item reopens it with its retained edits.
+  Once every original item has a decision, Approve (also Space) submits approval if no
+  corrections remain; otherwise Submit correction submits a fresh review round. Invalid
+  or unfinished additions block confirmation. Only the overview submits
   corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
   existing identity line. The full accessible details explain that geometry is

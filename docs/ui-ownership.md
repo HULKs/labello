@@ -272,7 +272,10 @@ migration and compact layouts. Statistics continues to use its assignment-preser
 
 Normal and revision review use the same correction owner. Its interaction module
 owns item position, locally decided targets, targets requiring another decision,
-editor validity, navigation, reset, and aggregate overview eligibility. Valid retained
+editor validity, navigation, reset, aggregate overview eligibility, and contextual
+confirmation. The existing `NextImage` action applies to both annotation and review;
+Space (or its configured replacement) approves unchanged items or retains valid
+corrections through the same owners as the compatibility Y/N actions. Valid retained
 corrections satisfy their target's rejection requirement without a separate item
 decision; unchanged targets still require approval. Ordinary
 unchanged-item approvals retain the existing server command; corrected-item
@@ -282,6 +285,18 @@ changed. Only actual differences enable rejection or receive amber preview styli
 Persisted annotations remain unchanged while the canvas previews edits, additions,
 removals and migration replacements. Reset invalidates the affected local decision,
 and earlier corrections do not block approval of another unchanged item.
+Completed new skeletons in the overview are staged locally rather than leaving the
+last keypoint active for replacement. The shared placement owner also stages a
+reopened or recovered completed addition before starting another; selecting or
+dragging an earlier point of an unfinished addition does not overwrite it on new
+placement. Both ordinary and migration canvas adapters
+allow overview selection while an addition is open; navigation retains a valid
+editor or blocks an incomplete one before reopening the selected item.
+The existing `DeleteAnnotation` binding is also WorkImage-scoped. Review dispatch
+consumes it before annotation-mode migration handling and reuses the reset owner
+only for a selected, version-zero overview editor. It discards that whole local
+addition and clears selection; busy/frozen, dragging and keyboard-focus guards
+prevent mutation. Existing reviewed objects and other additions remain unchanged.
 
 The overview is the only correction submission point and requires a decision for
 every original target and valid geometry. Correction success advances the assignment
@@ -291,7 +306,8 @@ assignment, round and sequence validation prevent cross-workspace recovery.
 Historical missing-object locations remain read-only. The second-bar review indicator
 owns its measured two-line presentation and toggles the existing Inspector panel or
 drawer, retaining focus-return behavior. It shows item position before workflow
-identity. The shared review footer owns decision buttons and Previous, Discard and
+identity. The shared review footer owns Approve / Submit correction, labelled from
+the focused item's changes (aggregate changes in overview), and Previous, Discard and
 Skip across ordinary, migration and revision review. Compact layouts keep navigation
 and discard actions in a second bottom row. Remove item for added migration objects
 uses the same footer and the existing local correction owner. The Inspector starts closed.

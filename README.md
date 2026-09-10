@@ -247,9 +247,16 @@ reviewer commits approval or submits substantive corrections. Later work can
 make the previous review ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
 
 Reviewers can edit, add, or remove boxes and skeletons, and change guided
-migration dispositions. **Keep correction** stages the current edit locally;
-**Submit corrections & reject** saves the accumulated changes and returns the
-image to a fresh review round. Rejection always requires a substantive change.
+migration dispositions. The primary action is **Approve** for an unchanged item or
+**Submit correction** for a changed item (`Space` by default); either advances to
+the next item, retaining corrections locally. From the overview, the same action
+submits approval when nothing changed, or saves accumulated corrections and returns
+the image to a fresh review round. Rejection always requires
+a substantive change. Existing Y/N shortcuts remain available. Completing a missing
+skeleton keeps it locally so another can be added; click a previously approved or
+corrected item in the overview to revisit it. Select a locally added object and use
+the configured **Delete annotation** shortcut (`Delete` by default) to discard the
+whole addition without affecting other objects.
 Saving corrections never completes the task. The same reviewer may claim the
 new round, but must review its current objects and final image again; earlier
 approvals do not count. Unsaved previews are identified in the inspector, and

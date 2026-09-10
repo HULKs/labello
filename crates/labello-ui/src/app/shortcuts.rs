@@ -139,6 +139,29 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
+        if action == UserAction::NextImage && self.view == AppView::Review {
+            self.confirm_review_item();
+            return;
+        }
+        if action == UserAction::DeleteAnnotation && self.view == AppView::Review {
+            if self.work.assignment.is_some()
+                && !self.loading.saving
+                && !self.loading.image
+                && !self.work.migration.busy
+                && self.work.pending_transition.is_none()
+                && !self.work.canvas.is_dragging()
+                && self.work.review_corrections.submission.is_none()
+                && self.review_overview()
+                && self.work.correction_draft.as_ref().is_some_and(|draft| {
+                    draft.expected_version == 0
+                        && self.work.selected_annotation.as_ref() == Some(&draft.annotation_id)
+                })
+            {
+                self.reset_review_item();
+                self.work.selected_annotation = None;
+            }
+            return;
+        }
         if self.view == AppView::Review && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none() {
             match action {
                 UserAction::SelectPreviousObject => { self.cycle_review_item(-1); return; }

@@ -1744,7 +1744,7 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
 
 #[cfg(feature = "inspector-presets")]
 #[test]
-fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
+fn migration_review_confirmation_is_visible_and_uses_space_on_mobile() {
     use crate::inspector_presets::{self, InspectorPreset};
 
     let api = Rc::new(SpyApi::new());
@@ -1759,49 +1759,42 @@ fn migration_review_decisions_are_visible_and_keep_their_shortcuts_on_mobile() {
     harness.step();
 
     let assert_review_layout =
-        |harness: &Harness<'static, LabelloApp>, accept: &str, reject: &str| {
-            let accept = harness.get_by_label(accept).rect();
-            let reject = harness.get_by_label(reject).rect();
+        |harness: &Harness<'static, LabelloApp>| {
+            let confirm = harness.get_by_label("Approve").rect();
             let width = harness.ctx.content_rect().width();
             let workflow = harness.get_by_label("Workflow").rect();
             let inspector = harness.get_by_label_contains("Review details: Workflow:").rect();
             let context = harness.get_by_label("Workspace context bar").rect();
-            assert!((accept.center().y - reject.center().y).abs() <= 1.0);
-            assert!(accept.right() <= reject.left());
-            assert!((accept.width() - reject.width()).abs() <= 1.0);
-            assert!(accept.left() <= 16.0 && reject.right() >= width - 16.0);
+            assert!(confirm.left() <= 16.0 && confirm.right() >= width - 16.0);
             assert!(workflow.top() >= context.top() && workflow.bottom() <= context.bottom());
             assert!(inspector.top() >= context.top() && inspector.bottom() <= context.bottom());
         };
 
     harness.set_size(egui::vec2(570.0, 667.0));
     harness.step();
-    assert_review_layout(&harness, "Approve", "Reject");
+    assert_review_layout(&harness);
     assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
     assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() > 80.0);
 
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
-    assert_review_layout(&harness, "Approve", "Reject");
+    assert_review_layout(&harness);
     assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
     assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() >= 44.0);
 
     harness.set_size(egui::vec2(260.0, 667.0));
     harness.step();
-    assert_review_layout(&harness, "Approve", "Reject");
+    assert_review_layout(&harness);
     assert!(harness.get_by_label("Workflow").rect().width() <= 44.5);
     assert!(harness.get_by_label_contains("Review details: Workflow:").rect().width() >= 44.0);
 
     harness.set_size(egui::vec2(150.0, 667.0));
     harness.step();
-    let accept = harness.get_by_label("Approve").rect();
-    let reject = harness.get_by_label("Reject").rect();
-    assert!((accept.center().y - reject.center().y).abs() <= 1.0);
-    assert!((accept.width() - reject.width()).abs() <= 1.0);
+    assert_control_inside(&harness, "Approve", egui::accesskit::Role::Button, 150.0, 667.0);
 
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
-    harness.key_press(egui::Key::Y);
+    harness.key_press(egui::Key::Space);
     harness.step();
     step_until(&mut harness, 8, |app| !app.work.migration.busy);
     assert_eq!(api.counts().migration_commands, 1);

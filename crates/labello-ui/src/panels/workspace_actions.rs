@@ -225,7 +225,7 @@ fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum WorkspaceActionIcon { Approve, Reject, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
+pub(crate) enum WorkspaceActionIcon { Approve, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
 
 pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &str, icon: WorkspaceActionIcon, width: Option<f32>, intent: theme::Intent) -> egui::Response {
     let width = width.unwrap_or_else(|| text_button_width(ui, label).min(ui.available_size_before_wrap().x.max(44.0)));
@@ -248,7 +248,6 @@ fn paint_workspace_action_icon(ui: &egui::Ui, response: &egui::Response, icon: W
         let line = |a, b| { ui.painter().line_segment([a, b], stroke); };
         match icon {
             WorkspaceActionIcon::Approve => { line(point(-8.0, 0.0), point(-2.0, 6.0)); line(point(-2.0, 6.0), point(9.0, -7.0)); }
-            WorkspaceActionIcon::Reject => { line(point(-7.0, -7.0), point(7.0, 7.0)); line(point(-7.0, 7.0), point(7.0, -7.0)); }
             WorkspaceActionIcon::Previous | WorkspaceActionIcon::Undo => { line(point(8.0, 0.0), point(-8.0, 0.0)); line(point(-8.0, 0.0), point(-1.0, -7.0)); line(point(-8.0, 0.0), point(-1.0, 7.0)); }
             WorkspaceActionIcon::Discard => { ui.painter().circle_stroke(point(1.0, 1.0), 8.0, stroke); line(point(-9.0, -8.0), point(-9.0, -1.0)); line(point(-9.0, -1.0), point(-2.0, -1.0)); }
             WorkspaceActionIcon::Skip | WorkspaceActionIcon::Next | WorkspaceActionIcon::Redo => { line(point(-7.0, -7.0), point(4.0, 0.0)); line(point(4.0, 0.0), point(-7.0, 7.0)); line(point(8.0, -8.0), point(8.0, 8.0)); }

@@ -303,40 +303,24 @@ impl LabelloApp {
     ) {
         let ready = self.work.assignment.is_some() && !self.loading.saving
             && !self.loading.image && self.work.pending_transition.is_none();
-        let approve_shortcut = self.shortcut_text(
-            ui.ctx(),
-            labello_domain::UserAction::AcceptReviewObject,
-        );
-        let reject_shortcut = self.shortcut_text(
-            ui.ctx(),
-            labello_domain::UserAction::RejectReviewObject,
-        );
-        let (approve, reject) = if self.review_overview() {
-            ("Submit approval".to_string(), if fill_width { "Reject & submit" } else { "Reject & submit corrections" }.to_string())
-        } else if shortcut_only {
-            (shortcut_button_label(&approve_shortcut, "Approve"), shortcut_button_label(&reject_shortcut, "Reject"))
-        } else { ("Approve".to_string(), "Reject".to_string()) };
-        let button_width = fill_width
-            .then(|| ((ui.available_size_before_wrap().x - ui.spacing().item_spacing.x) / 2.0).floor().max(44.0));
-        let can_approve = ready && !self.work.migration.busy && self.review_can_approve();
-        let approve_response = workspace_action_button(ui, can_approve, &approve, WorkspaceActionIcon::Approve, button_width, theme::Intent::Accent);
-        if approve_response
-            .on_hover_text(format!(
-                "Accept review object ({})",
-                shortcut_button_label(&approve_shortcut, "Accept")
-            ))
+        let shortcut = self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage);
+        let label = if self.focused_review_changed() { "Submit correction" } else { "Approve" };
+        let label = if shortcut_only { shortcut_button_label(&shortcut, label) } else { label.to_string() };
+        let explanation = match (self.review_overview(), self.focused_review_changed()) {
+            (false, false) => "Approve this item and continue",
+            (false, true) => "Keep this correction and continue",
+            (true, false) => "Submit approval for this image",
+            (true, true) => "Submit corrections for a fresh review round",
+        };
+        let button_width = fill_width.then(|| ui.available_size_before_wrap().x.floor().max(44.0));
+        let enabled = ready && !self.work.migration.busy
+            && (self.review_can_approve() || self.review_can_reject());
+        if workspace_action_button(ui, enabled, &label, WorkspaceActionIcon::Approve, button_width, theme::Intent::Accent)
+            .on_hover_text(format!("{explanation} ({shortcut})"))
+            .on_disabled_hover_text("Finish or reset the current annotation and review every item before submitting.")
             .clicked()
         {
-            if self.manual_migration_active() { self.trigger_migration_review_action(ReviewDecision::Approved); } else { self.request_review(ReviewDecision::Approved); }
-        }
-        if workspace_action_button(ui, ready && !self.work.migration.busy && self.review_can_reject(), &reject, WorkspaceActionIcon::Reject, button_width, theme::Intent::Error)
-            .on_hover_text(format!(
-                "Reject review object ({})",
-                shortcut_button_label(&reject_shortcut, "Reject")
-            ))
-            .clicked()
-        {
-            self.reject_review_item();
+            self.confirm_review_item();
         }
     }
 
