@@ -304,7 +304,7 @@ impl LabelloApp {
         let ready = self.work.assignment.is_some() && !self.loading.saving
             && !self.loading.image && self.work.pending_transition.is_none();
         let shortcut = self.shortcut_text(ui.ctx(), labello_domain::UserAction::NextImage);
-        let label = if self.review_overview() { "Submit review" } else { "Confirm" };
+        let label = if self.focused_review_changed() { "Submit correction" } else { "Approve" };
         let label = if shortcut_only { shortcut_button_label(&shortcut, label) } else { label.to_string() };
         let explanation = match (self.review_overview(), self.focused_review_changed()) {
             (false, false) => "Approve this item and continue",

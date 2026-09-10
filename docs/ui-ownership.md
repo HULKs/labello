@@ -286,7 +286,10 @@ Persisted annotations remain unchanged while the canvas previews edits, addition
 removals and migration replacements. Reset invalidates the affected local decision,
 and earlier corrections do not block approval of another unchanged item.
 Completed new skeletons in the overview are staged locally rather than leaving the
-last keypoint active for replacement. Both ordinary and migration canvas adapters
+last keypoint active for replacement. The shared placement owner also stages a
+reopened or recovered completed addition before starting another; selecting or
+dragging an earlier point of an unfinished addition does not overwrite it on new
+placement. Both ordinary and migration canvas adapters
 allow overview selection while an addition is open; navigation retains a valid
 editor or blocks an incomplete one before reopening the selected item.
 
@@ -298,7 +301,8 @@ assignment, round and sequence validation prevent cross-workspace recovery.
 Historical missing-object locations remain read-only. The second-bar review indicator
 owns its measured two-line presentation and toggles the existing Inspector panel or
 drawer, retaining focus-return behavior. It shows item position before workflow
-identity. The shared review footer owns Confirm / Submit review and Previous, Discard and
+identity. The shared review footer owns Approve / Submit correction, labelled from
+the focused item's changes (aggregate changes in overview), and Previous, Discard and
 Skip across ordinary, migration and revision review. Compact layouts keep navigation
 and discard actions in a second bottom row. Remove item for added migration objects
 uses the same footer and the existing local correction owner. The Inspector starts closed.

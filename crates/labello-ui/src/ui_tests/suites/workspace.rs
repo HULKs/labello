@@ -1078,7 +1078,7 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
     api.set_no_assignment(true);
     let counts_before = api.counts();
 
-    click(&mut harness, "Submit review");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 12, |app| {
         app.work
             .assignment
@@ -1121,7 +1121,7 @@ fn review_promotion_revalidates_and_discards_stale_prepared_work() {
     let fallback = prepared[1].clone();
     let stale_assignment_id = api.complete_review_elsewhere(&stale);
 
-    click(&mut harness, "Submit review");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 20, |app| {
         app.work
             .assignment
@@ -1178,7 +1178,7 @@ fn empty_review_revalidation_clears_completed_work_and_releases_cached_leases() 
         .map(|image_id| api.complete_review_elsewhere(image_id))
         .collect::<Vec<_>>();
 
-    click(&mut harness, "Submit review");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 20, |app| {
         !app.loading.image && app.work.current.is_none() && app.work.assignment.is_none()
     });
@@ -1206,7 +1206,7 @@ fn failed_review_revalidation_clears_old_image_and_releases_claimed_assignment()
     api.fail_next_revalidation();
     let counts_before = api.counts();
 
-    click(&mut harness, "Submit review");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 20, |app| {
         !app.loading.image && app.work.current.is_none() && app.runtime.error.is_some()
     });
@@ -2147,7 +2147,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.state().work.current.is_some());
     assert_eq!(harness.state().work.queue.queue_size(), IMAGE_QUEUE_SIZE);
     assert!(harness.query_by_label("Assignment").is_none());
-    assert!(harness.query_by_label("Confirm").is_none());
+    assert!(harness.query_by_label("Approve").is_none());
     assert!(harness.query_by_label("Accept all annotations").is_none());
 
     harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Questionmark);
@@ -2215,7 +2215,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     });
     assert!(harness.state().work.drawer.is_none());
     assert!(harness.query_by_label("Tutorial").is_none());
-    assert!(harness.query_by_label("Confirm").is_some());
+    assert!(harness.query_by_label("Approve").is_some());
     assert!(harness.query_by_label("Reject").is_none());
     assert!(harness.query_by_label("Accept").is_none());
     harness.key_press(egui::Key::Y);
@@ -2500,7 +2500,7 @@ fn reviewer_correction_controls_follow_task_config_and_keep_an_isolated_bbox_dra
     harness.get_by_role_and_label(egui::accesskit::Role::Button, "Reset item").scroll_to_me();
     harness.run_steps(8);
     assert_control_inside(&harness, "Reset item", egui::accesskit::Role::Button, 1500.0, 780.0);
-    click(&mut harness, "Confirm");
+    click(&mut harness, "Submit correction");
     assert!(harness.state().review_overview());
     assert!(harness.state_mut().submit_staged_review_corrections());
     step_until(&mut harness, 8, |app| !app.loading.saving);
@@ -2700,10 +2700,10 @@ fn review_revision_stages_decisions_preserves_cancelled_drafts_and_retries_ident
     assert_eq!(harness.state().work.current_state.as_ref().unwrap(), &before);
     assert_eq!(harness.state().work.staged_review_decisions.len(), 1);
     assert!(harness.state().current_review_annotation().is_none());
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Submit review").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Approve").accesskit_node().is_disabled());
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.step(); harness.step(); harness.step();
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Submit review").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, "Approve").accesskit_node().is_disabled());
     assert!(!harness.state().review_can_reject());
     let canvas = harness.get_by_label("Annotation canvas").rect();
     assert!(canvas.height() >= 44.0, "short final revision canvas: {canvas:?}");
@@ -2895,7 +2895,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
             .accesskit_node()
             .is_disabled()
     );
-    for label in ["Confirm", "Submit review"] {
+    for label in ["Approve", "Submit correction"] {
         let action = harness.query_by_role_and_label(egui::accesskit::Role::Button, label);
         assert!(
             action.is_none_or(|action| action.accesskit_node().is_disabled()),
@@ -3005,6 +3005,7 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
             && app.current_review_annotation().is_some()
     });
     edit_test_review_box(harness.state_mut());
+    harness.step();
     let current_image = harness
         .state()
         .work
@@ -3193,6 +3194,7 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
             && app.current_review_annotation().is_some()
     });
     edit_test_review_box(harness.state_mut());
+    harness.step();
     let draft = harness.state().work.correction_draft.clone().unwrap();
     let assignment = harness.state().work.assignment.clone().unwrap();
     let previous = harness.state().work.previous_assignment.clone();
@@ -3853,7 +3855,7 @@ fn recorded_review_decision_still_requires_navigation_confirmation() {
         x: 0.2, y: 0.2, width: 0.3, height: 0.3,
     }), true);
     let mut harness = loaded_review_harness(api.clone());
-    click(&mut harness, "Confirm");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 12, |app| !app.loading.saving);
     assert_eq!(api.counts().record_review, 1);
     harness.state_mut().open_view(AppView::Setup);
@@ -4306,7 +4308,7 @@ fn reviewer_can_stage_multiple_additions_and_distinguish_unsaved_previews() {
     harness.step();
     harness.set_size(egui::vec2(1440.0, 1000.0));
     harness.run_steps(4);
-    click(&mut harness, "Confirm");
+    click(&mut harness, "Approve");
     step_until(&mut harness, 12, |app| app.review_overview() && !app.loading.saving);
     let persisted = harness.state().work.annotations.clone();
     for index in 0..2 {

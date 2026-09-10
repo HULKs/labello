@@ -795,7 +795,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
              refocus={refocus:?} context={context:?}",
         );
         let layout = LayoutMode::for_width(width);
-        let confirm = "Confirm";
+        let confirm = "Approve";
         assert_control_inside(&harness, confirm, egui::accesskit::Role::Button, width, height);
         if layout != LayoutMode::Wide {
             let confirm_rect = harness
@@ -837,7 +837,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     for label in [
         "Fit",
         "Refocus object R",
-        "Confirm",
+        "Approve",
     ] {
         assert_control_inside(&harness, label, egui::accesskit::Role::Button, 320.0, 320.0);
     }
@@ -848,7 +848,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     );
     harness.set_size(egui::vec2(150.0, 568.0));
     harness.step();
-    assert_control_inside(&harness, "Confirm", egui::accesskit::Role::Button, 150.0, 568.0);
+    assert_control_inside(&harness, "Approve", egui::accesskit::Role::Button, 150.0, 568.0);
 
     harness.state_mut().work.review_index = 1;
     harness.set_size(egui::vec2(320.0, 568.0));

@@ -720,14 +720,45 @@ impl LabelloApp {
 
     pub(crate) fn place_review_correction_keypoint(&mut self, point: NormalizedPoint) {
         let overview = self.review_overview();
+        // Reopened or recovered additions can still have an editor after completion.
+        if overview
+            && self.work.correction_draft.as_ref().is_some_and(|draft| {
+                draft.expected_version == 0
+                    && matches!(&draft.edited_geometry, AnnotationGeometry::Skeleton(skeleton)
+                    if skeleton.keypoints.iter().all(|keypoint| keypoint.point.is_some()))
+            })
+        {
+            if !self.retain_review_editor() {
+                return;
+            }
+            self.begin_new_review_object(None);
+        }
         let Some(draft) = self.work.correction_draft.as_mut() else {
-            return;
-        };
-        let Some(index) = draft.selected_keypoint else {
             return;
         };
         let mut geometry = draft.edited_geometry.clone();
         let AnnotationGeometry::Skeleton(skeleton) = &mut geometry else {
+            return;
+        };
+        let index = if overview && draft.expected_version == 0 {
+            draft
+                .selected_keypoint
+                .filter(|index| {
+                    skeleton
+                        .keypoints
+                        .get(*index)
+                        .is_some_and(|keypoint| keypoint.point.is_none())
+                })
+                .or_else(|| {
+                    skeleton
+                        .keypoints
+                        .iter()
+                        .position(|keypoint| keypoint.point.is_none())
+                })
+        } else {
+            draft.selected_keypoint
+        };
+        let Some(index) = index else {
             return;
         };
         let Some(keypoint) = skeleton.keypoints.get_mut(index) else {

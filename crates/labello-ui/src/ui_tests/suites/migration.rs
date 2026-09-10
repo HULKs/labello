@@ -1760,7 +1760,7 @@ fn migration_review_confirmation_is_visible_and_uses_space_on_mobile() {
 
     let assert_review_layout =
         |harness: &Harness<'static, LabelloApp>| {
-            let confirm = harness.get_by_label("Confirm").rect();
+            let confirm = harness.get_by_label("Approve").rect();
             let width = harness.ctx.content_rect().width();
             let workflow = harness.get_by_label("Workflow").rect();
             let inspector = harness.get_by_label_contains("Review details: Workflow:").rect();
@@ -1790,7 +1790,7 @@ fn migration_review_confirmation_is_visible_and_uses_space_on_mobile() {
 
     harness.set_size(egui::vec2(150.0, 667.0));
     harness.step();
-    assert_control_inside(&harness, "Confirm", egui::accesskit::Role::Button, 150.0, 667.0);
+    assert_control_inside(&harness, "Approve", egui::accesskit::Role::Button, 150.0, 667.0);
 
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();

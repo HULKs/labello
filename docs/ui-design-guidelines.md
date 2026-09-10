@@ -202,8 +202,9 @@ has been recorded.
   Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
   width, retaining accessible names and tooltips. Short empty states scroll to keep
   retry actions reachable.
-  Confirm evaluates the focused item independently: it approves an unchanged item
-  or retains a valid correction locally, then advances. Space uses this same action
+  The primary action evaluates the focused item independently: Approve for an
+  unchanged item, or Submit correction to retain a valid correction locally; either
+  advances to the next item. Space uses this same action
   through the configurable Submit and next binding; existing Y/N bindings
   remain supported. Previous item, Next item and Overview retain valid corrections, which
   satisfy the corrected item's rejection requirement. Unchanged items still require
@@ -212,9 +213,11 @@ has been recorded.
   The overview permits drawing missing annotations and revisiting existing items,
   including while a valid addition is open. Completing a new skeleton retains it
   locally so the next click can start another; a one-keypoint skeleton takes one click.
+  Reselecting or dragging an addition does not redirect new placement into an occupied
+  keypoint: empty-space clicks fill unplaced points or start another object after completion.
   Clicking a previously approved or corrected item reopens it with its retained edits.
-  Once every original item has a decision, Submit review (also Space) submits approval
-  if no corrections remain, or corrections for a fresh review round otherwise. Invalid
+  Once every original item has a decision, Approve (also Space) submits approval if no
+  corrections remain; otherwise Submit correction submits a fresh review round. Invalid
   or unfinished additions block confirmation. Only the overview submits
   corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
