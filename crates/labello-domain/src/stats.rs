@@ -9,11 +9,17 @@ use crate::{
 };
 
 mod activity;
+pub mod scoring;
 pub use activity::{DailyActivityCounts, UtcActivityWindow, daily_activity_from_events};
+pub use scoring::{FocusWindow, ScoreDay, ScoringProjection, daily_multiplier, displayed_score};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasetStats {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scoring_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scoring_focus: Option<FocusWindow>,
     pub total_images: usize,
     pub completed_tasks: usize,
     pub pending_tasks: usize,
@@ -47,6 +53,8 @@ pub struct ContributorStats {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ContributorDay {
+    #[serde(default)]
+    pub score: ScoreDay,
     pub day: String,
     pub labeled: usize,
     pub reviewed: usize,
