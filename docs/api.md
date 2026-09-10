@@ -148,11 +148,7 @@ decisions count on commit and retain earlier activity. Clients
 calculate periods, ranks, and acceptance percentages. Existing response fields,
 authorization, and persisted formats remain unchanged.
 
-Clients also derive daily labeling streaks from this history: at least 20
-`labeled` submissions per UTC day in the dataset. A current streak ends today
-when the goal is met, otherwise yesterday; a missed full day resets it. Reviews
-do not contribute. Streaks use full history independently of leaderboard period
-filters, and require no additional API or persisted fields.
+Clients derive labeling streaks from contributor history.
 
 Role mutation retains bootstrap-administrator protections implemented by the
 handler; a data administrator cannot use this route to bypass those rules.
