@@ -266,20 +266,17 @@ has been recorded.
   the invoking control, and constrain the content to a scrollable viewport.
   Keep real data visible during refresh, order columns by the workflow, align
   numeric comparisons, and expose an accessible value for every chart item.
-  Lead with the full-width score podium, expanded at every viewport size, then
-  contributor rankings, Daily activity, dataset totals, assignment balance,
-  task/class breakdowns, and throughput. Put Score first in metric choices.
-  Keep other podium highlights in a secondary disclosure below Rankings; below
-  850 points of content width, stack the same chart cards vertically when it is
-  expanded. Keep values, units, and explicit empty states in each card.
+  Lead with the full-width score podium and rankings, then Daily activity,
+  dataset totals, assignment balance, task/class breakdowns, and throughput.
+  Keep Score first in metric choices and its podium expanded on mobile. Put
+  other highlights below Rankings in a disclosure; stack chart cards below
+  850 content points, retaining values, units, and empty states.
   Keep period controls beside activity and rankings; they share
   the selected period. Provide a keyboard- and touch-operated Activity day
   selector and Previous/Next day buttons with visible counts, alongside calendar
   hover details. At enlarged browser zoom, stack the modal header and selector
-  labels. Compact rankings use one bounded sort picker and a 44-point direction
-  button, with score-first metric summaries wrapping beneath each contributor.
-  On phones, reclaim modal gutters, omit the duplicate page title inside the
-  Statistics modal, and shorten the podium without collapsing it. Keep history
+  labels. Compact rankings use a bounded sort picker, a 44-point direction
+  button, and wrapping score-first summaries. Keep history
   comparison controls below the metric choices and selected names in bounded rows.
   Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
