@@ -425,6 +425,14 @@ impl LabelloApp {
                     .and_then(|draft| draft.selected_keypoint),
             );
             interaction.allow_create = true;
+            interaction.allow_selection = self.view == AppView::Review && self.review_overview();
+            if interaction.allow_selection {
+                selectable_annotations.extend(
+                    annotations
+                        .iter()
+                        .map(|annotation| annotation.annotation_id.clone()),
+                );
+            }
             interaction.editable = !self.loading.saving
                 && !self.loading.image
                 && self.work.pending_transition.is_none();
@@ -470,6 +478,7 @@ impl LabelloApp {
                 Some(CanvasAction::SelectKeypoint(selection)) => {
                     self.select_correction_keypoint(selection.keypoint_index)
                 }
+                Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
                 _ => {}
             }
             return;

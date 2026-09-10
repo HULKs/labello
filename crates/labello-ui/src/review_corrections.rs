@@ -441,7 +441,7 @@ impl LabelloApp {
             });
         }
         if self.has_review_corrections() {
-            ui.label("Corrections remain unsaved until you reject and submit from the overview.");
+            ui.label("Corrections remain unsaved until you submit the review from the overview.");
         }
     }
 
@@ -719,6 +719,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn place_review_correction_keypoint(&mut self, point: NormalizedPoint) {
+        let overview = self.review_overview();
         let Some(draft) = self.work.correction_draft.as_mut() else {
             return;
         };
@@ -746,7 +747,15 @@ impl LabelloApp {
                 .map(|(index, _)| index)
                 .or(Some(index));
         }
+        let completed_addition = overview
+            && draft.expected_version == 0
+            && matches!(&draft.edited_geometry, AnnotationGeometry::Skeleton(skeleton)
+                if skeleton.keypoints.iter().all(|keypoint| keypoint.point.is_some()));
         self.work.assignment_touched = true;
+        if completed_addition {
+            // Return to overview placement rather than moving the last point on the next click.
+            self.stage_review_correction();
+        }
     }
 }
 

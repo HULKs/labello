@@ -518,7 +518,7 @@ fn mobile_review_icon_fallback_keeps_large_text_actions_in_their_rows() {
     harness.set_size(egui::vec2(390.0, 844.0));
     harness.ctx.global_style_mut(|style| { style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(36.0)); });
     harness.run_steps(4);
-    for label in ["Submit approval", "Reject & submit", "Previous", "Discard", "Skip", "Fit"] {
+    for label in ["Submit review", "Previous", "Discard", "Skip", "Fit"] {
         let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
         assert!(rect.left() >= 0.0 && rect.right() <= 390.0);
         assert!(rect.height() >= 44.0 && rect.height() < 60.0, "{label}: {rect:?}");

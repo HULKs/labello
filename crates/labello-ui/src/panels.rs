@@ -1,5 +1,5 @@
 use eframe::egui::{self, RichText};
-use labello_domain::{AnnotationGeometry, AnnotationType, KeypointState, ReviewDecision};
+use labello_domain::{AnnotationGeometry, AnnotationType, KeypointState};
 
 use crate::{
     app::{
@@ -228,7 +228,9 @@ fn action_category(action: labello_domain::UserAction) -> &'static str {
 fn action_description(action: labello_domain::UserAction) -> &'static str {
     use labello_domain::UserAction;
     match action {
-        UserAction::NextImage => "Save, complete, and claim another image.",
+        UserAction::NextImage => {
+            "Confirm the current review item or submit the overview; in annotation, save, complete, and claim another image."
+        }
         UserAction::UndoEdit => "Reverse the last annotation edit.",
         UserAction::RedoEdit => "Restore the last undone edit.",
         UserAction::SaveAnnotations => "Save without leaving the assignment.",

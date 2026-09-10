@@ -202,16 +202,20 @@ has been recorded.
   Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
   width, retaining accessible names and tooltips. Short empty states scroll to keep
   retry actions reachable.
-  Approve and Reject evaluate the focused item independently. An unchanged item
-  enables Approve; a valid correction enables Reject. Reject retains changes locally
-  and advances. Previous item, Next item and Overview retain valid corrections, which
+  Confirm evaluates the focused item independently: it approves an unchanged item
+  or retains a valid correction locally, then advances. Space uses this same action
+  through the configurable Submit and next binding; existing Y/N bindings
+  remain supported. Previous item, Next item and Overview retain valid corrections, which
   satisfy the corrected item's rejection requirement. Unchanged items still require
   explicit approval. Reset item restores the original annotation or disposition and requires
   another decision. Discard corrections resets every changed item for review.
-  The overview permits drawing missing annotations and revisiting existing items.
-  Once every original item has a decision, Submit approval is enabled if no
-  corrections remain; otherwise Reject and submit corrections is enabled. Invalid
-  or unfinished additions block both submission actions. Only the overview submits
+  The overview permits drawing missing annotations and revisiting existing items,
+  including while a valid addition is open. Completing a new skeleton retains it
+  locally so the next click can start another; a one-keypoint skeleton takes one click.
+  Clicking a previously approved or corrected item reopens it with its retained edits.
+  Once every original item has a decision, Submit review (also Space) submits approval
+  if no corrections remain, or corrections for a fresh review round otherwise. Invalid
+  or unfinished additions block confirmation. Only the overview submits
   corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
   existing identity line. The full accessible details explain that geometry is

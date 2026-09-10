@@ -214,6 +214,26 @@ impl LabelloApp {
                 })
     }
 
+    pub(crate) fn confirm_review_item(&mut self) {
+        if self.view != AppView::Review
+            || self.loading.saving
+            || self.loading.image
+            || self.work.migration.busy
+            || self.work.pending_transition.is_some()
+        {
+            return;
+        }
+        if self.review_can_reject() {
+            self.reject_review_item();
+        } else if self.review_can_approve() {
+            if self.manual_migration_active() {
+                self.trigger_migration_review_action(ReviewDecision::Approved);
+            } else {
+                self.request_review(ReviewDecision::Approved);
+            }
+        }
+    }
+
     pub(crate) fn review_can_approve(&self) -> bool {
         !self.focused_review_changed()
             && self.review_editor_valid()

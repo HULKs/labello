@@ -67,6 +67,7 @@ include!("suites/setup.rs");
 include!("suites/admin.rs");
 include!("suites/export.rs");
 include!("suites/workspace.rs");
+include!("suites/review_confirmation.rs");
 include!("suites/import.rs");
 include!("suites/migration.rs");
 include!("suites/persistence.rs");

@@ -139,6 +139,10 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
+        if action == UserAction::NextImage && self.view == AppView::Review {
+            self.confirm_review_item();
+            return;
+        }
         if self.view == AppView::Review && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none() {
             match action {
                 UserAction::SelectPreviousObject => { self.cycle_review_item(-1); return; }

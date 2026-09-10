@@ -102,7 +102,8 @@ impl UserAction {
             | Self::OpenSettings
             | Self::PreviousImage
             | Self::SkipAssignment => ActionContext::WorkWorkspace,
-            Self::TogglePanMode
+            Self::NextImage
+            | Self::TogglePanMode
             | Self::ZoomIn
             | Self::ZoomOut
             | Self::FitImage
@@ -111,8 +112,7 @@ impl UserAction {
                 ActionContext::AnnotateWorkspace
             }
             Self::RetryImageLoad => ActionContext::AnnotateNoImage,
-            Self::NextImage
-            | Self::UndoEdit
+            Self::UndoEdit
             | Self::RedoEdit
             | Self::SaveAnnotations
             | Self::DeleteAnnotation
@@ -518,6 +518,26 @@ mod tests {
             bindings.bindings[&UserAction::RetryImageLoad]
         );
         assert_eq!(bindings.pan_drag_modifier, PanDragModifier::Control);
+    }
+
+    #[test]
+    fn confirmation_conflicts_with_review_shortcuts_and_normalizes_legacy_reuse() {
+        let mut bindings = KeybindingSet::defaults_for(UserId::from("user_1"));
+        bindings
+            .bindings
+            .insert(UserAction::NextImage, KeyChord::new("Y"));
+        assert_eq!(UserAction::NextImage.context(), ActionContext::WorkImage);
+        assert!(bindings.validate_conflicts().is_err());
+        bindings.normalize();
+        assert_eq!(
+            bindings.bindings[&UserAction::NextImage],
+            KeyChord::new("Y")
+        );
+        assert_ne!(
+            bindings.bindings[&UserAction::AcceptReviewObject],
+            KeyChord::new("Y")
+        );
+        assert!(bindings.validate().is_ok());
     }
 
     #[test]
