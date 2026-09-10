@@ -209,29 +209,14 @@ Statistics data, remote status, and active request identity remain dataset-owned
 Scores reuse these owners and the leaderboard/history renderer, with identity
 reset before rendering. Domain owns [scoring policy](scoring.md); storage owns
 durable focus selection and aggregation. UI never awards points. Annotation
-refreshes focus statistics each minute and hides expired or failed-refresh data.
+refreshes focus statistics in the background and hides expired or failed-refresh data.
 The shared renderer orders score podium, rankings, activity, then aggregates.
-Authenticated users with an accessible selected dataset see a daily flame in the application
-bar. Statistics refresh every 30 seconds with the modal closed, every three
-seconds while open, and after successful saves. A refresh requested during an
-in-flight load coalesces into one follow-up load. Existing request and epoch
-gates reject obsolete samples. Unavailable and stale progress are explicitly
-described by the flame control, which opens Statistics for details and retry.
-The current streak counts consecutive UTC days with at least 20 distinct
-image/task submissions in this dataset. Yesterday's streak remains extendable
-until today ends; the flame is gray until today's goal is reached. Rankings
-display each person's current flame and streak independently of the period
-filter. The sortable Streak column sits beside the person's name on wide layouts;
-compact rows reserve the measured flame/count width beside the name and keep the
-flame/count together. A touch-sized Ranking order menu replaces the sorting grid
-on compact rankings. Selecting
-Streak sorts current streak length longest first; selecting it again reverses
-the order. Equal lengths share rank, including zero-day streaks.
-The domain projection uses the existing contributor history; no new
-persistent counter or wire field is required. A newly reached goal produces a
-single 700 ms pulse, suppressed for reduced or unknown motion preferences.
-Initial loads, account/dataset changes and refreshes of an already lit flame
-do not replay the celebration.
+The domain derives streaks from contributor history; `statistics/streak.rs` owns
+flame rendering and reduced-motion-aware goal animation. The app-bar flame opens
+Statistics; leaderboard state owns streak sorting. Background statistics refresh
+runs every 30 seconds (three while open), with saves requesting a refresh and
+in-flight requests coalescing into one follow-up. Existing epoch gates reject
+stale responses.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar
 counts without hover and clamps to the current period after a period change.
