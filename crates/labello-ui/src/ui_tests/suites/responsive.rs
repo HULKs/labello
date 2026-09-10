@@ -1368,7 +1368,8 @@ fn compact_panel_shortcuts_close_the_drawer_they_open() {
 fn stats_and_responsive_layouts_render_without_losing_primary_actions() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api.clone());
-    assert_eq!(api.counts().dataset_stats, 0);
+    step_until(&mut harness, 8, |app| !app.loading.stats);
+    assert!(api.counts().dataset_stats >= 1, "the daily flame loads statistics before opening the modal");
 
     click_application_menu_item(&mut harness, "Statistics");
     step_until(&mut harness, 8, |app| {

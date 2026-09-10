@@ -54,6 +54,48 @@ pub struct ContributorDay {
     pub rejected: usize,
 }
 
+pub const DAILY_LABEL_GOAL: usize = 20;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LabelStreak {
+    pub days: usize,
+    pub labeled_today: usize,
+}
+
+impl LabelStreak {
+    pub fn lit(self) -> bool {
+        self.labeled_today >= DAILY_LABEL_GOAL
+    }
+}
+
+impl ContributorStats {
+    /// UTC submission days; yesterday's streak remains available to extend today.
+    pub fn label_streak(&self, today: chrono::NaiveDate) -> LabelStreak {
+        let days: BTreeMap<chrono::NaiveDate, usize> = self
+            .history
+            .iter()
+            .filter_map(|day| day.day.parse().ok().map(|date| (date, day.labeled)))
+            .collect();
+        let mut streak = LabelStreak {
+            labeled_today: days.get(&today).copied().unwrap_or_default(),
+            ..Default::default()
+        };
+        let mut cursor = if streak.lit() {
+            Some(today)
+        } else {
+            today.pred_opt()
+        };
+        while let Some(day) = cursor {
+            if days.get(&day).copied().unwrap_or_default() < DAILY_LABEL_GOAL {
+                break;
+            }
+            streak.days += 1;
+            cursor = day.pred_opt();
+        }
+        streak
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignmentBalanceStats {
@@ -152,6 +194,55 @@ pub struct ThroughputPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streak_requires_twenty_and_expires_only_after_a_missed_utc_day() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let mut person = ContributorStats {
+            history: [
+                ("2025-12-31", 20),
+                ("2025-12-30", 25),
+                ("2025-12-28", 30),
+                ("2026-01-02", 50),
+                ("invalid", 50),
+                ("2026-01-01", 19),
+            ]
+            .into_iter()
+            .map(|(day, labeled)| ContributorDay {
+                day: day.into(),
+                labeled,
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        };
+        person.history.last_mut().unwrap().reviewed = 100;
+        assert_eq!(
+            person.label_streak(today),
+            LabelStreak {
+                days: 2,
+                labeled_today: 19
+            }
+        );
+        assert!(!person.label_streak(today).lit());
+        person.history.last_mut().unwrap().labeled = 20;
+        assert_eq!(
+            person.label_streak(today),
+            LabelStreak {
+                days: 3,
+                labeled_today: 20
+            }
+        );
+        assert!(person.label_streak(today).lit());
+        assert_eq!(
+            person.label_streak(today + chrono::Days::new(4)),
+            LabelStreak::default()
+        );
+        assert_eq!(
+            ContributorStats::default().label_streak(today),
+            LabelStreak::default()
+        );
+    }
 
     #[test]
     fn statistics_from_older_servers_decode_without_contributor_support() {

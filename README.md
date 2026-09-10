@@ -19,6 +19,8 @@ Labello currently supports:
 - object-level approval review, full-image checks, and correction workflows;
 - dataset, task, class, text-tutorial, role, and keybinding administration;
 - filesystem image ingestion, duplicate detection, statistics, and snapshots;
+- daily labeling streaks: 20 distinct image/task submissions per dataset per UTC
+  day, with leaderboard flames and a top-bar flame that lights at the daily goal;
 - dataset contributor leaderboards, top-three podiums and selectable user history
   in Statistics, with labeling/review counts and acceptance percentages;
 - atomic new-dataset import for explicit YOLO detection/pose and COCO

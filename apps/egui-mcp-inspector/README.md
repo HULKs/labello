@@ -199,7 +199,7 @@ Available presets are `annotation`, `presence`, `presence-reduced-motion`, `setu
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
-`statistics-failure`, `assignment-failure`, `image-failure`, `import-source`,
+`statistics-failure`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
 `import-preflight`, `import-ready`, `import-running`, `import-failure`,
 `import-success`, `import-multiple-descriptors`, `import-yolo-splits`,
 `export-selection`, `export-loading`, `export-ready`, `export-blocked`,
@@ -216,6 +216,8 @@ are intentionally local and deterministic; restart with another preset for a
 clean inspection context. The `statistics` and `statistics-failure` presets open
 an accessible, scrollable statistics modal above Setup; Escape or Close returns
 to that underlying view.
+The `streak-lit` preset shows a four-day labeling streak with today's goal met
+in both the leaderboard and the underlying application bar.
 
 `overlay-annotation`, `overlay-review`, `overlay-correction`, and
 `overlay-migration` show visible, occluded, and not-present keypoints over

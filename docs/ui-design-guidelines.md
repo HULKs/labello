@@ -273,7 +273,8 @@ has been recorded.
   the selected period. Provide a keyboard- and touch-operated Activity day
   selector and Previous/Next day buttons with visible counts, alongside calendar
   hover details. At enlarged browser zoom, stack the modal header and selector
-  labels, and use one sorting column when two no longer fit. Keep history
+  labels, and use one Ranking order menu for compact rankings. Keep the flame and day
+  count together beside each contributor, reserving their measured width. Keep history
   comparison controls below the metric choices and selected names in bounded rows.
   Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
