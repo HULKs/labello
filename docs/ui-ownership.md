@@ -443,3 +443,18 @@ name. Successful recovery clears connection failures immediately. Last-known
 presence remains during one or two failures; three failures display `Presence
 unavailable` until a successful response arrives. The indicator does not change
 assignment ownership or present unsaved work as saved.
+
+## Migration companion annotation focus
+
+Opening a bounding-box annotation assignment without a restored selection selects
+the first visible migration companion in the selected workflow. The shared workspace canvas focuses a selected
+companion once per activation, using the existing context margin and bounded zoom.
+Focus tracks annotation identity rather than version, so editing, autosave and
+manual pan, zoom or Fit do not repeatedly reset the view. Selecting another object
+and returning focuses it again. Refocus active object, bound to R by default,
+also works for selected companions. Independent companion edits retain their link and
+focus behavior. Ordinary boxes retain their existing annotation viewport behavior.
+
+The domain companion derivation supplies the initial size described in
+[the API contract](api.md). Focus padding changes only the view;
+it does not write geometry, provenance, or review state.

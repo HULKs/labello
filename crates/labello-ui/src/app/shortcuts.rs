@@ -343,7 +343,7 @@ impl LabelloApp {
             }
             UserAction::RefocusObject
                 if self.work.current.is_some()
-                    && (self.view == AppView::Review || self.manual_migration_active()) =>
+                    && self.refocus_annotation().is_some() =>
             {
                 self.refocus_active_object();
             }

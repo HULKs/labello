@@ -4427,3 +4427,56 @@ fn invalid_review_addition_blocks_submission_and_navigation_until_reset() {
     harness.state_mut().reset_review_item();
     assert!(harness.state().review_can_approve());
 }
+
+#[test]
+fn migration_companion_annotation_focus_survives_edits_and_manual_navigation() {
+    let api = Rc::new(SpyApi::new());
+    let id = seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.7, y: 0.7, width: 0.05, height: 0.05,
+    }), true);
+    {
+        let mut spy = api.state.borrow_mut();
+        let state = spy.states.values_mut().next().unwrap();
+        let annotation = state.current_annotation(&id).unwrap().clone();
+        state.migration_companions.insert("discovered".into(), labello_domain::MigrationCompanion {
+            migration_task_id: "skeleton".into(), guide_task_id: annotation.task_id,
+            class_id: annotation.class_id, skeleton_annotation_id: "discovered".into(),
+            skeleton_version: 1, box_annotation_id: id.clone(), box_version: 1,
+        });
+    }
+    let mut harness = loaded_work_harness(api);
+    assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&id));
+    assert!(harness.state().work.canvas.current_zoom() > 1.0);
+    for size in [egui::vec2(1440.0, 900.0), egui::vec2(390.0, 844.0), egui::vec2(320.0, 568.0)] {
+        harness.set_size(size);
+        harness.run();
+        harness.state_mut().work.canvas.fit_view();
+        harness.run();
+        assert_eq!(harness.state().work.canvas.current_zoom(), 1.0, "manual Fit must survive redraws");
+        let annotation = harness.state_mut().work.annotations.iter_mut().find(|annotation| annotation.annotation_id == id).unwrap();
+        annotation.version += 1;
+        annotation.revision_source = RevisionSource::Human { action: HumanRevisionKind::Edited };
+        annotation.geometry = AnnotationGeometry::BoundingBox(BoundingBox { x: 0.6, y: 0.6, width: 0.1, height: 0.1 });
+        harness.run();
+        assert_eq!(harness.state().work.canvas.current_zoom(), 1.0, "edits and saved versions must retain manual navigation");
+        harness.state_mut().trigger_user_action(labello_domain::UserAction::RefocusObject);
+        harness.run();
+        assert!(harness.state().work.canvas.current_zoom() > 1.0);
+        harness.state_mut().work.selected_annotation = None;
+        harness.run();
+        harness.state_mut().work.selected_annotation = Some(id.clone());
+        harness.run();
+        assert!(harness.state().work.canvas.current_zoom() > 1.0, "reactivation must focus the companion");
+    }
+}
+
+#[test]
+fn ordinary_annotation_opening_does_not_select_or_focus_a_box() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.7, y: 0.7, width: 0.05, height: 0.05,
+    }), true);
+    let harness = loaded_work_harness(api);
+    assert!(harness.state().work.selected_annotation.is_none());
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+}

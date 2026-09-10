@@ -185,8 +185,12 @@ policy creates derived pending seeds, not authoritative skeleton labels.
 An object discovered during full-image migration review creates both a manually
 authored skeleton and a bounding-box companion in the configured guide task.
 The companion carries exact skeleton-version provenance, uses visible and hidden
-positions, ignores absent keypoints, and has at least one original pixel of
-width and height. The box task reopens for correction and ordinary review.
+positions, ignores absent keypoints, and spans at least 15% of image width and
+height with a one-original-pixel floor for tiny images. Bounds expand around
+the positioned points and shift inward at image edges to preserve coverage.
+This rule applies to newly derived geometry, including regeneration; loading
+and replay retain existing boxes, and human edits may use smaller extents. The box task reopens for correction and ordinary review.
+
 The frozen imported target set and imported object groups do not change.
 
 Still-derived companions update or withdraw with their skeleton. Independent

@@ -66,6 +66,7 @@ pub enum InspectorPreset {
     MigrationPass,
     MigrationFullImage,
     MigrationReview,
+    MigrationCompanionAnnotation,
     MigrationDiscovery,
     MigrationDiscoveryReview,
     MigrationAnnotatedEdit,
@@ -77,7 +78,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 53] = [
+    pub const ALL: [Self; 54] = [
         Self::Annotation,
         Self::Presence,
         Self::PresenceReducedMotion,
@@ -123,6 +124,7 @@ impl InspectorPreset {
         Self::MigrationPass,
         Self::MigrationFullImage,
         Self::MigrationReview,
+        Self::MigrationCompanionAnnotation,
         Self::MigrationDiscovery,
         Self::MigrationDiscoveryReview,
         Self::MigrationAnnotatedEdit,
@@ -181,6 +183,7 @@ impl InspectorPreset {
             Self::MigrationPass => "migration-pass",
             Self::MigrationFullImage => "migration-full-image",
             Self::MigrationReview => "migration-review",
+            Self::MigrationCompanionAnnotation => "migration-companion-annotation",
             Self::MigrationDiscovery => "migration-discovery",
             Self::MigrationDiscoveryReview => "migration-discovery-review",
             Self::MigrationAnnotatedEdit => "migration-annotated-edit",
@@ -354,6 +357,7 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::MigrationPass => migration_preset(ctx, MigrationPreset::Pass),
         InspectorPreset::MigrationFullImage => migration_preset(ctx, MigrationPreset::FullImage),
         InspectorPreset::MigrationReview => migration_preset(ctx, MigrationPreset::Review),
+        InspectorPreset::MigrationCompanionAnnotation => migration_companion_annotation_preset(ctx),
         InspectorPreset::MigrationDiscovery => migration_discovery_preset(ctx, false),
         InspectorPreset::MigrationDiscoveryReview => migration_discovery_preset(ctx, true),
         InspectorPreset::MigrationAnnotatedEdit => migration_preset(ctx, MigrationPreset::Pass),
@@ -969,6 +973,38 @@ fn migration_preset(ctx: &egui::Context, preset: MigrationPreset) -> LabelloApp 
     if matches!(preset, MigrationPreset::Review) {
         app.work.migration.review_index = 1;
     }
+    app
+}
+
+fn migration_companion_annotation_preset(ctx: &egui::Context) -> LabelloApp {
+    let mut app = work_preset(AssignmentKind::Annotation, ctx);
+    let annotation = &mut app.work.annotations[0];
+    annotation.geometry = AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.7,
+        y: 0.7,
+        width: 0.15,
+        height: 0.15,
+    });
+    annotation.revision_source = labello_domain::RevisionSource::MigrationSkeleton {
+        annotation_id: "discovered-skeleton".into(),
+        version: 1,
+    };
+    let state = app.work.current_state.as_mut().unwrap();
+    state.migration_companions.insert(
+        "discovered-skeleton".into(),
+        labello_domain::MigrationCompanion {
+            migration_task_id: "skeleton:person".into(),
+            guide_task_id: annotation.task_id.clone(),
+            class_id: annotation.class_id.clone(),
+            skeleton_annotation_id: "discovered-skeleton".into(),
+            skeleton_version: 1,
+            box_annotation_id: annotation.annotation_id.clone(),
+            box_version: annotation.version,
+        },
+    );
+    state
+        .annotations
+        .insert(annotation.annotation_id.clone(), vec![annotation.clone()]);
     app
 }
 

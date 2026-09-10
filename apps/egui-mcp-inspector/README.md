@@ -208,7 +208,7 @@ Available presets are `annotation`, `presence`, `presence-reduced-motion`, `setu
 `import-partial-categories`, `import-recovery-blocked`, `migration-object`,
 `migration-single-optional`, `migration-exclusion`, `migration-pass`,
 `migration-full-image`, `migration-review`, `migration-discovery`,
-`migration-discovery-review`, `migration-annotated-edit`, and
+`migration-discovery-review`, `migration-companion-annotation`, `migration-annotated-edit`, and
 `migration-guide-deleted`. The `migration-single-optional` preset reproduces a
 pending imported guide with one optional `center` keypoint and no positioned
 draft input, without a server or dataset. Preset actions
