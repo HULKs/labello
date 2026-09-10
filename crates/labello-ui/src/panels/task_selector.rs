@@ -176,6 +176,15 @@ impl LabelloApp {
             if response.clicked() && !selected {
                 self.request_transition(PendingTransition::Workflow(workflow.task_id.clone()));
             }
+            if self.view == AppView::Annotate
+                && self.datasets.stats_error.is_none()
+                && let Some(focus) = &self.datasets.stats.scoring_focus
+                && focus.task_id.as_ref() == Some(&workflow.task_id)
+                && focus.contains(labello_domain::now())
+            {
+                let minutes = ((focus.ends_at - labello_domain::now()).num_seconds().max(0) as u64).div_ceil(60);
+                ui.label(RichText::new(format!("Focus · +25% · {minutes} min left")).color(theme::ACCENT));
+            }
         }
         if let Some(error) = self.work.availability.error.clone() {
             theme::inline_message(

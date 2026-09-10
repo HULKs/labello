@@ -15,6 +15,7 @@ documents are maintained current references:
 | [HTTP API contract](api.md) | Normative current; internal/unversioned | API maintainers | Client, API, UI maintainers | Routes, roles, transport limits, errors, and compatibility policy |
 | [Architecture](architecture.md) | Normative current | Labello maintainers | Maintainers, contributors | Crate boundaries and implementation ownership |
 | [Assignment](assignment.md) | Normative current | Workflow maintainers | Operators, data administrators, maintainers | Assignment eligibility, completion balance, counts, boundaries, and cache consistency |
+| [Contribution scoring](scoring.md) | Normative current | Domain and UI maintainers | Contributors, operators, maintainers | Label weights, bonuses, review deductions, historical credit, and leaderboard interpretation |
 | [Server configuration](configuration.md) | Normative current | Server maintainers | Operators, maintainers | Supported settings, defaults, validation, and deployment configuration |
 | [Dataset import](import.md) | Normative current | Import maintainers | Operators, maintainers, UI contributors | Supported sources, lifecycle, invariants, and ownership |
 | [Dataset export](export.md) | Normative current | Storage and API maintainers | Dataset administrators, operators, contributors | Selection, capture, artifacts, and explicit round-trip guarantees |

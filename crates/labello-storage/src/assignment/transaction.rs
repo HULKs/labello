@@ -95,6 +95,7 @@ impl DatasetRepository {
             &mut next_state,
             &mut events,
         )?;
+        self.prepare_scoring_focus(&events).await?;
         let history_commit = self
             .review_history_commit(&previous_state, &next_state, previous)
             .await?;
