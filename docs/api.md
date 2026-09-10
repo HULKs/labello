@@ -271,7 +271,7 @@ recorded historical all-absent command still replays without appending events.
 
 Each newly discovered skeleton is saved with one ordinary bounding box in the
 configured guide task, in the same per-image event transaction. The box bounds
-include positioned visible and hidden keypoints and span at least 5% of each
+include positioned visible and hidden keypoints and span at least 15% of each
 image dimension, retaining a one-original-pixel floor per axis for tiny images.
 Expansion is centered on the keypoint bounds and shifted inside the image at
 edges and corners. This derivation rule also applies to automatic regeneration

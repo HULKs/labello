@@ -77,7 +77,10 @@ fn paint_canvas(
         let style = annotation_styles
             .get(&annotation.annotation_id)
             .copied()
-            .unwrap_or_else(|| CanvasAnnotationStyle::solid(annotation_color));
+            .unwrap_or_else(|| CanvasAnnotationStyle::solid(match annotation.geometry {
+                AnnotationGeometry::BoundingBox(_) => theme::ANNOTATION,
+                AnnotationGeometry::Skeleton(_) => annotation_color,
+            }));
         match &annotation.geometry {
             AnnotationGeometry::BoundingBox(bbox) => {
                 let bbox = edit_preview
@@ -330,7 +333,7 @@ fn paint_selected_box(
         for (_, center) in resize_handles(rect) {
             let handle = Rect::from_center_size(center, Vec2::splat(HANDLE_SIZE));
             painter.rect_filled(handle, CornerRadius::same(2), Color32::WHITE);
-            paint_outlined_rect(painter, handle, 2, theme::SELECTION, 1.5);
+            paint_outlined_rect(painter, handle, 2, color, 1.5);
         }
     }
 }

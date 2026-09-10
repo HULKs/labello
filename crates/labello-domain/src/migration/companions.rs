@@ -50,11 +50,11 @@ pub fn migration_skeleton_bounds(
     }
     // This is initial companion geometry, not a minimum for human box edits.
     let width = (right - left)
-        .max(0.05)
+        .max(0.15)
         .max(1.0 / dimensions.width as f32)
         .min(1.0);
     let height = (bottom - top)
-        .max(0.05)
+        .max(0.15)
         .max(1.0 / dimensions.height as f32)
         .min(1.0);
     let bounds = BoundingBox {
@@ -277,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn compact_bounds_keep_five_percent_and_pixel_extents_with_keypoint_coverage() {
+    fn compact_bounds_keep_fifteen_percent_and_pixel_extents_with_keypoint_coverage() {
         for (width, height) in [
             (1, 1),
             (10, 20),
@@ -307,8 +307,8 @@ mod tests {
                     .unwrap()
                     .unwrap();
                 bounds.validate().unwrap();
-                assert!(bounds.width >= 0.05_f32.max(1.0 / width as f32));
-                assert!(bounds.height >= 0.05_f32.max(1.0 / height as f32));
+                assert!(bounds.width >= 0.15_f32.max(1.0 / width as f32));
+                assert!(bounds.height >= 0.15_f32.max(1.0 / height as f32));
                 for (x, y) in points {
                     assert!(bounds.x <= x + 1e-6 && bounds.y <= y + 1e-6);
                     assert!(bounds.x + bounds.width + 1e-6 >= x);

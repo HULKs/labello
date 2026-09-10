@@ -185,7 +185,7 @@ policy creates derived pending seeds, not authoritative skeleton labels.
 An object discovered during full-image migration review creates both a manually
 authored skeleton and a bounding-box companion in the configured guide task.
 The companion carries exact skeleton-version provenance, uses visible and hidden
-positions, ignores absent keypoints, and spans at least 5% of image width and
+positions, ignores absent keypoints, and spans at least 15% of image width and
 height with a one-original-pixel floor for tiny images. Bounds expand around
 the positioned points and shift inward at image edges to preserve coverage.
 This rule applies to newly derived geometry, including regeneration; loading

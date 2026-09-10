@@ -164,8 +164,12 @@ has been recorded.
   corrections, and migration. Not-present keypoints have no image marker or
   incident edge. Suggestions retain hollow markers and their prelabel color;
   visible suggestions use circles and occluded suggestions use diamonds.
-  Retain class or workflow colors with a single one-point contrasting halo
-  on boxes, edges, keypoints, selection handles, and focus indicators. Choose
+  Ordinary bounding boxes use Labello annotation teal, including the active box
+  outline and resize-handle outlines. Selection remains visible through the
+  stronger outline, fill and white handle centers. Explicit review/migration
+  warning and error styles retain their semantic colors; skeletons retain class
+  colors. Use a single one-point contrasting halo on boxes, edges, keypoints,
+  selection handles, and focus indicators. Choose
   black for light class colors and white for dark ones, keeping at least 4.5:1
   between the color and its halo. Inspect legibility on light, dark, and textured
   images; this does not guarantee contrast against every image pixel. Keep context

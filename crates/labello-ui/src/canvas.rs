@@ -731,6 +731,59 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_boxes_and_active_handles_use_labello_teal_with_semantic_overrides() {
+        for selected in [false, true] {
+            for override_color in [None, Some(theme::WARNING)] {
+                let annotation =
+                    test_annotation(AnnotationGeometry::BoundingBox(bbox(0.2, 0.2, 0.5, 0.5)));
+                let id = annotation.annotation_id.clone();
+                let styles = override_color
+                    .map(|color| (id.clone(), CanvasAnnotationStyle::solid(color)))
+                    .into_iter()
+                    .collect();
+                let harness =
+                    Harness::builder()
+                        .with_size(vec2(600.0, 400.0))
+                        .build_ui(move |ui| {
+                            show_canvas_colored(
+                                ui,
+                                &mut CanvasState::default(),
+                                None,
+                                std::slice::from_ref(&annotation),
+                                [600, 400],
+                                false,
+                                selected.then_some(&id),
+                                CanvasInteraction::annotations(true),
+                                &[],
+                                &[],
+                                Color32::RED,
+                                &styles,
+                                None,
+                            );
+                        });
+                let strokes = harness
+                    .output()
+                    .shapes
+                    .iter()
+                    .filter_map(|shape| match &shape.shape {
+                        egui::Shape::Rect(rect) => Some(rect.stroke.color),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                let expected = override_color.unwrap_or(theme::ANNOTATION);
+                assert_eq!(
+                    strokes.iter().filter(|color| **color == expected).count(),
+                    if selected { 9 } else { 1 }
+                );
+                assert!(!strokes.contains(&Color32::RED));
+                if override_color.is_none() {
+                    assert!(!strokes.contains(&theme::SELECTION));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn overlay_halo_is_thin_and_contrasts_with_light_and_dark_class_colors() {
         for color in [
             Color32::BLACK,

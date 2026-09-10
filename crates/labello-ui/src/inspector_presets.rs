@@ -982,8 +982,8 @@ fn migration_companion_annotation_preset(ctx: &egui::Context) -> LabelloApp {
     annotation.geometry = AnnotationGeometry::BoundingBox(BoundingBox {
         x: 0.7,
         y: 0.7,
-        width: 0.05,
-        height: 0.05,
+        width: 0.15,
+        height: 0.15,
     });
     annotation.revision_source = labello_domain::RevisionSource::MigrationSkeleton {
         annotation_id: "discovered-skeleton".into(),
