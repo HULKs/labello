@@ -174,6 +174,7 @@ enum ReviewViewTarget {
     Disabled,
     FullImage,
     Annotation(AnnotationId, u32),
+    EditingAnnotation(AnnotationId),
 }
 
 impl CanvasState {
@@ -307,6 +308,19 @@ impl CanvasState {
         }
         self.review_target = target;
         self.pending_review_view = Some(annotation.and_then(annotation_focus_rect));
+    }
+
+    /// Keep the editing view stable across geometry changes and saved versions.
+    pub(crate) fn set_annotation_edit_focus(&mut self, annotation: Option<&AnnotationVersion>) {
+        let Some(annotation) = annotation else {
+            self.clear_review_focus();
+            return;
+        };
+        let target = ReviewViewTarget::EditingAnnotation(annotation.annotation_id.clone());
+        if self.review_target != target {
+            self.review_target = target;
+            self.pending_review_view = Some(annotation_focus_rect(annotation));
+        }
     }
 
     pub(crate) fn focus_annotation(&mut self, annotation: &AnnotationVersion) {
@@ -1512,6 +1526,44 @@ mod tests {
         state.pan += vec2(5.0, 0.0);
         state.apply_pending_review_view(viewport, fitted);
         assert_eq!(state.pan.x, 5.0);
+    }
+
+    #[test]
+    fn companion_edit_focus_keeps_context_and_manual_transform_across_versions() {
+        for image_size in [[640, 480], [480, 640], [8000, 1000], [1000, 8000]] {
+            for viewport_size in [vec2(1000.0, 700.0), vec2(280.0, 300.0), vec2(280.0, 100.0)] {
+                let viewport = Rect::from_min_size(Pos2::ZERO, viewport_size);
+                let fitted = fitted_image_rect(viewport, image_size);
+                for (x, y) in [(0.0, 0.0), (0.95, 0.95), (0.475, 0.475)] {
+                    let bounds = BoundingBox {
+                        x,
+                        y,
+                        width: 0.05,
+                        height: 0.05,
+                    };
+                    let mut annotation = test_annotation(AnnotationGeometry::BoundingBox(bounds));
+                    let mut state = CanvasState::default();
+                    state.set_annotation_edit_focus(Some(&annotation));
+                    state.apply_pending_review_view(viewport, fitted);
+                    let image = transformed_image_rect(fitted, state.zoom, state.pan);
+                    let focused = bbox_to_screen_rect(image, bounds);
+                    assert!(viewport.expand(0.001).contains_rect(focused));
+                    assert!(focused.width() <= viewport.width() / FOCUS_MARGIN + 0.001);
+                    assert!(focused.height() <= viewport.height() / FOCUS_MARGIN + 0.001);
+                    assert!(state.zoom > 1.0);
+                    state.zoom_out();
+                    state.pan += vec2(4.0, 3.0);
+                    let manual = (state.zoom, state.pan);
+                    annotation.version += 1;
+                    state.set_annotation_edit_focus(Some(&annotation));
+                    state.apply_pending_review_view(viewport, fitted);
+                    assert_eq!((state.zoom, state.pan), manual);
+                    annotation.annotation_id = "another-companion".into();
+                    state.set_annotation_edit_focus(Some(&annotation));
+                    assert!(state.pending_review_view.is_some());
+                }
+            }
+        }
     }
 
     #[test]

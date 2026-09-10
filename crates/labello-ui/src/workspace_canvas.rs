@@ -7,6 +7,24 @@ use crate::{
 };
 
 impl LabelloApp {
+    pub(crate) fn is_migration_companion_box(
+        &self,
+        annotation: &labello_domain::AnnotationVersion,
+    ) -> bool {
+        !annotation.deleted
+            && matches!(
+                annotation.geometry,
+                labello_domain::AnnotationGeometry::BoundingBox(_)
+            )
+            && self.work.current_state.as_ref().is_some_and(|state| {
+                state.migration_companions.values().any(|link| {
+                    link.box_annotation_id == annotation.annotation_id
+                        && link.guide_task_id == annotation.task_id
+                        && link.class_id == annotation.class_id
+                })
+            })
+    }
+
     pub(crate) fn workspace_canvas(&mut self, ui: &mut egui::Ui) {
         self.work
             .canvas
@@ -91,6 +109,14 @@ impl LabelloApp {
                     } else {
                         review_annotation
                     });
+            } else if self.view == AppView::Annotate {
+                let companion = selected_annotation.as_ref().and_then(|id| {
+                    annotations.iter().find(|annotation| {
+                        &annotation.annotation_id == id
+                            && self.is_migration_companion_box(annotation)
+                    })
+                });
+                self.work.canvas.set_annotation_edit_focus(companion);
             } else {
                 self.work.canvas.clear_review_focus();
             }

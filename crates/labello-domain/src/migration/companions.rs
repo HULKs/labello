@@ -48,8 +48,15 @@ pub fn migration_skeleton_bounds(
         top = top.min(point.y);
         bottom = bottom.max(point.y);
     }
-    let width = (right - left).max(1.0 / dimensions.width as f32).min(1.0);
-    let height = (bottom - top).max(1.0 / dimensions.height as f32).min(1.0);
+    // This is initial companion geometry, not a minimum for human box edits.
+    let width = (right - left)
+        .max(0.05)
+        .max(1.0 / dimensions.width as f32)
+        .min(1.0);
+    let height = (bottom - top)
+        .max(0.05)
+        .max(1.0 / dimensions.height as f32)
+        .min(1.0);
     let bounds = BoundingBox {
         x: ((left + right - width) / 2.0).clamp(0.0, 1.0 - width),
         y: ((top + bottom - height) / 2.0).clamp(0.0, 1.0 - height),
@@ -270,32 +277,44 @@ mod tests {
     }
 
     #[test]
-    fn single_and_collinear_points_have_a_pixel_extent_at_every_image_edge() {
-        let dimensions = ImageDimensions {
-            width: 100,
-            height: 200,
-        };
-        for (x, y) in [(0.0, 0.0), (1.0, 1.0), (0.0, 1.0), (1.0, 0.0), (0.5, 0.5)] {
-            let bounds = migration_skeleton_bounds(
-                &skeleton(&[(KeypointState::Visible, Some((x, y)))]),
-                dimensions,
-            )
-            .unwrap()
-            .unwrap();
-            bounds.validate().unwrap();
-            assert!(bounds.width >= 1.0 / dimensions.width as f32);
-            assert!(bounds.height >= 1.0 / dimensions.height as f32);
-            assert!(bounds.x <= x && bounds.y <= y);
-            assert!(bounds.x + bounds.width + 1e-6 >= x);
-            assert!(bounds.y + bounds.height + 1e-6 >= y);
-        }
-        for points in [[(0.5, 0.2), (0.5, 0.9)], [(0.2, 0.5), (0.9, 0.5)]] {
-            let shape = skeleton(&points.map(|point| (KeypointState::Hidden, Some(point))));
-            let bounds = migration_skeleton_bounds(&shape, dimensions)
-                .unwrap()
-                .unwrap();
-            assert!(bounds.width >= 0.01 && bounds.height >= 0.005);
-            bounds.validate().unwrap();
+    fn compact_bounds_keep_five_percent_and_pixel_extents_with_keypoint_coverage() {
+        for (width, height) in [
+            (1, 1),
+            (10, 20),
+            (640, 480),
+            (480, 640),
+            (8000, 1000),
+            (1000, 8000),
+        ] {
+            let dimensions = ImageDimensions { width, height };
+            for points in [
+                vec![(0.0, 0.0)],
+                vec![(1.0, 1.0)],
+                vec![(0.0, 1.0)],
+                vec![(1.0, 0.0)],
+                vec![(0.5, 0.5)],
+                vec![(0.98, 0.99), (1.0, 1.0)],
+                vec![(0.5, 0.2), (0.5, 0.9)],
+                vec![(0.2, 0.5), (0.9, 0.5)],
+            ] {
+                let shape = skeleton(
+                    &points
+                        .iter()
+                        .map(|point| (KeypointState::Hidden, Some(*point)))
+                        .collect::<Vec<_>>(),
+                );
+                let bounds = migration_skeleton_bounds(&shape, dimensions)
+                    .unwrap()
+                    .unwrap();
+                bounds.validate().unwrap();
+                assert!(bounds.width >= 0.05_f32.max(1.0 / width as f32));
+                assert!(bounds.height >= 0.05_f32.max(1.0 / height as f32));
+                for (x, y) in points {
+                    assert!(bounds.x <= x + 1e-6 && bounds.y <= y + 1e-6);
+                    assert!(bounds.x + bounds.width + 1e-6 >= x);
+                    assert!(bounds.y + bounds.height + 1e-6 >= y);
+                }
+            }
         }
     }
 

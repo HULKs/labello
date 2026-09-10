@@ -223,6 +223,13 @@ impl LabelloApp {
                 .unwrap_or(0);
         }
         self.apply_assignment_preferences();
+        self.work.canvas.clear_review_focus();
+        if self.view == AppView::Annotate && self.work.selected_annotation.is_none() {
+            self.work.selected_annotation = self.work.annotations.iter().find(|annotation| {
+                self.annotation_matches_selected_workflow(annotation)
+                    && self.is_migration_companion_box(annotation)
+            }).map(|annotation| annotation.annotation_id.clone());
+        }
         self.sync_review_selection();
         if let Some(state) = self.work.current_state.clone() {
             self.renew_assignment_from_state(&state);

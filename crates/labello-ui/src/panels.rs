@@ -260,7 +260,9 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
             "Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch."
         }
         UserAction::FitImage => "Fit and center the image.",
-        UserAction::RefocusObject => "Center and zoom to the active review or migration object.",
+        UserAction::RefocusObject => {
+            "Center and zoom to the active review object, migration object, or companion box."
+        }
         UserAction::AcceptReviewObject => "Approve the current review object.",
         UserAction::RejectReviewObject => "Reject the current review object.",
         UserAction::PreviousImage => "Return to the last skipped or submitted assignment.",

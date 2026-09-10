@@ -2943,6 +2943,10 @@ async fn discovery_companion_transaction_retries_replays_updates_and_withdraws()
         .migration_companion_box(&skeleton_id)
         .unwrap();
     assert_eq!(bounding_box.task_id, fixture.guide_task_id);
+    let AnnotationGeometry::BoundingBox(bounds) = bounding_box.geometry else {
+        panic!("companion must be a box")
+    };
+    assert!(bounds.width >= 0.05 && bounds.height >= 0.05);
     assert!(bounding_box.object_group_id.is_none());
     assert!(
         added
