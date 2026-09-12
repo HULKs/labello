@@ -90,6 +90,7 @@ impl LabelloApp {
     }
 
     fn set_review_position(&mut self, position: usize) {
+        self.work.next_keypoint_hidden = false;
         self.work.review_index = position;
         self.work.migration.review_index = position;
         self.work.review_corrections.position = Some(position);

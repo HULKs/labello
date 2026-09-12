@@ -72,7 +72,7 @@ fn review_confirmation_keeps_multiple_missing_keypoint_objects() {
                 harness.state().work.review_corrections.changes.len(),
                 object + 1
             );
-            assert!(harness.state().work.correction_draft.is_none());
+            assert!(harness.state().work.correction_draft.is_some());
         }
         let mut previews = Vec::new();
         harness.state().apply_staged_review_previews(&mut previews);
@@ -291,7 +291,7 @@ fn review_creation_after_reopening_an_addition_preserves_it_and_starts_another()
         assert!(changes.iter().any(|change| matches!(change,
             labello_domain::ReviewCorrectionChange::Add { annotation_id, geometry, .. }
                 if annotation_id == &previous_id && geometry == &previous)));
-        assert!(harness.state().work.correction_draft.is_none());
+        assert!(harness.state().work.correction_draft.is_some());
     }
 }
 
@@ -405,4 +405,112 @@ fn review_creation_primary_label_follows_the_focused_decision() {
             .query_by_role_and_label(egui::accesskit::Role::Button, "Approve")
             .is_some()
     );
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn review_hidden_shortcut_applies_to_new_keypoints_and_selected_corrections() {
+    for mut harness in [keypoint_review_overview(2), migration_keypoint_review_overview()] {
+        let task_id = harness.state().work.selected_task_id.clone().unwrap();
+        harness.state_mut().work.tasks.iter_mut()
+            .find(|task| task.task_id == task_id).unwrap()
+            .skeleton.as_mut().unwrap().allow_hidden = false;
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        harness.state_mut().work.tasks.iter_mut()
+            .find(|task| task.task_id == task_id).unwrap()
+            .skeleton.as_mut().unwrap().allow_hidden = true;
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(harness.state().work.next_keypoint_hidden);
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(harness.state().work.next_keypoint_hidden);
+        let rect = harness.get_by_label("Annotation canvas").rect();
+        click_at(&mut harness, rect.center() + egui::vec2(80.0, 50.0));
+        harness.run_steps(3);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        let mut previews = Vec::new();
+        harness.state().apply_staged_review_previews(&mut previews);
+        let geometry = harness.state().work.correction_draft.as_ref()
+            .map(|draft| &draft.edited_geometry)
+            .unwrap_or_else(|| &previews.last().unwrap().geometry);
+        let AnnotationGeometry::Skeleton(skeleton) = geometry else { panic!("expected skeleton"); };
+        assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+        assert!(skeleton.keypoints[0].point.is_some());
+
+        // Inspect an existing object to exercise the correction editor and undo path.
+        harness.state_mut().reset_review_item();
+        harness.state_mut().navigate_review_item(0);
+        harness.run_steps(3);
+        harness.state_mut().work.keybindings.bindings.insert(
+            labello_domain::UserAction::ToggleKeypointHidden,
+            labello_domain::KeyChord::new("J"),
+        );
+        let before = harness.state().work.correction_draft.as_ref().unwrap().edited_geometry.clone();
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.state_mut().work.migration.busy = true;
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.state_mut().work.migration.busy = false;
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_ne!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Z);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+    }
+}
+
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn review_overview_selects_each_new_keypoint_for_immediate_visibility_edits() {
+    for mut harness in [keypoint_review_overview(1), keypoint_review_overview(2), migration_keypoint_review_overview()] {
+        let count = harness.state().selected_task().unwrap().skeleton.as_ref().unwrap().keypoints.len();
+        let rect = harness.get_by_label("Annotation canvas").rect();
+        let mut objects = Vec::new();
+        for object in 0..2 {
+            for point in 0..count {
+                click_at(&mut harness, rect.center() + egui::vec2(-80.0 + object as f32 * 120.0, -100.0 + point as f32 * 45.0));
+                harness.run_steps(2);
+                let draft = harness.state().work.correction_draft.as_ref().unwrap();
+                assert_eq!(draft.selected_keypoint, Some(point));
+                assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&draft.annotation_id));
+                if point == 0 {
+                    assert!(!objects.contains(&draft.annotation_id));
+                    objects.push(draft.annotation_id.clone());
+                }
+                for expected in [KeypointState::Hidden, KeypointState::Visible, KeypointState::Hidden] {
+                    harness.key_press(egui::Key::H);
+                    harness.run_steps(2);
+                    let draft = harness.state().work.correction_draft.as_ref().unwrap();
+                    let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry else { panic!("expected skeleton"); };
+                    assert_eq!(skeleton.keypoints[point].state, expected);
+                    assert!(skeleton.keypoints[point].point.is_some());
+                }
+            }
+            assert_eq!(harness.state().work.review_corrections.changes.len(), object + 1);
+        }
+        assert!(harness.state_mut().retain_review_editor());
+        let mut previews = Vec::new();
+        harness.state().apply_staged_review_previews(&mut previews);
+        assert_eq!(previews.len(), 2);
+        for preview in previews {
+            let AnnotationGeometry::Skeleton(skeleton) = preview.geometry else { panic!("expected skeleton"); };
+            assert!(skeleton.keypoints.iter().all(|point| point.state == KeypointState::Hidden));
+        }
+    }
 }

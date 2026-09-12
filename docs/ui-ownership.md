@@ -289,13 +289,22 @@ approval validates the requested current item independently of the server cursor
 the cursor still resumes at the first unapproved item after reload. Final server
 approval remains gated on all current items, and submitting corrections starts
 a fresh review round without carrying earlier approvals forward.
-Completed new skeletons in the overview are staged locally rather than leaving the
-last keypoint active for replacement. The shared placement owner also stages a
-reopened or recovered completed addition before starting another; selecting or
+Each newly placed overview keypoint stays selected for immediate visibility edits,
+including the final point of a skeleton. Completed additions are staged locally
+while retaining their editor and undo history; the next blank-canvas placement
+starts another object instead of replacing the selected point. The shared placement
+owner also stages a reopened or recovered completed addition before starting another; selecting or
 dragging an earlier point of an unfinished addition does not overwrite it on new
 placement. Both ordinary and migration canvas adapters
 allow overview selection while an addition is open; navigation retains a valid
 editor or blocks an incomplete one before reopening the selected item.
+The `ToggleKeypointHidden` binding is WorkImage-scoped. In ordinary and migration
+review, it toggles the selected positioned keypoint between Visible and Hidden,
+or selects hidden placement for the next point when adding a skeleton. Placement
+consumes that mode and returns to Visible. Review dispatch handles this before
+annotation-mode migration handling, respects hidden-keypoint permission and
+busy/frozen guards, and records selected-point changes in correction undo history.
+`MarkKeypointAbsent` remains annotation-only; N retains its review rejection action.
 The existing `DeleteAnnotation` binding is also WorkImage-scoped. Review dispatch
 consumes it before annotation-mode migration handling and reuses the reset owner
 only for a selected, version-zero overview editor. It discards that whole local
