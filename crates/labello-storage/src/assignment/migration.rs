@@ -106,8 +106,9 @@ impl DatasetRepository {
                         .sequence_index,
                     object_group_id,
                 },
-                CanonicalReviewTarget::Confirmation { .. }
-                | CanonicalReviewTarget::Discovered { .. } => MigrationCursor::FullImage,
+                CanonicalReviewTarget::Confirmation { .. } | CanonicalReviewTarget::Discovered => {
+                    MigrationCursor::FullImage
+                }
             };
             let mut result = command_result(state, context.task_id, None, None, None)?;
             result.cursor = cursor;
@@ -1528,7 +1529,7 @@ impl DatasetRepository {
         let state = self.load_image_state(context.image_id).await?;
         let primary_id = command_event_id(user_id, context.assignment_id, idempotency_key, None);
         if let Some(command) = find_command(self, context.image_id, &primary_id).await? {
-            let matches = matches!(&command.primary.payload, EventPayload::ReviewRecorded { review } if review.decision == decision && review.comment == comment && review_request_matches(review, &command.before, context.task_id, target));
+            let matches = matches!(&command.primary.payload, EventPayload::ReviewRecorded { review } if review.decision == decision && review.comment == comment && review_request_matches(&review.target, &command.before, context.task_id, target));
             return replay_retry(
                 matches,
                 state,
@@ -1558,52 +1559,30 @@ impl DatasetRepository {
             return Err(conflict("migration task is no longer submitted for review"));
         }
         let events = self.load_events(context.image_id).await?;
-        let canonical = canonical_review_target(&state, &events, context.task_id, user_id)?;
-        let review_target = match (canonical, target) {
-            (
-                CanonicalReviewTarget::Object {
-                    object_group_id,
-                    review_target,
-                    disposition_version,
-                },
-                MigrationReviewTarget::Disposition {
-                    object_group_id: requested_group,
-                    disposition_version: requested_version,
-                },
-            ) if object_group_id == *requested_group
-                && disposition_version == *requested_version =>
-            {
-                review_target
-            }
-            (
-                CanonicalReviewTarget::Discovered {
-                    annotation_id,
-                    version,
-                },
-                MigrationReviewTarget::Discovered {
-                    annotation_id: requested_id,
-                    version: requested_version,
-                },
-            ) if annotation_id == *requested_id && version == *requested_version => {
-                ReviewTarget::AnnotationVersion {
-                    annotation_id,
-                    version,
+        let review_target = match target {
+            MigrationReviewTarget::Confirmation { confirmation_hash } => {
+                // Corrections stay local until overview submission. Individual items
+                // may be approved in any order, but final approval requires them all.
+                match canonical_review_target(&state, &events, context.task_id, user_id)? {
+                    CanonicalReviewTarget::Confirmation {
+                        confirmation_hash: current_hash,
+                    } if current_hash == *confirmation_hash => {
+                        ReviewTarget::MigrationConfirmation {
+                            task_id: context.task_id.clone(),
+                            confirmation_hash: current_hash,
+                        }
+                    }
+                    _ => return Err(conflict("migration final review is not ready or is stale")),
                 }
             }
-            (
-                CanonicalReviewTarget::Confirmation { confirmation_hash },
-                MigrationReviewTarget::Confirmation {
-                    confirmation_hash: requested_hash,
-                },
-            ) if confirmation_hash == *requested_hash => ReviewTarget::MigrationConfirmation {
-                task_id: context.task_id.clone(),
-                confirmation_hash,
-            },
-            _ => {
-                return Err(conflict(
-                    "migration review target is not the canonical next target",
-                ));
-            }
+            MigrationReviewTarget::Disposition { .. }
+            | MigrationReviewTarget::Discovered { .. } => state
+                .review_object_targets(task)?
+                .into_iter()
+                .find(|candidate| {
+                    review_request_matches(candidate, &state, context.task_id, target)
+                })
+                .ok_or_else(|| conflict("migration review target is not a current item"))?,
         };
         let review = ReviewRecord {
             review_id: command_review_id(user_id, context.assignment_id, idempotency_key),
@@ -2427,18 +2406,9 @@ fn cancel_competing_reviews(
 
 #[derive(Debug)]
 enum CanonicalReviewTarget {
-    Discovered {
-        annotation_id: AnnotationId,
-        version: u32,
-    },
-    Object {
-        object_group_id: ObjectGroupId,
-        disposition_version: u32,
-        review_target: ReviewTarget,
-    },
-    Confirmation {
-        confirmation_hash: MigrationHash,
-    },
+    Discovered,
+    Object { object_group_id: ObjectGroupId },
+    Confirmation { confirmation_hash: MigrationHash },
 }
 
 fn canonical_review_target(
@@ -2482,8 +2452,6 @@ fn canonical_review_target(
         if !approved {
             return Ok(CanonicalReviewTarget::Object {
                 object_group_id: target.object_group_id.clone(),
-                disposition_version: disposition.disposition_version,
-                review_target,
             });
         }
     }
@@ -2497,10 +2465,7 @@ fn canonical_review_target(
                 && review.decision == ReviewDecision::Approved
                 && review.target == review_target
         }) {
-            return Ok(CanonicalReviewTarget::Discovered {
-                annotation_id: annotation.annotation_id.clone(),
-                version: annotation.version,
-            });
+            return Ok(CanonicalReviewTarget::Discovered);
         }
     }
     let confirmation = state
@@ -2555,7 +2520,7 @@ pub(super) fn migration_final_approval_count(events: &[EventLogEntry], task_id: 
 }
 
 fn review_request_matches(
-    review: &ReviewRecord,
+    target: &ReviewTarget,
     state: &ImageState,
     task_id: &TaskId,
     requested: &MigrationReviewTarget,
@@ -2571,12 +2536,12 @@ fn review_request_matches(
                 .any(|annotation| {
                     annotation.annotation_id == *annotation_id && annotation.version == *version
                 })
-                && matches!(&review.target, ReviewTarget::AnnotationVersion { annotation_id: reviewed_id, version: reviewed_version } if reviewed_id == annotation_id && reviewed_version == version)
+                && matches!(target, ReviewTarget::AnnotationVersion { annotation_id: reviewed_id, version: reviewed_version } if reviewed_id == annotation_id && reviewed_version == version)
         }
         MigrationReviewTarget::Disposition {
             object_group_id,
             disposition_version,
-        } => match &review.target {
+        } => match target {
             ReviewTarget::MigrationDisposition {
                 task_id: reviewed,
                 object_group_id: group,
@@ -2611,7 +2576,7 @@ fn review_request_matches(
             _ => false,
         },
         MigrationReviewTarget::Confirmation { confirmation_hash } => {
-            matches!(&review.target, ReviewTarget::MigrationConfirmation { task_id: reviewed, confirmation_hash: hash } if reviewed == task_id && hash == confirmation_hash)
+            matches!(target, ReviewTarget::MigrationConfirmation { task_id: reviewed, confirmation_hash: hash } if reviewed == task_id && hash == confirmation_hash)
         }
     }
 }

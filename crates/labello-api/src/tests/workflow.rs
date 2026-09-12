@@ -2290,11 +2290,11 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
     let second_version = submitted.image_state.migration_dispositions[&fixture.task_id]
         [&fixture.targets[1].object_group_id]
         .disposition_version;
-    let wrong_review_group = migration_request(
+    let later_review_group = migration_request(
         &fixture,
         "reviewer_1",
         "review",
-        Some("wrong-review-group"),
+        Some("approve-later-review-group"),
         &labello_client::ReviewMigrationRequest {
             assignment_id: review_assignment.assignment_id.clone(),
             task_id: fixture.task_id.clone(),
@@ -2307,7 +2307,22 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
         },
     )
     .await;
-    assert_eq!(wrong_review_group.0, StatusCode::CONFLICT);
+    // The first correction is still local, so its server item remains unapproved.
+    let later_approved = successful_migration(later_review_group);
+    assert_eq!(later_approved.image_state.task_states[&fixture.task_id].status, TaskStatus::Submitted);
+    let early_final = migration_request(
+        &fixture, "reviewer_1", "review", Some("premature-final"),
+        &labello_client::ReviewMigrationRequest {
+            assignment_id: review_assignment.assignment_id.clone(),
+            task_id: fixture.task_id.clone(),
+            target: labello_client::MigrationReviewTarget::Confirmation {
+                confirmation_hash: submitted.image_state.migration_confirmations[&fixture.task_id].confirmation_hash.clone(),
+            },
+            decision: ReviewDecision::Approved,
+            comment: None,
+        },
+    ).await;
+    assert_eq!(early_final.0, StatusCode::CONFLICT);
     let wrong_review_owner = migration_request(
         &fixture,
         "annotator",
@@ -2368,6 +2383,8 @@ async fn assembled_manual_migration_routes_enforce_contract_and_replay_end_to_en
     let corrected = migration_state(&fixture.app, &fixture.image_id, "reviewer_1").await;
     let confirmation_hash = corrected.migration_confirmations[&fixture.task_id].confirmation_hash.clone();
     assert_eq!(corrected.task_states[&fixture.task_id].status, TaskStatus::Submitted);
+    assert_ne!(corrected.review_round(&fixture.task_id), before.review_round(&fixture.task_id));
+    assert_eq!(corrected.effective_reviews_for_task(&fixture.task_id).count(), 0);
     let final_review: Assignment = serde_json::from_value(
         claim_assignment_for_task(
             &fixture.app,
