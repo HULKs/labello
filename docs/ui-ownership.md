@@ -296,6 +296,13 @@ dragging an earlier point of an unfinished addition does not overwrite it on new
 placement. Both ordinary and migration canvas adapters
 allow overview selection while an addition is open; navigation retains a valid
 editor or blocks an incomplete one before reopening the selected item.
+The `ToggleKeypointHidden` binding is WorkImage-scoped. In ordinary and migration
+review, it toggles the selected positioned keypoint between Visible and Hidden,
+or selects hidden placement for the next point when adding a skeleton. Placement
+consumes that mode and returns to Visible. Review dispatch handles this before
+annotation-mode migration handling, respects hidden-keypoint permission and
+busy/frozen guards, and records selected-point changes in correction undo history.
+`MarkKeypointAbsent` remains annotation-only; N retains its review rejection action.
 The existing `DeleteAnnotation` binding is also WorkImage-scoped. Review dispatch
 consumes it before annotation-mode migration handling and reuses the reset owner
 only for a selected, version-zero overview editor. It discards that whole local

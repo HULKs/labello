@@ -169,6 +169,36 @@ impl LabelloApp {
                 _ => {}
             }
         }
+        if action == UserAction::ToggleKeypointHidden && self.view == AppView::Review {
+            if self.work.assignment.is_some()
+                && !self.loading.saving
+                && !self.loading.image
+                && !self.work.migration.busy
+                && self.work.pending_transition.is_none()
+                && !self.work.canvas.is_dragging()
+                && self.work.review_corrections.submission.is_none()
+                && self.selected_task().and_then(|task| task.skeleton.as_ref())
+                    .is_some_and(|spec| spec.allow_hidden)
+            {
+                let selected = self.work.correction_draft.as_ref().and_then(|draft| {
+                    let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry else {
+                        return None;
+                    };
+                    skeleton.keypoints.get(draft.selected_keypoint?)
+                });
+                if let Some(keypoint) = selected.filter(|keypoint| keypoint.point.is_some()) {
+                    let state = if keypoint.state == KeypointState::Hidden {
+                        KeypointState::Visible
+                    } else {
+                        KeypointState::Hidden
+                    };
+                    self.set_correction_keypoint_state(state);
+                } else if selected.is_some() || self.review_overview() {
+                    self.work.next_keypoint_hidden = !self.work.next_keypoint_hidden;
+                }
+            }
+            return;
+        }
         if self.manual_migration_active() {
             match action {
                 UserAction::NextImage => {

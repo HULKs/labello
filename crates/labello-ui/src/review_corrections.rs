@@ -765,7 +765,12 @@ impl LabelloApp {
             return;
         };
         keypoint.point = Some(point);
-        keypoint.state = KeypointState::Visible;
+        keypoint.state = if self.work.next_keypoint_hidden {
+            KeypointState::Hidden
+        } else {
+            KeypointState::Visible
+        };
+        self.work.next_keypoint_hidden = false;
         draft.geometry_history.push(draft.edited_geometry.clone());
         draft.edited_geometry = geometry;
         if let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry {

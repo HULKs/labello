@@ -104,6 +104,7 @@ impl UserAction {
             | Self::SkipAssignment => ActionContext::WorkWorkspace,
             Self::NextImage
             | Self::DeleteAnnotation
+            | Self::ToggleKeypointHidden
             | Self::TogglePanMode
             | Self::ZoomIn
             | Self::ZoomOut
@@ -122,7 +123,6 @@ impl UserAction {
             | Self::SelectNextPrelabel
             | Self::AcceptPrelabel
             | Self::DiscardPrelabel
-            | Self::ToggleKeypointHidden
             | Self::MarkKeypointAbsent
             | Self::AddMissingObject => ActionContext::AnnotateImage,
             Self::AcceptReviewObject | Self::RejectReviewObject => ActionContext::Review,
@@ -522,7 +522,11 @@ mod tests {
 
     #[test]
     fn shared_image_actions_conflict_with_review_shortcuts_and_normalize_legacy_reuse() {
-        for action in [UserAction::NextImage, UserAction::DeleteAnnotation] {
+        for action in [
+            UserAction::NextImage,
+            UserAction::DeleteAnnotation,
+            UserAction::ToggleKeypointHidden,
+        ] {
             let mut bindings = KeybindingSet::defaults_for(UserId::from("user_1"));
             bindings.bindings.insert(action, KeyChord::new("Y"));
             assert_eq!(action.context(), ActionContext::WorkImage);

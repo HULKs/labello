@@ -317,6 +317,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn discard_correction(&mut self) {
+        self.work.next_keypoint_hidden = false;
         self.work.correction_draft = None;
         self.work.review_corrections.editor = None;
     }

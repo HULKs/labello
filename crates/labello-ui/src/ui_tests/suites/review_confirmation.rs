@@ -406,3 +406,70 @@ fn review_creation_primary_label_follows_the_focused_decision() {
             .is_some()
     );
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn review_hidden_shortcut_applies_to_new_keypoints_and_selected_corrections() {
+    for mut harness in [keypoint_review_overview(2), migration_keypoint_review_overview()] {
+        let task_id = harness.state().work.selected_task_id.clone().unwrap();
+        harness.state_mut().work.tasks.iter_mut()
+            .find(|task| task.task_id == task_id).unwrap()
+            .skeleton.as_mut().unwrap().allow_hidden = false;
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        harness.state_mut().work.tasks.iter_mut()
+            .find(|task| task.task_id == task_id).unwrap()
+            .skeleton.as_mut().unwrap().allow_hidden = true;
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(harness.state().work.next_keypoint_hidden);
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert!(harness.state().work.next_keypoint_hidden);
+        let rect = harness.get_by_label("Annotation canvas").rect();
+        click_at(&mut harness, rect.center() + egui::vec2(80.0, 50.0));
+        harness.run_steps(3);
+        assert!(!harness.state().work.next_keypoint_hidden);
+        let mut previews = Vec::new();
+        harness.state().apply_staged_review_previews(&mut previews);
+        let geometry = harness.state().work.correction_draft.as_ref()
+            .map(|draft| &draft.edited_geometry)
+            .unwrap_or_else(|| &previews.last().unwrap().geometry);
+        let AnnotationGeometry::Skeleton(skeleton) = geometry else { panic!("expected skeleton"); };
+        assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+        assert!(skeleton.keypoints[0].point.is_some());
+
+        // Inspect an existing object to exercise the correction editor and undo path.
+        harness.state_mut().reset_review_item();
+        harness.state_mut().navigate_review_item(0);
+        harness.run_steps(3);
+        harness.state_mut().work.keybindings.bindings.insert(
+            labello_domain::UserAction::ToggleKeypointHidden,
+            labello_domain::KeyChord::new("J"),
+        );
+        let before = harness.state().work.correction_draft.as_ref().unwrap().edited_geometry.clone();
+        harness.key_press(egui::Key::H);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.state_mut().work.migration.busy = true;
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.state_mut().work.migration.busy = false;
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_ne!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+        harness.key_press(egui::Key::J);
+        harness.run_steps(2);
+        harness.key_press_modifiers(egui::Modifiers::CTRL, egui::Key::Z);
+        harness.run_steps(2);
+        assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, before);
+    }
+}
