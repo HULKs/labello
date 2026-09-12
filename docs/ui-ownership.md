@@ -289,9 +289,11 @@ approval validates the requested current item independently of the server cursor
 the cursor still resumes at the first unapproved item after reload. Final server
 approval remains gated on all current items, and submitting corrections starts
 a fresh review round without carrying earlier approvals forward.
-Completed new skeletons in the overview are staged locally rather than leaving the
-last keypoint active for replacement. The shared placement owner also stages a
-reopened or recovered completed addition before starting another; selecting or
+Each newly placed overview keypoint stays selected for immediate visibility edits,
+including the final point of a skeleton. Completed additions are staged locally
+while retaining their editor and undo history; the next blank-canvas placement
+starts another object instead of replacing the selected point. The shared placement
+owner also stages a reopened or recovered completed addition before starting another; selecting or
 dragging an earlier point of an unfinished addition does not overwrite it on new
 placement. Both ordinary and migration canvas adapters
 allow overview selection while an addition is open; navigation retains a valid

@@ -773,7 +773,9 @@ impl LabelloApp {
         self.work.next_keypoint_hidden = false;
         draft.geometry_history.push(draft.edited_geometry.clone());
         draft.edited_geometry = geometry;
-        if let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry {
+        if overview && draft.expected_version == 0 {
+            draft.selected_keypoint = Some(index);
+        } else if let AnnotationGeometry::Skeleton(skeleton) = &draft.edited_geometry {
             draft.selected_keypoint = skeleton
                 .keypoints
                 .iter()
@@ -789,8 +791,15 @@ impl LabelloApp {
                 if skeleton.keypoints.iter().all(|keypoint| keypoint.point.is_some()));
         self.work.assignment_touched = true;
         if completed_addition {
-            // Return to overview placement rather than moving the last point on the next click.
+            // Stage the addition while keeping its last point available for immediate edits.
+            // The completed-addition guard above starts another object on the next placement.
+            let editor = self.work.review_corrections.editor.clone();
+            let draft = self.work.correction_draft.clone();
             self.stage_review_correction();
+            if self.work.correction_draft.is_none() {
+                self.work.review_corrections.editor = editor;
+                self.work.correction_draft = draft;
+            }
         }
     }
 }
