@@ -23,8 +23,11 @@ retains prior review records as history. Normal box-task claims, corrections,
 review policy and completion projections then apply.
 
 The frozen imported migration target count does not grow when a companion is
-created. Migration review visits canonical dispositions, discovered skeletons
-in stable annotation-ID order, and then full-image confirmation. Each discovery
+created. Migration review defaults to canonical dispositions, discovered skeletons
+in stable annotation-ID order, and then full-image confirmation. Exact current
+items may be approved in any order, including after an earlier locally retained
+correction. Final confirmation requires all current items to be approved by the
+reviewer in the current submission round. Each discovery
 decision binds the current exact skeleton version. A box review cannot approve
 its skeleton, and migration approval cannot approve its box.
 

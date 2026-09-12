@@ -1518,7 +1518,7 @@ async fn concurrent_admin_repairs_use_one_exact_state_winner() {
 }
 
 #[tokio::test]
-async fn migration_review_is_sequential_and_rejection_cancels_competitors() {
+async fn migration_review_allows_item_navigation_and_correction_cancels_competitors() {
     let fixture = fixture(ReviewWorkflow::Approval, 2).await;
     let annotation = claim_annotator(&fixture).await;
     let mut state = fixture
@@ -1618,7 +1618,7 @@ async fn migration_review_is_sequential_and_rejection_cancels_competitors() {
                 "review-jump",
             )
             .await
-            .is_err()
+            .is_ok()
     );
     let first_version = state.migration_dispositions[&fixture.task_id]
         [&fixture.targets[0].object_group_id]
@@ -4528,4 +4528,285 @@ async fn review_corrections_cover_exclusions_canonical_skeletons_and_discovery_c
         assert_ne!(next.assignment_id, assignment.assignment_id);
         assignment = next;
     }
+}
+
+#[tokio::test]
+async fn migration_review_can_approve_after_a_locally_corrected_skeleton() {
+    let fixture = fixture(ReviewWorkflow::Approval, 2).await;
+    let annotation = claim_annotator(&fixture).await;
+    let mut state = fixture
+        .repository
+        .load_image_state(&fixture.image_id)
+        .await
+        .unwrap();
+    for (index, target) in fixture.targets.iter().enumerate() {
+        state = fixture
+            .repository
+            .save_migration_skeleton(
+                &fixture.annotator,
+                context(&annotation),
+                None,
+                &expectation(&state, &fixture.task_id, target),
+                skeleton(0.3 + index as f32 * 0.3),
+                &format!("save-{index}"),
+            )
+            .await
+            .unwrap()
+            .image_state;
+    }
+    let target_hash = state.migration_target_sets[&fixture.task_id]
+        .target_set_hash
+        .clone();
+    let state_hash = state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let confirmation_hash = migration_confirmation_hash(&target_hash, &state_hash).unwrap();
+    fixture
+        .repository
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&annotation),
+            &target_hash,
+            &state_hash,
+            &confirmation_hash,
+            "submit",
+        )
+        .await
+        .unwrap();
+    let review = fixture
+        .repository
+        .assign_next_image(
+            &fixture.reviewers[0],
+            &fixture.task_id,
+            AssignmentKind::Review,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    // Correct retains the first skeleton locally until overview submission.
+    let first = &fixture.targets[0];
+    let second = &fixture.targets[1];
+    let second_version =
+        state.migration_dispositions[&fixture.task_id][&second.object_group_id].disposition_version;
+    let second_target = MigrationReviewTarget::Disposition {
+        object_group_id: second.object_group_id.clone(),
+        disposition_version: second_version,
+    };
+    let approved = fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&review),
+            &second_target,
+            ReviewDecision::Approved,
+            None,
+            "approve-second",
+        )
+        .await
+        .expect("the unchanged second skeleton can be approved while the first correction is local")
+        .image_state;
+    assert_eq!(
+        approved.task_states[&fixture.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_eq!(
+        assignment_status(&approved, &review),
+        AssignmentStatus::Active
+    );
+    assert_eq!(
+        approved
+            .effective_reviews_for_task(&fixture.task_id)
+            .count(),
+        1
+    );
+
+    // Reload and a lost-response retry retain the approval without duplicating it.
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture
+            .repository
+            .rebuild_image_state(&fixture.image_id)
+            .await
+            .unwrap(),
+        approved
+    );
+    let retry = fixture
+        .repository
+        .review_migration(
+            &fixture.reviewers[0],
+            context(&review),
+            &second_target,
+            ReviewDecision::Approved,
+            None,
+            "approve-second",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retry.image_state, approved);
+    assert_eq!(
+        fixture
+            .repository
+            .load_events(&fixture.image_id)
+            .await
+            .unwrap(),
+        events
+    );
+
+    // Item navigation does not relax exact versions, actor ownership, or final approval.
+    for (actor, target, key) in [
+        (
+            &fixture.reviewers[0],
+            MigrationReviewTarget::Disposition {
+                object_group_id: second.object_group_id.clone(),
+                disposition_version: second_version + 1,
+            },
+            "stale-second",
+        ),
+        (
+            &fixture.reviewers[0],
+            MigrationReviewTarget::Disposition {
+                object_group_id: ObjectGroupId::new("unknown-object"),
+                disposition_version: 1,
+            },
+            "unknown-object",
+        ),
+        (&fixture.reviewers[1], second_target.clone(), "wrong-owner"),
+        (
+            &fixture.reviewers[0],
+            MigrationReviewTarget::Confirmation {
+                confirmation_hash: confirmation_hash.clone(),
+            },
+            "premature-final",
+        ),
+    ] {
+        assert!(
+            fixture
+                .repository
+                .review_migration(
+                    actor,
+                    context(&review),
+                    &target,
+                    ReviewDecision::Approved,
+                    None,
+                    key,
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            fixture
+                .repository
+                .load_events(&fixture.image_id)
+                .await
+                .unwrap(),
+            events
+        );
+    }
+
+    // Discarding/resetting a local correction can return to the first object:
+    // its server cursor remains unresolved, and the later approval survives.
+    let current = fixture
+        .repository
+        .current_manual_migration(&fixture.reviewers[0], context(&review), None)
+        .await
+        .unwrap();
+    assert!(
+        matches!(current.cursor, MigrationCursor::Object { object_group_id, .. }
+        if object_group_id == first.object_group_id)
+    );
+
+    // Submitting the retained correction must supersede this round, including
+    // the later approval, instead of accidentally approving the entire image.
+    let captured = &approved.review_assignment_contexts[&review.assignment_id];
+    let submission = labello_domain::ReviewCorrectionSubmission {
+        correction_id: labello_domain::CorrectionId::generate(),
+        round: captured.round.clone(),
+        target_fingerprint: captured.target_fingerprint.clone(),
+        reason: None,
+        changes: vec![labello_domain::ReviewCorrectionChange::MigrationObject {
+            object_group_id: first.object_group_id.clone(),
+            expected_disposition_version: state.migration_dispositions[&fixture.task_id]
+                [&first.object_group_id]
+                .disposition_version,
+            replacement: labello_domain::MigrationReviewCorrection::Skeleton {
+                skeleton: skeleton(0.4),
+            },
+        }],
+    };
+    let corrected = fixture
+        .repository
+        .submit_review_corrections(&fixture.reviewers[0], context(&review), submission.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        corrected.task_states[&fixture.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_ne!(
+        corrected.review_round(&fixture.task_id),
+        Some(&captured.round)
+    );
+    assert_eq!(
+        corrected
+            .effective_reviews_for_task(&fixture.task_id)
+            .count(),
+        0
+    );
+    assert_eq!(
+        assignment_status(&corrected, &review),
+        AssignmentStatus::Completed
+    );
+    assert_eq!(
+        corrected
+            .current_annotation(&first.reserved_skeleton_annotation_id)
+            .unwrap()
+            .geometry,
+        AnnotationGeometry::Skeleton(skeleton(0.4))
+    );
+    assert_eq!(
+        corrected.current_annotation(&second.reserved_skeleton_annotation_id),
+        approved.current_annotation(&second.reserved_skeleton_annotation_id)
+    );
+    assert_eq!(
+        fixture
+            .repository
+            .submit_review_corrections(&fixture.reviewers[0], context(&review), submission,)
+            .await
+            .unwrap(),
+        corrected
+    );
+    assert!(
+        fixture
+            .repository
+            .review_migration(
+                &fixture.reviewers[0],
+                context(&review),
+                &second_target,
+                ReviewDecision::Approved,
+                None,
+                "expired-round",
+            )
+            .await
+            .is_err()
+    );
+    let events = fixture
+        .repository
+        .load_events(&fixture.image_id)
+        .await
+        .unwrap();
+    for boundary in 0..=events.len() {
+        rebuild_state(fixture.image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(
+        fixture
+            .repository
+            .rebuild_image_state(&fixture.image_id)
+            .await
+            .unwrap(),
+        corrected
+    );
 }

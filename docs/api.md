@@ -298,8 +298,13 @@ remain unresolved with an actionable conflict. Each committed link is a durable
 unit of progress: after interruption, inspect current links and reconcile the
 remaining objects. Reads never perform reconciliation.
 
-Migration review visits canonical dispositions, then every active discovered
-skeleton in annotation-ID order, then the full-image confirmation. A discovered
+Migration review defaults to canonical dispositions, then every active discovered
+skeleton in annotation-ID order, then the full-image confirmation. Individual
+items may be approved in any order under the exact active review assignment,
+binding their current disposition or skeleton version. This permits approval of
+a later unchanged item while an earlier correction remains local until overview
+submission. Final confirmation still requires this reviewer to have approved
+every current item in the current submission round. A discovered
 review target is `{ "targetType": "discovered", "annotationId": "…", "version": 1 }`;
 it binds the exact current skeleton version. A rejected discovery must receive
 a new version or be removed before submission. Companion boxes retain the

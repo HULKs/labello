@@ -2521,3 +2521,96 @@ fn untouched_migration_navigation_releases_but_keypoint_input_remains_protected(
         }
     }
 }
+
+#[test]
+fn migration_review_button_and_space_approve_after_retaining_a_correction() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    // Storage covers admission and round transitions; this fake isolates input dispatch.
+    for use_space in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut app =
+            inspector_presets::build(InspectorPreset::MigrationReview, &egui::Context::default());
+        let task_id = app.work.selected_task_id.clone().unwrap();
+        app.work
+            .tasks
+            .iter_mut()
+            .find(|task| task.task_id == task_id)
+            .unwrap()
+            .skeleton = Some(SkeletonSpec {
+            keypoints: vec![KeypointSpec {
+                name: "head".into(),
+                required: true,
+            }],
+            edges: vec![],
+            allow_hidden: true,
+            allow_absent: false,
+        });
+        let state = app.work.current_state.as_mut().unwrap();
+        state.reviews.clear();
+        let targets = state.migration_target_sets[&task_id].targets.clone();
+        let mut skeleton = state
+            .current_annotation(&targets[0].reserved_skeleton_annotation_id)
+            .unwrap()
+            .clone();
+        skeleton.annotation_id = targets[1].reserved_skeleton_annotation_id.clone();
+        skeleton.object_group_id = Some(targets[1].object_group_id.clone());
+        state
+            .annotations
+            .insert(skeleton.annotation_id.clone(), vec![skeleton.clone()]);
+        state
+            .migration_dispositions
+            .get_mut(&task_id)
+            .unwrap()
+            .get_mut(&targets[1].object_group_id)
+            .unwrap()
+            .status = MigrationDispositionStatus::Annotated {
+            skeleton_annotation_id: skeleton.annotation_id,
+            skeleton_version: 1,
+        };
+        app.work.annotations = state.active_annotations().cloned().collect();
+        api.set_image_state(state.clone());
+        app.work.migration.review_index = 0;
+        app.runtime.api = Some(api.clone());
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run_steps(3);
+        assert_eq!(harness.state().review_position(), 0);
+        let id = harness
+            .state()
+            .work
+            .correction_draft
+            .as_ref()
+            .unwrap()
+            .annotation_id
+            .clone();
+        harness
+            .state_mut()
+            .edit_correction_keypoint(crate::canvas::KeypointEdit {
+                annotation_id: id,
+                keypoint_index: 0,
+                point: NormalizedPoint { x: 0.4, y: 0.4 },
+            });
+        harness.run_steps(2);
+        click(&mut harness, "Submit correction");
+        harness.run_steps(3);
+        assert_eq!(harness.state().review_position(), 1);
+        assert!(
+            harness.state().review_can_approve(),
+            "next unchanged skeleton must allow approval"
+        );
+        if use_space {
+            harness.key_press(egui::Key::Space);
+        } else {
+            click(&mut harness, "Approve");
+        }
+        harness.run_steps(5);
+        assert!(
+            harness.state().review_overview(),
+            "approval must advance past the second skeleton: position={}, error={:?}, migration_error={:?}",
+            harness.state().review_position(),
+            harness.state().runtime.error,
+            harness.state().work.migration.error
+        );
+    }
+}
