@@ -187,7 +187,11 @@ failure states and retry actions reload the same Data saver profile. Cached
 images never imply an active assignment or offline annotation support.
 
 Statistics data, remote status, and active request identity remain dataset-owned.
-The shared statistics renderer orders activity and rankings before aggregates.
+Scores reuse these owners and the leaderboard/history renderer, with identity
+reset before rendering. Domain owns [scoring policy](scoring.md); storage owns
+durable focus selection and aggregation. UI never awards points. Annotation
+refreshes focus statistics each minute and hides expired or failed-refresh data.
+The shared renderer orders score podium, rankings, activity, then aggregates.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar
 counts without hover and clamps to the current period after a period change.
