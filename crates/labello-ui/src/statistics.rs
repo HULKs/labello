@@ -10,6 +10,7 @@ use crate::{
 
 mod avatar;
 mod leaderboard;
+mod streak;
 pub(crate) use leaderboard::LeaderboardState;
 
 impl LabelloApp {
