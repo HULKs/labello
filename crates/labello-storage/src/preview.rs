@@ -21,6 +21,7 @@ const POLICY: &str = "preview-v1/triangle-native-depth-then-rgba8/no-orientation
 pub enum PreviewProfile {
     StandardV1,
     DataSaverV1,
+    ThumbnailV1,
 }
 
 impl PreviewProfile {
@@ -28,12 +29,14 @@ impl PreviewProfile {
         match self {
             Self::StandardV1 => 1600,
             Self::DataSaverV1 => 1280,
+            Self::ThumbnailV1 => 256,
         }
     }
     pub fn name(self) -> &'static str {
         match self {
             Self::StandardV1 => "standard_v1",
             Self::DataSaverV1 => "data_saver_v1",
+            Self::ThumbnailV1 => "thumbnail_v1",
         }
     }
 }

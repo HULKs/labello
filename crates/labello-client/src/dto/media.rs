@@ -5,10 +5,11 @@ pub enum ImagePreviewProfile {
     #[default]
     StandardV1,
     DataSaverV1,
+    ThumbnailV1,
 }
 impl ImagePreviewProfile {
-    pub fn as_str(self) -> &'static str { match self { Self::StandardV1 => "standard_v1", Self::DataSaverV1 => "data_saver_v1" } }
-    pub fn max_edge(self) -> u32 { match self { Self::StandardV1 => 1600, Self::DataSaverV1 => 1280 } }
+    pub fn as_str(self) -> &'static str { match self { Self::StandardV1 => "standard_v1", Self::DataSaverV1 => "data_saver_v1", Self::ThumbnailV1 => "thumbnail_v1" } }
+    pub fn max_edge(self) -> u32 { match self { Self::StandardV1 => 1600, Self::DataSaverV1 => 1280, Self::ThumbnailV1 => 256 } }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

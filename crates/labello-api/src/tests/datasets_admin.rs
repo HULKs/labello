@@ -572,3 +572,31 @@ async fn inspector_browsing_and_return_permissions_are_separate() {
         .unwrap();
     }
 }
+
+#[tokio::test]
+async fn unfiltered_gallery_loads_only_requested_page_states() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    upload_test_image(&app, "alpha.png", &png_bytes(2, 2)).await;
+    upload_test_image(&app, "beta.png", &png_bytes(3, 2)).await;
+    let repo = state.repo(&"ds".into()).unwrap();
+    let index = repo.load_images_index().await.unwrap();
+    let other = index.images_by_hash.values().find(|r| r.file_name == "beta.png").unwrap();
+    // Reading off-page history is both unnecessary work and an unrelated failure.
+    tokio::fs::create_dir_all(repo.events_path(&other.image_id).parent().unwrap()).await.unwrap();
+    tokio::fs::write(repo.events_path(&other.image_id), b"invalid event\n").await.unwrap();
+    for (query, expected) in [("page=1&pageSize=1", StatusCode::OK), ("page=2&pageSize=1", StatusCode::INTERNAL_SERVER_ERROR), ("page=1&pageSize=1&status=pending", StatusCode::INTERNAL_SERVER_ERROR)] {
+        let response = app.clone().oneshot(Request::builder()
+            .uri(format!("/datasets/ds/images?{query}"))
+            .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(page["totalItems"], 2);
+            assert_eq!(page["items"][0]["image"]["fileName"], "alpha.png");
+        }
+    }
+}

@@ -182,7 +182,7 @@ impl ImageApi for DemoLabelloApi {
         Box::pin(async move {
             let webp: &[u8] = match profile {
                 crate::ImagePreviewProfile::StandardV1 => include_bytes!("fixtures/standard.webp"),
-                crate::ImagePreviewProfile::DataSaverV1 => {
+                crate::ImagePreviewProfile::DataSaverV1 | crate::ImagePreviewProfile::ThumbnailV1 => {
                     include_bytes!("fixtures/data-saver.webp")
                 }
             };

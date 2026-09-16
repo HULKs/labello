@@ -1824,7 +1824,7 @@ impl ImageApi for SpyApi {
             labello_client::ImagePreviewProfile::StandardV1 => {
                 include_bytes!("../fixtures/standard.webp")
             }
-            labello_client::ImagePreviewProfile::DataSaverV1 => {
+            labello_client::ImagePreviewProfile::DataSaverV1 | labello_client::ImagePreviewProfile::ThumbnailV1 => {
                 include_bytes!("../fixtures/data-saver.webp")
             }
         };

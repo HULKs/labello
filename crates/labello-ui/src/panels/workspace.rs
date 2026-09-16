@@ -159,6 +159,7 @@ impl LabelloApp {
             self.application_navigation_drawer(ctx);
             return;
         }
+        if self.view == AppView::Inspect { self.inspection_drawer(ctx, layout); }
         if layout != LayoutMode::Wide && self.work_view() {
             let screen = ctx.content_rect();
             let compact = layout == LayoutMode::Compact;

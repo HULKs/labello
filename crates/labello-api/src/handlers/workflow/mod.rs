@@ -424,6 +424,9 @@ pub(crate) async fn get_encoded_preview(
     ensure_any_dataset_role(&repo.load_dataset_config().await?, &actor)?;
     let record = repo.load_image_record(&image_id).await?;
     let profile = match query.profile {
+        labello_client::ImagePreviewProfile::ThumbnailV1 => {
+            labello_storage::PreviewProfile::ThumbnailV1
+        }
         labello_client::ImagePreviewProfile::StandardV1 => {
             labello_storage::PreviewProfile::StandardV1
         }

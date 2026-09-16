@@ -215,7 +215,8 @@ or test that would fail if the stated compatibility or recovery rule regressed.
 
 ## Derived Preview Cache
 
-Encoded previews are disposable derived artifacts outside `datasetsRoot` in the
+Encoded previews, including the 256-pixel Thumbnail v1 gallery proxies, are
+disposable derived artifacts outside `datasetsRoot` in the
 production server. They are not dataset images, image-index entries, import
 outputs, events, export/snapshot contents, or authoritative backup contents.
 The embedded `ApiState` default uses its private `.labello-server/previews`
