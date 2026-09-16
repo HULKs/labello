@@ -438,6 +438,9 @@ Compact review availability uses a reserved slot in the identity line. Only that
 truncatable line gives up text width; type/phase and canvas allocation remain
 stable while loading. The shared spinner description retains its existing
 progress-indicator name and tooltip across workspace placements.
+The shared wrapped context row preserves its content container while availability
+starts and finishes, so removing the spinner does not change widget identities
+or trigger transient diagnostic outlines.
 
 The shared shell measures the compact action panel against its allocated bottom edge.
 When its height changes after a resize, it requests the next repaint to settle

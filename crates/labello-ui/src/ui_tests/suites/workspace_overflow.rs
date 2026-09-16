@@ -548,3 +548,44 @@ fn navigation_bars_previous_object_uses_annotation_order_and_keeps_assignment() 
     assert_eq!(harness.state().work.selected_annotation, expected);
     assert_eq!(harness.state().work.assignment, assignment);
 }
+
+#[test]
+fn availability_completion_does_not_flash_red_context_outlines() {
+    for review in [false, true] {
+        for width in [320.0, 768.0, 1440.0] {
+            let api = Rc::new(SpyApi::new());
+            let mut harness = if review {
+                seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+                    x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+                }), true);
+                loaded_review_harness(api)
+            } else {
+                loaded_work_harness(api)
+            };
+            harness.set_size(egui::vec2(width, 1000.0));
+            harness.run_steps(4);
+            let fit_id = harness.get_by_label("Fit").accesskit_node().locate().0;
+            harness.get_by_label("Fit").focus();
+            harness.run_steps(2);
+            // Check each transition frame: settling first would miss the flash.
+            for loading in [true, false, true, false] {
+                harness.state_mut().work.availability.loading = loading;
+                harness.state_mut().work.availability.tasks.clear();
+                for _ in 0..3 {
+                    harness.step();
+                    let fit = harness.get_by_label("Fit");
+                    assert_eq!(fit.accesskit_node().locate().0, fit_id);
+                    assert!(fit.is_focused(), "availability must preserve keyboard focus");
+                    let bar = harness.get_by_label("Workspace context bar").rect();
+                    let red_outlines: Vec<_> = harness.output().shapes.iter().filter_map(|shape| {
+                        if let egui::Shape::Rect(rect) = &shape.shape
+                            && rect.stroke.color == egui::Color32::RED
+                            && bar.intersects(rect.rect)
+                        { Some(rect.rect) } else { None }
+                    }).collect();
+                    assert!(red_outlines.is_empty(), "availability transition flashed red outlines: review={review}, width={width}, loading={loading}: {red_outlines:?}");
+                }
+            }
+        }
+    }
+}

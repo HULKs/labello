@@ -198,7 +198,7 @@ impl LabelloApp {
                 ui.painter().galley(pos, line.clone(), theme::TEXT);
                 pos.y += line.size().y;
             }
-            if text.availability_loading {
+            {
                 let line_height = text.lines[0].size().y;
                 let side = 16.0_f32.min(line_height);
                 let spinner_rect = egui::Rect::from_min_size(
@@ -212,8 +212,12 @@ impl LabelloApp {
                         .max_rect(spinner_rect)
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
-                let spinner = spinner_ui.add(egui::Spinner::new().size(side));
-                Self::describe_assignment_availability_spinner(spinner);
+                // Creating the child unconditionally keeps following controls
+                // on the same automatic IDs across loading transitions.
+                if text.availability_loading {
+                    let spinner = spinner_ui.add(egui::Spinner::new().size(side));
+                    Self::describe_assignment_availability_spinner(spinner);
+                }
             }
         }
         let response = choice.response.on_hover_text(&content.accessible);
