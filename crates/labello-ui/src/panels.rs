@@ -274,7 +274,7 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
     }
 }
 
-fn workflow_type_icon(
+pub(crate) fn workflow_type_icon(
     ui: &mut egui::Ui,
     id: egui::Id,
     rect: egui::Rect,

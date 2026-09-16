@@ -586,7 +586,10 @@ Previous/next image navigation crosses page boundaries within the active filters
 Canvas interaction permits pan/zoom, without annotation editing. Workflow, status,
 and annotation-type visibility intersect. The compact overlay panel has one
 visibility row per workflow with an annotation count and status tooltip; skeleton
-edges come from each annotation's configured task.
+edges come from each annotation's configured task. The geometry toggles use the
+same type icons as Annotate/Review and share a row with the status dropdown.
+Workflow visibility and return-target selection use these icon toggles beside
+the workflow names, with contextual accessible names and selected states.
 
 Reviewer/data-admin return controls open from a secondary Return to review action
 and select workflows independently of overlays. Discard or success closes the form.

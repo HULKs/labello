@@ -48,7 +48,7 @@ impl LabelloApp {
                 let text = self.inspection.query.search.get_or_insert_default();
                 let response = ui.add_sized(
                     [width, 44.0],
-                    egui::TextEdit::singleline(text)
+                    theme::singleline_text_edit(text)
                         .hint_text("Search images")
                         .desired_width(width),
                 );

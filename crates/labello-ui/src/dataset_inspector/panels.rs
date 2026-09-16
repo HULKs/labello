@@ -315,3 +315,45 @@ impl LabelloApp {
         }
     }
 }
+
+/// Icon-only toggle with the same type artwork as Annotate and Review workflows.
+pub(super) fn annotation_type_toggle(
+    ui: &mut egui::Ui,
+    selected: &mut bool,
+    annotation_type: &AnnotationType,
+    label: &str,
+) -> egui::Response {
+    ui.push_id(label, |ui| {
+        ui.scope(|ui| {
+            ui.spacing_mut().button_padding = egui::vec2(8.0, 8.0);
+            let icon_id = ui.id().with("annotation-type");
+            let icon = egui::Atom::custom(icon_id, egui::vec2(28.0, 28.0));
+            let choice = egui::Button::new(egui::Atoms::new(icon))
+                .selected(*selected)
+                .min_size(egui::vec2(44.0, 44.0))
+                .atom_ui(ui);
+            if let Some(rect) = choice.rect(icon_id) {
+                crate::panels::workflow_type_icon(ui, icon_id, rect, annotation_type);
+            }
+            let mut response = choice
+                .response
+                .on_hover_text(label)
+                .on_disabled_hover_text(label);
+            if response.clicked() {
+                *selected = !*selected;
+                response.mark_changed();
+            }
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::Button,
+                    ui.is_enabled(),
+                    *selected,
+                    label,
+                )
+            });
+            response
+        })
+        .inner
+    })
+    .inner
+}

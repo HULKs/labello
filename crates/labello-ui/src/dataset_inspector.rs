@@ -526,34 +526,48 @@ impl LabelloApp {
         }
     }
     fn inspection_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
-        ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut self.inspection.boxes, "Bounding boxes");
-            ui.checkbox(&mut self.inspection.skeletons, "Skeletons");
-        });
-        egui::ComboBox::from_id_salt("overlay-statuses")
-            .width(ui.available_width())
-            .selected_text(if self.inspection.hidden_statuses.is_empty() {
-                "All statuses".to_owned()
-            } else {
-                format!(
-                    "{} statuses shown",
-                    5 - self.inspection.hidden_statuses.len()
-                )
-            })
-            .show_ui(ui, |ui| {
-                for status in statuses() {
-                    let mut visible = !self.inspection.hidden_statuses.contains(&status);
-                    if ui.checkbox(&mut visible, status_label(&status)).changed() {
-                        if visible {
-                            self.inspection.hidden_statuses.retain(|old| old != &status);
-                        } else {
-                            self.inspection.hidden_statuses.push(status);
+        ui.horizontal(|ui| {
+            panels::annotation_type_toggle(
+                ui,
+                &mut self.inspection.boxes,
+                &AnnotationType::BoundingBox,
+                "Bounding boxes",
+            );
+            panels::annotation_type_toggle(
+                ui,
+                &mut self.inspection.skeletons,
+                &AnnotationType::Skeleton,
+                "Skeletons",
+            );
+            egui::ComboBox::from_id_salt("overlay-statuses")
+                .width(ui.available_width())
+                .wrap_mode(egui::TextWrapMode::Truncate)
+                .selected_text(if self.inspection.hidden_statuses.is_empty() {
+                    "All statuses".to_owned()
+                } else {
+                    format!(
+                        "{} statuses shown",
+                        5 - self.inspection.hidden_statuses.len()
+                    )
+                })
+                .show_ui(ui, |ui| {
+                    for status in statuses() {
+                        let mut visible = !self.inspection.hidden_statuses.contains(&status);
+                        if ui.checkbox(&mut visible, status_label(&status)).changed() {
+                            if visible {
+                                self.inspection.hidden_statuses.retain(|old| old != &status);
+                            } else {
+                                self.inspection.hidden_statuses.push(status);
+                            }
                         }
                     }
-                }
-            })
-            .response
-            .on_hover_text("Filter overlays by workflow status");
+                })
+                .response
+                .on_hover_text("Filter overlays by workflow status")
+                .widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Overlay statuses")
+                });
+        });
         ui.add_space(theme::SPACE_2);
         if let Some(state) = &self.inspection.state {
             for task in &self.work.tasks {
@@ -570,22 +584,26 @@ impl LabelloApp {
                     let mut visible = !self.inspection.hidden_tasks.contains(&task.task_id);
                     ui.horizontal(|ui| {
                         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                        let width = (ui.available_width() - 40.0).max(44.0);
-                        let response = ui
-                            .allocate_ui_with_layout(
-                                egui::vec2(width, 44.0),
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.set_min_width(width);
-                                    ui.add(egui::Checkbox::new(&mut visible, &task.name))
-                                },
-                            )
-                            .inner
-                            .on_hover_text(format!(
-                                "{} · {} · {count} annotations",
-                                task.name,
-                                status_label(&status)
-                            ));
+                        let response = panels::annotation_type_toggle(
+                            ui,
+                            &mut visible,
+                            &task.annotation_type,
+                            &task.name,
+                        );
+                        let width = (ui.available_width() - 40.0).max(1.0);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, 44.0),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.set_min_width(width);
+                                ui.add(egui::Label::new(&task.name).truncate())
+                                    .on_hover_text(format!(
+                                        "{} · {} · {count} annotations",
+                                        task.name,
+                                        status_label(&status)
+                                    ));
+                            },
+                        );
                         if response.changed() {
                             if visible {
                                 self.inspection.hidden_tasks.remove(&task.task_id);
@@ -634,16 +652,27 @@ impl LabelloApp {
                         .and_then(|s| s.task_states.get(&task.task_id))
                         .is_some_and(|s| s.status == TaskStatus::Completed);
                 let mut selected = self.inspection.return_tasks.contains(&task.task_id);
-                if ui
-                    .add_enabled(
-                        eligible,
-                        egui::Checkbox::new(
-                            &mut selected,
-                            format!("Return {} to review", task.name),
-                        ),
-                    )
-                    .changed()
-                {
+                let response = ui
+                    .add_enabled_ui(eligible, |ui| {
+                        ui.horizontal(|ui| {
+                            let response = panels::annotation_type_toggle(
+                                ui,
+                                &mut selected,
+                                &task.annotation_type,
+                                &format!("Return {} to review", task.name),
+                            );
+                            ui.add(
+                                egui::Label::new(&task.name)
+                                    .truncate()
+                                    .halign(egui::Align::Min),
+                            )
+                            .on_hover_text(&task.name);
+                            response
+                        })
+                        .inner
+                    })
+                    .inner;
+                if response.changed() {
                     changed = true;
                     if selected {
                         self.inspection.return_tasks.insert(task.task_id.clone());
@@ -799,7 +828,10 @@ fn status_label(status: &TaskStatus) -> &'static str {
 mod tests {
     use super::*;
     use crate::app::AppView;
-    use egui_kittest::{Harness, kittest::Queryable};
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT, Queryable},
+    };
 
     fn app() -> LabelloApp {
         crate::inspector_presets::build(
@@ -952,6 +984,77 @@ mod tests {
         let submit = harness.get_by_label("Return selected workflows").rect();
         assert!(submit.right() <= 1440.0 && submit.bottom() <= 1000.0);
     }
+    #[test]
+    fn inspector_icon_toggles_share_a_row_and_keep_return_selection_independent() {
+        for size in [
+            egui::vec2(1440.0, 1000.0),
+            egui::vec2(390.0, 844.0),
+            egui::vec2(320.0, 568.0),
+        ] {
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app());
+            harness.run();
+            if size.x < 1288.0 {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, "Overlays")
+                    .click();
+                harness.run();
+            }
+            let boxes =
+                harness.get_by_role_and_label(egui::accesskit::Role::Button, "Bounding boxes");
+            let skeletons =
+                harness.get_by_role_and_label(egui::accesskit::Role::Button, "Skeletons");
+            let statuses = harness.get_by_label("Overlay statuses");
+            assert_eq!(boxes.rect().center().y, skeletons.rect().center().y);
+            assert_eq!(boxes.rect().center().y, statuses.rect().center().y);
+            assert!(statuses.rect().right() <= size.x);
+            assert!(boxes.rect().width() >= 44.0 && boxes.rect().height() >= 44.0);
+            assert_eq!(
+                boxes.accesskit_node().toggled(),
+                Some(egui::accesskit::Toggled::True)
+            );
+            boxes.click();
+            harness.run();
+            assert!(!harness.state().inspection.boxes);
+            let task = harness.state().work.tasks[0].clone();
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, &task.name)
+                .click();
+            harness.run();
+            assert!(
+                harness
+                    .state()
+                    .inspection
+                    .hidden_tasks
+                    .contains(&task.task_id)
+            );
+            assert!(harness.state().inspection.return_tasks.is_empty());
+            harness.get_by_label("Return to review").click();
+            harness.run();
+            harness
+                .get_by_role_and_label(
+                    egui::accesskit::Role::Button,
+                    &format!("Return {} to review", task.name),
+                )
+                .click();
+            harness.run();
+            assert!(
+                harness
+                    .state()
+                    .inspection
+                    .return_tasks
+                    .contains(&task.task_id)
+            );
+            assert!(
+                harness
+                    .state()
+                    .inspection
+                    .hidden_tasks
+                    .contains(&task.task_id)
+            );
+            assert!(!harness.state().inspection.boxes);
+        }
+    }
+
     #[test]
     fn inspector_annotation_members_browse_without_return_controls() {
         let mut app = app();
