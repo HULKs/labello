@@ -61,11 +61,18 @@ clears account and dataset state before scheduling requests against the new API.
 
 Workspace rendering is grouped by the reason it changes:
 
-- `panels/app_bar.rs` and `panels/workspace_actions.rs`: global and workflow
-  actions;
+- `panels/app_bar.rs`: global navigation, utilities and account controls, with
+  measured label widths and icon fallback before the navigation drawer;
+- `panels/workspace_actions.rs`: persistent bottom workflow actions for all
+  layouts, including separate Previous image and Previous object commands;
+  review object navigation uses the existing correction-retaining navigation
+  owner, and migration dispatch retains its audited revisit commands;
 - `panels/task_selector.rs`: task selection;
 - `panels/inspector.rs`: annotation and review controls;
-- `panels/workspace.rs`: central workspace and canvas controls;
+- `panels/workspace.rs`: central workspace and the second bar's image context
+  and canvas controls. It does not render workflow commands;
+- `app/shell.rs`: reserves the bottom action panel at every workspace width and
+  settles measured height after resizing;
 - `statistics.rs`: the dataset statistics modal and its existing metric renderer;
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;

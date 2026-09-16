@@ -46,7 +46,9 @@ and history.
 - Validate width and height together. Long content and larger text must not
   collapse siblings or push primary controls offscreen.
 - Keep global identity, dataset, navigation, status, and account controls in the
-  app shell. Keep assignment context and commands in the work toolbar.
+  app shell. The second bar owns image identity, workflow context and canvas
+  controls. The bottom bar owns workflow commands in every layout, including
+  annotation, review, correction and every migration phase.
 - When every global destination, action, and account element cannot fit in the
   app bar, replace all of them with one modal left-drawer trigger. The drawer
   owns its dismiss action, closes after navigation, and restores focus to its
@@ -54,8 +56,8 @@ and history.
 - Render each action once per layout. Keep primary work actions visible and move
   secondary actions to overflow when space is limited.
 - Wide work views use workflow, canvas, and inspector panes; Medium and Compact
-  use center-left Workflow and center-right Inspector drawers with bottom
-  actions.
+  use center-left Workflow and center-right Inspector drawers. Workflow actions
+  stay in the bottom bar at every width.
 - Use aligned rows or grids for desktop comparison. Use 44-point, touch-friendly
   cards and stacked fields on Compact layouts. Keep forms and pages bounded.
 - Truncate or wrap long content deliberately; expose the complete value by
@@ -193,9 +195,10 @@ has been recorded.
   Long identity text truncates within the indicator while the tooltip and Inspector
   retain the complete accessible identity. Keep the current position visible when
   corrections exist. The Inspector starts closed. On mobile, keep the item/Inspector
-  indicator, Refocus, Fit and workflow toggle in one top row. Put Previous, Discard
-  and Skip in a permanently visible second bottom row beneath the decision buttons;
-  use Discard corrections on wide screens. Skip is not hidden in the navigation menu.
+  indicator, Refocus, Fit and workflow toggle in one top row. Put Previous image,
+  Previous object, Discard changes and Skip in a visible bottom row beneath the
+  decision and Next object/Overview controls. Use the same names at every width.
+  Skip is not hidden in the navigation menu.
   Reviewed keypoints retain their normal marker without an additional selection circle.
   When reviewing an added migration object, Remove item also belongs to this footer
   row, with an icon fallback when its text does not fit.
@@ -237,8 +240,13 @@ has been recorded.
   Preserve each workflow's primary controls and secondary order. Show the longest
   secondary prefix that fits, trying icons before an overflow trigger for the remaining tail; omit
   the trigger when everything fits. Required controls wrap and the panel reserves
-  their actual height. Migration Previous object leads its secondary action order;
-  short migration annotation bars remove spare vertical padding so confirmation
+  their actual height. Previous image and Previous object remain visible beside
+  the other required workflow controls; only secondary commands use overflow.
+  Previous image uses an image/back-arrow icon and returns to the immediately
+  previous eligible assignment. Previous object uses a back arrow within the
+  current image. Annotation retains cyclic selection, review retains valid
+  corrections and stops at the first target, and migration retains its audited
+  revisit and discard guards. Short migration annotation bars remove spare vertical padding so confirmation
   and the canvas remain visible. Moving a focused action into overflow transfers focus to
   the trigger without dispatching it; opening the menu returns keyboard access to
   that action. Long menu labels and shortcuts stack within a scrollable menu.

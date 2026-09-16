@@ -142,7 +142,8 @@ pub(crate) fn workspace_secondary_actions(
                 let response = if icon_only && !menu {
                     use labello_domain::UserAction;
                     let icon = match action.command {
-                        WorkspaceCommand::User(UserAction::PreviousImage | UserAction::SelectPreviousObject) => WorkspaceActionIcon::Previous,
+                        WorkspaceCommand::User(UserAction::PreviousImage) => WorkspaceActionIcon::PreviousImage,
+                        WorkspaceCommand::User(UserAction::SelectPreviousObject) => WorkspaceActionIcon::Previous,
                         WorkspaceCommand::User(UserAction::UndoEdit) => WorkspaceActionIcon::Undo,
                         WorkspaceCommand::User(UserAction::RedoEdit) => WorkspaceActionIcon::Redo,
                         WorkspaceCommand::User(UserAction::SaveAnnotations) => WorkspaceActionIcon::Save,

@@ -349,10 +349,6 @@ impl LabelloApp {
                 if show_panel_buttons {
                     self.context_panel_buttons(ui);
                 }
-                if layout == LayoutMode::Wide && !self.manual_migration_active() {
-                    ui.separator();
-                    self.workspace_actions(ui, layout);
-                }
             })
         };
         response.response.widget_info(|| {

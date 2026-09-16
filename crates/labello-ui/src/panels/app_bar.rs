@@ -44,7 +44,8 @@ impl LabelloApp {
         let spacing = ui.spacing().item_spacing.x;
         let side_gap = theme::SPACE_2;
         let destinations = self.primary_navigation_destinations();
-        let navigation_width = |label: &str| 30.0 + label.chars().count() as f32 * 7.5;
+        let navigation_widths: Vec<_> = destinations.iter().map(|(_, label)| (*label, text_button_width(ui, label).max(44.0))).collect();
+        let navigation_width = |label: &str| navigation_widths.iter().find(|(name, _)| *name == label).unwrap().1;
         let total_navigation_width = destinations
             .iter()
             .map(|(_, label)| navigation_width(label))
@@ -63,8 +64,14 @@ impl LabelloApp {
             egui::vec2(dataset_width + 18.0, bar_rect.height()),
         );
         let required_right_width = status_width + actions.len() as f32 * (44.0 + spacing);
-        let drawer_navigation = (layout != LayoutMode::Wide && self.view == AppView::Review)
-            || if self.work_view() {
+        let navigation_budget = if self.work_view() {
+            bar_rect.width() - required_right_width - 180.0 - 2.0 * side_gap
+        } else { dataset_rect.left() - bar_rect.left() - side_gap };
+        let navigation_icons = total_navigation_width > navigation_budget;
+        let total_navigation_width = if navigation_icons {
+            destinations.len() as f32 * 44.0 + spacing * destinations.len().saturating_sub(1) as f32
+        } else { total_navigation_width };
+        let drawer_navigation = if self.work_view() {
                 total_navigation_width + required_right_width + 180.0 + 2.0 * side_gap
                     > bar_rect.width()
             } else {
@@ -162,10 +169,14 @@ impl LabelloApp {
             self.navigation.restore_drawer_trigger_focus = false;
             for (view, label) in destinations {
                 let response = left_ui.add_sized(
-                    [navigation_width(label), 44.0],
-                    egui::Button::selectable(self.view == view, label),
+                    [if navigation_icons { 44.0 } else { navigation_width(label) }, 44.0],
+                    egui::Button::selectable(self.view == view, if navigation_icons { "" } else { label }),
                 );
-                if response.clicked() {
+                response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, self.view == view, label));
+                if navigation_icons {
+                    paint_workspace_action_icon(&left_ui, &response, if view == AppView::Review { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Save });
+                }
+                if response.on_hover_text(label).clicked() {
                     self.open_view(view);
                 }
             }

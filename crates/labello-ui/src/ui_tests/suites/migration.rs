@@ -1765,7 +1765,7 @@ fn migration_review_confirmation_is_visible_and_uses_space_on_mobile() {
             let workflow = harness.get_by_label("Workflow").rect();
             let inspector = harness.get_by_label_contains("Review details: Workflow:").rect();
             let context = harness.get_by_label("Workspace context bar").rect();
-            assert!(confirm.left() <= 16.0 && confirm.right() >= width - 16.0);
+            assert!(confirm.left() <= 16.0 && confirm.right() >= width - 70.0);
             assert!(workflow.top() >= context.top() && workflow.bottom() <= context.bottom());
             assert!(inspector.top() >= context.top() && inspector.bottom() <= context.bottom());
         };
