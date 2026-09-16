@@ -344,7 +344,7 @@ impl LabelloApp {
     pub(crate) fn inspection_has_reason(&self) -> bool {
         !self.inspection.reason.is_empty() || self.inspection.busy()
     }
-    pub(crate) fn dataset_inspector(&mut self, ui: &mut egui::Ui) {
+    fn inspection_feedback(&self, ui: &mut egui::Ui) {
         for error in [
             self.inspection.error.clone(),
             self.inspection.image_error.clone(),
@@ -360,6 +360,11 @@ impl LabelloApp {
         }
         if let Some(notice) = &self.inspection.notice {
             ui.label(notice);
+        }
+    }
+    pub(crate) fn dataset_inspector(&mut self, ui: &mut egui::Ui) {
+        if self.inspection.drawer.is_none() {
+            self.inspection_feedback(ui);
         }
         if let Some(record) = self.inspection.selected.clone() {
             if !self.inspection.preview_loaded {
@@ -431,6 +436,9 @@ impl LabelloApp {
         }
     }
     fn inspection_gallery(&mut self, ui: &mut egui::Ui) {
+        if self.inspection.drawer == Some(false) {
+            self.inspection_feedback(ui);
+        }
         let busy = self.inspection.busy()
             || self
                 .inspection
@@ -1386,6 +1394,27 @@ mod tests {
         );
         assert_eq!(app.inspection.selected.as_ref().unwrap().image_id, expected);
         assert!(app.inspection.navigate_page.is_none());
+    }
+
+    #[test]
+    fn inspector_failure_feedback_is_inside_the_active_drawer() {
+        let mut app = app();
+        app.inspection.error = Some("Synthetic save failure".into());
+        app.inspection.reason = "Retained input".into();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(390.0, 844.0))
+            .build_eframe(|_| app);
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Overlays")
+            .click();
+        harness.run();
+        let error = harness.get_by_label(
+            "Could not refresh or save. Displayed data may be stale. Synthetic save failure",
+        );
+        assert!(error.rect().top() > harness.get_by_label("Close Overlays").rect().bottom());
+        assert!(error.rect().right() <= 390.0);
+        assert_eq!(harness.state().inspection.reason, "Retained input");
     }
 
     #[test]

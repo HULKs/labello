@@ -214,6 +214,9 @@ impl LabelloApp {
     }
 
     fn inspection_sidebar(&mut self, ui: &mut egui::Ui) {
+        if self.inspection.drawer == Some(true) {
+            self.inspection_feedback(ui);
+        }
         if let Some(record) = self.inspection.selected.clone() {
             let busy = self.inspection.busy()
                 || self.inspection.state.is_none()
