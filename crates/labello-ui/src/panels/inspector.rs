@@ -374,9 +374,9 @@ impl LabelloApp {
         }
 
         ui.add_space(theme::SPACE_2);
-        ui.label(RichText::new("Reason").strong().color(theme::TEXT_MUTED));
         if let Some(draft) = self.work.correction_draft.as_mut() {
-            let label = ui.label("Reason (optional)");
+            let label = ui.label("Reason (optional, this object)");
+            ui.small("Saved with this object’s correction when you submit the review.");
             ui.add_enabled_ui(ready, |ui| {
                 theme::resizable_multiline_text_edit(
                     ui,
@@ -385,8 +385,14 @@ impl LabelloApp {
                     2,
                     Some("What was corrected?"),
                 )
-                .labelled_by(label.id);
-            });
+                .labelled_by(label.id)
+                .changed()
+            }).inner.then(|| { self.work.assignment_touched = true; });
+        }
+        let bytes = self.correction_reason_text().len();
+        ui.small(format!("{bytes} of 2000 UTF-8 bytes across all correction reasons"));
+        if bytes > 2_000 {
+            theme::inline_message(ui, theme::Intent::Error, "Shorten correction reasons before continuing. All object explanations must fit within 2000 UTF-8 bytes in total.");
         }
 
     }

@@ -933,6 +933,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
     };
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
+            reasons: Vec::new(),
         assignment: next_assignment,
         queued: QueuedImage {
             image: image_record(next_image_id.as_str(), "prepared-migration.png", 640, 480),
@@ -1007,6 +1008,7 @@ fn migration_review_approval_promotes_cached_work_without_refetching_image_data(
     api.add_active_assignment(next_assignment.clone());
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
+            reasons: Vec::new(),
         assignment: next_assignment,
         queued: QueuedImage {
             image: image_record(
@@ -1212,7 +1214,7 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             .query_by_label("Exclude object")
             .is_some()
     );
-    assert!(object.query_by_label("Reason").is_some());
+    assert!(object.query_by_label("Reason (required, this object)").is_some());
     assert!(
         object
             .query_by_label_contains("Not present” applies")
@@ -1364,7 +1366,7 @@ fn single_optional_migration_separates_not_present_from_object_exclusion() {
             .query_by_label("Exclude object")
             .is_some()
     );
-    assert!(harness.query_by_label("Reason").is_some());
+    assert!(harness.query_by_label("Reason (required, this object)").is_some());
     assert!(
         harness
             .query_by_label_contains("Not present” applies")
@@ -1689,6 +1691,7 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
     next_image.image.image_id = next_assignment.image_id.clone();
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(crate::app::LoadedImage {
+            reasons: Vec::new(),
         assignment: next_assignment,
         queued: next_image,
         annotations: Vec::new(),
@@ -2006,6 +2009,7 @@ fn discovery_conflict_reload_retains_draft_and_refuses_changed_source_version() 
                 .version = 2;
         }
         let loaded = crate::live_protocol::LoadedImage {
+            reasons: Vec::new(),
             assignment: app.work.assignment.clone().unwrap(),
             queued: app.work.current.clone().unwrap(),
             annotations: state.active_annotations().cloned().collect(),

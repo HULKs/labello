@@ -30,6 +30,7 @@ pub enum InspectorPreset {
     BuildUnavailable,
     Review,
     ReviewCorrection,
+    WorkflowReasons,
     Admin,
     ExportSelection,
     ExportLoading,
@@ -78,7 +79,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 54] = [
+    pub const ALL: [Self; 55] = [
         Self::Annotation,
         Self::Presence,
         Self::PresenceReducedMotion,
@@ -88,6 +89,7 @@ impl InspectorPreset {
         Self::BuildUnavailable,
         Self::Review,
         Self::ReviewCorrection,
+        Self::WorkflowReasons,
         Self::Admin,
         Self::ExportSelection,
         Self::ExportLoading,
@@ -146,6 +148,7 @@ impl InspectorPreset {
             Self::BuildUnavailable => "build-unavailable",
             Self::Review => "review",
             Self::ReviewCorrection => "review-correction",
+            Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::ExportSelection => "export-selection",
             Self::ExportLoading => "export-loading",
@@ -254,6 +257,50 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Review => work_preset(AssignmentKind::Review, ctx),
+        InspectorPreset::WorkflowReasons => {
+            let mut app = work_preset(AssignmentKind::Review, ctx);
+            let assignment = app.work.assignment.as_ref().unwrap();
+            let reason = labello_domain::WorkflowReason {
+                image_id: assignment.image_id.clone(),
+                event_id: labello_domain::EventId::from("synthetic-reason"),
+                event_sequence: 1,
+                actor_user_id: UserId::from("synthetic-reviewer"),
+                timestamp: labello_domain::now(),
+                action: labello_domain::WorkflowReasonAction::ReviewerCorrection,
+                review_decision: None,
+                task_id: Some(assignment.task_id.clone()),
+                annotation_id: Some(app.work.annotations[0].annotation_id.clone()),
+                object_group_id: None,
+                text: Some(
+                    "The box cuts off the left foot. Extend it to include the full person, without including the person beside them.".into(),
+                ),
+                category: None,
+                current_round: true,
+                current_exclusion: false,
+                superseded: false,
+            };
+            let mut historical = reason.clone();
+            historical.current_round = false;
+            historical.event_sequence = 1;
+            historical.review_decision = Some(labello_domain::ReviewDecision::Approved);
+            historical.action = labello_domain::WorkflowReasonAction::ReviewComment;
+            historical.text =
+                Some("Earlier synthetic explanation, retained as historical context.".into());
+            let mut rejection = reason;
+            rejection.event_sequence = 2;
+            rejection.action = labello_domain::WorkflowReasonAction::ReviewComment;
+            rejection.review_decision = Some(labello_domain::ReviewDecision::Rejected);
+            app.install_reason_notice(vec![historical, rejection]);
+            app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
+                previous: "Synthetic previous workflow".into(),
+                current: "Synthetic current workflow".into(),
+                dataset_id: app.config.dataset_id.clone(),
+                view: app.view,
+                presented: true,
+                presented_pass: None,
+            });
+            app
+        }
         InspectorPreset::ReviewCorrection => {
             let mut app = work_preset(AssignmentKind::Review, ctx);
             app.work.tasks[0].review.allow_reviewer_corrections = true;

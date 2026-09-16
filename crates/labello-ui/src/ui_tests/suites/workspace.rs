@@ -2089,7 +2089,7 @@ fn review_correction_drawer_and_actions_stay_reachable() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
         assert_canvas_geometry(&harness, width, height);
-        for label in ["Object", "Reason"] {
+        for label in ["Object", "Reason (optional, this object)"] {
             assert!(
                 harness.query_by_label(label).is_some(),
                 "missing correction section {label} at {width}x{height}"
@@ -2099,7 +2099,7 @@ fn review_correction_drawer_and_actions_stay_reachable() {
             harness
                 .query_by_role_and_label(
                     egui::accesskit::Role::MultilineTextInput,
-                    "Reason (optional)",
+                    "Reason (optional, this object)",
                 )
                 .is_some()
         );
@@ -3326,7 +3326,7 @@ fn reviewer_correction_edits_existing_keypoint_and_visibility_with_undo() {
     assert!(harness.state().work.correction_draft.is_some());
     harness.state_mut().select_correction_keypoint(0);
     harness.step();
-    for label in ["Object", "Keypoints", "Reason"] {
+    for label in ["Object", "Keypoints", "Reason (optional, this object)"] {
         assert!(harness.query_by_label(label).is_some());
     }
     click(&mut harness, "Hidden");

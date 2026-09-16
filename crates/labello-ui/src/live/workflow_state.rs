@@ -177,6 +177,7 @@ impl LabelloApp {
         self.work.assignment = Some(loaded.assignment);
         self.work.current = Some(loaded.queued);
         self.work.current_state = Some(loaded.state.clone());
+        self.install_reason_notice(loaded.reasons);
         self.work.annotations = loaded.annotations;
         // Deleted annotations retain their version identity for a later Undo/Redo save.
         self.work.persisted_annotations = loaded.state.annotations.keys().cloned().collect();

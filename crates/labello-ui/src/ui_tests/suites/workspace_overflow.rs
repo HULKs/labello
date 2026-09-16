@@ -315,7 +315,7 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     harness.run_steps(4);
     assert!(harness.state().review_revision_active());
     assert!(harness.state().review_context().is_none());
-    assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_some());
+    assert!(harness.query_by_label("Decision revision; geometry unchanged.").is_none());
 }
 
 #[test]
