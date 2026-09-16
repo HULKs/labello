@@ -1,5 +1,5 @@
 use eframe::egui;
-use labello_domain::{DAILY_LABEL_GOAL, LabelStreak};
+use labello_domain::{DAILY_LABEL_GOAL, DAILY_REVIEW_GOAL, LabelStreak};
 
 use crate::{LabelloApp, theme};
 
@@ -31,9 +31,10 @@ pub(super) fn badge(ui: &mut egui::Ui, streak: LabelStreak, name: &str) {
 
 fn description(streak: LabelStreak, name: &str) -> String {
     format!(
-        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} labels today · Flame {}. Complete {DAILY_LABEL_GOAL} distinct image/task submissions per UTC day in this dataset.",
+        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} labels today · {}/{DAILY_REVIEW_GOAL} reviews today · Flame {}. Complete {DAILY_LABEL_GOAL} distinct image/task submissions or {DAILY_REVIEW_GOAL} reviews per UTC day in this dataset.",
         streak.days,
         streak.labeled_today,
+        streak.reviewed_today,
         if streak.lit() { "lit" } else { "unlit" }
     )
 }
