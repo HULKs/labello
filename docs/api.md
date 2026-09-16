@@ -512,7 +512,10 @@ records and contributor activity remain available through their existing APIs.
 role in that dataset, matching image-state access. It returns `WorkflowReason[]`
 projected from one authoritative event-log snapshot. Each entry identifies the
 image, event sequence/ID, actor, timestamp, action, optional workflow and object
-identities, optional text and structured exclusion category. `currentRound`,
+identities, optional text and structured exclusion category. Optional
+`reviewDecision` preserves the recorded decision for review and revised-review
+comments; absent values remain neutral comments rather than inferred rejections.
+This is read-only transport metadata, not a persisted-event change. `currentRound`,
 `superseded` and `currentExclusion` describe that snapshot's relevance. Historical
 entries remain ordered by source event, with copied exclusion sources and the
 legacy correction's identical review comment deduplicated. Blank text and known

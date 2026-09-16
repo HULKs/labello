@@ -48,7 +48,7 @@ impl LabelloApp {
             notice.presented_pass != Some(ctx.cumulative_pass_nr())
         });
         if !workflow_visible && !self.reason_notice_visible() { return; }
-        let width = (canvas.width() - 16.0).clamp(200.0, 680.0);
+        let width = (canvas.width() - 16.0).clamp(200.0, 520.0);
         egui::Area::new(egui::Id::new("automatic-workflow-change"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))

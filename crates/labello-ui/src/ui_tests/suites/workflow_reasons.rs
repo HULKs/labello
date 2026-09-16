@@ -4,6 +4,7 @@ fn test_workflow_reason(app: &LabelloApp, text: &str) -> labello_domain::Workflo
         image_id: assignment.image_id.clone(), event_id: labello_domain::EventId::from("reason-event"),
         event_sequence: 1, actor_user_id: app.config.user_id.clone(), timestamp: labello_domain::now(),
         action: labello_domain::WorkflowReasonAction::ReviewerCorrection,
+                review_decision: None,
         task_id: Some(assignment.task_id.clone()), annotation_id: None, object_group_id: None,
         text: Some(text.into()), category: None, current_round: true, current_exclusion: false, superseded: false,
     }
@@ -57,38 +58,38 @@ fn workflow_reasons_notice_dismissal_reopen_and_scope_are_explicit() {
     let reason = test_workflow_reason(harness.state(), "Synthetic saved explanation");
     harness.state_mut().install_reason_notice(vec![reason.clone(), reason.clone()]);
     harness.run_steps(4);
-    assert!(harness.query_by_label("Saved reasons (2)").is_some());
-    click(&mut harness, "Dismiss saved reasons");
+    assert!(harness.query_by_label("2 saved messages").is_some());
+    click(&mut harness, "Dismiss image feedback");
     harness.run_steps(8);
-    assert!(harness.query_by_label("Dismiss saved reasons").is_none());
+    assert!(harness.query_by_label("Dismiss image feedback").is_none());
     harness.state_mut().install_reason_notice(vec![reason.clone()]);
     harness.run_steps(4);
-    assert!(harness.query_by_label("Dismiss saved reasons").is_some());
+    assert!(harness.query_by_label("Dismiss image feedback").is_some());
     harness.state_mut().work.selected_task_id = Some(TaskId::from("another-workflow"));
     harness.run_steps(4);
-    assert!(harness.query_by_label("Dismiss saved reasons").is_none());
+    assert!(harness.query_by_label("Dismiss image feedback").is_none());
     harness.state_mut().work.selected_task_id = reason.task_id.clone();
     let mut stale = reason.clone();
     stale.image_id = ImageId::from("another-image");
     harness.state_mut().install_reason_notice(vec![stale]);
     // Revision guidance may remain, but another image's reason is never installed.
     harness.run_steps(4);
-    assert!(harness.query_by_label("Saved reasons (1)").is_none());
+    assert!(harness.query_by_label("Synthetic saved explanation").is_none());
     harness.state_mut().install_reason_notice(vec![reason]);
     harness.state_mut().view = AppView::Annotate;
     harness.run_steps(4);
-    assert!(harness.query_by_label("Dismiss saved reasons").is_none());
+    assert!(harness.query_by_label("Dismiss image feedback").is_none());
 }
 
 #[test]
 fn workflow_reasons_notice_long_text_compact_and_keyboard_dismissal() {
-    for size in [egui::vec2(1440.0,1000.0), egui::vec2(390.0,844.0), egui::vec2(320.0,320.0)] {
+    for size in [egui::vec2(320.0,568.0), egui::vec2(390.0,844.0), egui::vec2(600.0,800.0), egui::vec2(1288.0,820.0), egui::vec2(1440.0,1000.0), egui::vec2(320.0,320.0)] {
         let mut harness = two_object_review_revision_harness();
         let reason = test_workflow_reason(harness.state(), &"Synthetic explanation with long text. ".repeat(100));
         harness.state_mut().install_reason_notice(vec![reason]);
         harness.set_size(size);
         harness.run_steps(5);
-        let dismiss = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss saved reasons");
+        let dismiss = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss image feedback");
         assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(dismiss.rect()), "{size:?}");
         assert!(dismiss.rect().height() >= 44.0);
         dismiss.focus();
@@ -117,12 +118,12 @@ fn workflow_reasons_load_with_annotation_and_review_retry_without_becoming_empty
         harness.state_mut().retry_assignment_load();
         step_until(&mut harness, 16, |app| !app.loading.image && app.runtime.error.is_none());
         harness.run_steps(3);
-        assert!(harness.query_by_label("Saved reasons (1)").is_some());
-        click(&mut harness, "Dismiss saved reasons");
+        assert!(harness.state().reason_notice_visible());
+        click(&mut harness, "Dismiss image feedback");
         harness.state_mut().retry_assignment_load();
         step_until(&mut harness, 16, |app| !app.loading.image);
         harness.run_steps(3);
-        assert!(harness.query_by_label("Saved reasons (1)").is_some());
+        assert!(harness.state().reason_notice_visible());
     }
 }
 
@@ -164,7 +165,7 @@ fn workflow_reasons_previous_navigation_reopens_notices_in_both_work_views() {
         api.state.borrow_mut().workflow_reasons.insert(original.clone(), vec![reason.clone()]);
         harness.state_mut().install_reason_notice(vec![reason]);
         harness.run_steps(3);
-        click(&mut harness, "Dismiss saved reasons");
+        click(&mut harness, "Dismiss image feedback");
         step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
         click(&mut harness, "Skip");
         step_until(&mut harness, 16, |app| app.work.assignment.as_ref().is_some_and(|a| a.image_id != original)
@@ -175,7 +176,7 @@ fn workflow_reasons_previous_navigation_reopens_notices_in_both_work_views() {
         step_until(&mut harness, 20, |app| app.work.assignment.as_ref().is_some_and(|a| a.image_id == original)
             && !app.loading.image);
         harness.run_steps(3);
-        assert!(harness.query_by_label("Saved reasons (1)").is_some());
+        assert!(harness.state().reason_notice_visible());
     }
 }
 
@@ -208,20 +209,73 @@ fn workflow_reasons_resize_keeps_the_short_footer_reachable_and_details_scrollab
     harness.run_steps(4);
     harness.set_size(egui::vec2(320.0,320.0));
     harness.run_steps(5);
-    let dismiss = harness.get_by_label("Dismiss saved reasons");
+    let dismiss = harness.get_by_label("Dismiss image feedback");
     let approve = harness.get_by_label("Approve");
     assert!(dismiss.rect().bottom() <= approve.rect().top());
-    assert!(harness.query_by_label("Close details").is_none());
-    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Saved reasons (2)").focus();
+    assert!(harness.query_by_label("Close feedback").is_none());
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Review rejected").focus();
     harness.key_press(egui::Key::Enter);
     harness.run_steps(4);
-    let close = harness.get_by_label("Close details");
+    let close = harness.get_by_label("Close feedback");
     assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0,320.0)).contains_rect(close.rect()));
     harness.get_by_label("Earlier synthetic explanation, retained as historical context.").scroll_to_me();
     harness.run_steps(5);
     let historical = harness.get_by_label("Earlier synthetic explanation, retained as historical context.");
     assert!(historical.rect().bottom() <= 320.0);
-    click(&mut harness, "Close details");
+    click(&mut harness, "Close feedback");
     harness.run_steps(3);
-    assert!(harness.query_by_label("Close details").is_none());
+    assert!(harness.query_by_label("Close feedback").is_none());
+}
+
+#[test]
+fn workflow_feedback_names_the_event_and_puts_the_explanation_before_audit_details() {
+    use labello_domain::{ReviewDecision, WorkflowReasonAction};
+    for (action, decision, title) in [
+        (WorkflowReasonAction::ReviewComment, Some(ReviewDecision::Rejected), "Review rejected"),
+        (WorkflowReasonAction::ReviewComment, Some(ReviewDecision::Approved), "Review approved"),
+        (WorkflowReasonAction::ReviewComment, None, "Reviewer comment"),
+        (WorkflowReasonAction::ReviewRevisionComment, Some(ReviewDecision::Rejected), "Review changed to rejected"),
+        (WorkflowReasonAction::ReviewRevisionComment, Some(ReviewDecision::Approved), "Review changed to approved"),
+        (WorkflowReasonAction::ReviewerCorrection, None, "Reviewer corrections saved"),
+        (WorkflowReasonAction::MigrationExclusion, None, "Object excluded from migration"),
+    ] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_work_harness(api);
+        harness.run_steps(3);
+        let mut reason = test_workflow_reason(harness.state(), "Move the left shoulder onto the visible joint.");
+        reason.action = action;
+        reason.review_decision = decision;
+        let mut earlier = reason.clone();
+        earlier.current_round = false;
+        earlier.superseded = true;
+        earlier.text = Some("Earlier explanation retained for context.".into());
+        earlier.action = WorkflowReasonAction::AnnotationEdit;
+        harness.state_mut().install_reason_notice(vec![earlier, reason]);
+        harness.run_steps(4);
+        assert!(harness.query_by_label(title).is_some());
+        let explanation = harness.get_by_label("Move the left shoulder onto the visible joint.");
+        let name = &harness.state().work.tasks[0].name;
+        let workflow_label = format!("{name} · Current review round");
+        let workflow = harness.get_by_label(&workflow_label);
+        assert!(explanation.rect().top() < workflow.rect().top());
+        assert!(harness.query_by_label("Reason details").is_none());
+        assert!(harness.query_by_label("Saved reasons (2)").is_none());
+        harness.get_by_label("Earlier explanation retained for context.").scroll_to_me();
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Replaced by a later update").is_some());
+    }
+}
+
+#[test]
+fn previous_review_guidance_is_information_not_a_reason_or_rejection() {
+    let mut harness = two_object_review_revision_harness();
+    harness.state_mut().install_reason_notice(vec![]);
+    harness.run_steps(4);
+    assert!(harness.query_by_label("Revisiting a completed review").is_some());
+    assert!(harness.query_by_label("The saved decision stays in effect until you submit your review. Submitting corrections starts a new review round.").is_some());
+    assert!(harness.query_by_label("Review rejected").is_none());
+    assert!(harness.query_by_label("Reason details").is_none());
+    click(&mut harness, "Dismiss image feedback");
+    harness.run_steps(4);
+    assert!(!harness.state().reason_notice_visible());
 }

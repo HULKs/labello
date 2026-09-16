@@ -17,6 +17,8 @@ pub struct WorkflowReason {
     pub actor_user_id: UserId,
     pub timestamp: Timestamp,
     pub action: WorkflowReasonAction,
+    #[serde(default)]
+    pub review_decision: Option<crate::ReviewDecision>,
     pub task_id: Option<TaskId>,
     pub annotation_id: Option<AnnotationId>,
     pub object_group_id: Option<ObjectGroupId>,
@@ -52,6 +54,7 @@ pub fn workflow_reasons(state: &ImageState, events: &[EventLogEntry]) -> Vec<Wor
             actor_user_id: event.actor_user_id.clone(),
             timestamp: event.timestamp,
             action: WorkflowReasonAction::ReviewComment,
+            review_decision: None,
             task_id: event.task_id().cloned(),
             annotation_id: None,
             object_group_id: None,
@@ -88,6 +91,7 @@ pub fn workflow_reasons(state: &ImageState, events: &[EventLogEntry]) -> Vec<Wor
             }
             EventPayload::ReviewRecorded { review } => {
                 set_target(&mut entry, state, &review.target);
+                entry.review_decision = Some(review.decision.clone());
                 entry.text = human_text(review.comment.as_deref());
                 entry.superseded = state.superseded_review_ids.contains(&review.review_id);
             }
@@ -95,6 +99,7 @@ pub fn workflow_reasons(state: &ImageState, events: &[EventLogEntry]) -> Vec<Wor
                 for review in &replacement.reviews {
                     let mut comment = entry.clone();
                     comment.action = WorkflowReasonAction::ReviewRevisionComment;
+                    comment.review_decision = Some(review.decision.clone());
                     set_target(&mut comment, state, &review.target);
                     comment.text = human_text(review.comment.as_deref());
                     comment.superseded = state.superseded_review_ids.contains(&review.review_id);
@@ -112,6 +117,7 @@ pub fn workflow_reasons(state: &ImageState, events: &[EventLogEntry]) -> Vec<Wor
                 if human_text(review.comment.as_deref()) != entry.text {
                     let mut comment = entry.clone();
                     comment.action = WorkflowReasonAction::ReviewComment;
+                    comment.review_decision = Some(review.decision.clone());
                     comment.text = human_text(review.comment.as_deref());
                     comment.superseded = state.superseded_review_ids.contains(&review.review_id);
                     push_reason(&mut reasons, state, comment);
@@ -290,6 +296,11 @@ mod tests {
         );
         let reasons = workflow_reasons(&state, &events);
         assert_eq!(reasons.len(), 3);
+        assert!(
+            reasons
+                .iter()
+                .all(|reason| reason.review_decision == Some(ReviewDecision::Rejected))
+        );
         assert_eq!(reasons[0].text.as_deref(), Some("earlier explanation"));
         assert!(!reasons[0].current_round);
         assert_eq!(reasons[1].text.as_ref().unwrap().len(), 2400);

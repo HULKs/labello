@@ -267,12 +267,12 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
                 actor_user_id: UserId::from("synthetic-reviewer"),
                 timestamp: labello_domain::now(),
                 action: labello_domain::WorkflowReasonAction::ReviewerCorrection,
+                review_decision: None,
                 task_id: Some(assignment.task_id.clone()),
                 annotation_id: Some(app.work.annotations[0].annotation_id.clone()),
                 object_group_id: None,
                 text: Some(
-                    "Synthetic explanation for inspecting wrapping and keyboard access. "
-                        .repeat(30),
+                    "The box cuts off the left foot. Extend it to include the full person, without including the person beside them.".into(),
                 ),
                 category: None,
                 current_round: true,
@@ -281,9 +281,16 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             };
             let mut historical = reason.clone();
             historical.current_round = false;
+            historical.event_sequence = 1;
+            historical.review_decision = Some(labello_domain::ReviewDecision::Approved);
+            historical.action = labello_domain::WorkflowReasonAction::ReviewComment;
             historical.text =
                 Some("Earlier synthetic explanation, retained as historical context.".into());
-            app.install_reason_notice(vec![reason, historical]);
+            let mut rejection = reason;
+            rejection.event_sequence = 2;
+            rejection.action = labello_domain::WorkflowReasonAction::ReviewComment;
+            rejection.review_decision = Some(labello_domain::ReviewDecision::Rejected);
+            app.install_reason_notice(vec![historical, rejection]);
             app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
                 previous: "Synthetic previous workflow".into(),
                 current: "Synthetic current workflow".into(),

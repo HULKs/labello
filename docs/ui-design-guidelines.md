@@ -261,9 +261,13 @@ has been recorded.
   Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.
 - **Saved reasons:** share the persistent, dismissible notification area with
-  workflow-change notices. Keep source action, workflow, object and historical
-  relevance explicit. Wrap long explanations in scrolling details; at short
-  heights use a summary button and a bounded non-modal details window. Dismissal
+  workflow-change notices. Lead with the actual event, such as Review rejected
+  or Reviewer corrections saved, and the explanation. Do not put a generic
+  Reason heading or accordion above the message. Keep workflow, object, author
+  and date secondary; label earlier feedback explicitly. Wrap long explanations
+  in a bounded scroll area; at short heights the event title opens full feedback
+  in a bounded non-modal window. Use amber only for current rejection/exclusion
+  feedback, not routine history or previous-review guidance. Dismissal
   applies to the opened image context. Object and submission reason inputs name
   their scope, optional/required rule and total byte limit; failures retain input.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected

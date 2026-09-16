@@ -516,20 +516,25 @@ Reasons never arrive through a separate unowned response.
 The notice identifies each source action, workflow, object where applicable,
 actor and timestamp. It retains historical explanations, labels current review
 rounds and active exclusions, and does not treat superseded decisions as current.
-It shares the floating notice area with workflow-change notices. Details scroll,
-long text wraps, and short viewports use a summary button that opens a bounded,
-non-modal details window. Dismissal
+It shares the floating notice area with workflow-change notices. Each message
+leads with its event and explanation, followed by muted workflow, object, author
+and time details. Newest messages appear first; earlier or replaced feedback is
+explicitly labelled. There is no accordion or generic Reason heading. Long
+content scrolls directly. Short viewports show the event title as a button that
+opens the full feedback in a bounded non-modal window. Dismissal
 lasts for the opened context; an accepted reload or reopening installs a new
 notice. Image, dataset, workflow and view changes invalidate the old context.
-Previous-review guidance uses this notice; it adds no standalone canvas caption.
+Previous-review guidance is titled Revisiting a completed review and explains
+that the saved decision remains effective until submission. It is informational,
+not a rejection or a user-provided reason, and adds no standalone canvas caption.
 
 | Saved input | Display mapping |
 | --- | --- |
 | Annotation edit/deletion reason supplied through the API | Annotation edit/deletion with workflow and annotation identity; built-in machine markers are omitted |
-| Review comments, including historical/revised decisions | Review comment or Revised review comment, associated with its exact target; superseded decisions remain historical |
-| Legacy reviewer correction reason | Reviewer correction with its annotation; the transaction's identical review-comment copy is shown once |
-| Review correction submission reason | Reviewer correction for the submission; object explanations retain explicit object labels inside the text |
-| Migration exclusion category and note | Migration exclusion with workflow and object group; category and optional explanatory note remain distinct; replaced exclusions remain historical |
+| Review comments, including historical/revised decisions | Review rejected / Review approved, or Review changed to rejected / approved for a revised decision; Reviewer comment when the decision is unavailable; superseded decisions remain historical |
+| Legacy reviewer correction reason | Reviewer corrections saved with its annotation; the transaction's identical review-comment copy is shown once |
+| Review correction submission reason | Reviewer corrections saved for the submission; object explanations retain explicit object labels inside the text |
+| Migration exclusion category and note | Object excluded from migration with workflow and object group; category and optional explanatory note remain distinct; replaced exclusions remain historical |
 | Imported-work reopening and coverage reasons | Imported work reopened or Imported coverage included with workflow identity |
 | Current browser annotation edits and unchanged review approvals | No reason entry; absent/blank comments and internal markers such as `annotator_edit` create no explanation |
 | Missing-object location evidence | Location evidence retains its existing presentation; it has no free-text reason field |

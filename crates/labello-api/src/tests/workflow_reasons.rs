@@ -22,6 +22,7 @@ async fn workflow_reasons_read_persisted_history_with_dataset_authorization() {
         if expected == StatusCode::OK {
             let reasons: Vec<labello_domain::WorkflowReason> = serde_json::from_value(response_json(response).await).unwrap();
             assert_eq!(reasons.len(), 2);
+            assert!(reasons.iter().all(|reason| reason.review_decision == Some(ReviewDecision::Approved)));
             assert_eq!(reasons[0].text.as_deref(), Some("First synthetic explanation"));
             assert_eq!(reasons[1].text.as_deref(), Some("Second synthetic explanation"));
             assert!(reasons.iter().all(|reason| reason.image_id == fixture.image_id));
