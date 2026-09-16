@@ -43,6 +43,7 @@ pub enum InspectorPreset {
     ExportSuccess,
     ExportRequestFailure,
     Statistics,
+    StreakLit,
     DialogSettings,
     DialogTransition,
     DialogAdminDiscard,
@@ -81,7 +82,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 57] = [
+    pub const ALL: [Self; 58] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -104,6 +105,7 @@ impl InspectorPreset {
         Self::ExportSuccess,
         Self::ExportRequestFailure,
         Self::Statistics,
+        Self::StreakLit,
         Self::DialogSettings,
         Self::DialogTransition,
         Self::DialogAdminDiscard,
@@ -166,6 +168,7 @@ impl InspectorPreset {
             Self::ExportRequestFailure => "export-request-failure",
 
             Self::Statistics => "statistics",
+            Self::StreakLit => "streak-lit",
             Self::DialogSettings => "dialog-settings",
             Self::DialogTransition => "dialog-transition",
             Self::DialogAdminDiscard => "dialog-admin-discard",
@@ -344,6 +347,17 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::ExportRequestFailure => export_preset(preset),
 
         InspectorPreset::Statistics => statistics_preset(),
+        InspectorPreset::StreakLit => {
+            let mut app = statistics_preset();
+            let people = app.datasets.stats.contributors.as_mut().unwrap();
+            let person = people.get_mut(&UserId::from("contributor_4")).unwrap();
+            for day in person.history.iter_mut().rev().take(3) {
+                day.labeled = 20;
+            }
+            let person = person.clone();
+            people.insert(app.config.user_id.clone(), person);
+            app
+        }
         InspectorPreset::DialogSettings => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             app.open_shortcut_settings();
