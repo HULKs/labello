@@ -53,9 +53,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn reason_notice_visible(&self) -> bool {
-        self.work.reason_notice.as_ref().is_some_and(|notice| {
-            !notice.dismissed && (!notice.reasons.is_empty() || self.review_revision_active())
-        })
+        self.work
+            .reason_notice
+            .as_ref()
+            .is_some_and(|notice| !notice.dismissed && !notice.reasons.is_empty())
     }
 
     pub(crate) fn reason_notice_contents(
@@ -67,7 +68,6 @@ impl LabelloApp {
         if !self.reason_notice_visible() {
             return;
         }
-        let revision = self.review_revision_active();
         let Some(notice) = self.work.reason_notice.as_ref() else {
             return;
         };
@@ -81,14 +81,10 @@ impl LabelloApp {
         let short = Self::short_viewport(ui.ctx().content_rect().size());
         let mut details_open = notice.compact_details_open;
         let mut dismiss = false;
-        let heading = if revision {
-            "Revisiting a completed review".to_owned()
-        } else {
-            reasons
-                .first()
-                .map_or_else(|| "Image feedback".into(), feedback_heading)
-        };
-        let accent = if !revision && reasons.first().is_some_and(needs_attention) {
+        let heading = reasons
+            .first()
+            .map_or_else(|| "Image feedback".into(), feedback_heading);
+        let accent = if reasons.first().is_some_and(needs_attention) {
             theme::AMBER
         } else {
             theme::BORDER
@@ -143,7 +139,7 @@ impl LabelloApp {
                     egui::ScrollArea::vertical()
                         .id_salt(&detail_id)
                         .max_height((canvas_height * 0.3).clamp(44.0, 220.0))
-                        .show(ui, |ui| self.saved_feedback(ui, &reasons, revision));
+                        .show(ui, |ui| self.saved_feedback(ui, &reasons));
                 }
             });
         if short && details_open && !dismiss {
@@ -171,7 +167,7 @@ impl LabelloApp {
                         .max_height((screen.height() - 132.0).max(44.0))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new(&heading).strong());
-                            self.saved_feedback(ui, &reasons, revision);
+                            self.saved_feedback(ui, &reasons);
                         });
                 });
         }
@@ -181,12 +177,9 @@ impl LabelloApp {
         }
     }
 
-    fn saved_feedback(&self, ui: &mut egui::Ui, reasons: &[WorkflowReason], revision: bool) {
-        if revision {
-            ui.add(egui::Label::new("The saved decision stays in effect until you submit your review. Submitting corrections starts a new review round.").wrap());
-        }
+    fn saved_feedback(&self, ui: &mut egui::Ui, reasons: &[WorkflowReason]) {
         for (index, reason) in reasons.iter().enumerate() {
-            if index > 0 || revision {
+            if index > 0 {
                 ui.add_space(theme::SPACE_2);
                 ui.separator();
                 ui.label(egui::RichText::new(feedback_heading(reason)).strong());

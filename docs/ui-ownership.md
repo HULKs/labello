@@ -408,9 +408,8 @@ availability results before they can change selection or feedback.
 
 
 Short review layout uses the shared review-context projection to keep revision
-mode in the existing context identity line. The central workspace omits its
-redundant caption only when valid compact revision details are present; missing
-or stale target context retains the caption fallback. This presentation does not
+mode in the existing context identity line. The central workspace adds no
+revisit notification or redundant caption. This presentation does not
 change captured targets, staging, or commit policy.
 
 ## Automatic workflow changes
@@ -524,9 +523,9 @@ content scrolls directly. Short viewports show the event title as a button that
 opens the full feedback in a bounded non-modal window. Dismissal
 lasts for the opened context; an accepted reload or reopening installs a new
 notice. Image, dataset, workflow and view changes invalidate the old context.
-Previous-review guidance is titled Revisiting a completed review and explains
-that the saved decision remains effective until submission. It is informational,
-not a rejection or a user-provided reason, and adds no standalone canvas caption.
+Revisiting a completed review does not create a notification. Only saved
+feedback appears, under its originating event heading. An empty feedback
+history leaves the notice area empty.
 
 | Saved input | Display mapping |
 | --- | --- |

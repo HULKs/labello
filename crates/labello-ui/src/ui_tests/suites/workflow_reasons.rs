@@ -72,7 +72,7 @@ fn workflow_reasons_notice_dismissal_reopen_and_scope_are_explicit() {
     let mut stale = reason.clone();
     stale.image_id = ImageId::from("another-image");
     harness.state_mut().install_reason_notice(vec![stale]);
-    // Revision guidance may remain, but another image's reason is never installed.
+    // Another image's feedback must never be installed.
     harness.run_steps(4);
     assert!(harness.query_by_label("Synthetic saved explanation").is_none());
     harness.state_mut().install_reason_notice(vec![reason]);
@@ -267,15 +267,17 @@ fn workflow_feedback_names_the_event_and_puts_the_explanation_before_audit_detai
 }
 
 #[test]
-fn previous_review_guidance_is_information_not_a_reason_or_rejection() {
+fn previous_review_only_shows_saved_feedback_without_revisit_guidance() {
     let mut harness = two_object_review_revision_harness();
     harness.state_mut().install_reason_notice(vec![]);
     harness.run_steps(4);
-    assert!(harness.query_by_label("Revisiting a completed review").is_some());
-    assert!(harness.query_by_label("The saved decision stays in effect until you submit your review. Submitting corrections starts a new review round.").is_some());
-    assert!(harness.query_by_label("Review rejected").is_none());
-    assert!(harness.query_by_label("Reason details").is_none());
-    click(&mut harness, "Dismiss image feedback");
-    harness.run_steps(4);
     assert!(!harness.state().reason_notice_visible());
+    assert!(harness.query_by_label("Dismiss image feedback").is_none());
+    let reason = test_workflow_reason(harness.state(), "The box was adjusted to include the foot.");
+    harness.state_mut().install_reason_notice(vec![reason]);
+    harness.run_steps(4);
+    assert!(harness.query_by_label("Reviewer corrections saved").is_some());
+    assert!(harness.query_by_label("The box was adjusted to include the foot.").is_some());
+    assert!(harness.query_by_label("Revisiting a completed review").is_none());
+    assert!(harness.query_by_label("The saved decision stays in effect until you submit your review. Submitting corrections starts a new review round.").is_none());
 }

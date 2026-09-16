@@ -228,8 +228,8 @@ has been recorded.
   corrections to the server. Failed submissions retain the exact retry request.
   Short compact decision revisions keep a visible Revising indication in the
   existing identity line. The full accessible details explain that geometry is
-  unchanged; no redundant caption row consumes canvas space. If target context
-  is unavailable, retain the revision caption without showing stale target details.
+  unchanged; no revisit notification or redundant caption row consumes canvas
+  space. Missing target context must not show stale target details.
   Decision revisions distinguish the current effective decision from a staged,
   uncommitted replacement. Loading, missing/stale targets and lost assignments
   clear the previous context; a missing image preview is labeled separately while
@@ -267,7 +267,7 @@ has been recorded.
   and date secondary; label earlier feedback explicitly. Wrap long explanations
   in a bounded scroll area; at short heights the event title opens full feedback
   in a bounded non-modal window. Use amber only for current rejection/exclusion
-  feedback, not routine history or previous-review guidance. Dismissal
+  feedback, not routine history. Revisiting a completed review alone creates no notice. Dismissal
   applies to the opened image context. Object and submission reason inputs name
   their scope, optional/required rule and total byte limit; failures retain input.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
