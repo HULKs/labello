@@ -771,6 +771,30 @@ async fn reviewer_bbox_correction_resubmits_idempotent_and_cancels_competitors()
         assert!(stats.get(removed).is_none());
     }
 
+    let typed: labello_domain::DatasetStats = serde_json::from_value(stats.clone()).unwrap();
+    assert_eq!(typed.scoring_version, Some(1));
+    let mut total = labello_domain::ScoreDay::default();
+    for person in typed.contributors.unwrap().values() {
+        for day in &person.history { total.add(&day.score); }
+    }
+    assert_eq!(total.labels, 1);
+    assert_eq!(total.labeling, 2700); // Manual box plus the first focus window.
+    assert_eq!(total.reviewing, 600);
+    assert_eq!(total.deductions, 1000);
+    assert_eq!(total.corrections, 0);
+    // Rebuilding every repository/cache after deployment must preserve exact credit.
+    let restarted = router(ApiState::new(temp.path()));
+    assert_eq!(get_test_stats(&restarted).await["contributors"], stats["contributors"]);
+    assert_eq!(post_test_review(&app, &image_id, "admin", "approve-corrected", json!({"targetType":"annotation_version","annotation_id":"ann_1","version":2}), "approved").await.status(), StatusCode::OK);
+    let approved: labello_domain::DatasetStats = serde_json::from_value(get_test_stats(&app).await).unwrap();
+    let mut after_approval = labello_domain::ScoreDay::default();
+    for person in approved.contributors.unwrap().values() {
+        for day in &person.history { after_approval.add(&day.score); }
+    }
+    assert_eq!(after_approval.labels, 1);
+    assert_eq!(after_approval.reviewing, 600);
+    assert_eq!(after_approval.deductions, 1000);
+    assert_eq!(after_approval.corrections, 400);
 }
 
 #[tokio::test]
