@@ -12,7 +12,7 @@ impl LabelloApp {
         }
         self.schedule_inspection_image();
         if self.inspection.page.is_none()
-            && self.inspection.error.is_none()
+            && self.inspection.gallery_error.is_none()
             && !self
                 .inspection
                 .pending
@@ -23,11 +23,11 @@ impl LabelloApp {
         }
         let available = (ui.available_width() - 30.0).max(1.0);
         let labels = if layout == LayoutMode::Compact {
-            ["Images", "Overlays", "Fit image", "‹", "›", "Refresh image"]
+            ["", "", "Fit image", "‹", "›", "↻"]
         } else {
             [
-                "Images",
-                "Overlays",
+                "",
+                "",
                 "Fit image",
                 "Previous image",
                 "Next image",
@@ -50,15 +50,7 @@ impl LabelloApp {
             }
             used += width + ui.spacing().item_spacing.x;
         }
-        let identity_height = if self.inspection.selected.is_some() {
-            ui.text_style_height(&egui::TextStyle::Body) + ui.spacing().item_spacing.y
-        } else {
-            0.0
-        };
-        let height = 18.0
-            + rows as f32 * 44.0
-            + (rows - 1) as f32 * ui.spacing().item_spacing.y
-            + identity_height;
+        let height = 18.0 + rows as f32 * 44.0 + (rows - 1) as f32 * ui.spacing().item_spacing.y;
         egui::Panel::top("inspection-context")
             .min_size(height)
             .frame(theme::top_bar_frame().fill(theme::PANEL))
@@ -67,11 +59,10 @@ impl LabelloApp {
             self.inspection.drawer = None;
             if !self.inspection.images_collapsed {
                 egui::Panel::left("inspection-images")
-                    .exact_size(280.0)
+                    .exact_size(420.0)
                     .resizable(false)
-                    .frame(theme::side_frame())
+                    .frame(theme::side_frame().inner_margin(8.0))
                     .show(ui, |ui| {
-                        ui.heading("Images");
                         self.inspection_gallery(ui);
                     });
             } else {
@@ -79,7 +70,7 @@ impl LabelloApp {
             }
             if !self.inspection.overlays_collapsed {
                 egui::Panel::right("inspection-overlays")
-                    .exact_size(315.0)
+                    .exact_size(300.0)
                     .resizable(false)
                     .frame(theme::side_frame())
                     .show(ui, |ui| {
@@ -113,7 +104,26 @@ impl LabelloApp {
                 } else {
                     self.inspection.drawer == Some(right)
                 };
-                let response = ui.add(egui::Button::new(title).selected(selected));
+                let icon_id = ui.id().with(("inspection-panel-icon", title));
+                let icon = egui::Atom::custom(icon_id, egui::vec2(25.0, 16.0));
+                let choice = egui::Button::new(egui::Atoms::new(icon))
+                    .selected(selected)
+                    .min_size(egui::vec2(44.0, 44.0))
+                    .atom_ui(ui);
+                let rect = choice.rect(icon_id);
+                let response = choice.response.on_hover_text(title);
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, title)
+                });
+                if let Some(rect) = rect {
+                    crate::panels::paint_side_panel_toggle_icon(
+                        ui,
+                        rect,
+                        !selected,
+                        right,
+                        ui.style().interact(&response).fg_stroke.color,
+                    );
+                }
                 if response.clicked() {
                     if layout == LayoutMode::Wide {
                         if right {
@@ -130,33 +140,40 @@ impl LabelloApp {
             if ui.button("Fit image").clicked() {
                 self.inspection.canvas.fit_view();
             }
-            let items = self
-                .inspection
-                .page
-                .as_ref()
-                .map(|p| p.items.clone())
-                .unwrap_or_default();
-            let position = self
-                .inspection
-                .selected
-                .as_ref()
-                .and_then(|r| items.iter().position(|i| i.image.image_id == r.image_id));
-            for (previous, label, icon) in
-                [(true, "Previous image", "‹"), (false, "Next image", "›")]
-            {
-                let target = position
-                    .and_then(|p| {
-                        if previous {
-                            p.checked_sub(1)
-                        } else {
-                            p.checked_add(1)
-                        }
-                    })
-                    .and_then(|p| items.get(p));
+            let navigation = {
+                let items = self
+                    .inspection
+                    .page
+                    .as_ref()
+                    .map(|p| p.items.as_slice())
+                    .unwrap_or_default();
+                let position = self
+                    .inspection
+                    .selected
+                    .as_ref()
+                    .and_then(|r| items.iter().position(|i| i.image.image_id == r.image_id));
+                [(true, "Previous image", "‹"), (false, "Next image", "›")].map(
+                    |(previous, label, icon)| {
+                        let target = position
+                            .and_then(|p| {
+                                if previous {
+                                    p.checked_sub(1)
+                                } else {
+                                    p.checked_add(1)
+                                }
+                            })
+                            .and_then(|p| items.get(p))
+                            .map(|i| i.image.clone());
+                        (previous, label, icon, target, position)
+                    },
+                )
+            };
+            for (previous, label, icon, target, position) in navigation {
                 let page_target = position.and(self.inspection.page.as_ref()).and_then(|p| {
-                    if previous && p.page > 1 {
-                        Some(p.page - 1)
-                    } else if !previous && p.page < p.total_pages {
+                    if !previous
+                        && p.page < p.total_pages
+                        && self.inspection.gallery_error.is_none()
+                    {
                         Some(p.page + 1)
                     } else {
                         None
@@ -177,28 +194,36 @@ impl LabelloApp {
                 });
                 if response.on_hover_text(label).clicked() {
                     if let Some(target) = target {
-                        self.select_inspection_image(target.image.clone());
-                    } else if let Some(page) = page_target {
-                        self.inspection.navigate_page = Some(previous);
-                        self.inspection.query.page = page;
-                        self.inspection.scroll = 0.0;
-                        self.inspect_request(InspectorAction::List(self.inspection.query.clone()));
+                        self.select_inspection_image(target);
+                    } else if page_target.is_some() {
+                        self.inspection.navigate_page = Some(false);
+                        self.load_more_inspection_images();
                     }
                 }
             }
-            if ui
-                .add_enabled(
-                    !self.inspection.busy()
-                        && self.inspection.selected.is_some()
-                        && !self
-                            .inspection
-                            .pending
-                            .values()
-                            .any(|a| matches!(a, InspectorAction::State(_))),
-                    egui::Button::new("Refresh image"),
+            let refresh = ui.add_enabled(
+                !self.inspection.busy()
+                    && self.inspection.selected.is_some()
+                    && !self
+                        .inspection
+                        .pending
+                        .values()
+                        .any(|a| matches!(a, InspectorAction::State(_))),
+                egui::Button::new(if layout == LayoutMode::Compact {
+                    "↻"
+                } else {
+                    "Refresh image"
+                })
+                .min_size(egui::vec2(44.0, 44.0)),
+            );
+            refresh.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::Button,
+                    refresh.enabled(),
+                    "Refresh image",
                 )
-                .clicked()
-            {
+            });
+            if refresh.on_hover_text("Refresh image").clicked() {
                 let record = self.inspection.selected.clone().unwrap();
                 self.inspection.error = None;
                 self.inspection.preview_loaded = false;
@@ -207,10 +232,6 @@ impl LabelloApp {
                 self.inspect_request(InspectorAction::State(record.image_id));
             }
         });
-        if let Some(record) = &self.inspection.selected {
-            ui.add(egui::Label::new(&record.file_name).truncate())
-                .on_hover_text(&record.canonical_path);
-        }
     }
 
     fn inspection_sidebar(&mut self, ui: &mut egui::Ui) {
@@ -227,7 +248,6 @@ impl LabelloApp {
                     .any(|a| matches!(a, InspectorAction::State(id) if *id == record.image_id));
             self.inspection_controls(ui, &record, busy);
         } else {
-            ui.heading("Annotation overlays");
             ui.label("Choose an image to see its annotations.");
         }
     }
@@ -240,7 +260,7 @@ impl LabelloApp {
             return;
         };
         let screen = ctx.content_rect();
-        let width = 315.0_f32.min(screen.width() - 48.0);
+        let width = (if right { 300.0_f32 } else { 420.0_f32 }).min(screen.width() - 48.0);
         let height = (screen.height() - 64.0).max(120.0);
         let title = if right { "Overlays" } else { "Images" };
         let id = egui::Id::new("inspection-drawer");

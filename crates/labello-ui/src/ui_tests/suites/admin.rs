@@ -998,7 +998,7 @@ fn inspector_browses_live_images_without_claiming_or_saving() {
     assert!(harness.query_by_label("Inspect one.png").is_some());
     click(&mut harness, "Inspect one.png");
     for _ in 0..20 { harness.step(); }
-    assert!(harness.query_by_label("Annotation overlays").is_some());
+    assert!(harness.query_by_label("Bounding boxes").is_some());
     click(&mut harness, "Bounding boxes");
     click(&mut harness, "Skeletons");
     harness.get_by_role_and_label(egui::accesskit::Role::Button, "Images").click();

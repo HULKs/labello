@@ -1,3 +1,4 @@
+mod gallery;
 mod panels;
 
 use crate::{
@@ -40,6 +41,7 @@ pub(crate) enum InspectorReply {
 pub(crate) struct InspectorState {
     transfers: crate::image_transfer::ImageTransfers,
     query: ImageExplorerQuery,
+    active_query: ImageExplorerQuery,
     page: Option<ImageExplorerPage>,
     pending: BTreeMap<u64, InspectorAction>,
     thumbnails: BTreeMap<ImageId, egui::TextureHandle>,
@@ -49,12 +51,14 @@ pub(crate) struct InspectorState {
     texture: Option<egui::TextureHandle>,
     canvas: CanvasState,
     hidden_tasks: BTreeSet<TaskId>,
-    hidden_annotations: BTreeSet<labello_domain::AnnotationId>,
     hidden_statuses: Vec<TaskStatus>,
     boxes: bool,
     skeletons: bool,
     return_tasks: BTreeSet<TaskId>,
     reason: String,
+    return_open: bool,
+    gallery_error: Option<String>,
+    failed_query: Option<ImageExplorerQuery>,
     retry: Option<ReturnToReviewRequest>,
     error: Option<String>,
     image_error: Option<String>,
@@ -81,6 +85,11 @@ impl Default for InspectorState {
                 page_size: PAGE_SIZE,
                 ..Default::default()
             },
+            active_query: ImageExplorerQuery {
+                page: 1,
+                page_size: PAGE_SIZE,
+                ..Default::default()
+            },
             page: None,
             pending: BTreeMap::new(),
             thumbnails: BTreeMap::new(),
@@ -90,12 +99,14 @@ impl Default for InspectorState {
             texture: None,
             canvas: CanvasState::default(),
             hidden_tasks: BTreeSet::new(),
-            hidden_annotations: BTreeSet::new(),
             hidden_statuses: Vec::new(),
             boxes: true,
             skeletons: true,
             return_tasks: BTreeSet::new(),
             reason: String::new(),
+            return_open: false,
+            gallery_error: None,
+            failed_query: None,
             retry: None,
             error: None,
             image_error: None,
@@ -127,8 +138,7 @@ impl InspectorState {
                 state
                     .active_annotations()
                     .filter(|annotation| {
-                        !self.hidden_annotations.contains(&annotation.annotation_id)
-                            && !self.hidden_tasks.contains(&annotation.task_id)
+                        !self.hidden_tasks.contains(&annotation.task_id)
                             && !self.hidden_statuses.contains(
                                 &state
                                     .task_states
@@ -228,10 +238,13 @@ impl LabelloApp {
             ) {
                 self.inspection.image_error = Some(error);
             } else {
-                if matches!(action, InspectorAction::List(_)) {
+                if let InspectorAction::List(query) = action {
                     self.inspection.navigate_page = None;
+                    self.inspection.failed_query = Some(query);
+                    self.inspection.gallery_error = Some(error);
+                } else {
+                    self.inspection.error = Some(error);
                 }
-                self.inspection.error = Some(error);
             }
         }
     }
@@ -245,14 +258,9 @@ impl LabelloApp {
             self.fail_inspection(request.request_id, error.to_string());
             return;
         }
-        if self
-            .inspection
-            .pending
-            .remove(&request.request_id)
-            .is_none()
-        {
+        let Some(action) = self.inspection.pending.remove(&request.request_id) else {
             return;
-        }
+        };
         let texture = |preview: ImagePreview| {
             ctx.load_texture(
                 "dataset-inspection",
@@ -265,27 +273,44 @@ impl LabelloApp {
         };
         match result.expect("handled failure") {
             InspectorReply::List(page) => {
-                self.inspection
-                    .thumbnails
-                    .retain(|id, _| page.items.iter().any(|item| item.image.image_id == *id));
-                self.inspection.thumbnail_errors.clear();
+                let InspectorAction::List(query) = action else {
+                    return;
+                };
                 let destination = self
                     .inspection
                     .navigate_page
                     .take()
-                    .and_then(|previous| {
-                        if previous {
-                            page.items.last()
-                        } else {
-                            page.items.first()
-                        }
-                    })
+                    .and_then(|_| page.items.first())
                     .map(|i| i.image.clone());
-                self.inspection.page = Some(page);
+                if query.page == 1 {
+                    self.inspection.active_query = query;
+                    self.inspection.scroll = 0.0;
+                    self.inspection.page = Some(page);
+                    self.inspection.thumbnail_errors.clear();
+                } else if let Some(loaded) = &mut self.inspection.page {
+                    // Only append the next batch of the active search, never a stale/reset reply.
+                    if page.page != loaded.page + 1 {
+                        return;
+                    }
+                    loaded.page = page.page;
+                    loaded.total_pages = page.total_pages;
+                    loaded.total_items = page.total_items;
+                    let known: BTreeSet<_> = loaded
+                        .items
+                        .iter()
+                        .map(|i| i.image.image_id.clone())
+                        .collect();
+                    loaded.items.extend(
+                        page.items
+                            .into_iter()
+                            .filter(|i| !known.contains(&i.image.image_id)),
+                    );
+                }
                 if let Some(record) = destination {
                     self.select_inspection_image(record);
                 }
-                self.inspection.error = None;
+                self.inspection.gallery_error = None;
+                self.inspection.failed_query = None;
             }
             InspectorReply::Thumbnail(id, preview) => {
                 if self
@@ -336,7 +361,8 @@ impl LabelloApp {
                 self.inspection.retry = None;
                 self.inspection.error = None;
                 self.inspection.notice = Some("Selected workflows returned to review.".into());
-                self.inspection.page = None;
+                self.inspection.return_open = false;
+                self.reset_inspection_gallery();
                 self.invalidate_assignment_availability(None);
             }
         }
@@ -367,9 +393,6 @@ impl LabelloApp {
             self.inspection_feedback(ui);
         }
         if let Some(record) = self.inspection.selected.clone() {
-            if !self.inspection.preview_loaded {
-                ui.label("Loading image…");
-            }
             self.inspection_canvas(ui, &record);
         } else {
             ui.heading("Dataset inspector");
@@ -384,12 +407,12 @@ impl LabelloApp {
         self.inspection.preview_loaded = false;
         self.inspection.image_error = None;
         self.inspection.state = None;
-        self.inspection.hidden_annotations.clear();
         self.inspection.canvas = CanvasState::default();
         self.inspection.canvas.require_pan_mode(true);
         self.inspection.error = None;
         self.inspection.notice = None;
         self.inspection.return_tasks.clear();
+        self.inspection.return_open = false;
         self.inspection.retry = None;
         self.inspect_request(InspectorAction::State(record.image_id.clone()));
         self.inspection.selected = Some(record);
@@ -435,296 +458,6 @@ impl LabelloApp {
             self.inspect_request(InspectorAction::Image(record.image_id.clone()));
         }
     }
-    fn inspection_gallery(&mut self, ui: &mut egui::Ui) {
-        if self.inspection.drawer == Some(false) {
-            self.inspection_feedback(ui);
-        }
-        let busy = self.inspection.busy()
-            || self
-                .inspection
-                .pending
-                .values()
-                .any(|a| matches!(a, InspectorAction::List(_)));
-        let mut refresh = false;
-        let page = self.inspection.page.clone();
-        egui::ScrollArea::vertical()
-            .id_salt("inspection-controls")
-            .max_height((ui.available_height() - 150.0).clamp(80.0, 320.0))
-            .show(ui, |ui| {
-                ui.add_enabled_ui(!busy, |ui| {
-                    let label = ui.label("Search filename or path");
-                    let text = self.inspection.query.search.get_or_insert_default();
-                    ui.add(egui::TextEdit::singleline(text).desired_width(ui.available_width()))
-                        .labelled_by(label.id);
-                    egui::CollapsingHeader::new("Filters").show(ui, |ui| {
-                        let narrow = ui.available_width() < 1100.0;
-                        let filters = |ui: &mut egui::Ui| {
-                            egui::ComboBox::from_label("Workflow filter")
-                                .width(140.0)
-                                .wrap_mode(egui::TextWrapMode::Truncate)
-                                .selected_text(
-                                    self.inspection
-                                        .query
-                                        .task_id
-                                        .as_ref()
-                                        .map(|id| {
-                                            self.work
-                                                .tasks
-                                                .iter()
-                                                .find(|task| task.task_id == *id)
-                                                .map(|task| task.name.clone())
-                                                .unwrap_or_else(|| id.to_string())
-                                        })
-                                        .unwrap_or("All workflows".into()),
-                                )
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut self.inspection.query.task_id,
-                                        None,
-                                        "All workflows",
-                                    );
-                                    for task in &self.work.tasks {
-                                        ui.selectable_value(
-                                            &mut self.inspection.query.task_id,
-                                            Some(task.task_id.clone()),
-                                            &task.name,
-                                        );
-                                    }
-                                });
-                            egui::ComboBox::from_label("Class filter")
-                                .width(140.0)
-                                .wrap_mode(egui::TextWrapMode::Truncate)
-                                .selected_text(
-                                    self.inspection
-                                        .query
-                                        .class_id
-                                        .as_ref()
-                                        .map(|id| {
-                                            self.work
-                                                .classes
-                                                .iter()
-                                                .find(|class| class.class_id == *id)
-                                                .map(|class| class.name.clone())
-                                                .unwrap_or_else(|| id.to_string())
-                                        })
-                                        .unwrap_or("All classes".into()),
-                                )
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut self.inspection.query.class_id,
-                                        None,
-                                        "All classes",
-                                    );
-                                    for class in &self.work.classes {
-                                        ui.selectable_value(
-                                            &mut self.inspection.query.class_id,
-                                            Some(class.class_id.clone()),
-                                            &class.name,
-                                        );
-                                    }
-                                });
-                            egui::ComboBox::from_label("Status filter")
-                                .width(140.0)
-                                .wrap_mode(egui::TextWrapMode::Truncate)
-                                .selected_text(
-                                    self.inspection
-                                        .query
-                                        .status
-                                        .as_ref()
-                                        .map(|s| status_label(s).to_owned())
-                                        .unwrap_or("All statuses".into()),
-                                )
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut self.inspection.query.status,
-                                        None,
-                                        "All statuses",
-                                    );
-                                    for status in statuses() {
-                                        ui.selectable_value(
-                                            &mut self.inspection.query.status,
-                                            Some(status.clone()),
-                                            status_label(&status),
-                                        );
-                                    }
-                                });
-                            if ui.button("Apply filters").clicked() {
-                                self.inspection.query.page = 1;
-                                self.inspection.scroll = 0.0;
-                                refresh = true;
-                            }
-                            if ui.button("Refresh gallery").clicked() {
-                                refresh = true;
-                            }
-                        };
-                        if narrow {
-                            ui.vertical(filters);
-                        } else {
-                            ui.horizontal_wrapped(filters);
-                        }
-                    });
-                    if ui.button("Search images").clicked() {
-                        self.inspection.query.page = 1;
-                        self.inspection.scroll = 0.0;
-                        refresh = true;
-                    }
-                });
-                if self.inspection.page.is_none() && !busy && self.inspection.error.is_none() {
-                    refresh = true;
-                }
-                if refresh {
-                    self.inspect_request(InspectorAction::List(self.inspection.query.clone()));
-                }
-                if busy {
-                    ui.label("Loading gallery…");
-                }
-                if let Some(page) = &page {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(format!(
-                            "{} images · Page {} of {}",
-                            page.total_items,
-                            page.page,
-                            page.total_pages.max(1)
-                        ));
-                        if ui
-                            .add_enabled(!busy && page.page > 1, egui::Button::new("Previous page"))
-                            .clicked()
-                        {
-                            self.inspection.query.page = page.page - 1;
-                            self.inspection.scroll = 0.0;
-                            self.inspect_request(InspectorAction::List(
-                                self.inspection.query.clone(),
-                            ));
-                        }
-                        if ui
-                            .add_enabled(
-                                !busy && page.page < page.total_pages,
-                                egui::Button::new("Next page"),
-                            )
-                            .clicked()
-                        {
-                            self.inspection.query.page = page.page + 1;
-                            self.inspection.scroll = 0.0;
-                            self.inspect_request(InspectorAction::List(
-                                self.inspection.query.clone(),
-                            ));
-                        }
-                    });
-                }
-            });
-        let Some(page) = page else {
-            return;
-        };
-        if page.items.is_empty() {
-            ui.label("No images match these filters.");
-        }
-        let columns = ((ui.available_width() / 200.0).floor() as usize).max(1);
-        let width = ((ui.available_width() - ui.spacing().item_spacing.x * (columns - 1) as f32)
-            / columns as f32)
-            .max(1.0);
-        let mut open = None;
-        let mut visible = Vec::new();
-        let output = egui::ScrollArea::vertical()
-            .id_salt("inspection-gallery")
-            .vertical_scroll_offset(self.inspection.scroll)
-            .show_rows(ui, 190.0, page.items.len().div_ceil(columns), |ui, rows| {
-                for row in rows {
-                    ui.horizontal(|ui| {
-                        for item in page.items.iter().skip(row * columns).take(columns) {
-                            ui.push_id(&item.image.image_id, |ui| {
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(width, 190.0),
-                                    egui::Layout::top_down(egui::Align::Min),
-                                    |ui| {
-                                        ui.set_min_size(egui::vec2(width, 190.0));
-                                        let id = &item.image.image_id;
-                                        visible.push(id.clone());
-                                        let button = if let Some(texture) =
-                                            self.inspection.thumbnails.get(id)
-                                        {
-                                            egui::Button::image(
-                                                egui::Image::new(texture)
-                                                    .fit_to_exact_size(egui::vec2(
-                                                        width.min(160.0),
-                                                        120.0,
-                                                    ))
-                                                    .alt_text(format!(
-                                                        "Inspect {}",
-                                                        item.image.file_name
-                                                    )),
-                                            )
-                                        } else {
-                                            egui::Button::new(
-                                                if self.inspection.thumbnail_errors.contains(id) {
-                                                    "Preview unavailable"
-                                                } else {
-                                                    "Loading preview…"
-                                                },
-                                            )
-                                        };
-                                        let response = ui.add_enabled(
-                                            !busy && self.inspection.reason.is_empty(),
-                                            button
-                                                .selected(
-                                                    self.inspection
-                                                        .selected
-                                                        .as_ref()
-                                                        .is_some_and(|r| r.image_id == *id),
-                                                )
-                                                .min_size(egui::vec2(width.min(160.0), 128.0)),
-                                        );
-                                        response.widget_info(|| {
-                                            egui::WidgetInfo::labeled(
-                                                egui::WidgetType::Button,
-                                                !busy,
-                                                format!("Inspect {}", item.image.file_name),
-                                            )
-                                        });
-                                        if response.clicked() {
-                                            open = Some(item.image.clone());
-                                        }
-                                        ui.add(egui::Label::new(&item.image.file_name).truncate())
-                                            .on_hover_text(&item.image.canonical_path);
-                                        if self.inspection.thumbnail_errors.contains(id)
-                                            && ui.button("Retry preview").clicked()
-                                        {
-                                            self.inspection.thumbnail_errors.remove(id);
-                                        }
-                                    },
-                                );
-                            });
-                        }
-                    });
-                }
-            });
-        self.inspection.scroll = output.state.offset.y;
-        self.schedule_inspection_image();
-        for id in visible {
-            if self
-                .inspection
-                .pending
-                .values()
-                .filter(|a| matches!(a, InspectorAction::Thumbnail(_) | InspectorAction::Image(_)))
-                .count()
-                >= MAX_IMAGE_REQUESTS
-            {
-                break;
-            }
-            if !self.inspection.thumbnails.contains_key(&id)
-                && !self.inspection.thumbnail_errors.contains(&id)
-                && !self
-                    .inspection
-                    .pending
-                    .values()
-                    .any(|a| matches!(a, InspectorAction::Thumbnail(pending) if *pending == id))
-            {
-                self.inspect_request(InspectorAction::Thumbnail(id));
-            }
-        }
-        if let Some(record) = open {
-            self.select_inspection_image(record);
-        }
-    }
     fn inspection_canvas(&mut self, ui: &mut egui::Ui, record: &ImageRecord) {
         let annotations = self.inspection.overlays();
         let edges = self
@@ -763,6 +496,7 @@ impl LabelloApp {
             .collect();
         let mut interaction = CanvasInteraction::annotations(false);
         interaction.allow_selection = false;
+        let viewport = ui.available_rect_before_wrap();
         crate::canvas::show_canvas_with_task_edges(
             ui,
             &mut self.inspection.canvas,
@@ -781,118 +515,93 @@ impl LabelloApp {
             &mut None,
             &edges,
         );
+        if !self.inspection.preview_loaded && self.inspection.image_error.is_none() {
+            let rect = egui::Rect::from_center_size(viewport.center(), egui::vec2(32.0, 32.0));
+            ui.painter()
+                .circle_filled(rect.center(), 22.0, theme::PANEL);
+            ui.put(rect, egui::Spinner::new().size(32.0))
+                .widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Loading image")
+                });
+        }
     }
     fn inspection_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
-        ui.heading("Annotation overlays");
-        let total = self
-            .inspection
-            .state
-            .as_ref()
-            .map(|s| s.active_annotations().count())
-            .unwrap_or(0);
-        ui.label(format!(
-            "{} of {total} annotations visible",
-            self.inspection.overlays().len()
-        ));
         ui.horizontal_wrapped(|ui| {
             ui.checkbox(&mut self.inspection.boxes, "Bounding boxes");
             ui.checkbox(&mut self.inspection.skeletons, "Skeletons");
         });
-        egui::CollapsingHeader::new("Workflow statuses").show(ui, |ui| {
-            for status in statuses() {
-                let mut visible = !self.inspection.hidden_statuses.contains(&status);
-                if ui.checkbox(&mut visible, status_label(&status)).changed() {
-                    if visible {
-                        self.inspection.hidden_statuses.retain(|old| old != &status);
-                    } else {
-                        self.inspection.hidden_statuses.push(status);
+        egui::ComboBox::from_id_salt("overlay-statuses")
+            .width(ui.available_width())
+            .selected_text(if self.inspection.hidden_statuses.is_empty() {
+                "All statuses".to_owned()
+            } else {
+                format!(
+                    "{} statuses shown",
+                    5 - self.inspection.hidden_statuses.len()
+                )
+            })
+            .show_ui(ui, |ui| {
+                for status in statuses() {
+                    let mut visible = !self.inspection.hidden_statuses.contains(&status);
+                    if ui.checkbox(&mut visible, status_label(&status)).changed() {
+                        if visible {
+                            self.inspection.hidden_statuses.retain(|old| old != &status);
+                        } else {
+                            self.inspection.hidden_statuses.push(status);
+                        }
                     }
                 }
+            })
+            .response
+            .on_hover_text("Filter overlays by workflow status");
+        ui.add_space(theme::SPACE_2);
+        if let Some(state) = &self.inspection.state {
+            for task in &self.work.tasks {
+                let count = state
+                    .active_annotations()
+                    .filter(|a| a.task_id == task.task_id)
+                    .count();
+                let status = state
+                    .task_states
+                    .get(&task.task_id)
+                    .map(|s| s.status.clone())
+                    .unwrap_or(TaskStatus::Pending);
+                ui.push_id(&task.task_id, |ui| {
+                    let mut visible = !self.inspection.hidden_tasks.contains(&task.task_id);
+                    ui.horizontal(|ui| {
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                        let width = (ui.available_width() - 40.0).max(44.0);
+                        let response = ui
+                            .allocate_ui_with_layout(
+                                egui::vec2(width, 44.0),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.set_min_width(width);
+                                    ui.add(egui::Checkbox::new(&mut visible, &task.name))
+                                },
+                            )
+                            .inner
+                            .on_hover_text(format!(
+                                "{} · {} · {count} annotations",
+                                task.name,
+                                status_label(&status)
+                            ));
+                        if response.changed() {
+                            if visible {
+                                self.inspection.hidden_tasks.remove(&task.task_id);
+                            } else {
+                                self.inspection.hidden_tasks.insert(task.task_id.clone());
+                            }
+                        }
+                        ui.weak(count.to_string()).on_hover_text(format!(
+                            "{count} annotations · {}",
+                            status_label(&status)
+                        ));
+                    });
+                });
             }
-        });
-        ui.separator();
-        if self.inspection.state.is_none() {
-            ui.label("Loading annotations…");
-        }
-        for task in &self.work.tasks {
-            ui.push_id(&task.task_id, |ui| {
-                let annotations: Vec<_> = self
-                    .inspection
-                    .state
-                    .as_ref()
-                    .map(|s| {
-                        s.active_annotations()
-                            .filter(|a| a.task_id == task.task_id)
-                            .cloned()
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let mut visible = !self.inspection.hidden_tasks.contains(&task.task_id);
-                if ui.checkbox(&mut visible, &task.name).changed() {
-                    if visible {
-                        self.inspection.hidden_tasks.remove(&task.task_id);
-                    } else {
-                        self.inspection.hidden_tasks.insert(task.task_id.clone());
-                    }
-                }
-                if let Some(state) = &self.inspection.state {
-                    let status = state
-                        .task_states
-                        .get(&task.task_id)
-                        .map(|s| s.status.clone())
-                        .unwrap_or(TaskStatus::Pending);
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} · {} annotations",
-                            status_label(&status),
-                            annotations.len()
-                        ))
-                        .small()
-                        .weak(),
-                    );
-                }
-                if !annotations.is_empty() {
-                    egui::CollapsingHeader::new("Annotations")
-                        .id_salt("objects")
-                        .show(ui, |ui| {
-                            ui.add_enabled_ui(visible, |ui| {
-                                for (index, annotation) in annotations.iter().enumerate() {
-                                    let class = self
-                                        .work
-                                        .classes
-                                        .iter()
-                                        .find(|c| c.class_id == annotation.class_id)
-                                        .map(|c| c.name.as_str())
-                                        .unwrap_or(annotation.class_id.as_str());
-                                    let mut shown = !self
-                                        .inspection
-                                        .hidden_annotations
-                                        .contains(&annotation.annotation_id);
-                                    ui.push_id(&annotation.annotation_id, |ui| {
-                                        if ui
-                                            .checkbox(
-                                                &mut shown,
-                                                format!("{} · {class}", index + 1),
-                                            )
-                                            .changed()
-                                        {
-                                            if shown {
-                                                self.inspection
-                                                    .hidden_annotations
-                                                    .remove(&annotation.annotation_id);
-                                            } else {
-                                                self.inspection
-                                                    .hidden_annotations
-                                                    .insert(annotation.annotation_id.clone());
-                                            }
-                                        }
-                                    });
-                                }
-                            });
-                        });
-                }
-                ui.add_space(theme::SPACE_2);
-            });
+        } else {
+            ui.spinner();
         }
         if self.has_dataset_role(DatasetRole::Reviewer)
             || self.has_dataset_role(DatasetRole::DataAdmin)
@@ -902,10 +611,17 @@ impl LabelloApp {
     }
     fn inspection_return_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
         ui.separator();
-        ui.heading("Return workflows to review");
-        ui.label(
-            "Select completed workflows below. Overlay visibility does not select work to return.",
-        );
+        if !self.inspection.return_open {
+            if ui
+                .add_enabled(!busy, egui::Button::new("Return to review"))
+                .clicked()
+            {
+                self.inspection.return_open = true;
+            }
+            return;
+        }
+        ui.strong("Return to review");
+        ui.weak("Select completed workflows and give a reason.");
         let mut changed = false;
         ui.add_enabled_ui(!busy, |ui| {
             for task in &self.work.tasks {
@@ -977,6 +693,7 @@ impl LabelloApp {
                     self.inspect_request(InspectorAction::Return(record.image_id.clone(), request));
                 }
                 if ui.button("Discard return draft").clicked() {
+                    self.inspection.return_open = false;
                     self.inspection.reason.clear();
                     self.inspection.return_tasks.clear();
                     self.inspection.retry = None;
@@ -1178,7 +895,7 @@ mod tests {
             .with_size(egui::vec2(1288.0, 820.0))
             .build_eframe(|_| app());
         harness.run();
-        assert!(harness.query_by_label("Annotation overlays").is_some());
+        assert!(harness.query_by_label("Annotation overlays").is_none());
         assert!(harness.query_by_label("Bounding boxes").is_some());
         let before = harness.state().inspection.state.clone();
         harness.get_by_label("Bounding boxes").click();
@@ -1210,18 +927,30 @@ mod tests {
             .with_size(egui::vec2(1440.0, 1000.0))
             .build_eframe(|_| app());
         harness.run();
-        let overlays = harness.get_by_label("Annotation overlays").rect();
-        let reason = harness.get_by_label("Reason for returning work").rect();
-        let submit = harness.get_by_label("Return selected workflows").rect();
-        assert!(reason.top() > overlays.bottom());
-        assert!(submit.right() <= 1440.0 && submit.bottom() <= 1000.0);
-
+        assert!(harness.query_by_label("Annotations").is_none());
+        assert!(harness.query_by_label("Next page").is_none());
+        assert!(harness.query_by_label("Filters").is_none());
+        assert!(
+            harness
+                .query_by_label("Reason for returning work")
+                .is_none()
+        );
         let preview = harness.get_by_label("Inspect Sample 0").rect();
+        let second = harness.get_by_label("Inspect Sample 1").rect();
+        let third = harness.get_by_label("Inspect Sample 2").rect();
+        let fourth = harness.get_by_label("Inspect Sample 3").rect();
         let filename = harness.get_by_label("Sample 0").rect();
         assert!(filename.top() >= preview.bottom());
-        assert!(harness.get_by_label("Next page").rect().bottom() < preview.top());
-        assert!(preview.right() < overlays.left());
+        assert!(filename.width() <= preview.width() + 1.0);
+        assert_eq!(preview.top(), second.top());
+        assert_eq!(preview.top(), third.top());
+        assert!(fourth.top() > preview.bottom());
+        assert!(third.right() <= 420.0);
         assert!(harness.get_by_label("Fit image").rect().bottom() < preview.top());
+        harness.get_by_label("Return to review").click();
+        harness.run();
+        let submit = harness.get_by_label("Return selected workflows").rect();
+        assert!(submit.right() <= 1440.0 && submit.bottom() <= 1000.0);
     }
     #[test]
     fn inspector_annotation_members_browse_without_return_controls() {
@@ -1233,11 +962,7 @@ mod tests {
             .build_eframe(|_| app);
         harness.run();
         assert!(harness.query_by_label("Bounding boxes").is_some());
-        assert!(
-            harness
-                .query_by_label("Return workflows to review")
-                .is_none()
-        );
+        assert!(harness.query_by_label("Return to review").is_none());
         harness.state_mut().datasets.summaries.clear();
         assert!(!harness.state().can_open_view(AppView::Inspect));
     }
@@ -1364,13 +1089,23 @@ mod tests {
             .clone();
         app.inspection.selected = Some(last);
         app.inspection.query.search = Some("Sample".into());
+        app.inspection.active_query.search = Some("Sample".into());
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1440.0, 1000.0))
             .build_eframe(|_| app);
         harness.run();
         harness.get_by_label("Next image").click();
         harness.run();
-        assert_eq!(harness.state().inspection.query.page, 2);
+        assert_eq!(
+            harness
+                .state()
+                .inspection
+                .failed_query
+                .as_ref()
+                .unwrap()
+                .page,
+            2
+        );
         assert_eq!(
             harness.state().inspection.query.search.as_deref(),
             Some("Sample")
@@ -1381,19 +1116,111 @@ mod tests {
         app.inspection.navigate_page = Some(false);
         let mut page = app.inspection.page.clone().unwrap();
         page.page = 2;
+        page.items[0].image.image_id = "new-image".into();
         let expected = page.items[0].image.image_id.clone();
         let request = app.request_identity(Some(app.config.dataset_id.clone()));
-        app.inspection.pending.insert(
-            request.request_id,
-            InspectorAction::List(app.inspection.query.clone()),
-        );
+        let mut query = app.inspection.active_query.clone();
+        query.page = 2;
+        app.inspection
+            .pending
+            .insert(request.request_id, InspectorAction::List(query));
         app.accept_inspection(
             &egui::Context::default(),
             request,
             Ok(InspectorReply::List(page)),
         );
+        assert_eq!(app.inspection.page.as_ref().unwrap().items.len(), 25);
         assert_eq!(app.inspection.selected.as_ref().unwrap().image_id, expected);
         assert!(app.inspection.navigate_page.is_none());
+    }
+
+    #[test]
+    fn inspector_scroll_requests_coalesce_and_reset_rejects_obsolete_batches() {
+        let mut app = app();
+        app.inspection.active_query.search = Some("applied".into());
+        app.inspection.query.search = Some("unsubmitted".into());
+        let selected = app.inspection.selected.clone();
+        app.load_more_inspection_images();
+        app.load_more_inspection_images();
+        let requests: Vec<_> = app
+            .inspection
+            .pending
+            .iter()
+            .filter_map(|(id, action)| {
+                if let InspectorAction::List(query) = action {
+                    Some((*id, query.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].1.page, 2);
+        assert_eq!(requests[0].1.search.as_deref(), Some("applied"));
+        let old_request = RequestIdentity {
+            request_id: requests[0].0,
+            ..app.request_identity(Some(app.config.dataset_id.clone()))
+        };
+        let mut late = app.inspection.page.clone().unwrap();
+        late.page = 2;
+        late.items[0].image.image_id = "obsolete".into();
+        app.reset_inspection_gallery();
+        assert!(!app.inspection.pending.contains_key(&old_request.request_id));
+        app.accept_inspection(
+            &egui::Context::default(),
+            old_request,
+            Ok(InspectorReply::List(late)),
+        );
+        assert_eq!(app.inspection.page.as_ref().unwrap().items.len(), 24);
+        assert_eq!(app.inspection.page.as_ref().unwrap().page, 1);
+        assert_eq!(app.inspection.selected, selected);
+        let request_id = *app.inspection.pending.keys().next().unwrap();
+        app.fail_inspection(request_id, "Temporary failure".into());
+        assert_eq!(
+            app.inspection
+                .failed_query
+                .as_ref()
+                .unwrap()
+                .search
+                .as_deref(),
+            Some("unsubmitted")
+        );
+        app.load_more_inspection_images();
+        assert!(
+            app.inspection.pending.is_empty(),
+            "failure requires an explicit retry"
+        );
+    }
+
+    #[test]
+    fn inspector_spinner_is_over_the_canvas_and_long_names_stay_within_tiles() {
+        let mut app = app();
+        let name = "A very long image filename which must remain within the thumbnail width.png";
+        app.inspection.page.as_mut().unwrap().items[0]
+            .image
+            .file_name = name.into();
+        app.work.tasks[0].name =
+            "A very long workflow name which must not push the count out of its panel".into();
+        app.inspection.preview_loaded = false;
+        // Hold image loading without a transport while inspecting the shared rendering.
+        let id = app.inspection.selected.as_ref().unwrap().image_id.clone();
+        app.inspection
+            .pending
+            .insert(999, InspectorAction::Image(id));
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run_steps(4);
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        let spinner = harness.get_by_label("Loading image").rect();
+        assert!(canvas.contains_rect(spinner));
+        assert!((canvas.center() - spinner.center()).length() < 1.0);
+        let preview = harness.get_by_label(&format!("Inspect {name}")).rect();
+        let filename = harness.get_by_label(name).rect();
+        assert!(filename.width() <= preview.width() + 1.0);
+        assert!(filename.right() <= preview.right() + 1.0);
+        assert!(harness.state().inspection.texture.is_some());
+        assert!(harness.query_by_label("Loading image…").is_none());
     }
 
     #[test]

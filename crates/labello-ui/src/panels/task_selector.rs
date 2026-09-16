@@ -193,7 +193,7 @@ impl LabelloApp {
 
 }
 
-fn paint_side_panel_toggle_icon(
+pub(crate) fn paint_side_panel_toggle_icon(
     ui: &egui::Ui,
     rect: egui::Rect,
     expanding: bool,

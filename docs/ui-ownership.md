@@ -553,8 +553,9 @@ below but are not yet integrated into this notice projection.
 
 ## Dataset inspector
 
-`dataset_inspector` owns gallery filters, page/scroll position, previews,
-read-only canvas, overlay visibility and the explicit return-to-review draft.
+`dataset_inspector` owns gallery filters, accumulated results and scroll position,
+previews, read-only canvas, overlay visibility and the explicit return-to-review
+draft.
 The Inspect destination is available to every dataset member. Its closed
 `Inspect`/`Inspected` commands use the existing request/auth/workspace ownership
 checks and structured session-recovery failures. Leaving the workspace clears
@@ -563,25 +564,32 @@ Browser workspace preferences restore the Inspect destination. Gallery filters
 and return drafts remain in memory; they are not restored after a page reload.
 Same-account session recovery retains the reason while cancelling obsolete reads.
 
-The second bar owns image identity, previous/next image navigation, Fit, refresh,
-and panel toggles. Wide layouts have collapsible Images and Overlays side panels;
+The second bar owns previous/next image navigation, Fit, refresh, and panel
+toggles using the same icons as Review. Image names appear beneath thumbnails.
+Wide layouts have collapsible Images and Overlays side panels;
 Medium and Compact use modal drawers with focus restoration. Filters and scroll
 position survive panel changes. The read-only canvas retains the available space.
 
-Gallery pages contain at most 24 items. Virtualized rows request visible cached
-Thumbnail v1 WebP proxies with at most two concurrent image reads and at most 24
-cached thumbnail textures. Opening an image immediately reuses its thumbnail;
+The wider Images panel has a three-column thumbnail grid with filenames bounded
+by each tile. Search and workflow/class/status filters stay above the grid.
+Scrolling near the bottom appends the next batch of up to 24 items; there are no
+page controls. A filter change resets results and rejects obsolete batch replies.
+Failed loads preserve displayed results and require an explicit retry.
+Virtualized rows request visible cached Thumbnail v1 WebP proxies with at most two concurrent image reads and at most 24
+cached thumbnail textures, evicting offscreen textures as the user scrolls.
+Opening an image immediately reuses its thumbnail beneath a centered spinner;
 authoritative state and the larger Data Saver preview load independently without
 claiming an assignment. An uncached selected image requests a thumbnail even if
 its navigation drawer is closed. Larger preview requests take priority over new
 background thumbnails, and stale replies cannot replace the selected image.
 Previous/next image navigation crosses page boundaries within the active filters.
 Canvas interaction permits pan/zoom, without annotation editing. Workflow, status,
-annotation-type and individual annotation visibility intersect. The overlay panel
-groups annotations by workflow with status and visible counts; skeleton edges
-come from each annotation's configured task.
+and annotation-type visibility intersect. The compact overlay panel has one
+visibility row per workflow with an annotation count and status tooltip; skeleton
+edges come from each annotation's configured task.
 
-Reviewer/data-admin return controls select workflows independently of overlays.
+Reviewer/data-admin return controls open from a secondary Return to review action
+and select workflows independently of overlays. Discard or success closes the form.
 A nonblank bounded reason is required; failures retain the draft and exact retry
 identity, and success is reported only after the server responds. Refresh reloads
 state and prepares a new request identity while retaining the reason. A pending
