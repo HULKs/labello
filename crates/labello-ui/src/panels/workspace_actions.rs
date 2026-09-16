@@ -54,7 +54,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        if !self.work_view() { return; }
+        if !self.work_view()
+            || self.loading.session || self.loading.dataset || self.loading.image
+            || self.work.current.is_none()
+            || (self.runtime.api.is_some() && self.work.assignment.is_none())
+        { return; }
         if self.view == AppView::Review {
             self.review_bottom_actions(ui);
         } else if self.manual_migration_active() {

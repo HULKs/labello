@@ -589,3 +589,36 @@ fn availability_completion_does_not_flash_red_context_outlines() {
         }
     }
 }
+
+#[test]
+fn workspace_actions_wait_for_loaded_work_without_annotation_fallback() {
+    use crate::inspector_presets::{build, InspectorPreset::*};
+    for preset in [Annotation, Review, MigrationObject, MigrationFullImage, MigrationReview] {
+        for width in [320.0, 768.0, 1440.0] {
+            let mut harness = Harness::builder().with_size(egui::vec2(width, 844.0))
+                .build_eframe(|ctx| build(preset, &ctx.egui_ctx));
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_some());
+            for phase in 0..3 {
+                harness.state_mut().loading.session = phase == 0;
+                harness.state_mut().loading.dataset = phase == 1;
+                harness.state_mut().loading.image = phase == 2;
+                harness.run_steps(4);
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                let buttons = harness.query_all_by_role(egui::accesskit::Role::Button)
+                    .filter(|button| button.rect().top() >= canvas.bottom()).count();
+                assert_eq!(buttons, 0, "{preset:?}, width={width}, phase={phase}");
+            }
+            harness.state_mut().loading.image = false;
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_some());
+            // Failed or empty loads must not fall back to annotation actions either.
+            harness.state_mut().work.current = None;
+            harness.state_mut().work.current_state = None;
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_none());
+            assert!(harness.query_by_label("Submit & next").is_none());
+            assert!(harness.query_by_label("More actions").is_none());
+        }
+    }
+}

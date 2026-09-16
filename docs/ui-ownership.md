@@ -442,6 +442,12 @@ The shared wrapped context row preserves its content container while availabilit
 starts and finishes, so removing the spinner does not change widget identities
 or trigger transient diagnostic outlines.
 
+The bottom action bar stays empty while session, dataset, or image loading is in
+progress, and until a current image and any required live assignment exist.
+Only the loaded workflow chooses its actions; unresolved migration state must
+not briefly show ordinary annotation commands. Background availability refresh
+does not hide actions for an already loaded image.
+
 The shared shell measures the compact action panel against its allocated bottom edge.
 When its height changes after a resize, it requests the next repaint to settle
 growing or shrinking content without waiting for pointer input. It compares the

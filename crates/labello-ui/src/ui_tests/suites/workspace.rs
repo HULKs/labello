@@ -107,7 +107,7 @@ fn image_load_failure_shows_retry_and_loads_image() {
             .query_by_label("Assignment image unavailable")
             .is_some()
     );
-    assert!(harness.query_by_label("Skip").is_some());
+    assert!(harness.query_by_label("Skip").is_none());
     assert!(
         harness
             .query_by_label_contains("Retry image load")
@@ -2888,12 +2888,9 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
         harness.state().work.current_texture.as_ref().unwrap().id(),
         current_texture
     );
-    assert!(
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Previous image")
-            .accesskit_node()
-            .is_disabled()
-    );
+    assert!(harness.query_by_role_and_label(
+        egui::accesskit::Role::Button, "Previous image"
+    ).is_none());
     for label in ["Approve", "Submit correction"] {
         let action = harness.query_by_role_and_label(egui::accesskit::Role::Button, label);
         assert!(
