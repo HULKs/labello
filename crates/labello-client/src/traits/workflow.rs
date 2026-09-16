@@ -75,6 +75,12 @@ pub trait ImageApi {
             ))
         })
     }
+    fn get_image_reasons<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+    ) -> ApiFuture<'a, Vec<labello_domain::WorkflowReason>>;
+
     fn get_image_state<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

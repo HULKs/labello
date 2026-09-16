@@ -281,6 +281,26 @@ pub(crate) async fn get_image_state(
     Ok(Json(repo.load_image_state(&image_id).await?))
 }
 
+pub(crate) async fn get_image_reasons(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+) -> ApiResult<Json<Vec<labello_domain::WorkflowReason>>> {
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_any_dataset_role(&metadata, &actor)?;
+    repo.load_image_record(&image_id).await?;
+    let events = repo.load_events(&image_id).await?;
+    let image_state = labello_domain::rebuild_state(image_id, &events)
+        .map_err(labello_storage::StorageError::from)?;
+    Ok(Json(labello_domain::workflow_reasons(
+        &image_state,
+        &events,
+    )))
+}
+
 pub(crate) async fn get_image_record(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,

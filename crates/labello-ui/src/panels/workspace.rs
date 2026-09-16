@@ -16,13 +16,6 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review => {}
         }
-        if self.review_revision_active() && !self.review_revision_in_compact_context(ui.ctx()) {
-            let explanation = "The previous outcome stays effective until you commit approval or submit corrections. Corrections return the image to a fresh review round.";
-            let caption = if Self::short_viewport(ui.ctx().content_rect().size()) {
-                "Decision revision; geometry unchanged."
-            } else { explanation };
-            ui.label(caption).on_hover_text(explanation);
-        }
         if self.workflow_change_needs_inline_slot(ui.ctx()) {
             let width = ui.available_width();
             let notice = egui::Frame::new()
@@ -50,21 +43,25 @@ impl LabelloApp {
     }
 
     fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        if self.work.automatic_workflow_change.as_ref().is_none_or(|notice| {
-            notice.presented_pass == Some(ctx.cumulative_pass_nr())
-        })
-        {
-            return;
-        }
+        self.clear_reason_notice_outside_scope();
+        let workflow_visible = self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
+            notice.presented_pass != Some(ctx.cumulative_pass_nr())
+        });
+        if !workflow_visible && !self.reason_notice_visible() { return; }
         let width = (canvas.width() - 16.0).clamp(200.0, 680.0);
         egui::Area::new(egui::Id::new("automatic-workflow-change"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
+            .constrain_to(canvas)
             .show(ctx, |ui| {
-                theme::card_frame()
-                    .inner_margin(egui::Margin::same(6))
-                    .stroke(egui::Stroke::new(2.0, theme::AMBER))
-                    .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+                ui.set_width(width);
+                if workflow_visible {
+                    theme::card_frame()
+                        .inner_margin(egui::Margin::same(6))
+                        .stroke(egui::Stroke::new(2.0, theme::AMBER))
+                        .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
+                }
+                self.reason_notice_contents(ui, width, canvas.height());
             });
     }
 

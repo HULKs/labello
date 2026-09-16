@@ -146,6 +146,17 @@ impl ImageApi for HttpLabelloApi {
         })
     }
 
+    fn get_image_reasons<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+    ) -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowReason>> {
+        Box::pin(async move {
+            Self::json(self.request(Method::GET,
+                &format!("/datasets/{dataset_id}/images/{image_id}/reasons"))?.send().await?).await
+        })
+    }
+
     fn get_image_state<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

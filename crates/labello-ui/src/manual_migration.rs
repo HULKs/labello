@@ -894,7 +894,7 @@ impl LabelloApp {
             )
             .wrap(),
         );
-        let reason_label = ui.label("Reason");
+        let reason_label = ui.label("Reason (required, this object)");
         let previous_reason = self.work.migration.exclusion_reason;
         egui::ComboBox::from_id_salt("migration-exclusion-reason")
             .width(ui.available_width().min(220.0))
@@ -3156,7 +3156,7 @@ fn disposition_intent(status: Option<&MigrationDispositionStatus>) -> theme::Int
     }
 }
 
-fn exclusion_label(reason: MigrationExclusionReason) -> &'static str {
+pub(crate) fn exclusion_label(reason: MigrationExclusionReason) -> &'static str {
     match reason {
         MigrationExclusionReason::NoValidSkeleton => "No valid skeleton can be created",
         MigrationExclusionReason::InsufficientVisibleFeatures => "Too little visible information",

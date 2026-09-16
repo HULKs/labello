@@ -95,13 +95,6 @@ impl ReviewBarText {
 }
 
 impl LabelloApp {
-    fn review_revision_in_compact_context(&self, ctx: &egui::Context) -> bool {
-        let viewport = ctx.content_rect().size();
-        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
-            && Self::short_viewport(viewport)
-            && self.review_context().is_some_and(|context| context.revision_mode)
-    }
-
     fn review_summary_width(&self, ctx: &egui::Context, layout: LayoutMode, available: f32) -> f32 {
         if layout == LayoutMode::Wide {
             available.min(380.0)

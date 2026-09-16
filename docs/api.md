@@ -505,3 +505,23 @@ cannot be introduced through current mutation endpoints.
 existing provenance and migration statistics. Each eligible image/task occupies
 one state count. The task table and summary use this same contract. Audit review
 records and contributor activity remain available through their existing APIs.
+
+### Saved workflow reasons
+
+`GET /datasets/{dataset_id}/images/{image_id}/reasons` requires a session and any
+role in that dataset, matching image-state access. It returns `WorkflowReason[]`
+projected from one authoritative event-log snapshot. Each entry identifies the
+image, event sequence/ID, actor, timestamp, action, optional workflow and object
+identities, optional text and structured exclusion category. `currentRound`,
+`superseded` and `currentExclusion` describe that snapshot's relevance. Historical
+entries remain ordered by source event, with copied exclusion sources and the
+legacy correction's identical review comment deduplicated. Blank text and known
+internal annotation markers are omitted. The route does not claim assignments,
+mutate history, or expose annotation geometry. Missing images return 404; role
+and authentication failures follow the normal image-route rules.
+
+The browser loads this resource under the assignment request's existing stale
+response gate. A failed request fails the image load and remains retryable; it
+does not masquerade as an empty reason history. No persisted event or state shape
+changes. Correction explanations for several objects use explicit object labels
+inside the existing optional submission reason and retain its 2000-byte limit.

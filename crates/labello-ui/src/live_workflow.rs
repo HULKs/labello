@@ -34,6 +34,7 @@ impl LabelloApp {
         self.work.assignment = None;
         self.work.current = None;
         self.work.current_state = None;
+        self.work.reason_notice = None;
         self.work.current_texture = None;
         self.work.annotations.clear();
         self.work.persisted_annotations.clear();
@@ -998,10 +999,11 @@ async fn load_image_data(
     prelabel_config_ids: Vec<PrelabelConfigId>,
     fetch_prelabels: bool,
 ) -> labello_client::ClientResult<LoadedImage> {
-    let (image, state, preview) = futures::try_join!(
+    let (image, state, preview, reasons) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
         load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id,),
+        api.get_image_reasons(&dataset_id, &assignment.image_id),
     )?;
     let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
         [preview.width as usize, preview.height as usize],
@@ -1024,6 +1026,7 @@ async fn load_image_data(
     }
     let annotations = state.active_annotations().cloned().collect();
     Ok(LoadedImage {
+        reasons,
         assignment,
         queued: QueuedImage { image, prelabels },
         annotations,

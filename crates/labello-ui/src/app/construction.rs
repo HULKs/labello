@@ -40,6 +40,7 @@ impl LabelloApp {
             tasks,
             selected_task_id: Some(TaskId::from("bounding_box:person")),
             automatic_workflow_change: None,
+            reason_notice: None,
             tool: Tool::BoundingBox,
             assignment: None,
             previous_assignment: None,

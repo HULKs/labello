@@ -86,3 +86,5 @@ include!("suites/review_context_bar.rs");
 include!("suites/workspace_overflow.rs");
 
 include!("suites/presence.rs");
+
+include!("suites/workflow_reasons.rs");

@@ -258,3 +258,8 @@ fallback in the shared work header. `presence` explicitly enables the sweep;
 `presence-reduced-motion` keeps the same content static. Other native presets
 and live mode default to static presence because the inspector has no operating
 system motion-preference adapter. Browser media-query behavior requires Chromium.
+
+The `workflow-reasons` preset shows two synthetic saved explanations alongside
+a workflow-change notice. Use it to inspect wrapping, scrolling, dismissal and
+the short-viewport details window; it does not prove history loading or browser
+behavior.

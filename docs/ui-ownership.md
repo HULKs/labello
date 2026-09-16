@@ -503,3 +503,46 @@ focus behavior. Ordinary boxes retain their existing annotation viewport behavio
 The domain companion derivation supplies the initial size described in
 [the API contract](api.md). Focus padding changes only the view;
 it does not write geometry, provenance, or review state.
+
+## Saved workflow reasons
+
+`workflow_reasons.rs` owns the image-scoped, dismissible reason notice in the
+shared annotation/review workspace. Assignment loading fetches the read-only
+reason projection alongside state and preview. The existing request, assignment
+and workspace gates apply to the entire load, including previous-assignment
+navigation, prefetch and reload. Failed loads use the existing retry path.
+Reasons never arrive through a separate unowned response.
+
+The notice identifies each source action, workflow, object where applicable,
+actor and timestamp. It retains historical explanations, labels current review
+rounds and active exclusions, and does not treat superseded decisions as current.
+It shares the floating notice area with workflow-change notices. Details scroll,
+long text wraps, and short viewports use a summary button that opens a bounded,
+non-modal details window. Dismissal
+lasts for the opened context; an accepted reload or reopening installs a new
+notice. Image, dataset, workflow and view changes invalidate the old context.
+Previous-review guidance uses this notice; it adds no standalone canvas caption.
+
+| Saved input | Display mapping |
+| --- | --- |
+| Annotation edit/deletion reason supplied through the API | Annotation edit/deletion with workflow and annotation identity; built-in machine markers are omitted |
+| Review comments, including historical/revised decisions | Review comment or Revised review comment, associated with its exact target; superseded decisions remain historical |
+| Legacy reviewer correction reason | Reviewer correction with its annotation; the transaction's identical review-comment copy is shown once |
+| Review correction submission reason | Reviewer correction for the submission; object explanations retain explicit object labels inside the text |
+| Migration exclusion category and note | Migration exclusion with workflow and object group; category and optional explanatory note remain distinct; replaced exclusions remain historical |
+| Imported-work reopening and coverage reasons | Imported work reopened or Imported coverage included with workflow identity |
+| Current browser annotation edits and unchanged review approvals | No reason entry; absent/blank comments and internal markers such as `annotator_edit` create no explanation |
+| Missing-object location evidence | Location evidence retains its existing presentation; it has no free-text reason field |
+
+Correction reason entry labels its scope as this object or whole submission.
+`ReviewCorrectionsDraft.object_reasons` retains input by annotation identity when
+moving between objects, participates in browser draft recovery, and clears with
+the corresponding reset/discard operation. Submission combines those explanations
+with object labels into the existing optional reason string. The existing
+2000 UTF-8 byte limit includes labels and separators; validation blocks excess
+input without truncation. Retry retains the same immutable submission. Migration
+exclusion categories remain required for the object, with a note required only
+for Other and optional otherwise.
+
+Dataset-inspector return-to-review reasons depend on issue #111 and are not yet
+integrated. This change does not implement that action or its persistence shape.

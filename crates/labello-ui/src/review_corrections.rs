@@ -19,11 +19,87 @@ pub(crate) struct ReviewCorrectionsDraft {
     pub(crate) position: Option<usize>,
     #[serde(default)]
     pub(crate) reason: String,
+    #[serde(default)]
+    pub(crate) object_reasons: std::collections::BTreeMap<AnnotationId, String>,
     pub(crate) editor: Option<AnnotationVersion>,
     pub(crate) submission: Option<ReviewCorrectionSubmission>,
 }
 
 impl LabelloApp {
+    fn retain_correction_reason(&mut self) -> bool {
+        if self.correction_reason_text().len() > 2_000 {
+            self.runtime.error = Some("Shorten correction reasons before continuing. The total limit is 2000 UTF-8 bytes.".into());
+            return false;
+        }
+        if let Some(draft) = &self.work.correction_draft {
+            if draft.reason.trim().is_empty() {
+                self.work
+                    .review_corrections
+                    .object_reasons
+                    .remove(&draft.annotation_id);
+            } else {
+                self.work
+                    .review_corrections
+                    .object_reasons
+                    .insert(draft.annotation_id.clone(), draft.reason.trim().to_owned());
+            }
+        }
+        true
+    }
+
+    fn remove_reason_for_change(&mut self, change: &ReviewCorrectionChange) {
+        match change {
+            ReviewCorrectionChange::Edit { annotation_id, .. }
+            | ReviewCorrectionChange::Add { annotation_id, .. }
+            | ReviewCorrectionChange::Remove { annotation_id, .. } => {
+                self.work
+                    .review_corrections
+                    .object_reasons
+                    .remove(annotation_id);
+            }
+            ReviewCorrectionChange::MigrationObject {
+                object_group_id, ..
+            } => {
+                if let Some(state) = &self.work.current_state {
+                    self.work.review_corrections.object_reasons.retain(|id, _| {
+                        let matches_annotation =
+                            state.current_annotation(id).is_some_and(|annotation| {
+                                annotation.object_group_id.as_ref() == Some(object_group_id)
+                            });
+                        let matches_reserved = state.migration_target_sets.values().any(|set| {
+                            set.targets.iter().any(|target| {
+                                &target.reserved_skeleton_annotation_id == id
+                                    && &target.object_group_id == object_group_id
+                            })
+                        });
+                        !matches_annotation && !matches_reserved
+                    });
+                }
+            }
+        }
+    }
+
+    pub(crate) fn correction_reason_text(&self) -> String {
+        let mut reasons = self.work.review_corrections.object_reasons.clone();
+        if let Some(draft) = &self.work.correction_draft {
+            if draft.reason.trim().is_empty() {
+                reasons.remove(&draft.annotation_id);
+            } else {
+                reasons.insert(draft.annotation_id.clone(), draft.reason.trim().to_owned());
+            }
+        }
+        let mut entries = Vec::new();
+        if !self.work.review_corrections.reason.trim().is_empty() {
+            entries.push(self.work.review_corrections.reason.trim().to_owned());
+        }
+        entries.extend(
+            reasons
+                .iter()
+                .map(|(id, text)| format!("Object {id}: {text}")),
+        );
+        entries.join("\n\n")
+    }
+
     pub(crate) fn has_review_corrections(&self) -> bool {
         !self.work.review_corrections.changes.is_empty() || self.review_editor_changed()
     }
@@ -33,6 +109,7 @@ impl LabelloApp {
             && self.all_review_items_decided()
             && self.has_review_corrections()
             && self.review_editor_valid()
+            && self.correction_reason_text().len() <= 2_000
     }
 
     pub(crate) fn begin_review_correction(&mut self, annotation: AnnotationVersion) {
@@ -72,7 +149,13 @@ impl LabelloApp {
             expected_version: annotation.version,
             original_geometry: annotation.geometry.clone(),
             edited_geometry: geometry,
-            reason: String::new(),
+            reason: self
+                .work
+                .review_corrections
+                .object_reasons
+                .get(&annotation.annotation_id)
+                .cloned()
+                .unwrap_or_default(),
             geometry_history: Vec::new(),
             selected_keypoint: (annotation.annotation_type == AnnotationType::Skeleton)
                 .then_some(0),
@@ -92,7 +175,15 @@ impl LabelloApp {
         if self.loading.saving || self.work.review_corrections.submission.is_some() {
             return;
         }
+        if self.correction_reason_text().len() > 2_000 {
+            self.runtime.error = Some("Correction reasons must fit within 2000 UTF-8 bytes in total. Shorten them before continuing.".into());
+            return;
+        }
         if editor.version > 0 && !draft.geometry_changed() {
+            self.work
+                .review_corrections
+                .object_reasons
+                .remove(&editor.annotation_id);
             let target = self.focused_review_target();
             if let Some(target) = target {
                 let changes = self
@@ -176,14 +267,23 @@ impl LabelloApp {
         } else {
             self.keep_review_change(change);
         }
-        if !draft.reason.trim().is_empty() {
-            self.work.review_corrections.reason = draft.reason.trim().to_owned();
+        if draft.reason.trim().is_empty() {
+            self.work
+                .review_corrections
+                .object_reasons
+                .remove(&editor.annotation_id);
+        } else {
+            self.work
+                .review_corrections
+                .object_reasons
+                .insert(editor.annotation_id.clone(), draft.reason.trim().to_owned());
         }
         self.discard_correction();
         self.runtime.error = None;
     }
 
     fn remove_staged_change(&mut self, change: &ReviewCorrectionChange) {
+        self.remove_reason_for_change(change);
         self.work
             .review_corrections
             .changes
@@ -242,6 +342,7 @@ impl LabelloApp {
         }) else {
             return false;
         };
+        let reason = self.correction_reason_text();
         let correction = self
             .work
             .review_corrections
@@ -251,8 +352,7 @@ impl LabelloApp {
                 round: captured.round.clone(),
                 target_fingerprint: captured.target_fingerprint.clone(),
                 changes: self.work.review_corrections.changes.clone(),
-                reason: (!self.work.review_corrections.reason.is_empty())
-                    .then(|| self.work.review_corrections.reason.clone()),
+                reason: (!reason.is_empty()).then_some(reason),
             })
             .clone();
         let operation_id = self.begin_operation();
@@ -301,6 +401,9 @@ impl LabelloApp {
             return;
         }
         if let Some(change) = self.migration_review_removal() {
+            if !self.retain_correction_reason() {
+                return;
+            }
             self.discard_correction();
             self.keep_review_change(change);
         }
@@ -342,6 +445,9 @@ impl LabelloApp {
                             .add_enabled(ready, egui::Button::new("Remove item"))
                             .clicked()
                     {
+                        if !self.retain_correction_reason() {
+                            return;
+                        }
                         self.discard_correction();
                         self.keep_review_change(ReviewCorrectionChange::Remove {
                             annotation_id,
@@ -420,6 +526,36 @@ impl LabelloApp {
         }
         if self.has_review_corrections() {
             ui.label("Corrections remain unsaved until you submit the review from the overview.");
+            if self.review_overview() {
+                let label = ui.label("Reason (optional, whole submission)");
+                let changed = ui
+                    .add_enabled_ui(ready, |ui| {
+                        crate::theme::resizable_multiline_text_edit(
+                            ui,
+                            ui.make_persistent_id("submission-reason"),
+                            &mut self.work.review_corrections.reason,
+                            2,
+                            Some("Context for the whole review"),
+                        )
+                        .labelled_by(label.id)
+                        .changed()
+                    })
+                    .inner;
+                if changed {
+                    self.work.assignment_touched = true;
+                }
+                let bytes = self.correction_reason_text().len();
+                ui.small(format!(
+                    "{bytes} of 2000 UTF-8 bytes across all correction reasons"
+                ));
+                if bytes > 2_000 {
+                    crate::theme::inline_message(
+                        ui,
+                        crate::theme::Intent::Error,
+                        "Shorten the submission or object reasons before submitting. The total limit is 2000 UTF-8 bytes.",
+                    );
+                }
+            }
         }
     }
 
@@ -430,6 +566,7 @@ impl LabelloApp {
         ready: bool,
     ) {
         ui.add_enabled_ui(ready, |ui| {
+            ui.label("Exclusion reason (required, this object)");
             ui.menu_button("Set exclusion", |ui| {
                 for (reason, label) in [
                     (
@@ -467,6 +604,9 @@ impl LabelloApp {
         group: labello_domain::ObjectGroupId,
         reason: MigrationExclusionReason,
     ) {
+        if !self.retain_correction_reason() {
+            return;
+        }
         self.discard_correction();
         let Some(task) = self.selected_task() else {
             return;

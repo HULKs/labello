@@ -203,9 +203,10 @@ impl LabelloApp {
         let mut annotation = editor.clone();
         annotation.version = annotation.version.max(1);
         annotation.geometry = draft.edited_geometry.clone();
-        annotation
-            .validate_for_task(task, image.image.dimensions())
-            .is_ok()
+        self.correction_reason_text().len() <= 2_000
+            && annotation
+                .validate_for_task(task, image.image.dimensions())
+                .is_ok()
             && (task.manual_box_guide_migration.is_none()
                 || match &annotation.geometry {
                     AnnotationGeometry::Skeleton(skeleton) => {
@@ -287,7 +288,24 @@ impl LabelloApp {
         {
             return;
         }
+        if let Some(editor) = &self.work.review_corrections.editor {
+            self.work
+                .review_corrections
+                .object_reasons
+                .remove(&editor.annotation_id);
+        }
         if let Some(target) = self.focused_review_target() {
+            let removed: Vec<_> = self
+                .work
+                .review_corrections
+                .changes
+                .iter()
+                .filter(|change| self.change_matches_target(change, &target))
+                .cloned()
+                .collect();
+            for change in &removed {
+                self.remove_reason_for_change(change);
+            }
             let retained = self
                 .work
                 .review_corrections
@@ -347,6 +365,7 @@ impl LabelloApp {
         }
         self.work.review_corrections.changes.clear();
         self.work.review_corrections.reason.clear();
+        self.work.review_corrections.object_reasons.clear();
         self.discard_correction();
         self.set_review_position(self.next_review_position());
         self.sync_review_editor();

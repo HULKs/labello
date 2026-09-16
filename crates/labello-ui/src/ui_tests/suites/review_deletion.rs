@@ -116,7 +116,7 @@ fn review_delete_respects_busy_states_dragging_and_text_focus() {
     harness
         .get_by_role_and_label(
             egui::accesskit::Role::MultilineTextInput,
-            "Reason (optional)",
+            "Reason (optional, this object)",
         )
         .focus();
     harness.step();

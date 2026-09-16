@@ -260,6 +260,12 @@ has been recorded.
   must not take width from the full type/phase line or add a context row.
   Short viewports retain identity and phase. Loading or missing targets replace
   the previous summary rather than pairing old identity with a new phase.
+- **Saved reasons:** share the persistent, dismissible notification area with
+  workflow-change notices. Keep source action, workflow, object and historical
+  relevance explicit. Wrap long explanations in scrolling details; at short
+  heights use a summary button and a bounded non-modal details window. Dismissal
+  applies to the opened image context. Object and submission reason inputs name
+  their scope, optional/required rule and total byte limit; failures retain input.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.

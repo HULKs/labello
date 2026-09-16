@@ -396,6 +396,7 @@ pub struct WorkState {
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,
     pub(crate) automatic_workflow_change: Option<AutomaticWorkflowChange>,
+    pub(crate) reason_notice: Option<crate::workflow_reasons::ReasonNotice>,
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
     pub(crate) previous_assignment: Option<Assignment>,

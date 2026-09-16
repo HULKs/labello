@@ -27,6 +27,11 @@ impl TaskApi for DemoLabelloApi {
 }
 
 impl ImageApi for DemoLabelloApi {
+    fn get_image_reasons<'a>(&'a self, _dataset_id: &'a DatasetId, _image_id: &'a ImageId)
+        -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowReason>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
     fn assignment_availability<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,
