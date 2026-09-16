@@ -307,6 +307,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn review_corrections_panel(&mut self, ui: &mut egui::Ui) {
+        let count = self.review_object_targets().len();
         if self.view != AppView::Review || self.work.assignment.is_none() {
             return;
         }
@@ -315,29 +316,6 @@ impl LabelloApp {
             && !self.work.migration.busy
             && self.work.pending_transition.is_none()
             && self.work.review_corrections.submission.is_none();
-        let position = self.review_position();
-        let count = self.review_object_targets().len();
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(ready && position > 0, egui::Button::new("Previous item"))
-                .clicked()
-            {
-                self.cycle_review_item(-1);
-            }
-            if ui
-                .add_enabled(
-                    ready && position < count,
-                    egui::Button::new(if position + 1 == count {
-                        "Overview"
-                    } else {
-                        "Next item"
-                    }),
-                )
-                .clicked()
-            {
-                self.cycle_review_item(1);
-            }
-        });
         if self.work.review_corrections.submission.is_some() {
             ui.label("Submission pending. Retry with the same corrections.");
         }

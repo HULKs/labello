@@ -6,9 +6,10 @@ impl LabelloApp {
         let compact = LayoutMode::for_width(ui.ctx().content_rect().width()) != LayoutMode::Wide;
         let secondary = |app: &mut Self, ui: &mut egui::Ui| {
             let removable = app.migration_review_removal().is_some();
-            let count = (if app.work.previous_assignment.is_some() { 3.0 } else { 2.0 })
+            let count = (if app.work.previous_assignment.is_some() { 4.0 } else { 3.0 })
                 + if removable { 1.0 } else { 0.0 };
             let width = compact.then(|| ((ui.available_width() - (count - 1.0) * ui.spacing().item_spacing.x) / count).floor().max(44.0));
+            app.review_object_navigation(ui, width);
             app.previous_review_action(ui, width);
             app.discard_review_action(ui, width);
             if removable && workspace_action_button(ui, ready && app.work.review_corrections.submission.is_none(), "Remove item", WorkspaceActionIcon::Remove, width, theme::Intent::Error).clicked() {
@@ -20,12 +21,17 @@ impl LabelloApp {
         };
         if compact {
             ui.vertical(|ui| {
-                ui.horizontal(|ui| self.review_decision_buttons(ui, false, true));
-                ui.horizontal(|ui| secondary(self, ui));
+                ui.horizontal(|ui| {
+                    let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
+                    ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center), |ui| self.review_decision_buttons(ui, false, true));
+                    self.review_next_object_action(ui, Some(44.0));
+                });
+                ui.horizontal_wrapped(|ui| secondary(self, ui));
             });
         } else {
             ui.horizontal_wrapped(|ui| {
                 self.review_decision_buttons(ui, false, false);
+                self.review_next_object_action(ui, None);
                 ui.separator();
                 secondary(self, ui);
             });
@@ -35,7 +41,7 @@ impl LabelloApp {
     fn previous_review_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
         if self.view == AppView::Review && self.work.previous_assignment.is_some()
             && workspace_action_button(ui, !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none(),
-                "Previous", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral).on_hover_text("Return to the immediately previous skipped or completed review.").clicked()
+                "Previous image", WorkspaceActionIcon::PreviousImage, width, theme::Intent::Neutral).on_hover_text("Return to the immediately previous eligible assignment.").clicked()
         {
             self.trigger_user_action(labello_domain::UserAction::PreviousImage);
         }
@@ -43,103 +49,83 @@ impl LabelloApp {
 
     fn discard_review_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
         let ready = self.has_review_corrections() && self.work.review_corrections.submission.is_none() && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none();
-        let label = if LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Wide { "Discard corrections" } else { "Discard" };
+        let label = "Discard changes";
         if workspace_action_button(ui, ready, label, WorkspaceActionIcon::Discard, width, theme::Intent::Neutral).clicked() { self.discard_all_review_corrections(); }
     }
 
-    pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, _layout: LayoutMode) {
-        if !self.work_view() {
-            return;
-        }
+    pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        if !self.work_view()
+            || self.loading.session || self.loading.dataset || self.loading.image
+            || self.work.current.is_none()
+            || (self.runtime.api.is_some() && self.work.assignment.is_none())
+        { return; }
         if self.view == AppView::Review {
             self.review_bottom_actions(ui);
-            return;
-        }
-        if self.manual_migration_active() {
-            self.migration_workspace_actions(ui, false);
-            return;
-        }
-        let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving
-            && !self.loading.image
-            && self.work.pending_transition.is_none();
-        let primary_width = ((ui.available_size_before_wrap().x - 44.0 - 3.0 * ui.spacing().item_spacing.x) / 3.0).floor().max(44.0);
-        if self.view == AppView::Annotate {
-            let show_previous = self.work.previous_assignment.is_some()
-                && !matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
-            if show_previous {
-                if workspace_toolbar_button(ui, self.runtime.api.is_some() && ready, "Previous", WorkspaceActionIcon::Previous, Some(primary_width), theme::Intent::Neutral)
-                    .on_hover_text("Return to the last skipped or submitted assignment.")
-                    .clicked()
-                {
-                    self.trigger_user_action(labello_domain::UserAction::PreviousImage);
-                }
-            } else if workspace_toolbar_button(ui, ready && matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry), "Save", WorkspaceActionIcon::Save, Some(primary_width), theme::Intent::Neutral)
-                .on_hover_text("Save edits and keep this assignment active.")
-                .clicked()
-            {
-                self.trigger_user_action(labello_domain::UserAction::SaveAnnotations);
-            }
-            if workspace_toolbar_button(ui, ready, "Submit & next", WorkspaceActionIcon::Next, Some(primary_width), theme::Intent::Accent)
-                .on_hover_text("Save, complete this assignment, and claim another.")
-                .clicked()
-            {
-                self.trigger_user_action(labello_domain::UserAction::NextImage);
-            }
-        }
-        if workspace_toolbar_button(ui, ready, "Skip", WorkspaceActionIcon::Skip, Some(primary_width), theme::Intent::Neutral)
-            .on_hover_text("Release this assignment and claim another.")
-            .clicked()
-        {
-            self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
-        }
-        if self.view == AppView::Annotate {
-            let actions = self.annotation_secondary_actions(ui.ctx(), ready, false);
-            self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
+        } else if self.manual_migration_active() {
+            self.migration_workspace_actions(ui, layout == LayoutMode::Compact);
+        } else {
+            self.annotation_bottom_actions(ui);
         }
     }
 
     pub(crate) fn compact_workspace_actions(&mut self, ui: &mut egui::Ui) {
-        if self.view == AppView::Review {
-            self.review_bottom_actions(ui);
-            return;
-        }
-        if self.manual_migration_active() {
-            ui.horizontal_wrapped(|ui| self.migration_workspace_actions(ui, true));
-            return;
-        }
-        let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
-        ui.horizontal_wrapped(|ui| {
-            let primary_width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
-            if self.view == AppView::Annotate
-                && workspace_toolbar_button(ui, ready, "Submit & next", WorkspaceActionIcon::Next, Some(primary_width), theme::Intent::Accent).clicked()
-            {
-                self.trigger_user_action(labello_domain::UserAction::NextImage);
-            }
-            let actions = if self.view == AppView::Annotate {
-                self.annotation_secondary_actions(ui.ctx(), ready, true)
-            } else {
-                vec![self.workspace_secondary_action(ui.ctx(), labello_domain::UserAction::SkipAssignment, "Skip", ready, "Release this assignment and claim another.")]
-            };
-            let label = if self.view == AppView::Annotate { "More actions" } else { "More" };
-            self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, label));
-        });
+        ui.horizontal_wrapped(|ui| self.workspace_actions(ui, LayoutMode::Compact));
     }
 
-    fn annotation_secondary_actions(&self, ctx: &egui::Context, ready: bool, compact: bool) -> Vec<WorkspaceAction> {
+    fn annotation_bottom_actions(&mut self, ui: &mut egui::Ui) {
         use labello_domain::UserAction;
-        let mut actions = Vec::new();
-        if compact || (self.work.previous_assignment.is_some() && matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)) {
-            actions.push(self.workspace_secondary_action(ctx, UserAction::PreviousImage, "Previous assignment", ready && (!compact || (self.work.previous_assignment.is_some() && self.runtime.api.is_some())), "Return to the last skipped or submitted assignment."));
+        let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
+            && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
+        let dirty = matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
+        let previous = self.work.previous_assignment.is_some();
+        let count = 4 + usize::from(previous);
+        let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
+            / count as f32).floor().max(44.0);
+        ui.push_id("annotation-primary-actions", |ui| {
+            for (action, label, icon, enabled, intent, help) in [
+                (UserAction::NextImage, "Submit & next", WorkspaceActionIcon::Next, ready, theme::Intent::Accent, "Save, complete this assignment, and claim another."),
+                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
+                (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && self.work.annotations.iter().any(|annotation| !annotation.deleted && self.annotation_matches_selected_workflow(annotation)), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
+                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save edits and keep this assignment active."),
+                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, ready, theme::Intent::Neutral, "Release this assignment and claim another."),
+            ] {
+                if action == UserAction::PreviousImage && !previous { continue; }
+                ui.push_id(action, |ui| {
+                    if workspace_toolbar_button(ui, enabled, label, icon, Some(width), intent)
+                        .on_hover_text(format!("{help} ({})", self.shortcut_text(ui.ctx(), action))).clicked() {
+                        self.trigger_user_action(action);
+                    }
+                });
+            }
+        });
+        let actions = [
+            self.workspace_secondary_action(ui.ctx(), UserAction::UndoEdit, "Undo", ready && !self.work.undo_stack.is_empty(), "Undo the last edit."),
+            self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
+        ];
+        self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
+    }
+
+    fn review_object_navigation(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
+        let ready = self.work.assignment.is_some() && !self.loading.saving && !self.loading.image
+            && !self.work.migration.busy && self.work.pending_transition.is_none()
+            && self.work.review_corrections.submission.is_none();
+        let position = self.review_position();
+        if workspace_toolbar_button(ui, ready && position > 0, "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
+            .on_hover_text("Return to the previous object in this image, retaining valid corrections. Stops at the first object.").clicked() {
+            self.cycle_review_item(-1);
         }
-        actions.push(self.workspace_secondary_action(ctx, UserAction::UndoEdit, "Undo", ready && !self.work.undo_stack.is_empty(), "Undo the last edit."));
-        actions.push(self.workspace_secondary_action(ctx, UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."));
-        if compact {
-            actions.push(self.workspace_secondary_action(ctx, UserAction::SaveAnnotations, "Save", ready && matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry), "Save edits and keep this assignment active."));
-            actions.push(self.workspace_secondary_action(ctx, UserAction::SkipAssignment, "Skip", ready, "Release this assignment and claim another."));
+    }
+
+    fn review_next_object_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
+        let position = self.review_position();
+        let count = self.review_object_targets().len();
+        let ready = self.work.assignment.is_some() && !self.loading.saving && !self.loading.image
+            && !self.work.migration.busy && self.work.pending_transition.is_none()
+            && self.work.review_corrections.submission.is_none() && position < count;
+        if workspace_toolbar_button(ui, ready, if position + 1 == count { "Overview" } else { "Next object" }, WorkspaceActionIcon::Next, width, theme::Intent::Neutral)
+            .on_hover_text("Continue within this image, retaining valid corrections, then show the full-image overview.").clicked() {
+            self.cycle_review_item(1);
         }
-        actions
     }
 
     fn drawer_panel_buttons(&mut self, ui: &mut egui::Ui, icon_only: bool) {
@@ -225,7 +211,7 @@ fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum WorkspaceActionIcon { Approve, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
+pub(crate) enum WorkspaceActionIcon { Approve, PreviousImage, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
 
 pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &str, icon: WorkspaceActionIcon, width: Option<f32>, intent: theme::Intent) -> egui::Response {
     let width = width.unwrap_or_else(|| text_button_width(ui, label).min(ui.available_size_before_wrap().x.max(44.0)));
@@ -249,6 +235,10 @@ fn paint_workspace_action_icon(ui: &egui::Ui, response: &egui::Response, icon: W
         match icon {
             WorkspaceActionIcon::Approve => { line(point(-8.0, 0.0), point(-2.0, 6.0)); line(point(-2.0, 6.0), point(9.0, -7.0)); }
             WorkspaceActionIcon::Previous | WorkspaceActionIcon::Undo => { line(point(8.0, 0.0), point(-8.0, 0.0)); line(point(-8.0, 0.0), point(-1.0, -7.0)); line(point(-8.0, 0.0), point(-1.0, 7.0)); }
+            WorkspaceActionIcon::PreviousImage => {
+                ui.painter().rect_stroke(egui::Rect::from_center_size(point(3.0, 0.0), egui::vec2(12.0, 18.0)), 1.0, stroke, egui::StrokeKind::Inside);
+                line(point(-2.0, 0.0), point(-11.0, 0.0)); line(point(-11.0, 0.0), point(-6.0, -5.0)); line(point(-11.0, 0.0), point(-6.0, 5.0));
+            }
             WorkspaceActionIcon::Discard => { ui.painter().circle_stroke(point(1.0, 1.0), 8.0, stroke); line(point(-9.0, -8.0), point(-9.0, -1.0)); line(point(-9.0, -1.0), point(-2.0, -1.0)); }
             WorkspaceActionIcon::Skip | WorkspaceActionIcon::Next | WorkspaceActionIcon::Redo => { line(point(-7.0, -7.0), point(4.0, 0.0)); line(point(4.0, 0.0), point(-7.0, 7.0)); line(point(8.0, -8.0), point(8.0, 8.0)); }
             WorkspaceActionIcon::Save => { ui.painter().rect_stroke(egui::Rect::from_center_size(center, egui::vec2(18.0, 18.0)), 1.0, stroke, egui::StrokeKind::Inside); line(point(-5.0, -8.0), point(-5.0, -1.0)); line(point(-5.0, -1.0), point(5.0, -1.0)); line(point(5.0, -1.0), point(5.0, -8.0)); }

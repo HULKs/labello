@@ -107,7 +107,7 @@ fn image_load_failure_shows_retry_and_loads_image() {
             .query_by_label("Assignment image unavailable")
             .is_some()
     );
-    assert!(harness.query_by_label("Skip").is_some());
+    assert!(harness.query_by_label("Skip").is_none());
     assert!(
         harness
             .query_by_label_contains("Retry image load")
@@ -1764,17 +1764,16 @@ fn previous_assignment_reopens_the_exact_skipped_image_from_compact_actions() {
             .is_some_and(|assignment| assignment.image_id != original.image_id)
             && app.work.previous_assignment.is_some()
     });
-    assert!(harness.query_by_label("Previous").is_some());
+    assert!(harness.query_by_label("Previous image").is_some());
 
     harness.set_size(egui::vec2(320.0, 568.0));
     harness.step();
-    click(&mut harness, "More actions");
     assert!(
         harness
-            .query_by_label_contains("Previous assignment")
+            .query_by_label_contains("Previous image")
             .is_some()
     );
-    click_accesskit_button(&mut harness, "Previous assignment");
+    click_accesskit_button(&mut harness, "Previous image");
     step_until(&mut harness, 20, |app| {
         app.work.assignment
             .as_ref()
@@ -1806,7 +1805,7 @@ fn previous_assignment_reopens_the_exact_submitted_image() {
             .is_some_and(|assignment| assignment.image_id != original.image_id)
             && app.work.previous_assignment.is_some()
     });
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     step_until(&mut harness, 20, |app| {
         app.work.assignment
             .as_ref()
@@ -2027,7 +2026,7 @@ fn annotator_and_reviewer_roles_are_independent_capabilities() {
     api.set_summary_roles(vec![DatasetRole::Annotator, DatasetRole::Reviewer]);
     let mut harness = loaded_work_harness(api);
 
-    harness.set_size(egui::vec2(600.0, 800.0));
+    harness.set_size(egui::vec2(390.0, 800.0));
     harness.step();
     click(&mut harness, "Open navigation");
     for label in ["Annotate", "Review", "Statistics"] {
@@ -2754,7 +2753,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
         harness.step();
         harness.step();
         let canvas = harness.get_by_label("Annotation canvas").rect();
-        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous");
+        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous image");
         assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
         assert!(previous.rect().top() >= canvas.bottom() && previous.rect().bottom() <= height,
             "Previous must remain in the footer at {width}x{height}: {:?}", previous.rect());
@@ -2765,7 +2764,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
     edit_test_review_box(harness.state_mut());
     harness.run_steps(4);
     let draft = harness.state().work.correction_draft.clone().unwrap();
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
@@ -2799,7 +2798,7 @@ fn previous_review_button_reopens_before_releasing_the_current_assignment() {
     let assignment_actions_before = api.assignment_actions().len();
     let previous_assignment_id = harness.state().work.previous_assignment.as_ref().unwrap().assignment_id.clone();
 
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     let assignment_actions = api.assignment_actions();
     let assignment_actions = &assignment_actions[assignment_actions_before..];
     assert_eq!(assignment_actions.first(), Some(&"reopen"));
@@ -2866,7 +2865,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     assert!(
         !scheduled.borrow().is_empty(),
         "Previous should have a delayed request"
@@ -2889,12 +2888,9 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
         harness.state().work.current_texture.as_ref().unwrap().id(),
         current_texture
     );
-    assert!(
-        harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Previous")
-            .accesskit_node()
-            .is_disabled()
-    );
+    assert!(harness.query_by_role_and_label(
+        egui::accesskit::Role::Button, "Previous image"
+    ).is_none());
     for label in ["Approve", "Submit correction"] {
         let action = harness.query_by_role_and_label(egui::accesskit::Role::Button, label);
         assert!(
@@ -3022,7 +3018,7 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     assert!(
         harness
             .query_by_label("Discard reviewer correction?")
@@ -3125,7 +3121,7 @@ fn delayed_previous_review_failure_preserves_current_canvas() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     harness.step();
     assert!(harness.state().loading.image);
     assert_eq!(
@@ -3201,7 +3197,7 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
     let released_before_previous = api.counts().release_assignment;
     api.fail_next_preview();
 
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Release and switch");
     step_until(&mut harness, 12, |app| !app.loading.saving && !app.loading.image);
@@ -3236,7 +3232,7 @@ fn failed_untouched_previous_request_renders_error_with_current_assignment() {
     });
     api.state.borrow_mut().reopenable_assignments.clear();
 
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     step_until(&mut harness, 12, |app| {
         !app.loading.image
             && app.runtime.error.as_deref().is_some_and(|error| {
@@ -3937,7 +3933,7 @@ fn review_correction_draft_counts_as_work_for_normal_and_previous_navigation() {
     previous.status = AssignmentStatus::Cancelled;
     harness.state_mut().work.previous_assignment = Some(previous);
     harness.step();
-    click(&mut harness, "Previous");
+    click(&mut harness, "Previous image");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     assert!(matches!(
         harness.state().work.pending_transition,

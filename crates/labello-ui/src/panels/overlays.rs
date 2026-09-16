@@ -14,11 +14,7 @@ impl LabelloApp {
         let screen = ctx.content_rect();
         let layout = LayoutMode::for_width(screen.width());
         let shell_height = 56.0 + self.workspace_context_height(ctx, layout, screen.size());
-        let action_height = if layout == LayoutMode::Wide {
-            0.0
-        } else {
-            self.workspace_actions_height(layout, screen.size())
-        };
+        let action_height = self.workspace_actions_height(layout, screen.size());
         let workspace = egui::Rect::from_min_max(
             egui::pos2(screen.left(), screen.top() + shell_height),
             egui::pos2(screen.right(), screen.bottom() - action_height),

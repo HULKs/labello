@@ -59,7 +59,7 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
         let bar = harness.get_by_label("Workspace context bar").rect();
         assert!(bar.contains_rect(rect));
         let canvas = harness.get_by_label("Annotation canvas").rect();
-        for label in ["Skip", if width >= 1100.0 { "Discard corrections" } else { "Discard" }] {
+        for label in ["Skip", "Discard changes"] {
             let action = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
             assert!(action.top() >= canvas.bottom(), "{label} must be below the canvas");
             assert!(action.bottom() <= height, "{label} must fit the viewport");
@@ -494,7 +494,7 @@ fn mobile_review_footer_stays_visible_across_review_kinds_and_phases() {
                 let canvas = harness.get_by_label("Annotation canvas").rect();
                 assert!(canvas.height() >= 44.0, "{preset:?} {width}x{height}: {canvas:?}");
                 let mut row_y: Option<f32> = None;
-                for label in ["Previous", "Discard", "Skip"] {
+                for label in ["Previous image", "Discard changes", "Skip"] {
                     let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
                     assert!(rect.top() >= canvas.bottom() && rect.bottom() <= height);
                     assert!(rect.left() >= 0.0 && rect.right() <= width);
@@ -524,7 +524,7 @@ fn mobile_review_icon_fallback_keeps_large_text_actions_in_their_rows() {
             harness.run_steps(2);
         }
         let primary = if corrected { "Submit correction" } else { "Approve" };
-        for label in [primary, "Previous", "Discard", "Skip", "Fit"] {
+        for label in [primary, "Previous image", "Discard changes", "Skip", "Fit"] {
             let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
             assert!(rect.left() >= 0.0 && rect.right() <= 390.0);
             assert!(rect.height() >= 44.0 && rect.height() < 60.0, "{label}: {rect:?}");

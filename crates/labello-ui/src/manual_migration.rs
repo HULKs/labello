@@ -826,47 +826,52 @@ impl LabelloApp {
         } else {
             ui.label("Review the saved skeleton against the read-only canonical guide.");
         }
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .add_enabled(
-                    self.can_edit_previous_migration_object(),
-                    egui::Button::new("Previous object").shortcut_text(
-                        crate::theme::button_shortcut(self.shortcut_text(
-                            ui.ctx(),
-                            labello_domain::UserAction::SelectPreviousObject,
+        if show_workspace_actions {
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        self.can_edit_previous_migration_object(),
+                        egui::Button::new("Previous object").shortcut_text(
+                            crate::theme::button_shortcut(self.shortcut_text(
+                                ui.ctx(),
+                                labello_domain::UserAction::SelectPreviousObject,
+                            )),
+                        ),
+                    )
+                    .clicked()
+                {
+                    self.edit_previous_migration_object();
+                }
+                let returns_to_current = self.inspection_next_returns_to_current();
+                if ui
+                    .add(
+                        egui::Button::new(if returns_to_current {
+                            "Return to current object"
+                        } else {
+                            "Next object"
+                        })
+                        .shortcut_text(crate::theme::button_shortcut(
+                            self.shortcut_text(
+                                ui.ctx(),
+                                labello_domain::UserAction::SelectNextObject,
+                            ),
                         )),
-                    ),
-                )
-                .clicked()
+                    )
+                    .clicked()
+                {
+                    self.inspect_migration_object(1);
+                }
+            });
+            if theme::primary_button(
+                ui,
+                !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
+                egui::Button::new("Edit this object"),
+            )
+            .on_hover_text("Make this resolved object the audited canonical correction target.")
+            .clicked()
             {
-                self.edit_previous_migration_object();
+                self.begin_revisit_migration_target(group_id);
             }
-            let returns_to_current = self.inspection_next_returns_to_current();
-            if ui
-                .add(
-                    egui::Button::new(if returns_to_current {
-                        "Return to current object"
-                    } else {
-                        "Next object"
-                    })
-                    .shortcut_text(crate::theme::button_shortcut(
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
-                    )),
-                )
-                .clicked()
-            {
-                self.inspect_migration_object(1);
-            }
-        });
-        if theme::primary_button(
-            ui,
-            !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
-            egui::Button::new("Edit this object"),
-        )
-        .on_hover_text("Make this resolved object the audited canonical correction target.")
-        .clicked()
-        {
-            self.begin_revisit_migration_target(group_id);
         }
         if show_workspace_actions {
             self.migration_assignment_section(ui);
@@ -1255,7 +1260,8 @@ impl LabelloApp {
                 !self.discovered_migration_skeletons().is_empty()
                     && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)),
             );
-        let count = (1 + extra_actions) as f32;
+        let count =
+            (3 + extra_actions + usize::from(self.work.previous_assignment.is_some())) as f32;
         let width = Some(
             ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
                 .floor()
@@ -1357,16 +1363,44 @@ impl LabelloApp {
                 }
             }
         }
-        let mut actions = Vec::new();
-        if self.can_edit_previous_migration_object() {
-            actions.push(self.workspace_secondary_action(
-                ui.ctx(),
-                labello_domain::UserAction::SelectPreviousObject,
-                "Previous object",
-                true,
-                "Return to the previous object.",
-            ));
+        let ready = self.work.assignment.is_some()
+            && !self.loading.saving
+            && !self.loading.image
+            && !self.work.migration.busy
+            && self.work.pending_transition.is_none();
+        if workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
+            "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
+            .on_hover_text("Edit the previous object in this image. Unsaved changes require confirmation. Stops at the first object.").clicked() {
+            self.trigger_user_action(labello_domain::UserAction::SelectPreviousObject);
         }
+        if self.work.previous_assignment.is_some()
+            && workspace_toolbar_button(
+                ui,
+                ready && self.runtime.api.is_some(),
+                "Previous image",
+                WorkspaceActionIcon::PreviousImage,
+                width,
+                theme::Intent::Neutral,
+            )
+            .on_hover_text("Return to the immediately previous eligible assignment.")
+            .clicked()
+        {
+            self.trigger_user_action(labello_domain::UserAction::PreviousImage);
+        }
+        if workspace_toolbar_button(
+            ui,
+            ready && self.runtime.api.is_some(),
+            "Skip",
+            WorkspaceActionIcon::Skip,
+            width,
+            theme::Intent::Neutral,
+        )
+        .on_hover_text("Release this assignment and claim another.")
+        .clicked()
+        {
+            self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
+        }
+        let mut actions = Vec::new();
         if self.work.migration.inspected_group_id.is_some() {
             actions.push(crate::panels::WorkspaceAction {
                 command: crate::panels::WorkspaceCommand::NextMigrationObject,
@@ -1382,28 +1416,6 @@ impl LabelloApp {
                 help: "Inspect the next object or return to the current object.",
             });
         }
-        let ready = self.work.assignment.is_some()
-            && self.runtime.api.is_some()
-            && !self.loading.saving
-            && !self.loading.image
-            && !self.work.migration.busy
-            && self.work.pending_transition.is_none();
-        if self.work.previous_assignment.is_some() {
-            actions.push(self.workspace_secondary_action(
-                ui.ctx(),
-                labello_domain::UserAction::PreviousImage,
-                "Previous assignment",
-                ready,
-                "Return to the previous assignment.",
-            ));
-        }
-        actions.push(self.workspace_secondary_action(
-            ui.ctx(),
-            labello_domain::UserAction::SkipAssignment,
-            "Skip",
-            ready,
-            "Release this assignment and claim another.",
-        ));
         self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
             ui, &actions, "More",
         ));
@@ -1544,36 +1556,25 @@ impl LabelloApp {
                 }
             }
             _ => {
-                ui.add_enabled_ui(!self.work.migration.busy, |ui| {
-                    egui::ComboBox::from_id_salt("migration-edit-added-object")
-                        .selected_text(if width.is_some_and(|width| width < 150.0) {
-                            "..."
-                        } else {
-                            "Edit added object"
-                        })
-                        .width(width.unwrap_or(150.0))
-                        .show_ui(ui, |ui| {
-                            for (index, skeleton) in skeletons.into_iter().enumerate() {
-                                if ui
-                                    .button(format!("Edit added object {}", index + 1))
-                                    .clicked()
-                                {
-                                    self.begin_edit_missing_migration_object(
-                                        skeleton.annotation_id,
-                                    );
-                                    ui.close();
-                                }
-                            }
-                        })
-                        .response
-                        .on_hover_text("Edit added object")
-                        .widget_info(|| {
-                            egui::WidgetInfo::labeled(
-                                egui::WidgetType::ComboBox,
-                                !self.work.migration.busy,
-                                "Edit added object",
-                            )
-                        });
+                let response = workspace_toolbar_button(
+                    ui,
+                    !self.work.migration.busy,
+                    "Edit added object",
+                    WorkspaceActionIcon::Save,
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text("Choose an added missing object to edit.");
+                egui::Popup::menu(&response).show(|ui| {
+                    for (index, skeleton) in skeletons.into_iter().enumerate() {
+                        if ui
+                            .button(format!("Edit added object {}", index + 1))
+                            .clicked()
+                        {
+                            self.begin_edit_missing_migration_object(skeleton.annotation_id);
+                            ui.close();
+                        }
+                    }
                 });
             }
         }
@@ -1649,7 +1650,7 @@ impl LabelloApp {
             && ui
                 .add_enabled(
                     ready,
-                    egui::Button::new("Previous assignment").shortcut_text(
+                    egui::Button::new("Previous image").shortcut_text(
                         crate::theme::button_shortcut(
                             self.shortcut_text(ui.ctx(), labello_domain::UserAction::PreviousImage),
                         ),

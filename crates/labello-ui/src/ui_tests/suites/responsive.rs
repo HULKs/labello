@@ -802,8 +802,8 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
                 .get_by_role_and_label(egui::accesskit::Role::Button, confirm)
                 .rect();
             assert!(
-                confirm_rect.left() <= 16.0 && confirm_rect.right() >= width - 16.0,
-                "confirmation must fill the bottom bar at {width}x{height}: {confirm_rect:?}",
+                confirm_rect.left() <= 16.0 && confirm_rect.right() >= width - 70.0,
+                "confirmation must fill the row beside object navigation at {width}x{height}: {confirm_rect:?}",
             );
             for label in ["Workflow", "Inspector"] {
                 let panel = if label == "Inspector" {

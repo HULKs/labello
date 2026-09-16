@@ -196,11 +196,11 @@ fn workspace_overflow_dynamic_save_previous_and_loading_keep_one_command_locatio
         harness.state_mut().work.last_edit_at = Some(Instant::now());
         harness.run_steps(3);
         let previous = harness
-            .query_all_by_label_contains("Previous")
+            .query_all_by_label_contains("Previous image")
             .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
             .count();
         assert_eq!(previous, 1);
-        assert_eq!(harness.query_by_label("Save").is_some(), dirty);
+        assert!(harness.query_by_label("Save").is_some());
         assert!(harness.query_by_label("More actions").is_none());
     }
     harness.state_mut().loading.saving = true;
@@ -277,10 +277,9 @@ fn migration_final_overflow_preserves_primary_confirmation_and_short_canvas() {
         egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0))
             .contains_rect(harness.get_by_label_contains("Confirm & finish").rect())
     );
-    assert!(harness.query_by_label_contains("Previous object").is_none());
-    harness.get_by_label("More").click();
-    harness.run_steps(3);
-    assert!(harness.query_by_label_contains("Previous object").is_some());
+    let previous = harness.get_by_label("Previous object").rect();
+    assert!(previous.top() >= canvas.bottom());
+    assert!(previous.width() >= 44.0 && previous.height() >= 44.0);
 }
 
 #[test]
@@ -476,4 +475,150 @@ fn workspace_idle_resize_does_not_repaint_forever_when_actions_cannot_fit() {
     harness.run();
     let confirm = harness.get_by_label_contains("Confirm & finish").rect();
     assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0)).contains_rect(confirm));
+}
+
+#[test]
+fn navigation_bars_keep_annotation_commands_below_canvas() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(600.0, 800.0), egui::vec2(320.0, 320.0)] {
+        harness.set_size(size);
+        harness.run_steps(4);
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        let submit = harness.get_by_label("Submit & next").rect();
+        assert!(submit.top() >= canvas.bottom(), "workflow action must be below canvas at {size:?}: {submit:?}, {canvas:?}");
+        let fit = harness.get_by_label("Fit").rect();
+        assert!(fit.bottom() <= canvas.top());
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn navigation_bars_cover_migration_variants_and_review_phases() {
+    use crate::inspector_presets::{build, InspectorPreset::*};
+    for preset in [Annotation, Review, ReviewCorrection, MigrationObject, MigrationSingleOptional,
+        MigrationExclusion, MigrationPass, MigrationFullImage, MigrationReview,
+        MigrationCompanionAnnotation, MigrationDiscovery, MigrationDiscoveryReview,
+        MigrationAnnotatedEdit, MigrationGuideDeleted] {
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|ctx| build(preset, &ctx.egui_ctx));
+        for size in [egui::vec2(1440.0, 1000.0), egui::vec2(1288.0, 820.0),
+            egui::vec2(600.0, 800.0), egui::vec2(390.0, 844.0), egui::vec2(320.0, 568.0),
+            egui::vec2(320.0, 320.0)] {
+            harness.set_size(size);
+            harness.run_steps(4);
+            let canvas = harness.get_by_label("Annotation canvas").rect();
+            let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+            assert!(canvas.height() >= 44.0, "{preset:?} {size:?}: {canvas:?}");
+            for label in ["Previous object", "Skip"] {
+                let matches = harness.query_all_by_role_and_label(egui::accesskit::Role::Button, label).collect::<Vec<_>>();
+                assert_eq!(matches.len(), 1, "{preset:?} {size:?}: {label}");
+                let rect = matches[0].rect();
+                assert!(rect.top() >= canvas.bottom() && viewport.contains_rect(rect), "{preset:?} {size:?}: {label} {rect:?}, {canvas:?}");
+                assert!(rect.width() >= 44.0 && rect.height() >= 44.0, "{label}: {rect:?}");
+            }
+            assert!(harness.get_by_label("Fit").rect().bottom() <= canvas.top());
+        }
+    }
+}
+
+#[test]
+fn navigation_bars_previous_object_uses_annotation_order_and_keeps_assignment() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+    }), true);
+    let mut harness = loaded_work_harness(api);
+    harness.set_size(egui::vec2(320.0, 568.0));
+    harness.run_steps(4);
+    let assignment = harness.state().work.assignment.clone();
+    let expected = harness.state().work.annotations.iter()
+        .filter(|annotation| !annotation.deleted && harness.state().annotation_matches_selected_workflow(annotation))
+        .map(|annotation| annotation.annotation_id.clone()).next_back();
+    assert!(expected.is_some());
+    harness.get_by_label("Previous object").focus();
+    harness.run_steps(2);
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(320.0, 568.0)] {
+        harness.set_size(size);
+        harness.run();
+        assert!(harness.get_by_label("Previous object").is_focused());
+        assert!(harness.state().work.selected_annotation.is_none());
+    }
+    harness.key_press(egui::Key::Enter);
+    harness.run_steps(3);
+    assert_eq!(harness.state().work.selected_annotation, expected);
+    assert_eq!(harness.state().work.assignment, assignment);
+}
+
+#[test]
+fn availability_completion_does_not_flash_red_context_outlines() {
+    for review in [false, true] {
+        for width in [320.0, 768.0, 1440.0] {
+            let api = Rc::new(SpyApi::new());
+            let mut harness = if review {
+                seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+                    x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+                }), true);
+                loaded_review_harness(api)
+            } else {
+                loaded_work_harness(api)
+            };
+            harness.set_size(egui::vec2(width, 1000.0));
+            harness.run_steps(4);
+            let fit_id = harness.get_by_label("Fit").accesskit_node().locate().0;
+            harness.get_by_label("Fit").focus();
+            harness.run_steps(2);
+            // Check each transition frame: settling first would miss the flash.
+            for loading in [true, false, true, false] {
+                harness.state_mut().work.availability.loading = loading;
+                harness.state_mut().work.availability.tasks.clear();
+                for _ in 0..3 {
+                    harness.step();
+                    let fit = harness.get_by_label("Fit");
+                    assert_eq!(fit.accesskit_node().locate().0, fit_id);
+                    assert!(fit.is_focused(), "availability must preserve keyboard focus");
+                    let bar = harness.get_by_label("Workspace context bar").rect();
+                    let red_outlines: Vec<_> = harness.output().shapes.iter().filter_map(|shape| {
+                        if let egui::Shape::Rect(rect) = &shape.shape
+                            && rect.stroke.color == egui::Color32::RED
+                            && bar.intersects(rect.rect)
+                        { Some(rect.rect) } else { None }
+                    }).collect();
+                    assert!(red_outlines.is_empty(), "availability transition flashed red outlines: review={review}, width={width}, loading={loading}: {red_outlines:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn workspace_actions_wait_for_loaded_work_without_annotation_fallback() {
+    use crate::inspector_presets::{build, InspectorPreset::*};
+    for preset in [Annotation, Review, MigrationObject, MigrationFullImage, MigrationReview] {
+        for width in [320.0, 768.0, 1440.0] {
+            let mut harness = Harness::builder().with_size(egui::vec2(width, 844.0))
+                .build_eframe(|ctx| build(preset, &ctx.egui_ctx));
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_some());
+            for phase in 0..3 {
+                harness.state_mut().loading.session = phase == 0;
+                harness.state_mut().loading.dataset = phase == 1;
+                harness.state_mut().loading.image = phase == 2;
+                harness.run_steps(4);
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                let buttons = harness.query_all_by_role(egui::accesskit::Role::Button)
+                    .filter(|button| button.rect().top() >= canvas.bottom()).count();
+                assert_eq!(buttons, 0, "{preset:?}, width={width}, phase={phase}");
+            }
+            harness.state_mut().loading.image = false;
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_some());
+            // Failed or empty loads must not fall back to annotation actions either.
+            harness.state_mut().work.current = None;
+            harness.state_mut().work.current_state = None;
+            harness.run_steps(4);
+            assert!(harness.query_by_label("Skip").is_none());
+            assert!(harness.query_by_label("Submit & next").is_none());
+            assert!(harness.query_by_label("More actions").is_none());
+        }
+    }
 }

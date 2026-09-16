@@ -61,11 +61,18 @@ clears account and dataset state before scheduling requests against the new API.
 
 Workspace rendering is grouped by the reason it changes:
 
-- `panels/app_bar.rs` and `panels/workspace_actions.rs`: global and workflow
-  actions;
+- `panels/app_bar.rs`: global navigation, utilities and account controls, with
+  measured label widths and icon fallback before the navigation drawer;
+- `panels/workspace_actions.rs`: persistent bottom workflow actions for all
+  layouts, including separate Previous image and Previous object commands;
+  review object navigation uses the existing correction-retaining navigation
+  owner, and migration dispatch retains its audited revisit commands;
 - `panels/task_selector.rs`: task selection;
 - `panels/inspector.rs`: annotation and review controls;
-- `panels/workspace.rs`: central workspace and canvas controls;
+- `panels/workspace.rs`: central workspace and the second bar's image context
+  and canvas controls. It does not render workflow commands;
+- `app/shell.rs`: reserves the bottom action panel at every workspace width and
+  settles measured height after resizing;
 - `statistics.rs`: the dataset statistics modal and its existing metric renderer;
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
@@ -431,6 +438,15 @@ Compact review availability uses a reserved slot in the identity line. Only that
 truncatable line gives up text width; type/phase and canvas allocation remain
 stable while loading. The shared spinner description retains its existing
 progress-indicator name and tooltip across workspace placements.
+The shared wrapped context row preserves its content container while availability
+starts and finishes, so removing the spinner does not change widget identities
+or trigger transient diagnostic outlines.
+
+The bottom action bar stays empty while session, dataset, or image loading is in
+progress, and until a current image and any required live assignment exist.
+Only the loaded workflow chooses its actions; unresolved migration state must
+not briefly show ordinary annotation commands. Background availability refresh
+does not hide actions for an already loaded image.
 
 The shared shell measures the compact action panel against its allocated bottom edge.
 When its height changes after a resize, it requests the next repaint to settle

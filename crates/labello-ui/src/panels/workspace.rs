@@ -349,10 +349,6 @@ impl LabelloApp {
                 if show_panel_buttons {
                     self.context_panel_buttons(ui);
                 }
-                if layout == LayoutMode::Wide && !self.manual_migration_active() {
-                    ui.separator();
-                    self.workspace_actions(ui, layout);
-                }
             })
         };
         response.response.widget_info(|| {
@@ -453,14 +449,14 @@ impl LabelloApp {
 }
 
 fn workspace_context_row(ui: &mut egui::Ui, availability: bool, contents: impl FnOnce(&mut egui::Ui)) -> egui::InnerResponse<()> {
-    if availability {
-        ui.horizontal(|ui| {
-            let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
-            ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), contents);
+    ui.horizontal(|ui| {
+        let spinner_width = if availability { 44.0 + ui.spacing().item_spacing.x } else { 0.0 };
+        let width = (ui.available_width() - spinner_width).max(44.0);
+        // Preserve the content's parent and automatic IDs when loading ends.
+        ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), contents);
+        if availability {
             let spinner = ui.spinner().on_hover_text("Checking assignment availability…");
             spinner.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, "Loading workflow assignment availability"));
-        })
-    } else {
-        ui.horizontal_wrapped(contents)
-    }
+        }
+    })
 }
