@@ -19,10 +19,10 @@ fn daily_flame_threshold_motion_and_header_fit() {
     harness.step();
     let identity = egui::Id::new(("daily-flame", &harness.state().config.dataset_id, &user,
         harness.state().auth_epoch, harness.state().workspace_epoch, today));
-    assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 labels today · Flame unlit").rect().height() >= 44.0);
+    assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 labels today · 0/30 reviews today · Flame unlit").rect().height() >= 44.0);
     harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 20;
     harness.step();
-    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 20/20 labels today · Flame lit").is_some());
+    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 20/20 labels today · 0/30 reviews today · Flame lit").is_some());
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
     for _ in 0..60 { harness.step(); }
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_none()));
@@ -39,6 +39,16 @@ fn daily_flame_threshold_motion_and_header_fit() {
         assert!(flame.top() >= 0.0 && flame.bottom() <= 56.0 && flame.left() >= 0.0 && flame.right() <= width, "flame outside header at {width}: {flame:?}");
         assert_visible_controls_clamped(&harness, width, height);
     }
+    crate::set_reduced_motion(&harness.ctx, false);
+    let day = &mut harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1];
+    day.labeled = 0;
+    day.reviewed = 29;
+    harness.step();
+    assert!(harness.query_by_label_contains("0/20 labels today · 29/30 reviews today · Flame unlit").is_some());
+    harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].reviewed = 30;
+    harness.step();
+    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 0/20 labels today · 30/30 reviews today · Flame lit").is_some());
+    assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
     harness.state_mut().datasets.stats_error = Some("Unavailable".into());
     harness.step();
     assert!(harness.query_by_label_contains("Last refresh failed; progress may be stale").is_some());

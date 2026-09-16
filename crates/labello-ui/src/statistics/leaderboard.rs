@@ -324,7 +324,7 @@ impl LeaderboardState {
             ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
             ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
             ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
-            ui.label("Streak: reach 20 labeled submissions per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
+            ui.label("Streak: reach 20 labeled submissions or 30 reviews per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
         });
         if self.history {
             let selected = self.selected.get_or_insert_with(|| {
@@ -1203,7 +1203,7 @@ mod tests {
                 },
                 streak: LabelStreak {
                     days,
-                    labeled_today: 0,
+                    ..Default::default()
                 },
             })
             .collect();
