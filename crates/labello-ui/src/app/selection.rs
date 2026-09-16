@@ -190,11 +190,16 @@ impl LabelloApp {
     }
 
     pub(crate) fn can_open_view(&self, view: AppView) -> bool {
+        if view == AppView::Inspect {
+            return self.datasets.summaries.iter().any(|summary| {
+                summary.dataset_id == self.config.dataset_id && !summary.roles.is_empty()
+            });
+        }
         let role = match view {
             AppView::Annotate => Some(DatasetRole::Annotator),
             AppView::Review => Some(DatasetRole::Reviewer),
             AppView::Admin => Some(DatasetRole::DataAdmin),
-            AppView::Setup | AppView::Stats => None,
+            AppView::Setup | AppView::Stats | AppView::Inspect => None,
         };
         role.is_none_or(|role| self.has_dataset_role(role))
     }
@@ -203,7 +208,7 @@ impl LabelloApp {
         match self.view {
             AppView::Annotate => Some(AssignmentKind::Annotation),
             AppView::Review => Some(AssignmentKind::Review),
-            AppView::Setup | AppView::Admin | AppView::Stats => None,
+            AppView::Setup | AppView::Admin | AppView::Stats | AppView::Inspect => None,
         }
     }
 

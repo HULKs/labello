@@ -90,6 +90,7 @@ pub(super) fn validate_payload(
         | EventPayload::AssignmentUpdated { .. } => {}
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
@@ -267,6 +268,7 @@ pub(super) fn required_role_for_payload(
         )),
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
@@ -327,6 +329,7 @@ pub(super) fn validate_annotation_assignment_payload(
         | EventPayload::AssignmentUpdated { .. }
         | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }
@@ -403,6 +406,7 @@ pub(super) fn validate_admin_repair_payload(
         )),
         EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
+        | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
         | EventPayload::ReviewRevisionCommitted { .. }
         | EventPayload::MissingObjectEvidenceRecorded { .. }

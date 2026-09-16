@@ -59,6 +59,14 @@ impl LabelloApp {
             processed += 1;
             let message = match message {
                 UiMessage::RequestFailed { request, error }
+                    if self.inspection_request_pending(request.request_id) =>
+                {
+                    UiMessage::Inspected {
+                        request,
+                        result: Err(error.into()),
+                    }
+                }
+                UiMessage::RequestFailed { request, error }
                     if self.runtime.presence.pending_request == Some(request.request_id) =>
                 {
                     UiMessage::PresenceLoaded {
@@ -250,6 +258,7 @@ fn view_label(view: AppView) -> &'static str {
         AppView::Review => "review",
         AppView::Admin => "administration",
         AppView::Stats => "statistics",
+        AppView::Inspect => "inspection",
     }
 }
 

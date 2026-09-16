@@ -157,6 +157,9 @@ impl LabelloApp {
         self.runtime.active_requests.remove(&request_id);
         self.import.active_operations.remove(&request_id);
         match command {
+            UiCommand::Inspect { request, .. } => {
+                self.fail_inspection(request.request_id, error.to_owned());
+            }
             UiCommand::Export { .. } => {
                 self.admin.export.request_failed(error.to_owned());
                 return;
@@ -408,6 +411,11 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
+        if self.auth.recovery.is_some() {
+            self.inspection.suspend_requests();
+        } else {
+            self.inspection = Default::default();
+        }
         self.navigation.statistics = Default::default();
         self.runtime.presence = Default::default();
         self.builds.copying = false;

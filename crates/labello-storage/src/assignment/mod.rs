@@ -11,6 +11,7 @@ use crate::{DatasetRepository, StorageError, StorageResult};
 use labello_domain::RevisionSource;
 
 mod claim;
+mod inspection;
 mod migration;
 pub(crate) mod presence;
 mod review;

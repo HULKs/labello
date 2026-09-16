@@ -5,6 +5,7 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+            UiMessage::Inspected { request, result } => self.accept_inspection(ctx, request, result),
             UiMessage::PresenceLoaded { request, result } => self.accept_presence(request, result),
             UiMessage::PresenceVisibilityRegained => self.request_presence(),
                 UiMessage::StatsLoaded { request, result } => {

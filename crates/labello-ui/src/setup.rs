@@ -499,6 +499,11 @@ impl LabelloApp {
                         self.open_dataset(dataset.dataset_id.clone(), AppView::Admin);
                     }
                     if !dataset.roles.is_empty()
+                        && dataset_action(ui, !self.loading.dataset, "Inspect", &dataset.name)
+                    {
+                        self.open_dataset(dataset.dataset_id.clone(), AppView::Inspect);
+                    }
+                    if !dataset.roles.is_empty()
                         && dataset_action(ui, !self.loading.dataset, "Stats", &dataset.name)
                     {
                         self.open_dataset(dataset.dataset_id.clone(), AppView::Stats);
@@ -600,10 +605,20 @@ impl LabelloApp {
                 destinations.push((view, label));
             }
         }
+        if self.datasets.metadata.is_some() && self.can_open_view(AppView::Inspect) {
+            destinations.push((AppView::Inspect, "Inspect"));
+        }
         destinations
     }
 
     pub(crate) fn open_view(&mut self, view: AppView) {
+        if self.view == AppView::Inspect && view != AppView::Inspect && self.inspection_has_reason()
+        {
+            self.runtime.error = Some(
+                "Finish the request or discard the return draft before leaving Inspect.".into(),
+            );
+            return;
+        }
         if view == AppView::Stats && self.datasets.metadata.is_some() {
             self.open_statistics();
             return;
@@ -640,6 +655,12 @@ impl LabelloApp {
     }
 
     pub(crate) fn open_dataset(&mut self, dataset_id: labello_domain::DatasetId, view: AppView) {
+        if self.view == AppView::Inspect && self.inspection_has_reason() {
+            self.runtime.error = Some(
+                "Finish the request or discard the return draft before switching datasets.".into(),
+            );
+            return;
+        }
         if self.has_missing_object_draft() {
             self.request_transition(PendingTransition::Dataset(dataset_id, view));
             return;

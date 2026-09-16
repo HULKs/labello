@@ -337,7 +337,7 @@ impl LabelloApp {
     }
 }
 
-fn parse_class_color(value: &str) -> Option<egui::Color32> {
+pub(crate) fn parse_class_color(value: &str) -> Option<egui::Color32> {
     let hex = value.strip_prefix('#')?;
     if hex.len() != 6 {
         return None;

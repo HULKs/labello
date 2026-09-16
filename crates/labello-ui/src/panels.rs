@@ -450,6 +450,7 @@ fn view_label(view: AppView) -> &'static str {
         AppView::Review => "Review",
         AppView::Admin => "Admin",
         AppView::Stats => "Stats",
+        AppView::Inspect => "Inspect",
     }
 }
 

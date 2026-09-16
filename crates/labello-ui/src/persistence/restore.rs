@@ -89,7 +89,7 @@ impl crate::app::LabelloApp {
             crate::app::AppView::Admin => summary
                 .roles
                 .contains(&labello_domain::DatasetRole::DataAdmin),
-            crate::app::AppView::Stats => !summary.roles.is_empty(),
+            crate::app::AppView::Inspect | crate::app::AppView::Stats => !summary.roles.is_empty(),
             crate::app::AppView::Setup => false,
         };
         if !authorized {

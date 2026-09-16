@@ -548,5 +548,32 @@ input without truncation. Retry retains the same immutable submission. Migration
 exclusion categories remain required for the object, with a note required only
 for Other and optional otherwise.
 
-Dataset-inspector return-to-review reasons depend on issue #111 and are not yet
-integrated. This change does not implement that action or its persistence shape.
+Dataset-inspector return-to-review reasons are persisted by the inspector action
+below but are not yet integrated into this notice projection.
+
+## Dataset inspector
+
+`dataset_inspector` owns gallery filters, page/scroll position, previews,
+read-only canvas, overlay visibility and the explicit return-to-review draft.
+The Inspect destination is available to every dataset member. Its closed
+`Inspect`/`Inspected` commands use the existing request/auth/workspace ownership
+checks and structured session-recovery failures. Leaving the workspace clears
+inspection data and cancels image transfers.
+Browser workspace preferences restore the Inspect destination. Gallery filters
+and return drafts remain in memory; they are not restored after a page reload.
+Same-account session recovery retains the reason while cancelling obsolete reads.
+
+Gallery pages contain at most 24 items. Virtualized rows request visible
+256-pixel previews with at most two concurrent image reads and at most 24 cached
+thumbnail textures. Image inspection loads authoritative state without claiming
+an assignment and uses the bounded Data Saver preview. Back to gallery retains
+the query and scroll position. Canvas interaction permits pan/zoom, without
+annotation editing. Workflow, status and annotation-type overlay filters
+intersect; skeleton edges come from each annotation's configured task.
+
+Reviewer/data-admin return controls select workflows independently of overlays.
+A nonblank bounded reason is required; failures retain the draft and exact retry
+identity, and success is reported only after the server responds. Refresh reloads
+state and prepares a new request identity while retaining the reason. A pending
+request or entered reason blocks navigation until it finishes or the user
+explicitly discards the draft. Return-to-review does not implement notifications.

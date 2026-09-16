@@ -156,6 +156,10 @@ pub fn router(state: ApiState) -> Router {
         )
         .route("/datasets/{dataset_id}/images", get(list_images))
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/return-to-review",
+            post(return_to_review),
+        )
+        .route(
             "/datasets/{dataset_id}/assignments/release",
             post(workflow::release_assignment),
         )
@@ -806,6 +810,26 @@ async fn download_snapshot_file(
     ))
 }
 
+async fn return_to_review(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, labello_domain::ImageId)>,
+    headers: HeaderMap,
+    Json(request): Json<labello_domain::ReturnToReviewRequest>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    request.validate().map_err(|_| {
+        ApiError::BadRequest(
+            "select workflows and enter a nonblank reason of at most 2000 bytes".into(),
+        )
+    })?;
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    Ok(Json(
+        repo.return_to_review(&actor.user_id, &image_id, request)
+            .await?,
+    ))
+}
+
 async fn list_images(
     State(state): State<ApiState>,
     Path(dataset_id): Path<DatasetId>,
@@ -815,7 +839,7 @@ async fn list_images(
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
     let metadata = repo.load_dataset_config().await?;
-    ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
+    ensure_any_dataset_role(&metadata, &actor)?;
     let index = repo.load_images_index().await?;
     let search = query
         .search

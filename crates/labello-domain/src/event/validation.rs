@@ -53,6 +53,7 @@ impl EventLogEntry {
 
     pub fn task_id(&self) -> Option<&TaskId> {
         match &self.payload {
+            EventPayload::WorkReturnedToReview { .. } => None,
             EventPayload::MigrationCompanionLinked { companion } => {
                 Some(&companion.migration_task_id)
             }

@@ -34,6 +34,7 @@ pub struct MigrationTargetSetInitialization {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
+    WorkReturnedToReview,
     MigrationCompanionLinked,
     AnnotationVersionCreated,
     AnnotationDeleted,
@@ -63,6 +64,7 @@ pub enum EventType {
 impl std::fmt::Display for EventType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::WorkReturnedToReview => "work_returned_to_review",
             Self::MigrationCompanionLinked => "migration_companion_linked",
             Self::AnnotationVersionCreated => "annotation_version_created",
             Self::AnnotationDeleted => "annotation_deleted",
@@ -93,6 +95,10 @@ impl std::fmt::Display for EventType {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EventPayload {
+    WorkReturnedToReview {
+        request: Box<crate::ReturnToReviewRequest>,
+        tasks: Vec<crate::TaskDefinition>,
+    },
     MigrationCompanionLinked {
         companion: crate::MigrationCompanion,
     },
@@ -199,6 +205,7 @@ pub enum EventPayload {
 impl EventPayload {
     pub fn event_type(&self) -> EventType {
         match self {
+            Self::WorkReturnedToReview { .. } => EventType::WorkReturnedToReview,
             Self::MigrationCompanionLinked { .. } => EventType::MigrationCompanionLinked,
             Self::AnnotationVersionCreated { .. } => EventType::AnnotationVersionCreated,
             Self::AnnotationDeleted { .. } => EventType::AnnotationDeleted,

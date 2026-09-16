@@ -21,6 +21,8 @@ use crate::app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupS
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorPreset {
+    DatasetGallery,
+    DatasetInspection,
     Annotation,
     Presence,
     PresenceReducedMotion,
@@ -79,7 +81,9 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 55] = [
+    pub const ALL: [Self; 57] = [
+        Self::DatasetGallery,
+        Self::DatasetInspection,
         Self::Annotation,
         Self::Presence,
         Self::PresenceReducedMotion,
@@ -139,6 +143,8 @@ impl InspectorPreset {
 
     pub const fn name(self) -> &'static str {
         match self {
+            Self::DatasetGallery => "dataset-gallery",
+            Self::DatasetInspection => "dataset-inspection",
             Self::Annotation => "annotation",
             Self::Presence => "presence",
             Self::PresenceReducedMotion => "presence-reduced-motion",
@@ -209,6 +215,11 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         | InspectorPreset::OverlayReview
         | InspectorPreset::OverlayCorrection
         | InspectorPreset::OverlayMigration => overlay_preset(ctx, preset),
+        InspectorPreset::DatasetGallery | InspectorPreset::DatasetInspection => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.prepare_inspection_preset(preset == InspectorPreset::DatasetInspection);
+            app
+        }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
         InspectorPreset::Presence | InspectorPreset::PresenceReducedMotion => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);

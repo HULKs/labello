@@ -195,7 +195,7 @@ not establish subagent-host MCP isolation or parallel live-server behavior.
 The default is the annotation preset. Use `-- --preset <name>` with Cargo or
 `--preset <name>` with the local headless launcher for another frozen state.
 
-Available presets are `annotation`, `presence`, `presence-reduced-motion`, `setup`, `about`, `build-mismatch`,
+Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-reduced-motion`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,

@@ -4604,3 +4604,268 @@ async fn review_policy_upgrade_preserves_a_fresh_correction_round() {
     assert_eq!(completed.task_states[&task].status, TaskStatus::Completed);
     assert_eq!(restarted.dataset_stats().await.unwrap().completed_tasks, 1);
 }
+
+#[tokio::test]
+async fn inspector_returns_completed_work_with_durable_retry_and_fresh_review_round() {
+    for annotation_type in [AnnotationType::BoundingBox, AnnotationType::Skeleton] {
+        let (temp, repo, image, task, annotator, reviewers) =
+            correction_repo(annotation_type, false).await;
+        let assignment = claim_review(&repo, &image, &task, &reviewers[0]).await;
+        let before = finalize_test_review(&repo, &assignment, ReviewDecision::Approved).await;
+        assert_eq!(before.task_states[&task].status, TaskStatus::Completed);
+        let request = labello_domain::ReturnToReviewRequest {
+            request_id: labello_domain::EventId::generate(),
+            expected_sequence: before.current_sequence,
+            task_ids: vec![task.clone()],
+            reason: "Inspect this again".into(),
+        };
+        assert!(matches!(
+            repo.return_to_review(&annotator, &image, request.clone())
+                .await,
+            Err(StorageError::Unauthorized(_))
+        ));
+        let mut stale = request.clone();
+        stale.expected_sequence -= 1;
+        assert!(matches!(
+            repo.return_to_review(&reviewers[0], &image, stale).await,
+            Err(StorageError::AssignmentConflict(_))
+        ));
+        let after = repo
+            .return_to_review(&reviewers[0], &image, request.clone())
+            .await
+            .unwrap();
+        assert_eq!(after.annotations, before.annotations);
+        assert_eq!(after.reviews, before.reviews);
+        assert_eq!(after.task_states[&task].status, TaskStatus::Submitted);
+        assert!(after.task_states[&task].outcome.is_none());
+        assert_ne!(after.review_round(&task), before.review_round(&task));
+        assert_eq!(after.effective_reviews_for_task(&task).count(), 0);
+        let events = repo.load_events(&image).await.unwrap();
+        assert_eq!(events.last().unwrap().actor_user_id, reviewers[0]);
+        assert!(
+            matches!(&events.last().unwrap().payload, EventPayload::WorkReturnedToReview { request: saved, .. } if **saved == request)
+        );
+        for end in 0..=events.len() {
+            labello_domain::rebuild_state(image.clone(), &events[..end]).unwrap();
+        }
+        let encoded = serde_json::to_vec(events.last().unwrap()).unwrap();
+        let decoded: EventLogEntry = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(&decoded, events.last().unwrap());
+        let mut legacy = decoded;
+        legacy.schema_version = 2;
+        assert!(serde_json::to_vec(&legacy).is_err());
+        let restarted = DatasetRepository::new(temp.path());
+        assert_eq!(
+            restarted
+                .return_to_review(&reviewers[0], &image, request.clone())
+                .await
+                .unwrap(),
+            after
+        );
+        assert_eq!(restarted.load_events(&image).await.unwrap(), events);
+        let mut reused = request.clone();
+        reused.reason = "Different request".into();
+        assert!(matches!(
+            restarted
+                .return_to_review(&reviewers[0], &image, reused)
+                .await,
+            Err(StorageError::AssignmentConflict(_))
+        ));
+        let fresh = claim_review(&restarted, &image, &task, &reviewers[0]).await;
+        assert_ne!(fresh.assignment_id, assignment.assignment_id);
+        let state = restarted.load_image_state(&image).await.unwrap();
+        let context = &state.review_assignment_contexts[&fresh.assignment_id];
+        assert!(!context.decision_revision);
+        assert!(context.superseded_review_ids.is_empty());
+        assert_eq!(
+            finalize_test_review(&restarted, &fresh, ReviewDecision::Approved)
+                .await
+                .task_states[&task]
+                .status,
+            TaskStatus::Completed
+        );
+        // Exact retries remain idempotent even after downstream work.
+        let count = restarted.load_events(&image).await.unwrap().len();
+        restarted
+            .return_to_review(&reviewers[0], &image, request)
+            .await
+            .unwrap();
+        assert_eq!(restarted.load_events(&image).await.unwrap().len(), count);
+    }
+}
+
+#[tokio::test]
+async fn inspector_rejects_active_revision_invalid_selection_and_ineligible_work_atomically() {
+    let (_temp, repo, image, task, _, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let assignment = claim_review(&repo, &image, &task, &reviewers[0]).await;
+    finalize_test_review(&repo, &assignment, ReviewDecision::Approved).await;
+    let lease = repo
+        .reopen_review_assignment(&reviewers[0], &assignment.assignment_id, &image, &task)
+        .await
+        .unwrap();
+    let state = repo.load_image_state(&image).await.unwrap();
+    let request = labello_domain::ReturnToReviewRequest {
+        request_id: labello_domain::EventId::generate(),
+        expected_sequence: state.current_sequence,
+        task_ids: vec![task.clone()],
+        reason: "Check".into(),
+    };
+    assert!(matches!(
+        repo.return_to_review(&reviewers[1], &image, request.clone())
+            .await,
+        Err(StorageError::AssignmentConflict(_))
+    ));
+    assert_eq!(repo.load_image_state(&image).await.unwrap(), state);
+    repo.release_assignment(
+        &reviewers[0],
+        &lease.assignment_id,
+        &image,
+        &task,
+        AssignmentKind::Review,
+    )
+    .await
+    .unwrap();
+    let state = repo.load_image_state(&image).await.unwrap();
+    for reason in [" ".to_string(), "a".repeat(2001)] {
+        let mut invalid = request.clone();
+        invalid.reason = reason;
+        assert!(
+            repo.return_to_review(&reviewers[1], &image, invalid)
+                .await
+                .is_err()
+        );
+    }
+    for ids in [
+        vec![],
+        vec![task.clone(), task.clone()],
+        vec![task.clone(), TaskId::from("missing")],
+    ] {
+        let mut invalid = request.clone();
+        invalid.task_ids = ids;
+        invalid.expected_sequence = state.current_sequence;
+        assert!(
+            repo.return_to_review(&reviewers[1], &image, invalid)
+                .await
+                .is_err()
+        );
+        assert_eq!(repo.load_image_state(&image).await.unwrap(), state);
+    }
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata.tasks[0].enabled = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    let mut disabled = request;
+    disabled.expected_sequence = state.current_sequence;
+    assert!(
+        repo.return_to_review(&reviewers[1], &image, disabled)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&image).await.unwrap(), state);
+}
+
+#[tokio::test]
+async fn inspector_multi_workflow_return_recovers_committed_event_after_cache_failure() {
+    let (temp, repo, image, task, annotator, reviewers) =
+        correction_repo(AnnotationType::BoundingBox, false).await;
+    let assignment = claim_review(&repo, &image, &task, &reviewers[0]).await;
+    finalize_test_review(&repo, &assignment, ReviewDecision::Approved).await;
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    let mut second = metadata.tasks[0].clone();
+    second.task_id = TaskId::from("another:person");
+    let second_id = second.task_id.clone();
+    metadata.tasks.push(second);
+    repo.save_dataset(&metadata).await.unwrap();
+    let actor = Actor {
+        user_id: reviewers[0].clone(),
+        role: DatasetRole::Reviewer,
+    };
+    let mut task_state = repo.load_image_state(&image).await.unwrap().task_states[&task].clone();
+    task_state.task_id = second_id.clone();
+    task_state.status = TaskStatus::Pending;
+    repo.append_payload(
+        &image,
+        &actor,
+        EventPayload::TaskStateChanged {
+            task_state: task_state.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let before = repo.load_image_state(&image).await.unwrap();
+    let mut request = labello_domain::ReturnToReviewRequest {
+        request_id: labello_domain::EventId::generate(),
+        expected_sequence: before.current_sequence,
+        task_ids: vec![task.clone(), second_id.clone()],
+        reason: "Inspect both workflows".into(),
+    };
+    assert!(
+        repo.return_to_review(&reviewers[0], &image, request.clone())
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&image).await.unwrap(), before);
+    task_state.status = TaskStatus::Completed;
+    repo.append_payload(
+        &image,
+        &actor,
+        EventPayload::TaskStateChanged { task_state },
+    )
+    .await
+    .unwrap();
+    request.expected_sequence += 1;
+    repo.fail_next_state_cache_write_after_completion();
+    assert!(
+        repo.return_to_review(&reviewers[0], &image, request.clone())
+            .await
+            .is_err()
+    );
+    let restarted = DatasetRepository::new(temp.path());
+    let recovered = restarted
+        .return_to_review(&reviewers[0], &image, request.clone())
+        .await
+        .unwrap();
+    assert_eq!(recovered.current_sequence, request.expected_sequence + 1);
+    for id in [&task, &second_id] {
+        assert_eq!(recovered.task_states[id].status, TaskStatus::Submitted);
+    }
+    assert_eq!(recovered.annotations, before.annotations);
+    let events = restarted.load_events(&image).await.unwrap();
+    assert_eq!(
+        labello_domain::rebuild_state(image.clone(), &events).unwrap(),
+        recovered
+    );
+    let mut tampered = events.last().unwrap().clone();
+    tampered.actor_role = DatasetRole::Annotator;
+    let mut prior =
+        labello_domain::rebuild_state(image.clone(), &events[..events.len() - 1]).unwrap();
+    let preserved = prior.clone();
+    assert!(prior.apply_event(&tampered).is_err());
+    assert_eq!(prior, preserved);
+    let bundle = restarted
+        .create_offline_bundle(&annotator, 10, false)
+        .await
+        .unwrap();
+    let restored: labello_domain::OfflineBundle =
+        serde_json::from_slice(&serde_json::to_vec(&bundle).unwrap()).unwrap();
+    assert_eq!(restored.images[0].state, recovered);
+    let snapshot = restarted.create_snapshot().await.unwrap();
+    let file = snapshot
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("/events.jsonl"))
+        .unwrap();
+    let saved = tokio::fs::read_to_string(
+        restarted
+            .snapshots_dir()
+            .join(snapshot.snapshot_id)
+            .join(&file.path),
+    )
+    .await
+    .unwrap();
+    let saved_events: Vec<EventLogEntry> = saved
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(saved_events, events);
+}

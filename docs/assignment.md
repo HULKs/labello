@@ -215,3 +215,23 @@ Awaiting review, Needs correction, and Completed. Approved and reviewer-correcte
 completed tasks both count as Completed. Enabled-task eligibility and excluded
 import coverage retain the completion-denominator rules above. Review decisions
 remain in audit history and contributor activity.
+
+## Return completed work from the inspector
+
+Any dataset member may inspect indexed images without claiming an assignment.
+Reviewers and dataset administrators may explicitly select completed workflows
+and return them to review with a required reason. This action is independent of
+Previous assignment and does not revise or supersede old decisions.
+
+Only enabled approval workflows without a live assignment are eligible. The
+server checks the exact image sequence and all selected workflows together under
+the image lock, after acquiring the configuration read guard. A conflict changes
+nothing. Successful return creates a new submission round, clears the selected
+task outcomes, preserves geometry and audit history, and invalidates completion,
+availability and statistics projections through the existing transaction.
+
+Normal review claims can then select this work, including for the previous
+reviewer. Every current object and the full-image target require fresh decisions.
+Migration work retains its current confirmation and must pass the existing
+migration terminal-state checks. Tasks without approval review and unfinished,
+disabled or actively assigned work cannot be returned through this action.
