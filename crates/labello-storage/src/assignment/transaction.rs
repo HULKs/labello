@@ -55,7 +55,8 @@ impl DatasetRepository {
         if payloads.iter().any(|payload| {
             matches!(
                 payload,
-                EventPayload::ReviewAssignmentOpened { .. }
+                EventPayload::WorkReturnedToReview { .. }
+                    | EventPayload::ReviewAssignmentOpened { .. }
                     | EventPayload::MissingObjectEvidenceRecorded { .. }
             )
         }) {

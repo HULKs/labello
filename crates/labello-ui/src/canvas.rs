@@ -444,6 +444,7 @@ mod tests {
                     theme::SELECTION,
                     &Default::default(),
                     1.0,
+                    &Default::default(),
                 );
             });
             assert!(output.shapes.iter().any(|shape| {
@@ -514,6 +515,7 @@ mod tests {
                         theme::ANNOTATION,
                         &Default::default(),
                         1.0,
+                        &Default::default(),
                     );
                 });
                 let circles = output

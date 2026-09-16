@@ -156,6 +156,10 @@ pub fn router(state: ApiState) -> Router {
         )
         .route("/datasets/{dataset_id}/images", get(list_images))
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/return-to-review",
+            post(return_to_review),
+        )
+        .route(
             "/datasets/{dataset_id}/assignments/release",
             post(workflow::release_assignment),
         )
@@ -806,6 +810,26 @@ async fn download_snapshot_file(
     ))
 }
 
+async fn return_to_review(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, labello_domain::ImageId)>,
+    headers: HeaderMap,
+    Json(request): Json<labello_domain::ReturnToReviewRequest>,
+) -> ApiResult<Json<labello_domain::ImageState>> {
+    request.validate().map_err(|_| {
+        ApiError::BadRequest(
+            "select workflows and enter a nonblank reason of at most 2000 bytes".into(),
+        )
+    })?;
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    Ok(Json(
+        repo.return_to_review(&actor.user_id, &image_id, request)
+            .await?,
+    ))
+}
+
 async fn list_images(
     State(state): State<ApiState>,
     Path(dataset_id): Path<DatasetId>,
@@ -815,7 +839,7 @@ async fn list_images(
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
     let metadata = repo.load_dataset_config().await?;
-    ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
+    ensure_any_dataset_role(&metadata, &actor)?;
     let index = repo.load_images_index().await?;
     let search = query
         .search
@@ -823,14 +847,35 @@ async fn list_images(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_lowercase);
+    let mut images: Vec<_> = index
+        .images_by_hash
+        .into_values()
+        .filter(|image| {
+            search.as_ref().is_none_or(|search| {
+                image.file_name.to_lowercase().contains(search)
+                    || image.canonical_path.to_lowercase().contains(search)
+            })
+        })
+        .collect();
+    images.sort_by(|a, b| {
+        a.canonical_path
+            .cmp(&b.canonical_path)
+            .then_with(|| a.image_id.cmp(&b.image_id))
+    });
+    let page = query.page.max(1);
+    let page_size = query.page_size.clamp(1, 100);
+    let unfiltered = query.status.is_none() && query.task_id.is_none() && query.class_id.is_none();
+    let indexed_total = images.len();
+    if unfiltered {
+        // Page membership depends only on indexed identity; replay only this page.
+        images = images
+            .into_iter()
+            .skip(page.saturating_sub(1).saturating_mul(page_size))
+            .take(page_size)
+            .collect();
+    }
     let mut items = Vec::new();
-    for image in index.images_by_hash.into_values() {
-        if search.as_ref().is_some_and(|search| {
-            !image.file_name.to_lowercase().contains(search)
-                && !image.canonical_path.to_lowercase().contains(search)
-        }) {
-            continue;
-        }
+    for image in images {
         let state = repo.load_image_state(&image.image_id).await?;
         let mut task_statuses = metadata
             .tasks
@@ -886,9 +931,11 @@ async fn list_images(
             .cmp(&right.image.canonical_path)
             .then_with(|| left.image.image_id.cmp(&right.image.image_id))
     });
-    let total_items = items.len();
-    let page = query.page.max(1);
-    let page_size = query.page_size.clamp(1, 100);
+    let total_items = if unfiltered {
+        indexed_total
+    } else {
+        items.len()
+    };
     let total_pages = total_items.div_ceil(page_size);
     let start = page
         .saturating_sub(1)
@@ -896,7 +943,11 @@ async fn list_images(
         .min(total_items);
     let end = start.saturating_add(page_size).min(total_items);
     Ok(Json(ImageExplorerPage {
-        items: items[start..end].to_vec(),
+        items: if unfiltered {
+            items
+        } else {
+            items[start..end].to_vec()
+        },
         page,
         page_size,
         total_items,

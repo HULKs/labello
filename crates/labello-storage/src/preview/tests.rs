@@ -519,3 +519,32 @@ async fn original_detail_keeps_source_bytes_and_reuses_all_source_and_worker_bou
         );
     }
 }
+
+#[tokio::test]
+async fn thumbnail_proxy_is_bounded_and_reused_after_restart() {
+    let fixture = Fixture::new(1024, 768, PreviewConfig::default());
+    let first = fixture.get(PreviewProfile::ThumbnailV1).await.unwrap();
+    assert_eq!((first.width, first.height), (256, 192));
+    assert_eq!((first.original_width, first.original_height), (1024, 768));
+    let pixels =
+        image::load_from_memory_with_format(&first.webp, image::ImageFormat::WebP).unwrap();
+    assert_eq!((pixels.width(), pixels.height()), (256, 192));
+    assert!(first.webp.len() < 256 * 192 * 4);
+    assert_eq!(
+        fixture.get(PreviewProfile::ThumbnailV1).await.unwrap().webp,
+        first.webp
+    );
+    assert_eq!(fixture.generations(), 1);
+    let root = fixture.cache.inner.root.clone();
+    drop(fixture.cache);
+    let cache = PreviewCache::new(root, PreviewConfig::default()).unwrap();
+    assert_eq!(
+        cache
+            .get(&fixture.repo, &fixture.record, PreviewProfile::ThumbnailV1)
+            .await
+            .unwrap()
+            .webp,
+        first.webp
+    );
+    assert_eq!(cache.inner.generations.load(Ordering::SeqCst), 0);
+}

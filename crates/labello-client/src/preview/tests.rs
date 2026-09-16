@@ -95,3 +95,13 @@ fn original_detail_decoder_preserves_pixels_and_rejects_mismatched_or_oversized_
     invalid.media_type = "image/png".into();
     assert!(invalid.decode_original_detail(1, 1).is_err());
 }
+
+#[test]
+fn thumbnail_decoder_enforces_its_own_profile_bound() {
+    let mut preview = valid();
+    preview.profile = ImagePreviewProfile::ThumbnailV1;
+    assert!(preview.decode().is_ok());
+    preview.width = 257;
+    preview.original_width = 257;
+    assert!(preview.decode().is_err());
+}

@@ -35,6 +35,11 @@ Labello currently supports:
 The project is under active development. See [Current limitations](#current-limitations)
 before using it in production.
 
+All dataset members can use the dataset inspector to browse indexed images,
+filter the gallery, and inspect bounding-box and skeleton overlays. Reviewers
+and dataset administrators can return selected completed workflows to a fresh
+review round with an audited reason.
+
 ## Quick Start
 
 ### Prerequisites

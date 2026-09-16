@@ -17,6 +17,9 @@ impl ImageState {
         }
         event.validate_shape()?;
         match &event.payload {
+            EventPayload::WorkReturnedToReview { request, tasks } => {
+                self.apply_return_to_review(request, tasks, event)?
+            }
             EventPayload::MigrationCompanionLinked { companion } => {
                 self.apply_migration_companion(companion)?
             }
@@ -296,7 +299,7 @@ impl ImageState {
         Ok(())
     }
 
-    pub(super) fn apply_task_state(&mut self, task_state: &TaskState) -> DomainResult<()> {
+    pub(crate) fn apply_task_state(&mut self, task_state: &TaskState) -> DomainResult<()> {
         let terminal = matches!(
             task_state.status,
             TaskStatus::Submitted | TaskStatus::Completed

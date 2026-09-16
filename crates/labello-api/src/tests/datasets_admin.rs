@@ -426,3 +426,177 @@ async fn data_admin_explores_images_with_bounded_pagination_and_filters() {
     assert_eq!(page["totalItems"], 1);
     assert_eq!(page["items"][0]["image"]["fileName"], "beta.png");
 }
+
+#[tokio::test]
+async fn inspector_browsing_and_return_permissions_are_separate() {
+    let temp = tempfile::tempdir().unwrap();
+    let api = ApiState::new(temp.path());
+    let app = router(api.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    upload_test_image(&app, "inspected.png", &png_bytes(3, 2)).await;
+    let repo = api.repo(&DatasetId::from("ds")).unwrap();
+    let metadata = repo.load_dataset().await.unwrap();
+    let image = metadata.images.values().next().unwrap().image_id.clone();
+    let task = TaskId::from("bounding_box:pixel");
+    repo.append_payload(
+        &image,
+        &Actor {
+            user_id: UserId::from("admin"),
+            role: DatasetRole::Annotator,
+        },
+        EventPayload::TaskStateChanged {
+            task_state: TaskState {
+                task_id: task.clone(),
+                status: TaskStatus::Completed,
+                outcome: Some(TaskOutcome::Approved),
+                assigned_to: None,
+                completed_by: Some(UserId::from("admin")),
+                completed_at: Some(now()),
+                updated_at: now(),
+            },
+        },
+    )
+    .await
+    .unwrap();
+    let before = repo.load_events(&image).await.unwrap();
+    for user in ["admin", "other_annotator", "reviewer_2"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/datasets/ds/images?status=completed&pageSize=1")
+                    .header("x-test-user-id", user)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["totalItems"], 1);
+    }
+    assert_eq!(repo.load_events(&image).await.unwrap(), before);
+    let request = labello_domain::ReturnToReviewRequest {
+        request_id: labello_domain::EventId::generate(),
+        expected_sequence: before.len() as u64,
+        task_ids: vec![task.clone()],
+        reason: "Please inspect again".into(),
+    };
+    let uri = format!("/datasets/ds/images/{image}/return-to-review");
+    for user in ["other_annotator", "intruder"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&uri)
+                    .header("x-test-user-id", user)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&uri)
+                .header("x-test-user-id", "reviewer_2")
+                .header("x-csrf-token", "invalid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(repo.load_events(&image).await.unwrap(), before);
+    for user in ["reviewer_2", "admin"] {
+        let state = repo.load_image_state(&image).await.unwrap();
+        let mut body = request.clone();
+        body.expected_sequence = state.current_sequence;
+        body.request_id = labello_domain::EventId::generate();
+        let mut blank = body.clone();
+        blank.reason = "  ".into();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&uri)
+                    .header("x-test-user-id", user)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(serde_json::to_vec(&blank).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        for _ in 0..2 {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(&uri)
+                        .header("x-test-user-id", user)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+        let after = repo.load_image_state(&image).await.unwrap();
+        assert_eq!(after.current_sequence, state.current_sequence + 1);
+        assert_eq!(after.task_states[&task].status, TaskStatus::Submitted);
+        let mut task_state = after.task_states[&task].clone();
+        task_state.status = TaskStatus::Completed;
+        repo.append_payload(
+            &image,
+            &Actor {
+                user_id: UserId::from(user),
+                role: DatasetRole::Reviewer,
+            },
+            EventPayload::TaskStateChanged { task_state },
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn unfiltered_gallery_loads_only_requested_page_states() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    upload_test_image(&app, "alpha.png", &png_bytes(2, 2)).await;
+    upload_test_image(&app, "beta.png", &png_bytes(3, 2)).await;
+    let repo = state.repo(&"ds".into()).unwrap();
+    let index = repo.load_images_index().await.unwrap();
+    let other = index.images_by_hash.values().find(|r| r.file_name == "beta.png").unwrap();
+    // Reading off-page history is both unnecessary work and an unrelated failure.
+    tokio::fs::create_dir_all(repo.events_path(&other.image_id).parent().unwrap()).await.unwrap();
+    tokio::fs::write(repo.events_path(&other.image_id), b"invalid event\n").await.unwrap();
+    for (query, expected) in [("page=1&pageSize=1", StatusCode::OK), ("page=2&pageSize=1", StatusCode::INTERNAL_SERVER_ERROR), ("page=1&pageSize=1&status=pending", StatusCode::INTERNAL_SERVER_ERROR)] {
+        let response = app.clone().oneshot(Request::builder()
+            .uri(format!("/datasets/ds/images?{query}"))
+            .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let page: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(page["totalItems"], 2);
+            assert_eq!(page["items"][0]["image"]["fileName"], "alpha.png");
+        }
+    }
+}

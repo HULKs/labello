@@ -184,6 +184,33 @@ pub(crate) fn show_canvas_with_evidence(
     missing: Option<MissingObjectOverlay<'_>>,
     missing_action: &mut Option<MissingObjectAction>,
 ) -> Option<CanvasAction<BoundingBoxEdit>> {
+    show_canvas_with_task_edges(
+        ui, state, texture, annotations, image_size, bounding_box_tool,
+        selected_annotation, interaction, skeleton_edges, prelabels, annotation_color,
+        annotation_styles, selectable_annotations, missing, missing_action,
+        &std::collections::BTreeMap::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments, reason = "the canvas receives explicit rendering and interaction policies")]
+pub(crate) fn show_canvas_with_task_edges(
+    ui: &mut Ui,
+    state: &mut CanvasState,
+    texture: Option<&egui::TextureHandle>,
+    annotations: &[AnnotationVersion],
+    image_size: [u32; 2],
+    bounding_box_tool: bool,
+    selected_annotation: Option<&AnnotationId>,
+    interaction: CanvasInteraction,
+    skeleton_edges: &[(String, String)],
+    prelabels: &[PrelabelSuggestion],
+    annotation_color: Color32,
+    annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
+    selectable_annotations: Option<&std::collections::BTreeSet<AnnotationId>>,
+    missing: Option<MissingObjectOverlay<'_>>,
+    missing_action: &mut Option<MissingObjectAction>,
+    edges_by_task: &std::collections::BTreeMap<labello_domain::TaskId, Vec<(String, String)>>,
+) -> Option<CanvasAction<BoundingBoxEdit>> {
     let editable = interaction.editable;
     let available = ui.available_size().max(vec2(1.0, 1.0));
     let (viewport, _) = ui.allocate_exact_size(available, Sense::hover());
@@ -218,6 +245,7 @@ pub(crate) fn show_canvas_with_evidence(
             annotation_color,
             annotation_styles,
             state.current_zoom(),
+            edges_by_task,
         );
         return None;
     }
@@ -299,6 +327,7 @@ pub(crate) fn show_canvas_with_evidence(
         annotation_color,
         annotation_styles,
         state.current_zoom(),
+        edges_by_task,
     );
 
     if let Some(missing) = missing {

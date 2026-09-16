@@ -1,5 +1,9 @@
 impl LabelloApp {
     pub(crate) fn request_transition(&mut self, transition: PendingTransition) {
+        if self.view == AppView::Inspect && self.inspection_has_reason() {
+            self.runtime.error = Some("Finish the request or discard the return draft before leaving Inspect.".into());
+            return;
+        }
         if self.loading.saving || self.loading.image || self.work.migration.busy
             || self.work.pending_transition.is_some() || self.transition_is_current(&transition) {
             return;

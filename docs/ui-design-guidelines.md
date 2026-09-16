@@ -47,7 +47,9 @@ and history.
   collapse siblings or push primary controls offscreen.
 - Keep global identity, dataset, navigation, status, and account controls in the
   app shell. The second bar owns image identity, workflow context and canvas
-  controls. The bottom bar owns workflow commands in every layout, including
+  controls. Dataset inspection keeps image names beneath the navigator thumbnails
+  and uses the second bar only for canvas navigation and panel controls.
+  The bottom bar owns workflow commands in every layout, including
   annotation, review, correction and every migration phase.
 - When every global destination, action, and account element cannot fit in the
   app bar, replace all of them with one modal left-drawer trigger. The drawer

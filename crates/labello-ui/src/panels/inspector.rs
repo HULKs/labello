@@ -57,7 +57,7 @@ impl LabelloApp {
         match self.view {
             AppView::Annotate => self.prelabel_panel(ui),
             AppView::Review => self.review_actions(ui, show_primary_actions),
-            AppView::Setup | AppView::Admin | AppView::Stats => {}
+            AppView::Setup | AppView::Admin | AppView::Stats | AppView::Inspect => {}
         }
         if self.view == AppView::Review { self.review_corrections_panel(ui); }
         self.missing_object_panel(ui);

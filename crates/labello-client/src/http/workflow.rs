@@ -29,6 +29,20 @@ impl TaskApi for HttpLabelloApi {
 }
 
 impl ImageApi for HttpLabelloApi {
+    fn return_to_review<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        request: labello_domain::ReturnToReviewRequest,
+    ) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(
+                self.request(Method::POST, &format!("/datasets/{dataset_id}/images/{image_id}/return-to-review"))?,
+                &request,
+            ).await
+        })
+    }
+
     fn assignment_availability<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

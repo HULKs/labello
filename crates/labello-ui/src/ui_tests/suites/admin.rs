@@ -985,3 +985,29 @@ fn stats_remote_states_never_replace_real_data_with_placeholders() {
     assert!(harness.query_by_label("Refreshing statistics").is_none());
     assert!(harness.query_by_label("Metric Images").is_some());
 }
+
+#[test]
+fn inspector_browses_live_images_without_claiming_or_saving() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = live_harness(api.clone());
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    let claims = api.counts().assign_next_image;
+    click(&mut harness, "Inspect Demo Dataset");
+    for _ in 0..20 { harness.step(); }
+    assert!(harness.query_by_label("Dataset inspector").is_some());
+    assert!(harness.query_by_label("Inspect one.png").is_some());
+    click(&mut harness, "Inspect one.png");
+    for _ in 0..20 { harness.step(); }
+    assert!(harness.query_by_label("Bounding boxes").is_some());
+    click(&mut harness, "Bounding boxes");
+    click(&mut harness, "Skeletons");
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Images").click();
+    harness.run();
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, "Images").click();
+    for _ in 0..5 { harness.step(); }
+    assert!(harness.query_by_label("Inspect one.png").is_some());
+    assert_eq!(api.counts().assign_next_image, claims);
+    assert_eq!(api.counts().append_event, 0);
+    assert_eq!(api.counts().annotation_batch, 0);
+    assert!(harness.state().work.assignment.is_none());
+}

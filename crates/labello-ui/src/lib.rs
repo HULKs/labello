@@ -16,6 +16,7 @@ pub mod panels;
 mod persistence;
 mod presence;
 pub use presence::set_reduced_motion;
+mod dataset_inspector;
 pub mod queue;
 mod review_context;
 mod review_corrections;

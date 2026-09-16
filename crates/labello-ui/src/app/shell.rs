@@ -63,6 +63,7 @@ impl eframe::App for LabelloApp {
                 )
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }
+        if self.view == AppView::Inspect { self.inspection_panels(ui, layout); }
         self.build_warning_bar(ui);
         if self.work_view() {
             if let Some(action_height) = compact_action_height {

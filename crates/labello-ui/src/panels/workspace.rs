@@ -2,6 +2,7 @@ impl LabelloApp {
     pub(crate) fn central(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         self.clear_workflow_change_outside_scope();
         match self.view {
+            AppView::Inspect => { self.dataset_inspector(ui); return; }
             AppView::Setup => {
                 centered_scroll(ui, 1100.0, |ui| self.setup_view(ui, layout));
                 return;
@@ -158,6 +159,7 @@ impl LabelloApp {
             self.application_navigation_drawer(ctx);
             return;
         }
+        if self.view == AppView::Inspect { self.inspection_drawer(ctx, layout); }
         if layout != LayoutMode::Wide && self.work_view() {
             let screen = ctx.content_rect();
             let compact = layout == LayoutMode::Compact;

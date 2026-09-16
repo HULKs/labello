@@ -81,6 +81,7 @@ pub(crate) enum AppView {
     Review,
     Admin,
     Stats,
+    Inspect,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -502,6 +503,7 @@ impl WorkflowChoice {
 
 pub struct LabelloApp {
     pub(crate) config: AppConfig,
+    pub(crate) inspection: crate::dataset_inspector::InspectorState,
     pub(crate) builds: crate::build_information::BuildInformationState,
     pub(crate) runtime: RuntimeState,
     pub(crate) loading: LoadingState,

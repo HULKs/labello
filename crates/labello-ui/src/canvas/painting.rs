@@ -18,6 +18,7 @@ fn paint_canvas(
     annotation_color: Color32,
     annotation_styles: &std::collections::BTreeMap<AnnotationId, CanvasAnnotationStyle>,
     zoom: f32,
+    edges_by_task: &std::collections::BTreeMap<labello_domain::TaskId, Vec<(String, String)>>,
 ) {
     let painter = ui.painter_at(viewport);
     painter.rect_filled(
@@ -96,7 +97,11 @@ fn paint_canvas(
             }
             AnnotationGeometry::Skeleton(skeleton) => {
                 let color = style.color;
-                for (from, to) in skeleton_edges {
+                for (from, to) in edges_by_task
+                    .get(&annotation.task_id)
+                    .map(Vec::as_slice)
+                    .unwrap_or(skeleton_edges)
+                {
                     let from = skeleton_keypoint_point(
                         &annotation.annotation_id,
                         skeleton,

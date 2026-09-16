@@ -3,6 +3,7 @@ fn stored_view(view: crate::app::AppView) -> StoredView {
         crate::app::AppView::Annotate => StoredView::Annotate,
         crate::app::AppView::Review => StoredView::Review,
         crate::app::AppView::Admin => StoredView::Admin,
+        crate::app::AppView::Inspect => StoredView::Inspect,
         crate::app::AppView::Stats | crate::app::AppView::Setup => StoredView::Stats,
     }
 }
@@ -13,6 +14,7 @@ fn app_view(view: StoredView) -> crate::app::AppView {
         StoredView::Review => crate::app::AppView::Review,
         StoredView::Adjudicate => crate::app::AppView::Setup,
         StoredView::Admin => crate::app::AppView::Admin,
+        StoredView::Inspect => crate::app::AppView::Inspect,
         StoredView::Stats => crate::app::AppView::Stats,
     }
 }

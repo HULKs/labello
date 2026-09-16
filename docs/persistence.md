@@ -215,7 +215,8 @@ or test that would fail if the stated compatibility or recovery rule regressed.
 
 ## Derived Preview Cache
 
-Encoded previews are disposable derived artifacts outside `datasetsRoot` in the
+Encoded previews, including the 256-pixel Thumbnail v1 gallery proxies, are
+disposable derived artifacts outside `datasetsRoot` in the
 production server. They are not dataset images, image-index entries, import
 outputs, events, export/snapshot contents, or authoritative backup contents.
 The embedded `ApiState` default uses its private `.labello-server/previews`
@@ -503,3 +504,25 @@ scheduling or new task configuration. Completed historical reviews can be
 revisited when the ordinary ownership, history, target and configuration checks
 still hold after normalization. Snapshots and offline bundles retain audit
 history and the replayed current state.
+
+## Inspector return-to-review history
+
+The server-owned version-3 `work_returned_to_review` event stores the complete
+request and captured workflow definitions. The event envelope identifies the
+image, actor, role and server timestamp; the request retains the reason and
+explicit workflow selection. This is the audit source for later reason
+notifications. The inspector does not implement those notifications.
+
+One image transaction validates the complete selection and appends one event.
+Replay checks the exact prior sequence, completed states, approval configuration,
+lease boundary and authorized actor role, then starts fresh review rounds for
+all selected tasks. Existing annotations, decisions and assignment history are
+preserved. The transaction follows the configuration guard, image lock,
+reload/validate/simulate/append/replay/cache-invalidation order. Retries compare
+the persisted request and actor before checking current eligibility.
+
+No new state-cache field or schema version is introduced. Older version-2 and
+version-3 histories still replay; version-2 output rejects this new event.
+Generated schemas, snapshot event logs and offline bundle event fragments retain
+it. Raw event and offline mutation interfaces cannot author it. A missing or
+interrupted state cache rebuilds from the committed event log.

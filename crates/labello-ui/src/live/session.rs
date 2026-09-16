@@ -12,6 +12,7 @@ impl LabelloApp {
     }
 
     fn clear_authenticated_state(&mut self) {
+        self.inspection = Default::default();
         self.begin_import_epoch();
         self.import = Default::default();
         self.auth.account = None;
@@ -65,6 +66,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_logout(&mut self) {
+        if self.view == AppView::Inspect && self.inspection_has_reason() {
+            self.runtime.error = Some("Finish the request or discard the return draft before signing out.".into());
+            return;
+        }
         if self.has_missing_object_draft() {
             self.request_transition(crate::app::PendingTransition::Logout);
             return;

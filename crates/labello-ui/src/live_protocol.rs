@@ -179,6 +179,10 @@ impl std::fmt::Display for UiRequestError {
 
 #[derive(Debug)]
 pub(crate) enum UiMessage {
+    Inspected {
+        request: RequestIdentity,
+        result: Result<crate::dataset_inspector::InspectorReply, UiRequestError>,
+    },
     BuildRefreshRequested,
     BuildInformationLoaded {
         request: RequestIdentity,
@@ -409,6 +413,10 @@ pub(crate) enum UiMessage {
 }
 
 pub(crate) enum UiCommand {
+    Inspect {
+        request: RequestIdentity,
+        action: crate::dataset_inspector::InspectorAction,
+    },
     BuildInformation {
         request: RequestIdentity,
     },
@@ -692,7 +700,8 @@ impl UiCommand {
             | Self::ImportDiagnostics { .. }
             | Self::CommitImport { .. }
             | Self::CancelImport { .. } => panic!("import commands use import_request"),
-            Self::BuildInformation { request }
+            Self::Inspect { request, .. }
+            | Self::BuildInformation { request }
             | Self::Export { request, .. }
             | Self::AuthOptions { request }
             | Self::Session { request }
@@ -771,6 +780,10 @@ impl UiCommand {
 impl UiMessage {
     pub(crate) fn requires_session_check(&self) -> bool {
         match self {
+            Self::Inspected { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
             Self::ImportCapabilitiesLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -968,7 +981,8 @@ impl UiMessage {
             | Self::ImportCancelled { .. } => None,
             #[cfg(target_arch = "wasm32")]
             Self::ImportBrowserFilesSelected { .. } => None,
-            Self::BuildInformationLoaded { request, .. }
+            Self::Inspected { request, .. }
+            | Self::BuildInformationLoaded { request, .. }
             | Self::BuildInformationCopied { request, .. }
             | Self::ExportFinished { request, .. }
             | Self::AuthOptionsLoaded { request, .. }

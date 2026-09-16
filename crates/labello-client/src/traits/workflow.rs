@@ -8,6 +8,15 @@ pub trait TaskApi {
 }
 
 pub trait ImageApi {
+    fn return_to_review<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _image_id: &'a ImageId,
+        _request: labello_domain::ReturnToReviewRequest,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Demo("return to review is unavailable".into())) })
+    }
+
     fn assignment_availability<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

@@ -5,6 +5,7 @@ pub(crate) enum StoredView {
     Review,
     Adjudicate,
     Admin,
+    Inspect,
     Stats,
 }
 

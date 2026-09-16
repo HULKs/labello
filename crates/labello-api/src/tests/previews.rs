@@ -26,7 +26,7 @@ async fn encoded_preview_profiles_are_authorized_on_cold_and_warm_reads() {
     let raw = request_preview(&app, &image_id, Some("admin"), "preview?max=1600").await;
     assert_eq!(raw.status(), StatusCode::OK);
     let rgba = to_bytes(raw.into_body(), 1024 * 1024).await.unwrap();
-    for profile in ["standard_v1", "data_saver_v1"] {
+    for profile in ["standard_v1", "data_saver_v1", "thumbnail_v1"] {
         for _ in 0..2 {
             let preview = request_preview(
                 &app,

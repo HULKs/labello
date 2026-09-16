@@ -176,6 +176,10 @@ fn event_updates_assignment(event: &EventLogEntry, id: &AssignmentId) -> bool {
 }
 
 fn relevant_event(event: &EventLogEntry, state: &ImageState, task: &TaskDefinition) -> bool {
+    if matches!(&event.payload, EventPayload::WorkReturnedToReview { request, .. } if request.task_ids.contains(&task.task_id))
+    {
+        return true;
+    }
     if event.task_id() == Some(&task.task_id) {
         return true;
     }

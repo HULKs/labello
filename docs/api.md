@@ -122,7 +122,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `POST /datasets/{dataset_id}/tasks` | Data admin | `TaskDefinition` → `TaskDefinition` |
 | `GET /datasets/{dataset_id}/prelabels` | Any role | No input → `PrelabelConfig[]` |
 | `POST /datasets/{dataset_id}/prelabels` | Data admin | `PrelabelConfig` → `PrelabelConfig` |
-| `GET /datasets/{dataset_id}/images` | Data admin | `ImageExplorerQuery` → `ImageExplorerPage` |
+| `GET /datasets/{dataset_id}/images` | Any role | `ImageExplorerQuery` → `ImageExplorerPage` |
 | `GET /datasets/{dataset_id}/stats` | Any role | No input → `DatasetStats` |
 | `GET /datasets/{dataset_id}/stats/me` | Any role | No user selector → `CurrentUserActivity` for the authenticated account and server UTC day; `Cache-Control: no-store` |
 | `GET /datasets/{dataset_id}/keybindings` | Any role | No input → authenticated user's `KeybindingSet` |
@@ -172,7 +172,7 @@ blocked by the enforced window.
 | `GET /datasets/{dataset_id}/images/{image_id}/record` | Any role | No input → `ImageRecord` |
 | `GET /datasets/{dataset_id}/images/{image_id}/file` | Any role | No input → original image bytes and stored media type |
 | `GET /datasets/{dataset_id}/images/{image_id}/preview` | Any role | `max` query clamped to 256–4096 → raw RGBA bytes (`application/octet-stream`) plus `x-image-width` and `x-image-height`; bounded legacy fallback |
-| `GET /datasets/{dataset_id}/images/{image_id}/encoded-preview` | Any role | `profile=standard_v1` (default) or `data_saver_v1` → bounded `image/webp`, `x-image-width`, `x-image-height`, `x-original-width`, `x-original-height`, `x-preview-profile` |
+| `GET /datasets/{dataset_id}/images/{image_id}/encoded-preview` | Any role | `profile=standard_v1` (default), `data_saver_v1` or `thumbnail_v1` → bounded `image/webp`, `x-image-width`, `x-image-height`, `x-original-width`, `x-original-height`, `x-preview-profile` |
 | `GET /datasets/{dataset_id}/images/{image_id}/detail` | Any role | Explicit bounded original-detail display; original encoded bytes and decoder-format MIME, `private, no-store` |
 | `POST /datasets/{dataset_id}/images/{image_id}/events` | Assigned annotator; role also derived from allowed payload | `AssignmentActionRequest` query plus `AppendEventRequest` → `EventLogEntry` |
 | `POST /datasets/{dataset_id}/images/{image_id}/annotation-batch` | Assigned annotator | `AssignmentActionRequest` query plus `AnnotationBatchRequest` → `ImageState` |
@@ -365,7 +365,8 @@ configuration, authentication state, paths, or other server details.
 
 Standard v1 resizes to at most 1600 pixels on the longest edge and encodes
 lossless WebP. Data Saver v1 uses at most 1280 pixels and lossy WebP quality 80
-(on libwebp's 0–100 scale). Neither profile upscales. Both preserve the existing
+(on libwebp's 0–100 scale). Thumbnail v1 uses a 256-pixel maximum edge and the
+same lossy quality for gallery proxies. No profile upscales. All preserve the existing
 Triangle resize at the decoder's native channel depth followed by RGBA8
 conversion, first-frame behavior, and no EXIF orientation or ICC conversion.
 Standard decoded RGBA, including transparent RGB, is identical to the legacy
@@ -528,3 +529,29 @@ response gate. A failed request fails the image load and remains retryable; it
 does not masquerade as an empty reason history. No persisted event or state shape
 changes. Correction explanations for several objects use explicit object labels
 inside the existing optional submission reason and retain its 2000-byte limit.
+
+## Dataset inspection and return to review
+
+All dataset members may list indexed images and read their previews and current
+annotations, including completed images outside their assignment queue. Search,
+workflow, class and workflow-status predicates apply before pagination. With no
+workflow/class/status filter, only the requested page loads annotation state;
+search and ordering use the image index. State-dependent filters still inspect
+all matching images before selecting the page. Browsing
+and changing overlay visibility require no assignment and append no events.
+
+`POST /datasets/{dataset_id}/images/{image_id}/return-to-review` requires a
+reviewer or data-admin role and the normal CSRF checks. Its JSON body is
+`ReturnToReviewRequest`: `requestId`, `expectedSequence`, `taskIds` and `reason`.
+Select 1–100 distinct configured workflows and supply a nonblank reason of at
+most 2000 UTF-8 bytes. The server requires an exact image sequence and enabled,
+completed approval workflows without an unexpired assignment. It rejects the
+entire selection if any workflow is ineligible. Active leases are not stolen.
+
+Success returns the replayed `ImageState` with the selected workflows submitted
+for fresh review rounds. Geometry and previous decisions remain unchanged.
+Stale state, active work, ineligible workflows and conflicting request-ID reuse
+return 409. An identical request by the same actor is idempotent across restart
+and later work; it returns current state without appending another event.
+Request identity is scoped to the dataset image. Other roles cannot mutate
+through this route, and ordinary event ingress cannot forge its server event.
