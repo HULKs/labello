@@ -22,6 +22,7 @@ A request to use this skill authorizes the delegated task-scoped commit, push, a
 
 - Trace changed code through its production callers and affected runtime paths. Check that the implementation matches the stated purpose and that the evidence covers the behavior most likely to regress.
 - Exercise the changed behavior where practical. Run focused checks, then `./scripts/verify.sh changed <comparison-base>`. Complete the applicable manual, visual, browser, local-link, and anchor checks from the repository verification contract.
+- For any visual change, capture and inspect the screenshots or recordings required by [visual evidence in pull requests](../../../docs/verification.md#visual-evidence-in-pull-requests). Include the captures, captions, and reviewer-accessible hosting details in the publication handoff. Missing visual evidence blocks publication.
 - Treat a failed, unavailable, or inconclusive required check as a blocker. Report the exact command and result. Leave implementation and tests unchanged.
 
 ## Review once

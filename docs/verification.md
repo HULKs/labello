@@ -262,6 +262,39 @@ The pull-request template is the required proof bundle. It records:
 - unresolved risks and checks not performed; and
 - preservation of unrelated worktree changes.
 
+### Visual evidence in pull requests
+
+Every pull request with any visual change must include screenshots or recordings
+in its `Visual or browser evidence` section when the draft is opened. This
+includes changes to layout, styling, text, icons, and visible interaction states,
+regardless of which files implement them. Apply this requirement when updating
+an existing draft too.
+
+Capture the affected states from the verified implementation. Show before and
+after for existing views where a comparison is available; for a new view, show
+the resulting view. Explain any unavailable before capture. Use a recording
+when motion or an interaction sequence cannot be demonstrated by still images.
+Caption each artifact with the change it demonstrates, state or scenario,
+viewport, DPR/zoom or native scale, tested revision, and whether it came from
+the native inspector or Chromium. Record any uncommitted diff at capture time
+and its resulting published commit. Refresh evidence when later edits change
+the depicted result.
+
+Embed the captures or link directly to hosted artifacts that PR reviewers can
+open. Local filesystem paths, inspection claims, test output, and accessibility
+trees alone do not satisfy this requirement. Read back the published PR and
+check that its evidence links resolve to the intended captures. If safe capture
+or reviewer-accessible hosting is unavailable, report the blocker and leave
+publication incomplete. Use `Not applicable` only when there is no visual change,
+with a brief explanation; browser checks may still apply.
+
+Use the inspection procedures and coverage limits in the UI and browser risk
+profiles above. Prepare captures using disposable, non-sensitive content and
+apply the artifact redaction requirements below before uploading. Keep evidence
+outside tracked and runtime dataset paths.
+
+### Artifact safety and review gates
+
 Artifacts and logs must follow [`operations.md`](operations.md): never upload
 secrets, credentials, runtime datasets, raw request data, image bytes,
 annotation geometry, review comments, uploaded filenames, or import paths.
