@@ -1019,3 +1019,145 @@ fn extracts_image_count_hint_from_index_prefix() {
     );
     assert_eq!(extract_image_count_hint(r#"{"imagesByHash":{}}"#), None);
 }
+
+#[tokio::test]
+async fn explorer_metadata_reuses_state_and_tracks_commits_repair_index_and_restart() {
+    use labello_domain::{AnnotationVersion, TaskStatus};
+    let temp = tempfile::tempdir().unwrap();
+    let repo = DatasetRepository::new(temp.path());
+    repo.initialize(DatasetMetadata::new("ds".into(), "Explorer", now()))
+        .await
+        .unwrap();
+    let images: Vec<_> = (0..256)
+        .map(|i| image_record(&format!("img_{i}"), &format!("hash-{i}")))
+        .collect();
+    let mut index = ImagesIndex {
+        images_by_hash: images
+            .iter()
+            .map(|i| (i.blake3.clone(), i.clone()))
+            .collect(),
+        ..Default::default()
+    };
+    repo.save_images_index(&index).await.unwrap();
+    repo.reset_image_state_load_count();
+    let cold = Instant::now();
+    for image in &images {
+        repo.image_explorer_item(image.clone(), &[]).await.unwrap();
+    }
+    let cold_elapsed = cold.elapsed();
+    assert_eq!(repo.image_state_load_count(), 256);
+    repo.reset_image_state_load_count();
+    let warm = Instant::now();
+    for image in &images {
+        repo.clone()
+            .image_explorer_item(image.clone(), &[])
+            .await
+            .unwrap();
+    }
+    let warm_elapsed = warm.elapsed();
+    assert_eq!(repo.image_state_load_count(), 0);
+    eprintln!(
+        "explorer metadata: images=256 cold_state_reads=256 warm_state_reads=0 cold_ms={} warm_us={}",
+        cold_elapsed.as_millis(),
+        warm_elapsed.as_micros()
+    );
+    let image = &images[0];
+    let actor = Actor {
+        user_id: "annotator".into(),
+        role: DatasetRole::Annotator,
+    };
+    let mut annotation = AnnotationVersion::native(
+        "ann".into(),
+        "boxes".into(),
+        "person".into(),
+        AnnotationType::BoundingBox,
+        AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.1,
+            y: 0.1,
+            width: 0.2,
+            height: 0.2,
+        }),
+        actor.user_id.clone(),
+        now(),
+    );
+    repo.append_payload(
+        &image.image_id,
+        &actor,
+        EventPayload::AnnotationVersionCreated {
+            annotation: annotation.clone(),
+            previous_version: None,
+            reason: None,
+        },
+    )
+    .await
+    .unwrap();
+    let item = repo.image_explorer_item(image.clone(), &[]).await.unwrap();
+    assert!(item.class_ids.contains(&ClassId::from("person")));
+    annotation.version = 2;
+    annotation.deleted = true;
+    annotation.revision_source = RevisionSource::Human {
+        action: HumanRevisionKind::Edited,
+    };
+    repo.append_payload(
+        &image.image_id,
+        &actor,
+        EventPayload::AnnotationVersionCreated {
+            annotation,
+            previous_version: Some(1),
+            reason: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.image_explorer_item(image.clone(), &[])
+            .await
+            .unwrap()
+            .class_ids
+            .is_empty()
+    );
+    repo.fail_state_cache_write_after_completion
+        .store(true, Ordering::SeqCst);
+    let mut state = TaskState::new("boxes".into(), now());
+    state.status = TaskStatus::Completed;
+    assert!(
+        repo.append_payload(
+            &image.image_id,
+            &actor,
+            EventPayload::TaskStateChanged { task_state: state }
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        repo.image_explorer_item(image.clone(), &[])
+            .await
+            .unwrap()
+            .task_statuses[&TaskId::from("boxes")],
+        TaskStatus::Completed
+    );
+    repo.reset_image_state_load_count();
+    for image in &images {
+        repo.image_explorer_item(image.clone(), &[]).await.unwrap();
+    }
+    assert_eq!(
+        repo.image_state_load_count(),
+        0,
+        "one image write does not invalidate other summaries"
+    );
+    repo.rebuild_image_state(&image.image_id).await.unwrap();
+    repo.reset_image_state_load_count();
+    repo.image_explorer_item(image.clone(), &[]).await.unwrap();
+    assert_eq!(repo.image_state_load_count(), 1);
+    let restarted = DatasetRepository::new(temp.path());
+    assert_eq!(
+        restarted
+            .image_explorer_item(image.clone(), &[])
+            .await
+            .unwrap(),
+        repo.image_explorer_item(image.clone(), &[]).await.unwrap()
+    );
+    index.images_by_hash.remove(&image.blake3);
+    repo.save_images_index(&index).await.unwrap();
+    assert!(!repo.explorer_cache.lock().contains_key(&image.image_id));
+}

@@ -152,6 +152,9 @@ impl DatasetRepository {
         if previous_image_ids != next_image_ids {
             self.review_history_cache.invalidate();
         }
+        self.explorer_cache
+            .lock()
+            .retain(|id, _| next_image_ids.contains(id));
         *cached = None;
         write_json_atomic(&self.images_index_path(), &index).await?;
         *cached = Some(Arc::new(index));

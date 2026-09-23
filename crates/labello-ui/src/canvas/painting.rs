@@ -77,7 +77,7 @@ fn paint_canvas(
         let selected = selected_annotation == Some(&annotation.annotation_id);
         let style = annotation_styles
             .get(&annotation.annotation_id)
-            .copied()
+            .cloned()
             .unwrap_or_else(|| CanvasAnnotationStyle::solid(match annotation.geometry {
                 AnnotationGeometry::BoundingBox(_) => theme::ANNOTATION,
                 AnnotationGeometry::Skeleton(_) => annotation_color,
@@ -136,6 +136,59 @@ fn paint_canvas(
                         );
                         let center = normalized_to_screen(image_rect, pos2(point.x, point.y));
                         paint_keypoint(&painter, center, &keypoint.state, color, if selected { 5.0 } else { 4.0 }, false);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut label_rects = Vec::new();
+    for annotation in annotations.iter().filter(|a| !a.deleted) {
+        let Some(style) = annotation_styles.get(&annotation.annotation_id) else {
+            continue;
+        };
+        let Some(label) = &style.label else {
+            continue;
+        };
+        let visible = viewport
+            .shrink(VIEWPORT_CORNER_RADIUS as f32)
+            .intersect(image_rect);
+        match &annotation.geometry {
+            AnnotationGeometry::BoundingBox(bbox) => {
+                let bounds = bbox_to_screen_rect(image_rect, *bbox).intersect(visible);
+                if bounds.is_positive() {
+                    paint_class_label(
+                        ui,
+                        &painter,
+                        annotation,
+                        label,
+                        style.color,
+                        bounds.min + vec2(2.0, 2.0),
+                        visible,
+                        &mut label_rects,
+                        0,
+                    );
+                }
+            }
+            AnnotationGeometry::Skeleton(skeleton) => {
+                for (index, keypoint) in skeleton.keypoints.iter().enumerate() {
+                    if keypoint.state != KeypointState::Absent
+                        && let Some(point) = keypoint.point
+                    {
+                        let point = normalized_to_screen(image_rect, pos2(point.x, point.y));
+                        if visible.contains(point) {
+                            paint_class_label(
+                                ui,
+                                &painter,
+                                annotation,
+                                label,
+                                style.color,
+                                point + vec2(8.0, 8.0),
+                                visible,
+                                &mut label_rects,
+                                index,
+                            );
+                        }
                     }
                 }
             }
@@ -386,4 +439,91 @@ fn paint_dashed_box(painter: &egui::Painter, rect: Rect, color: Color32, zoom: f
                 corner + outgoing * (offset + dash_length)], color, 2.0);
         }
     }
+}
+
+/// Pick opaque black or white using WCAG relative luminance. One always exceeds 4.5:1.
+fn class_label_text_color(color: Color32) -> Color32 {
+    let linear = |v: u8| {
+        let v = v as f32 / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance =
+        0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b());
+    if luminance > 0.179 {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "leaf label painting receives explicit annotation and clipping inputs"
+)]
+fn paint_class_label(
+    ui: &Ui,
+    painter: &egui::Painter,
+    annotation: &AnnotationVersion,
+    label: &str,
+    color: Color32,
+    anchor: Pos2,
+    visible: Rect,
+    occupied: &mut Vec<Rect>,
+    index: usize,
+) {
+    if visible.width() < 24.0 || visible.height() < 24.0 {
+        return;
+    }
+    let background = Color32::from_rgb(color.r(), color.g(), color.b());
+    let foreground = class_label_text_color(background);
+    let mut job = egui::text::LayoutJob::simple(
+        label.to_owned(),
+        egui::FontId::proportional(13.0),
+        foreground,
+        (visible.width() - 12.0).min(220.0),
+    );
+    job.wrap.max_rows = 2;
+    job.wrap.break_anywhere = true;
+    let galley = painter.layout_job(job);
+    let size = galley.size() + vec2(10.0, 6.0);
+    let clamp = |point: Pos2| {
+        pos2(
+            point.x.clamp(
+                visible.left(),
+                (visible.right() - size.x).max(visible.left()),
+            ),
+            point.y.clamp(
+                visible.top(),
+                (visible.bottom() - size.y).max(visible.top()),
+            ),
+        )
+    };
+    let mut rect = Rect::from_min_size(clamp(anchor), size);
+    for _ in 0..occupied.len() {
+        if let Some(overlap) = occupied.iter().find(|r| r.intersects(rect)) {
+            let next = Rect::from_min_size(clamp(pos2(rect.left(), overlap.bottom() + 2.0)), size);
+            if next == rect {
+                break;
+            }
+            rect = next;
+        } else {
+            break;
+        }
+    }
+    let painter = painter.with_clip_rect(visible);
+    painter.rect_filled(rect, CornerRadius::same(4), background);
+    painter.galley(rect.min + vec2(5.0, 3.0), galley, foreground);
+    ui.interact(
+        rect,
+        ui.id()
+            .with(("class-label", &annotation.annotation_id, index)),
+        Sense::hover(),
+    )
+    .on_hover_text(label)
+    .widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, format!("Class: {label}")));
+    occupied.push(rect);
 }

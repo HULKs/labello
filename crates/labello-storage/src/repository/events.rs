@@ -25,6 +25,7 @@ impl DatasetRepository {
         let _guard = lock.lock().await;
         let _history_membership = self.review_history_cache.membership.write().await;
         self.review_history_cache.invalidate();
+        self.explorer_cache.lock().remove(image_id);
         let events = self.load_events(image_id).await?;
         let state = rebuild_state(image_id.clone(), &events)?;
         self.observe_authoritative_completion(&state);
@@ -142,6 +143,9 @@ impl DatasetRepository {
         }
         file.sync_all().await.with_path(&temporary)?;
         drop(file);
+        // Invalidate before publication, including cancellation after the rename.
+        // Explorer readers share the image lock with mutation transactions.
+        self.explorer_cache.lock().remove(image_id);
         tokio::fs::rename(&temporary, &path)
             .await
             .with_path(&path)?;

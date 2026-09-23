@@ -2,9 +2,23 @@ use super::*;
 
 impl LabelloApp {
     pub(super) fn reset_inspection_gallery(&mut self) {
-        self.inspection
+        let obsolete: Vec<_> = self
+            .inspection
             .pending
-            .retain(|_, a| !matches!(a, InspectorAction::List(_)));
+            .iter()
+            .filter_map(|(id, action)| matches!(action, InspectorAction::List(_)).then_some(*id))
+            .collect();
+        for id in obsolete {
+            self.inspection.transfers.cancel(id);
+            self.inspection.pending.remove(&id);
+            self.runtime.active_requests.remove(&id);
+        }
+        let selected = self
+            .inspection
+            .selected
+            .as_ref()
+            .map(|r| r.image_id.clone());
+        self.cancel_obsolete_inspection_previews(&BTreeSet::new(), selected.as_ref());
         self.inspection.navigate_page = None;
         self.inspection.query.page = 1;
         self.inspection.gallery_error = None;
@@ -184,6 +198,14 @@ impl LabelloApp {
                 }
             }
         }
+        let replacing = self
+            .inspection
+            .pending
+            .values()
+            .any(|a| matches!(a, InspectorAction::List(q) if q.page == 1));
+        if replacing {
+            ui.label("Applying filters… Previous results remain visible.");
+        }
         let Some(page) = self.inspection.page.as_ref() else {
             if loading {
                 ui.spinner();
@@ -191,7 +213,10 @@ impl LabelloApp {
             return;
         };
         ui.horizontal(|ui| {
-            ui.weak(format!("{} images", page.total_items));
+            ui.weak(format!("{} matching images", page.total_items));
+            if page.items.len() < page.total_items {
+                ui.weak(format!("{} listed", page.items.len()));
+            }
             if loading {
                 ui.spinner();
             }
@@ -293,10 +318,12 @@ impl LabelloApp {
                 },
             );
         self.inspection.scroll = output.state.offset.y;
-        if output.state.offset.y + output.inner_rect.height() >= output.content_size.y - row_height
-        {
-            self.load_more_inspection_images();
-        }
+        let selected = self
+            .inspection
+            .selected
+            .as_ref()
+            .map(|r| r.image_id.clone());
+        self.cancel_obsolete_inspection_previews(&visible, selected.as_ref());
         // Texture memory follows the visible rows, not the ever-growing result list.
         self.inspection.thumbnails.retain(|id, _| {
             visible.contains(id)

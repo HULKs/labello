@@ -40,6 +40,7 @@ mod artifact_migration;
 mod cache;
 mod config;
 mod events;
+mod explorer;
 mod export;
 mod layout;
 mod locks;
@@ -53,6 +54,7 @@ pub(crate) use events::stats_relevant_event;
 #[derive(Clone, Debug)]
 pub struct DatasetRepository {
     root: Arc<PathBuf>,
+    explorer_cache: Arc<Mutex<BTreeMap<ImageId, explorer::ImageExplorerSummary>>>,
     pub(crate) review_history_cache: Arc<crate::review_history::ReviewHistoryCache>,
     locks: Arc<Mutex<BTreeMap<ImageId, Arc<AsyncMutex<()>>>>>,
     migration_lock: Arc<AsyncMutex<()>>,
@@ -92,6 +94,7 @@ impl DatasetRepository {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: Arc::new(root.into()),
+            explorer_cache: Arc::default(),
             review_history_cache: Arc::default(),
             locks: Arc::new(Mutex::new(BTreeMap::new())),
             migration_lock: Arc::new(AsyncMutex::new(())),

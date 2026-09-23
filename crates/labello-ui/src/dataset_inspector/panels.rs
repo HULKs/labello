@@ -101,7 +101,7 @@ impl LabelloApp {
                 .inspection
                 .pending
                 .values()
-                .any(|a| matches!(a, InspectorAction::List(_)));
+                .any(|a| matches!(a, InspectorAction::List(q) if q.page == 1));
         ui.horizontal_wrapped(|ui| {
             for (right, title) in [(false, "Images"), (true, "Overlays")] {
                 let selected = if layout == LayoutMode::Wide {

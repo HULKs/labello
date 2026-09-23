@@ -611,11 +611,14 @@ position survive panel changes. The read-only canvas retains the available space
 
 The wider Images panel has a three-column thumbnail grid with filenames bounded
 by each tile. Search and workflow/class/status filters stay above the grid.
-Scrolling near the bottom appends the next batch of up to 24 items; there are no
-page controls. A filter change resets results and rejects obsolete batch replies.
+Metadata batches of up to 100 items load consecutively without waiting for
+scrolling or preview downloads; there are no page controls. The result total
+means matching images, with a separate loaded-list count while metadata arrives.
+Pending filter replacements explicitly identify the still-displayed previous results. A filter change resets results and rejects obsolete batch replies.
 Failed loads preserve displayed results and require an explicit retry.
-Virtualized rows request visible cached Thumbnail v1 WebP proxies with at most two concurrent image reads and at most 24
-cached thumbnail textures, evicting offscreen textures as the user scrolls.
+Virtualized rows request visible cached Thumbnail v1 WebP proxies with at most two concurrent image reads and at most 48
+cached thumbnail textures, evicting offscreen textures as the user scrolls. Offscreen preview requests are
+cancelled and removed from request ownership before newly visible images load.
 Opening an image immediately reuses its thumbnail beneath a centered spinner;
 authoritative state and the larger Data Saver preview load independently without
 claiming an assignment. An uncached selected image requests a thumbnail even if
@@ -627,8 +630,22 @@ and annotation-type visibility intersect. The compact overlay panel has one
 visibility row per workflow with an annotation count and status tooltip; skeleton
 edges come from each annotation's configured task. The geometry toggles use the
 same type icons as Annotate/Review and share a row with the status dropdown.
-Workflow visibility and return-target selection use these icon toggles beside
-the workflow names, with contextual accessible names and selected states.
+Workflow visibility uses these icon toggles beside workflow names. Return-target
+selection uses full-width workflow-name buttons with contextual accessible names
+and selected states. The shared domain eligibility policy explains disabled
+workflows, approval configuration, incomplete work, active assignments, and
+incomplete review targets. Completed bounding-box and skeleton workflows follow
+the same eligibility rules. Authoritative ground-truth import configures review as
+`None`, so its completed workflows remain ineligible unless approval review is
+explicitly configured; the selector explains that approval review is not enabled.
+
+Inspector boxes and skeletons use class colors. Box labels sit inside the visible
+corner when space permits; unboxed keypoints have class labels. A visible box in
+the same object group supplies the shared label, and hiding boxes restores labels
+on visible keypoints. Opaque class-colored label backgrounds choose black or white
+text for at least 4.5:1 contrast. Labels use screen-space text, bounded two-line
+layout, full accessible names/tooltips, and the canvas clip/mask. Crowded labels
+move downward where space permits; small boxes may need labels wider than the box.
 
 Reviewer/data-admin return controls open from a secondary Return to review action
 and select workflows independently of overlays. Discard or success closes the form.

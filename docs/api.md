@@ -574,8 +574,12 @@ All dataset members may list indexed images and read their previews and current
 annotations, including completed images outside their assignment queue. Search,
 workflow, class and workflow-status predicates apply before pagination. With no
 workflow/class/status filter, only the requested page loads annotation state;
-search and ordering use the image index. State-dependent filters still inspect
-all matching images before selecting the page. Browsing
+search and ordering use the image index. State-dependent filters evaluate rebuildable, process-local per-image summaries
+before selecting the page. A cold summary loads authoritative image state once;
+subsequent queries reuse it until that image changes. Configuration defaults and
+image records come from the current request, not cached workflow definitions.
+A workflow filter identifies configured workflow status, including Pending on
+unannotated images; selecting a workflow alone need not reduce the image count. Browsing
 and changing overlay visibility require no assignment and append no events.
 
 `POST /datasets/{dataset_id}/images/{image_id}/return-to-review` requires a
