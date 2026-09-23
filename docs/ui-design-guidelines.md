@@ -70,12 +70,12 @@ and history.
 - Each remote region shows one base state: initial loading, loaded, empty,
   initial failure with Retry, loaded while refreshing, or loaded and stale after
   refresh failure.
-- Keep loaded data visible during refresh. View bars start blank with their
+- Keep loaded data visible during refresh. View-specific bars start blank with their
   layout space reserved. Within the same view and workflow, retain their last
   loaded contents while the next or previous image loads and disable the
   retained controls. Loading feedback belongs in the image region. Do not
   show zero placeholders after failure or present retained contents as newly
-  loaded data.
+  loaded data. The global top bar stays visible and keeps its layout during loads.
 - Put validation and failures in the affected field, section, or page. Reserve
   global notices for cross-screen events.
 - Hide account-scoped content while authentication is unresolved. Clear stale
@@ -270,9 +270,9 @@ has been recorded.
   new image is ready. First load and changes of view, workflow, dataset or
   account show blank reserved bars until ready. Empty and failed loads discard
   retained presentation and use the normal empty/error state. Never pair old
-  identity with a new phase. The header also starts blank while the initial
-  view, session or dataset is loading. Within a loaded view, its global controls
-  remain available during image transitions. The dataset
+  identity with a new phase. The global header remains visible during initial
+  loading and image transitions, with its existing navigation and utilities.
+  Loading alone must not change its layout. The dataset
   inspector reserves its context row during initial gallery loading and retains
   its fixed controls across image loads.
 - **Saved reasons:** share the persistent, dismissible notification area with

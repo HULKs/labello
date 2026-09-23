@@ -1,9 +1,5 @@
 impl LabelloApp {
     pub(crate) fn app_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        if self.loading.session || self.loading.dataset || self.loading.logout
-            || (self.work_view() && self.workspace_bars_blank())
-            || self.inspection_initial_loading()
-        { return; }
         if self.view == AppView::Setup && (!self.auth.checked || self.auth.account.is_none()) {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = theme::SPACE_3;

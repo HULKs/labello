@@ -70,7 +70,9 @@ Workspace rendering is grouped by the reason it changes:
   and scope changes discard the retained presentation;
 
 - `panels/app_bar.rs`: global navigation, utilities and account controls, with
-  measured label widths and icon fallback before the navigation drawer;
+  measured label widths and icon fallback before the navigation drawer. This
+  global bar stays visible during loading and is outside the view-specific
+  blank/retained presentation policy;
 - `panels/workspace_actions.rs`: persistent bottom workflow actions for all
   layouts, including separate Previous image and Previous object commands;
   review object navigation uses the existing correction-retaining navigation

@@ -50,6 +50,47 @@ mod loading_bars {
     }
 
     #[test]
+    fn global_header_stays_visible_and_stable_during_loads() {
+        for preset in [
+            InspectorPreset::Annotation,
+            InspectorPreset::Review,
+            InspectorPreset::MigrationFullImage,
+            InspectorPreset::DatasetInspection,
+        ] {
+            for size in [egui::vec2(390., 844.), egui::vec2(1440., 1000.)] {
+                let mut h = harness(preset, size);
+                h.run_steps(4);
+                let header_controls = |h: &Harness<'_, LabelloApp>| {
+                    h.query_all_by_role(egui::accesskit::Role::Button)
+                        .filter(|n| n.rect().top() < 56.0)
+                        .map(|n| {
+                            (
+                                n.accesskit_node().label().unwrap_or_default().to_owned(),
+                                n.rect(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let before = header_controls(&h);
+                assert!(!before.is_empty(), "{preset:?}");
+                h.state_mut().clear_current_image();
+                for phase in 0..4 {
+                    h.state_mut().loading.image = phase == 0;
+                    h.state_mut().loading.dataset = phase == 1;
+                    h.state_mut().loading.session = phase == 2;
+                    h.state_mut().loading.logout = phase == 3;
+                    h.run_steps(4);
+                    assert_eq!(header_controls(&h), before, "{preset:?} {size:?} {phase}");
+                }
+            }
+        }
+        let mut initial = harness(InspectorPreset::ReviewInitialLoad, egui::vec2(390., 844.));
+        initial.run_steps(4);
+        assert!(initial.query_by_label("Open navigation").is_some());
+        assert!(controls(&initial).is_empty());
+    }
+
+    #[test]
     fn blank_bars_reserve_loaded_geometry_including_frame_margins() {
         for preset in [
             InspectorPreset::Annotation,
