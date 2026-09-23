@@ -168,6 +168,23 @@ administration update route rejects ratio and tagged-policy shapes. Assignment
 statistics include the current annotation and review counts plus the task IDs
 blocked by the enforced window.
 
+### Creating a dataset from an existing schema
+
+`POST /datasets` accepts optional `schemaSourceDatasetId`. Omitted or null
+creates empty classes and tasks. A source requires DataAdmin access in addition
+to the existing bootstrap-admin creation permission. The server reloads its
+current configuration and validates the copied definitions before initializing
+the destination. Missing, unauthorized, or invalid sources fail creation;
+they never fall back to an empty schema.
+
+The copy preserves class and task IDs, names, class relationships, workflow
+settings, instructions text, skeleton definitions, and migration guide links.
+Tutorial example-image references and prelabel bindings are cleared. Images,
+annotation/workflow history, source roles, ingestion paths, prelabel model
+configuration, and dataset balance settings are not copied. The destination
+keeps normal fresh-dataset identity, defaults, and initial administrator roles.
+The source and destination are independent after creation.
+
 ## Assignment And Image Routes
 
 | Method and path | Access | Input → output |

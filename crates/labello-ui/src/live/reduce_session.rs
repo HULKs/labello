@@ -217,9 +217,23 @@ impl LabelloApp {
                         }
                     }
                 }
+                UiMessage::SchemaSourceLoaded { request, result } => {
+                    if self.setup.schema_copy.pending == Some(request.request_id) {
+                        self.setup.schema_copy.pending = None;
+                        match *result {
+                            Ok(metadata) if self.setup.schema_copy.source.as_ref() == Some(&metadata.dataset_id) => {
+                                self.setup.schema_copy.preview = Some(metadata);
+                                self.setup.schema_copy.error = None;
+                            }
+                            Ok(_) => self.setup.schema_copy.error = Some("The selected schema is unavailable. Select it again.".into()),
+                            Err(error) => self.setup.schema_copy.error = Some(error.to_string()),
+                        }
+                    }
+                }
                 UiMessage::DatasetCreated { result, .. } => match *result {
                     Ok(metadata) => {
                         self.loading.dataset = false;
+                        self.setup.schema_copy = Default::default();
                         if self.config.dataset_id != metadata.dataset_id {
                             self.loading.stats = false;
                             self.datasets.active_stats_request = None;
@@ -239,6 +253,10 @@ impl LabelloApp {
                     }
                     Err(error) => {
                         self.loading.dataset = false;
+                        if self.setup.schema_copy.source.is_some() {
+                            self.setup.schema_copy.error = Some(error.to_string());
+                            self.setup.schema_copy.preview = None;
+                        }
                         self.runtime.error = Some(error.to_string());
                     }
                 },

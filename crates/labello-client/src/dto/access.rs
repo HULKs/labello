@@ -30,6 +30,8 @@ pub struct CreateDatasetRequest {
     pub dataset_id: DatasetId,
     pub name: String,
     pub admin_user_id: UserId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_source_dataset_id: Option<DatasetId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

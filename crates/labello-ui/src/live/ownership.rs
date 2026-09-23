@@ -217,6 +217,12 @@ impl LabelloApp {
                 self.loading.datasets = false;
                 self.datasets.summaries_error = Some(error.to_string());
             }
+            UiCommand::LoadSchemaSource { request, .. } => {
+                if self.setup.schema_copy.pending == Some(request.request_id) {
+                    self.setup.schema_copy.pending = None;
+                    self.setup.schema_copy.error = Some(error.to_string());
+                }
+            }
             UiCommand::CreateDataset { .. } | UiCommand::LoadDataset { .. } => {
                 self.loading.dataset = false
             }
@@ -416,6 +422,8 @@ impl LabelloApp {
         } else {
             self.inspection = Default::default();
         }
+        self.setup.schema_copy.pending = None;
+        self.setup.schema_copy.preview = None;
         self.navigation.statistics = Default::default();
         self.runtime.presence = Default::default();
         self.builds.copying = false;

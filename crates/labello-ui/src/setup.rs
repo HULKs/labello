@@ -176,7 +176,7 @@ impl LabelloApp {
             SetupSection::Create if self.auth.can_create_datasets => {
                 ui.heading("Create a dataset");
                 ui.label(
-                    RichText::new("Start an empty dataset and configure it in Admin.")
+                    RichText::new("Start with an empty schema or copy classes and workflows from another dataset.")
                         .color(theme::TEXT_MUTED),
                 );
                 ui.add_space(theme::SPACE_2);
@@ -575,11 +575,13 @@ impl LabelloApp {
                 theme::COMPACT_TEXT_FIELD_HEIGHT,
             )
             .on_hover_text("Human-readable dataset name.");
+            self.schema_source_selector(ui);
             let dataset_id = DatasetId::from(self.setup.create_dataset_id.trim());
             let id_error = dataset_id.validate_path_segment().err();
             let can_create = id_error.is_none()
                 && !self.setup.create_dataset_name.trim().is_empty()
-                && !self.loading.dataset;
+                && !self.loading.dataset
+                && self.schema_copy_ready();
             if theme::primary_button(ui, can_create, egui::Button::new("Create dataset"))
                 .on_hover_text("Requires bootstrap administrator access.")
                 .clicked()
@@ -593,6 +595,145 @@ impl LabelloApp {
             }
             ui.small("Only bootstrap administrators can create datasets.");
         });
+    }
+
+    fn schema_source_selector(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(theme::SPACE_2);
+        ui.label("Copy schema from");
+        let mut selected = self.setup.schema_copy.source.clone();
+        let sources: Vec<_> = self
+            .datasets
+            .summaries
+            .iter()
+            .filter(|dataset| {
+                dataset
+                    .roles
+                    .contains(&labello_domain::DatasetRole::DataAdmin)
+            })
+            .map(|dataset| {
+                (
+                    dataset.dataset_id.clone(),
+                    format!("{} ({})", dataset.name, dataset.dataset_id),
+                )
+            })
+            .collect();
+        let selected_label = selected.as_ref().map_or_else(
+            || "None".to_string(),
+            |id| {
+                sources
+                    .iter()
+                    .find(|(source, _)| source == id)
+                    .map(|(_, label)| label.clone())
+                    .unwrap_or_else(|| format!("Unavailable dataset ({id})"))
+            },
+        );
+        ui.add_enabled_ui(!self.loading.dataset, |ui| {
+            let response = egui::ComboBox::from_id_salt("schema_source")
+                .selected_text(&selected_label)
+                .truncate()
+                .width(ui.available_width())
+                .height(240.0)
+                .show_ui(ui, |ui| {
+                    ui.set_max_width(ui.available_width().min(480.0));
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                    ui.spacing_mut().interact_size.y = 44.0;
+                    if ui.selectable_value(&mut selected, None, "None").clicked() {
+                        ui.close();
+                    }
+                    for (id, label) in &sources {
+                        if ui
+                            .selectable_value(&mut selected, Some(id.clone()), label)
+                            .clicked()
+                        {
+                            ui.close();
+                        }
+                    }
+                });
+            response.response.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    egui::WidgetType::ComboBox,
+                    !self.loading.dataset,
+                    format!("Copy schema from: {selected_label}"),
+                )
+            });
+            if selected != self.setup.schema_copy.source {
+                response.response.request_focus();
+            }
+            response.response.on_hover_text(&selected_label);
+        });
+        if selected != self.setup.schema_copy.source {
+            self.select_schema_source(selected);
+        }
+        if self.loading.datasets {
+            ui.label("Loading schema sources…");
+        } else if self.datasets.summaries_error.is_some() {
+            ui.colored_label(theme::DANGER, "Could not load schema sources.");
+            if ui.button("Retry schema sources").clicked() {
+                self.request_dataset_list();
+            }
+        } else if sources.is_empty() {
+            ui.small("No datasets available to copy. None creates an empty schema.");
+        }
+        let copy = &self.setup.schema_copy;
+        if copy.source.is_none() {
+            ui.small("Start with no classes or workflows.");
+            return;
+        }
+        if copy.pending.is_some() {
+            ui.label("Loading schema preview…");
+        } else if let Some(error) = &copy.error {
+            ui.colored_label(theme::DANGER, error);
+        } else if let Some(preview) = &copy.preview {
+            ui.label(format!(
+                "Schema from {} ({})",
+                preview.name, preview.dataset_id
+            ));
+            ui.label(format!(
+                "Classes: {} · Workflows: {}",
+                preview.label_classes.len(),
+                preview.tasks.len()
+            ));
+            for class in &preview.label_classes {
+                ui.label(format!("Class: {} ({})", class.name, class.class_id));
+            }
+            for task in &preview.tasks {
+                let classes = task
+                    .class_ids
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                ui.label(format!(
+                    "Workflow: {} ({}) · {} · Classes: {}{}",
+                    task.name,
+                    task.task_id,
+                    task.annotation_type,
+                    classes,
+                    if task.enabled { "" } else { " · Disabled" }
+                ));
+                if let Some(skeleton) = &task.skeleton {
+                    ui.small(format!(
+                        "Keypoints in order: {}",
+                        skeleton
+                            .keypoints
+                            .iter()
+                            .map(|point| point.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+            }
+        }
+        if self.setup.schema_copy.pending.is_none() && !self.loading.dataset {
+            if !self.schema_copy_ready() {
+                ui.colored_label(theme::DANGER, "The selected schema is not ready to copy.");
+            }
+            if ui.button("Reload schema preview").clicked() {
+                self.select_schema_source(self.setup.schema_copy.source.clone());
+            }
+        }
+        ui.small("Copies classes and workflows. Tutorial image references and prelabel bindings are omitted. Images, labels, access, and dataset settings are not copied.");
+        ui.small("Use matching export profiles and workflow/class selections for compatible labels. Later schema edits or different selections can break compatibility.");
     }
 
     pub(crate) fn primary_navigation_destinations(&self) -> Vec<(AppView, &'static str)> {

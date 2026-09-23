@@ -42,6 +42,17 @@ without such membership use the selected fallback, initially `train` in the
 UI. Conflicting recognized memberships require an explicit per-image choice.
 There is no random split or silent reassignment of an unambiguous split.
 
+### Compatible exports from copied schemas
+
+Dataset creation can copy classes and workflows from an existing dataset.
+This preserves the task/class IDs that determine class indices and the exact
+skeleton keypoint order. With unchanged copied definitions, the same profile
+and corresponding task/class selections produce matching class-index meanings
+and pose keypoint layouts across both datasets, including distinct classes
+with equal display names. Their labels require no class or keypoint remapping.
+Different selections or later schema edits can break that compatibility.
+Copying a schema does not combine archives or copy annotations and images.
+
 ## Geometry and files
 
 Detection rows contain class index and normalized box center, width, and

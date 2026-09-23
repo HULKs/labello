@@ -600,3 +600,92 @@ async fn unfiltered_gallery_loads_only_requested_page_states() {
         }
     }
 }
+
+async fn create_with_schema(app: &axum::Router, id: &str, source: Option<&str>, actor: &str) -> axum::response::Response {
+    app.clone().oneshot(Request::builder().method("POST").uri("/datasets")
+        .header("x-test-user-id", actor)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(json!({"datasetId": id, "name": "New dataset", "adminUserId": actor,
+            "schemaSourceDatasetId": source}).to_string())).unwrap()).await.unwrap()
+}
+
+#[tokio::test]
+async fn schema_copy_preserves_definitions_and_isolates_dataset_data() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    let source_repo = state.repo(&DatasetId::from("ds")).unwrap();
+    let mut source = source_repo.load_dataset().await.unwrap();
+    source.tasks[0].instructions.example_images = vec!["private/example.png".into()];
+    source.tasks[0].prelabel_config_ids = vec!["source-model".into()];
+    source.image_roots = vec!["source-images".into()];
+    let mut skeleton = source.tasks[0].clone();
+    skeleton.task_id = "pose:pixel".into();
+    skeleton.annotation_type = AnnotationType::Skeleton;
+    skeleton.skeleton = Some(SkeletonSpec {
+        keypoints: vec![KeypointSpec { name: "tail".into(), required: false }, KeypointSpec { name: "nose".into(), required: true }],
+        edges: vec![labello_domain::SkeletonEdge { from: "tail".into(), to: "nose".into() }],
+        allow_hidden: true, allow_absent: true,
+    });
+    skeleton.manual_box_guide_migration = Some(ManualBoxGuideMigration {
+        guide_task_id: source.tasks[0].task_id.clone(),
+        cardinality: MigrationCardinality::ExactlyOne,
+        sequence: MigrationSequence::ImportedSpatialOrderV1,
+        allow_exclusion: true,
+    });
+    source.tasks.push(skeleton);
+    source_repo.save_dataset(&source).await.unwrap();
+    let response = create_with_schema(&app, "copied", Some("ds"), "admin").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let copied_repo = state.repo(&DatasetId::from("copied")).unwrap();
+    let copied = copied_repo.load_dataset().await.unwrap();
+    assert_eq!(copied.label_classes, source.label_classes);
+    let mut expected_tasks = source.tasks.clone();
+    for task in &mut expected_tasks { task.instructions.example_images.clear(); task.prelabel_config_ids.clear(); }
+    assert_eq!(copied.tasks, expected_tasks);
+    assert_eq!(copied.image_roots, ["images"]);
+    assert!(copied.images.is_empty());
+    assert!(copied.migration_history.is_empty());
+    assert!(copied.prelabel_configs.is_empty());
+    assert!(copied.imbalance.is_none());
+    assert_eq!(copied.role_assignments.len(), 1);
+    assert_eq!(copied.role_assignments[0].dataset_id, DatasetId::from("copied"));
+    assert_eq!(source_repo.load_dataset().await.unwrap(), source);
+    let mut edited = copied.clone();
+    edited.label_classes[0].name = "Independent".into();
+    copied_repo.save_dataset(&edited).await.unwrap();
+    assert_eq!(source_repo.load_dataset().await.unwrap(), source);
+    let blank = create_with_schema(&app, "blank", None, "admin").await;
+    assert_eq!(blank.status(), StatusCode::OK);
+    assert!(state.repo(&DatasetId::from("blank")).unwrap().load_dataset().await.unwrap().tasks.is_empty());
+}
+
+#[tokio::test]
+async fn schema_copy_rejects_unavailable_unauthorized_and_invalid_sources_without_creation() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    for (destination, source, actor, expected) in [
+        ("missing-copy", "missing", "admin", StatusCode::NOT_FOUND),
+        ("unsafe-copy", "../ds", "admin", StatusCode::BAD_REQUEST),
+        ("non-bootstrap", "ds", "reviewer_2", StatusCode::UNAUTHORIZED),
+    ] {
+        assert_eq!(create_with_schema(&app, destination, Some(source), actor).await.status(), expected);
+        assert!(!temp.path().join(destination).exists());
+    }
+    let repo = state.repo(&DatasetId::from("ds")).unwrap();
+    let mut source = repo.load_dataset_config().await.unwrap();
+    source.role_assignments.retain(|assignment| assignment.user_id != UserId::from("admin"));
+    repo.save_dataset(&source).await.unwrap();
+    assert_eq!(create_with_schema(&app, "denied-copy", Some("ds"), "admin").await.status(), StatusCode::UNAUTHORIZED);
+    assert!(!temp.path().join("denied-copy").exists());
+    source.role_assignments.push(DatasetRoleAssignment { dataset_id: "ds".into(), user_id: "admin".into(), roles: BTreeSet::from([DatasetRole::DataAdmin]), assigned_at: now(), assigned_by: None });
+    source.tasks[0].class_ids = vec!["missing-class".into()];
+    repo.save_dataset(&source).await.unwrap();
+    assert_eq!(create_with_schema(&app, "invalid-copy", Some("ds"), "admin").await.status(), StatusCode::BAD_REQUEST);
+    assert!(!temp.path().join("invalid-copy").exists());
+}

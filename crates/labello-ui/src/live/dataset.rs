@@ -17,8 +17,36 @@ impl LabelloApp {
         self.queue_command(UiCommand::DatasetList { request });
     }
 
+    pub(crate) fn select_schema_source(&mut self, source: Option<labello_domain::DatasetId>) {
+        if let Some(request_id) = self.setup.schema_copy.pending.take() {
+            self.runtime.active_requests.remove(&request_id);
+        }
+        self.setup.schema_copy = crate::app::SchemaCopyState {
+            source: source.clone(),
+            ..Default::default()
+        };
+        let Some(dataset_id) = source else { return };
+        let request = self.request_identity(None);
+        self.setup.schema_copy.pending = Some(request.request_id);
+        self.queue_command(UiCommand::LoadSchemaSource { request, dataset_id });
+    }
+
+    pub(crate) fn schema_copy_ready(&self) -> bool {
+        let copy = &self.setup.schema_copy;
+        copy.source.is_none() || (copy.pending.is_none() && copy.error.is_none()
+            && copy.preview.as_ref().is_some_and(|preview| Some(&preview.dataset_id) == copy.source.as_ref())
+            && self.datasets.summaries_error.is_none()
+            && !self.loading.datasets
+            && self.datasets.summaries.iter().any(|dataset| Some(&dataset.dataset_id) == copy.source.as_ref()
+                && dataset.roles.contains(&labello_domain::DatasetRole::DataAdmin)))
+    }
+
     pub(crate) fn request_create_dataset(&mut self) {
         if self.loading.dataset || self.runtime.api.is_none() {
+            return;
+        }
+        if !self.schema_copy_ready() {
+            self.setup.schema_copy.error = Some("Load an available schema before creating the dataset.".into());
             return;
         }
         let dataset_id = labello_domain::DatasetId::from(self.setup.create_dataset_id.trim());
@@ -38,6 +66,7 @@ impl LabelloApp {
             dataset_id,
             name,
             admin_user_id: self.config.user_id.clone(),
+            schema_source_dataset_id: self.setup.schema_copy.source.clone(),
         });
     }
 

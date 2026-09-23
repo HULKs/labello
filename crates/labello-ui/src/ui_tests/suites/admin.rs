@@ -1011,3 +1011,138 @@ fn inspector_browses_live_images_without_claiming_or_saving() {
     assert_eq!(api.counts().annotation_batch, 0);
     assert!(harness.state().work.assignment.is_none());
 }
+
+#[test]
+fn schema_copy_selector_defaults_to_none_previews_and_copies() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = live_harness(api.clone());
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    select_setup_section(&mut harness, "Create");
+    assert!(harness.state().setup.schema_copy.source.is_none());
+    assert!(harness.query_by_label("Copy schema from: None").is_some());
+    let source_id = harness.state().datasets.summaries[0].dataset_id.clone();
+    let source_name = harness.state().datasets.summaries[0].name.clone();
+    click(&mut harness, "Copy schema from: None");
+    click(&mut harness, &format!("{source_name} ({source_id})"));
+    step_until(&mut harness, 10, |app| app.setup.schema_copy.preview.is_some());
+    assert!(harness.state().schema_copy_ready());
+    assert!(!harness.state().setup.schema_copy.preview.as_ref().unwrap().tasks.is_empty());
+    let mut source_tasks = harness.state().setup.schema_copy.preview.as_ref().unwrap().tasks.clone();
+    for task in &mut source_tasks { task.instructions.example_images.clear(); task.prelabel_config_ids.clear(); }
+    harness.state_mut().setup.create_dataset_id = "schema-copy".into();
+    harness.state_mut().setup.create_dataset_name = "Copied schema".into();
+    harness.step();
+    click(&mut harness, "Create dataset");
+    step_until(&mut harness, 20, |app| app.view == AppView::Admin && !app.loading.admin);
+    assert_eq!(api.counts().create_dataset, 1);
+    assert_eq!(harness.state().datasets.admin_config.as_ref().unwrap().tasks, source_tasks);
+}
+
+#[test]
+fn schema_copy_keyboard_selection_restores_focus_and_reaches_create() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = live_harness(api.clone());
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    harness.set_size(egui::vec2(1440.0, 1000.0));
+    select_setup_section(&mut harness, "Create");
+    harness.state_mut().setup.create_dataset_id = "keyboard-copy".into();
+    harness.state_mut().setup.create_dataset_name = "Keyboard copy".into();
+    harness.step();
+    harness.get_by_label("Dataset ID").focus();
+    for key in [egui::Key::Tab, egui::Key::Tab, egui::Key::Space, egui::Key::ArrowDown, egui::Key::ArrowDown, egui::Key::Enter] {
+        harness.key_press(key);
+        harness.run_steps(3);
+    }
+    step_until(&mut harness, 10, |app| app.setup.schema_copy.preview.is_some());
+    let source = &harness.state().datasets.summaries[0];
+    let label = format!("Copy schema from: {} ({})", source.name, source.dataset_id);
+    assert!(harness.get_by_label(&label).is_focused());
+    for key in [egui::Key::Tab, egui::Key::Tab] {
+        harness.key_press(key);
+        harness.run_steps(3);
+    }
+    assert!(harness.get_by_label("Create dataset").is_focused());
+    harness.key_press(egui::Key::Enter);
+    step_until(&mut harness, 20, |app| app.view == AppView::Admin && !app.loading.admin);
+    assert_eq!(api.counts().create_dataset, 1);
+}
+
+#[test]
+fn schema_copy_none_failure_and_obsolete_preview_never_copy_silently() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = live_harness(api.clone());
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    let app = harness.state_mut();
+    app.setup.create_dataset_id = "copy".into();
+    app.setup.create_dataset_name = "Copy".into();
+    app.select_schema_source(Some("missing".into()));
+    app.request_create_dataset();
+    assert_eq!(api.counts().create_dataset, 0);
+    step_until(&mut harness, 10, |app| app.setup.schema_copy.pending.is_none());
+    assert!(harness.state().setup.schema_copy.error.is_some());
+    assert!(!harness.state().schema_copy_ready());
+    let source = harness.state().datasets.summaries[0].dataset_id.clone();
+    harness.state_mut().select_schema_source(Some(source));
+    // Selecting None before the reply must not restore the old preview or selection.
+    harness.state_mut().select_schema_source(None);
+    for _ in 0..8 { harness.step(); }
+    assert!(harness.state().setup.schema_copy.preview.is_none());
+    assert!(harness.state().schema_copy_ready());
+    harness.state_mut().request_create_dataset();
+    step_until(&mut harness, 20, |app| app.view == AppView::Admin && !app.loading.admin);
+    assert!(harness.state().datasets.admin_config.as_ref().unwrap().tasks.is_empty());
+}
+
+#[test]
+fn schema_copy_catalog_failures_and_revocation_block_only_selected_sources() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = live_harness(api.clone());
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    let source = harness.state().datasets.summaries[0].dataset_id.clone();
+    harness.state_mut().select_schema_source(Some(source));
+    step_until(&mut harness, 10, |app| app.setup.schema_copy.preview.is_some());
+    assert!(harness.state().schema_copy_ready());
+    harness.state_mut().datasets.summaries_error = Some("refresh failed".into());
+    assert!(!harness.state().schema_copy_ready());
+    harness.state_mut().datasets.summaries_error = None;
+    harness.state_mut().datasets.summaries[0].roles.clear();
+    assert!(!harness.state().schema_copy_ready());
+    harness.state_mut().select_schema_source(None);
+    assert!(harness.state().schema_copy_ready());
+}
+
+#[test]
+fn schema_copy_menu_retains_long_names_and_fits_compact_layouts() {
+    for size in [egui::vec2(320.0, 568.0), egui::vec2(390.0, 844.0), egui::vec2(600.0, 800.0), egui::vec2(1288.0, 820.0), egui::vec2(1440.0, 1000.0)] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = live_harness(api);
+        step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+        let name = "Long dataset name for the shared annotation schema ".repeat(3);
+        harness.state_mut().datasets.summaries[0].name = name.clone();
+        harness.state_mut().setup.section = SetupSection::Create;
+        harness.set_size(size);
+        for _ in 0..4 { harness.step(); }
+        let menu = harness.get_by_label("Copy schema from: None");
+        let rect = menu.rect();
+        assert!(rect.min.x >= 0.0 && rect.max.x <= size.x, "{size:?}: {rect:?}");
+        menu.click_accesskit();
+        for _ in 0..3 { harness.step(); }
+        let source = &harness.state().datasets.summaries[0];
+        let label = format!("{} ({})", name, source.dataset_id);
+        assert!(harness.query_by_label(&label).is_some());
+        harness.get_by_label(&label).click_accesskit();
+        step_until(&mut harness, 10, |app| app.setup.schema_copy.preview.is_some());
+        let selected_label = format!("Copy schema from: {label}");
+        let menu = harness.get_by_label(&selected_label);
+        let rect = menu.rect();
+        assert!(rect.min.x >= 0.0 && rect.max.x <= size.x, "selected {size:?}: {rect:?}");
+        menu.scroll_to_me();
+        for _ in 0..3 { harness.step(); }
+        click(&mut harness, &selected_label);
+        for _ in 0..3 { harness.step(); }
+        harness.get_by_label("None").click_accesskit();
+        harness.step();
+        assert!(harness.state().setup.schema_copy.source.is_none());
+    }
+}

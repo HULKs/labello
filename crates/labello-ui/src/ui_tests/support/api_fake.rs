@@ -1276,6 +1276,12 @@ impl DatasetApi for SpyApi {
         state.counts.create_dataset += 1;
         let timestamp = now();
         let mut metadata = DatasetMetadata::new(request.dataset_id, request.name, timestamp);
+        if let Some(source_id) = request.schema_source_dataset_id {
+            if source_id != state.metadata.dataset_id {
+                return ready(Err(ClientError::Demo("Schema source unavailable".into())));
+            }
+            metadata.copy_annotation_schema_from(&state.metadata);
+        }
         metadata.role_assignments = vec![DatasetRoleAssignment {
             dataset_id: metadata.dataset_id.clone(),
             user_id: request.admin_user_id,

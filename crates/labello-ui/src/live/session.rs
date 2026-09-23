@@ -13,6 +13,7 @@ impl LabelloApp {
 
     fn clear_authenticated_state(&mut self) {
         self.inspection = Default::default();
+        self.setup.schema_copy = Default::default();
         self.begin_import_epoch();
         self.import = Default::default();
         self.auth.account = None;
