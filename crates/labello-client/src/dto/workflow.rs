@@ -217,3 +217,20 @@ pub struct CorrectionRequest {
     pub geometry: AnnotationGeometry,
     pub reason: Option<String>,
 }
+
+/// Saved explanation with current, public author presentation. Never persisted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowReasonEntry {
+    #[serde(flatten)]
+    pub reason: labello_domain::WorkflowReason,
+    #[serde(default)]
+    pub author: Option<WorkflowReasonAuthor>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowReasonAuthor {
+    pub github_login: Option<String>,
+    pub github_user_id: Option<String>,
+}

@@ -2,6 +2,7 @@ use crate::{
     app::{AppView, LabelloApp},
     theme,
 };
+use labello_client::WorkflowReasonEntry;
 use labello_domain::{DatasetId, ImageId, TaskId, WorkflowReason, WorkflowReasonAction};
 
 pub(crate) struct ReasonNotice {
@@ -9,13 +10,13 @@ pub(crate) struct ReasonNotice {
     image_id: ImageId,
     task_id: TaskId,
     view: AppView,
-    reasons: Vec<WorkflowReason>,
+    reasons: Vec<WorkflowReasonEntry>,
     dismissed: bool,
     compact_details_open: bool,
 }
 
 impl LabelloApp {
-    pub(crate) fn install_reason_notice(&mut self, reasons: Vec<WorkflowReason>) {
+    pub(crate) fn install_reason_notice(&mut self, reasons: Vec<WorkflowReasonEntry>) {
         self.work.reason_notice = self
             .work
             .assignment
@@ -27,7 +28,10 @@ impl LabelloApp {
                 view: self.view,
                 reasons: reasons
                     .into_iter()
-                    .filter(|reason| reason.image_id == assignment.image_id)
+                    .filter(|entry| {
+                        entry.reason.image_id == assignment.image_id
+                            && entry.reason.task_id.as_ref() == Some(&assignment.task_id)
+                    })
                     .collect(),
                 dismissed: false,
                 compact_details_open: false,
@@ -71,20 +75,18 @@ impl LabelloApp {
         let Some(notice) = self.work.reason_notice.as_ref() else {
             return;
         };
-        // Recent feedback should not be buried below earlier explanations.
         let reasons: Vec<_> = notice.reasons.iter().rev().cloned().collect();
         let detail_id = (
             "work-feedback",
+            notice.dataset_id.clone(),
             notice.image_id.clone(),
             notice.task_id.clone(),
         );
         let short = Self::short_viewport(ui.ctx().content_rect().size());
         let mut details_open = notice.compact_details_open;
         let mut dismiss = false;
-        let heading = reasons
-            .first()
-            .map_or_else(|| "Image feedback".into(), feedback_heading);
-        let accent = if reasons.first().is_some_and(needs_attention) {
+        let heading = feedback_heading(&reasons[0].reason);
+        let accent = if needs_attention(&reasons[0].reason) {
             theme::AMBER
         } else {
             theme::BORDER
@@ -94,15 +96,15 @@ impl LabelloApp {
             .stroke(egui::Stroke::new(1.0, accent))
             .show(ui, |ui| {
                 ui.set_width((width - 16.0).max(100.0));
-                ui.horizontal(|ui| {
+                // The close target sits beside the content, never between title and explanation.
+                ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width((width - 68.0 - ui.spacing().item_spacing.x).max(44.0));
                         if short {
-                            let label = heading.clone();
                             if ui
                                 .add_sized(
                                     [ui.available_width(), 44.0],
-                                    egui::Button::new(&label).wrap(),
+                                    egui::Button::new(&heading).wrap(),
                                 )
                                 .on_hover_text("Read image feedback")
                                 .clicked()
@@ -110,17 +112,10 @@ impl LabelloApp {
                                 details_open = true;
                             }
                         } else {
-                            let response = ui.add(
-                                egui::Label::new(egui::RichText::new(&heading).strong()).wrap(),
-                            );
-                            ui.ctx().accesskit_node_builder(response.id, |node| {
-                                node.set_role(egui::accesskit::Role::Status);
-                                node.set_label(heading.clone());
-                                node.set_live(egui::accesskit::Live::Polite);
-                            });
-                            if reasons.len() > 1 {
-                                ui.weak(format!("{} saved messages", reasons.len()));
-                            }
+                            egui::ScrollArea::vertical()
+                                .id_salt(&detail_id)
+                                .max_height((canvas_height * 0.3 + 44.0).clamp(88.0, 264.0))
+                                .show(ui, |ui| self.saved_feedback(ui, &reasons, &detail_id));
                         }
                     });
                     let response = ui
@@ -135,11 +130,12 @@ impl LabelloApp {
                     });
                     dismiss = response.clicked();
                 });
-                if !short {
-                    egui::ScrollArea::vertical()
-                        .id_salt(&detail_id)
-                        .max_height((canvas_height * 0.3).clamp(44.0, 220.0))
-                        .show(ui, |ui| self.saved_feedback(ui, &reasons));
+                if !short && reasons.len() > 1 {
+                    ui.label(
+                        egui::RichText::new(format!("{} saved messages", reasons.len()))
+                            .small()
+                            .color(theme::TEXT_MUTED),
+                    );
                 }
             });
         if short && details_open && !dismiss {
@@ -155,7 +151,6 @@ impl LabelloApp {
                     (screen.height() - 48.0).max(100.0),
                 ))
                 .show(ui.ctx(), |ui| {
-                    // Put Close first so even a long heading cannot push it out of reach.
                     if ui
                         .add(egui::Button::new("Close feedback").min_size(egui::vec2(44.0, 44.0)))
                         .clicked()
@@ -166,8 +161,10 @@ impl LabelloApp {
                         .id_salt("compact-image-feedback")
                         .max_height((screen.height() - 132.0).max(44.0))
                         .show(ui, |ui| {
-                            ui.label(egui::RichText::new(&heading).strong());
-                            self.saved_feedback(ui, &reasons);
+                            self.saved_feedback(ui, &reasons, &detail_id);
+                            if reasons.len() > 1 {
+                                ui.weak(format!("{} saved messages", reasons.len()));
+                            }
                         });
                 });
         }
@@ -177,87 +174,143 @@ impl LabelloApp {
         }
     }
 
-    fn saved_feedback(&self, ui: &mut egui::Ui, reasons: &[WorkflowReason]) {
-        for (index, reason) in reasons.iter().enumerate() {
+    fn saved_feedback(
+        &self,
+        ui: &mut egui::Ui,
+        reasons: &[WorkflowReasonEntry],
+        context: &(impl std::hash::Hash + std::fmt::Debug),
+    ) {
+        for (index, entry) in reasons.iter().enumerate() {
+            let reason = &entry.reason;
             if index > 0 {
-                ui.add_space(theme::SPACE_2);
                 ui.separator();
-                ui.label(egui::RichText::new(feedback_heading(reason)).strong());
             }
-            if reason.superseded {
-                ui.weak("Replaced by a later update");
-            }
-            if let Some(category) = reason.category {
-                ui.add(
-                    egui::Label::new(format!(
-                        "Exclusion: {}",
-                        crate::manual_migration::exclusion_label(category)
-                    ))
-                    .wrap(),
-                );
-            }
-            if let Some(text) = &reason.text {
-                let text = if reason.category.is_some() {
-                    format!("Note: {text}")
-                } else {
-                    text.clone()
-                };
-                ui.add(egui::Label::new(text).wrap().selectable(true));
-            }
-            let workflow = reason
-                .task_id
-                .as_ref()
-                .map(|id| {
-                    self.work
-                        .tasks
-                        .iter()
-                        .find(|task| &task.task_id == id)
-                        .map_or_else(|| id.to_string(), |task| task.name.clone())
-                })
-                .unwrap_or_else(|| "Whole image".into());
-            let relevance = if reason.current_exclusion {
-                " · Active exclusion"
-            } else if reason.current_round {
-                " · Current review round"
-            } else {
-                ""
-            };
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(format!("{workflow}{relevance}"))
-                        .small()
-                        .color(theme::TEXT_MUTED),
-                )
-                .wrap(),
-            );
-            if let Some(object) = reason
-                .object_group_id
-                .as_ref()
-                .map(ToString::to_string)
-                .or_else(|| reason.annotation_id.as_ref().map(ToString::to_string))
-            {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(format!("Object {object}"))
-                            .small()
-                            .monospace()
-                            .color(theme::TEXT_MUTED),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(format!("Object {object}"));
-            }
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(format!(
-                        "{} · {}",
-                        reason.actor_user_id,
-                        reason.timestamp.format("%Y-%m-%d %H:%M UTC")
-                    ))
-                    .small()
-                    .color(theme::TEXT_MUTED),
-                )
-                .wrap(),
+            ui.push_id(
+                (context, &reason.event_id, &reason.annotation_id, index),
+                |ui| {
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.y = theme::SPACE_1;
+                        let heading = feedback_heading(reason);
+                        let response =
+                            ui.add(egui::Label::new(egui::RichText::new(&heading).strong()).wrap());
+                        if index == 0 {
+                            ui.ctx().accesskit_node_builder(response.id, |node| {
+                                node.set_role(egui::accesskit::Role::Status);
+                                node.set_label(heading);
+                                node.set_live(egui::accesskit::Live::Polite);
+                            });
+                        }
+                        if let Some(category) = reason.category {
+                            ui.add(
+                                egui::Label::new(format!(
+                                    "Exclusion: {}",
+                                    crate::manual_migration::exclusion_label(category)
+                                ))
+                                .wrap(),
+                            );
+                        }
+                        if let Some(text) = &reason.text {
+                            let text = if reason.category.is_some() {
+                                format!("Note: {text}")
+                            } else {
+                                text.clone()
+                            };
+                            ui.add(egui::Label::new(text).wrap().selectable(true));
+                        }
+                    });
+                    let workflow = reason
+                        .task_id
+                        .as_ref()
+                        .map(|id| {
+                            self.work
+                                .tasks
+                                .iter()
+                                .find(|task| &task.task_id == id)
+                                .map_or_else(|| id.to_string(), |task| task.name.clone())
+                        })
+                        .unwrap_or_else(|| "Whole image".into());
+                    let relevance = if reason.current_exclusion {
+                        " · Active exclusion"
+                    } else if reason.current_round {
+                        " · Current review round"
+                    } else {
+                        ""
+                    };
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("{workflow}{relevance}"))
+                                .small()
+                                .color(theme::TEXT_MUTED),
+                        )
+                        .wrap(),
+                    );
+                    if reason.superseded {
+                        ui.weak("Replaced by a later update");
+                    }
+                    let name = entry
+                        .author
+                        .as_ref()
+                        .and_then(|author| author.github_login.as_deref())
+                        .filter(|login| !login.trim().is_empty())
+                        .map(|login| format!("@{login}"))
+                        .unwrap_or_else(|| "Unknown author".into());
+                    let github_id = entry
+                        .author
+                        .as_ref()
+                        .and_then(|author| author.github_user_id.as_deref());
+                    ui.scope(|ui| {
+                        ui.spacing_mut().interact_size.y = 24.0;
+                        ui.horizontal(|ui| {
+                            let (rect, _) = ui
+                                .allocate_exact_size(egui::Vec2::splat(24.0), egui::Sense::hover());
+                            crate::avatar::paint(ui, github_id, &name, rect);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&name).small().color(theme::TEXT_MUTED),
+                                )
+                                .truncate(),
+                            )
+                            .on_hover_text(&name);
+                        });
+                    });
+                    ui.scope(|ui| {
+                        ui.spacing_mut().interact_size.y = 44.0;
+                        egui::CollapsingHeader::new(
+                            egui::RichText::new("Additional info")
+                                .small()
+                                .color(theme::TEXT_MUTED),
+                        )
+                        .id_salt("audit-details")
+                        .show(ui, |ui| {
+                            if let Some(object) = reason
+                                .object_group_id
+                                .as_ref()
+                                .map(ToString::to_string)
+                                .or_else(|| reason.annotation_id.as_ref().map(ToString::to_string))
+                            {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(format!("Object {object}"))
+                                            .small()
+                                            .monospace(),
+                                    )
+                                    .wrap()
+                                    .selectable(true),
+                                );
+                            }
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(
+                                        reason.timestamp.format("%Y-%m-%d %H:%M UTC").to_string(),
+                                    )
+                                    .small()
+                                    .color(theme::TEXT_MUTED),
+                                )
+                                .wrap(),
+                            );
+                        });
+                    });
+                },
             );
         }
     }

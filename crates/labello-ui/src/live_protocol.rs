@@ -1068,7 +1068,7 @@ pub(crate) struct LoadedAdmin {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LoadedImage {
-    pub reasons: Vec<labello_domain::WorkflowReason>,
+    pub reasons: Vec<labello_client::WorkflowReasonEntry>,
     pub assignment: Assignment,
     pub queued: QueuedImage,
     pub annotations: Vec<labello_domain::AnnotationVersion>,

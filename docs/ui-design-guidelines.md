@@ -275,16 +275,22 @@ has been recorded.
   Loading alone must not change its layout. The dataset
   inspector reserves its context row during initial gallery loading and retains
   its fixed controls across image loads.
-- **Saved reasons:** share the persistent, dismissible notification area with
-  workflow-change notices. Lead with the actual event, such as Review rejected
-  or Reviewer corrections saved, and the explanation. Do not put a generic
-  Reason heading or accordion above the message. Keep workflow, object, author
-  and date secondary; label earlier feedback explicitly. Wrap long explanations
-  in a bounded scroll area; at short heights the event title opens full feedback
-  in a bounded non-modal window. Use amber only for current rejection/exclusion
-  feedback, not routine history. Revisiting a completed review alone creates no notice. Dismissal
-  applies to the opened image context. Object and submission reason inputs name
-  their scope, optional/required rule and total byte limit; failures retain input.
+- **Saved reasons:** show only feedback matching the active image and workflow,
+  sharing the persistent, dismissible area with workflow-change notices. Lead
+  with the event and explanation at a four-point gap; keep the 44-point dismiss
+  target beside the content so it cannot inflate that gap. Use eight-point
+  grouping gaps, existing text roles and quiet borders. Keep workflow and status
+  visible, then a 24-point avatar with the GitHub username immediately to its right.
+  Reuse cached avatars and initials fallback; unavailable identity reads Unknown
+  author. Object IDs and UTC timestamps belong in a collapsed Additional info
+  disclosure at the end of each message. The explanation itself never requires
+  expansion. Show message counts at the bottom. Keep earlier/replaced feedback
+  explicit and newest messages first. Wrap long explanations in a bounded scroll
+  area; at short heights the event title opens full feedback in a bounded non-modal
+  window. Use amber only for current rejection/exclusion feedback. Revisiting a
+  completed review alone creates no notice. Dismissal applies to the opened
+  context. Object and submission reason inputs retain their scope, validation
+  and input-preservation behavior.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.

@@ -241,7 +241,7 @@ pub(super) struct CallCounts {
 }
 
 pub(super) struct SpyState {
-    pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_domain::WorkflowReason>>,
+    pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
     pub(super) fail_next_reasons: bool,
     pub(super) metadata: DatasetMetadata,
     pub(super) states: BTreeMap<ImageId, ImageState>,
@@ -1429,7 +1429,7 @@ impl TaskApi for SpyApi {
 
 impl ImageApi for SpyApi {
     fn get_image_reasons<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId)
-        -> labello_client::ApiFuture<'a, Vec<labello_domain::WorkflowReason>> {
+        -> labello_client::ApiFuture<'a, Vec<labello_client::WorkflowReasonEntry>> {
         let mut state = self.state.borrow_mut();
         if std::mem::take(&mut state.fail_next_reasons) {
             return ready(Err(ClientError::Demo("reason history unavailable".into())));

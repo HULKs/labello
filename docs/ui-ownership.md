@@ -530,27 +530,38 @@ it does not write geometry, provenance, or review state.
 
 ## Saved workflow reasons
 
-`workflow_reasons.rs` owns the image-scoped, dismissible reason notice in the
+`workflow_reasons.rs` owns the image-and-workflow-scoped, dismissible reason notice in the
 shared annotation/review workspace. Assignment loading fetches the read-only
 reason projection alongside state and preview. The existing request, assignment
 and workspace gates apply to the entire load, including previous-assignment
 navigation, prefetch and reload. Failed loads use the existing retry path.
 Reasons never arrive through a separate unowned response.
 
-The notice identifies each source action, workflow, object where applicable,
-actor and timestamp. It retains historical explanations, labels current review
-rounds and active exclusions, and does not treat superseded decisions as current.
-It shares the floating notice area with workflow-change notices. Each message
-leads with its event and explanation, followed by muted workflow, object, author
-and time details. Newest messages appear first; earlier or replaced feedback is
-explicitly labelled. There is no accordion or generic Reason heading. Long
-content scrolls directly. Short viewports show the event title as a button that
-opens the full feedback in a bounded non-modal window. Dismissal
-lasts for the opened context; an accepted reload or reopening installs a new
-notice. Image, dataset, workflow and view changes invalidate the old context.
-Revisiting a completed review does not create a notification. Only saved
-feedback appears, under its originating event heading. An empty feedback
-history leaves the notice area empty.
+The notice admits only reasons whose image and workflow match the installed
+assignment. An unscoped reason is not inferred relevant from image identity.
+No matching reasons means no notice. The accepted load includes optional public
+GitHub author identity, so feedback does not depend on visiting Statistics.
+The API enriches transport data; persisted reasons and workflow policy stay unchanged.
+
+Each message leads with its event and explanation, separated by four logical
+points. The 44-point dismiss control sits beside the content and does not reserve
+a header row above the explanation. Workflow and current/historical status stay
+visible below the explanation. A 24-point avatar precedes the GitHub username;
+missing avatars use the Statistics initials fallback, and an unavailable login
+reads Unknown author rather than an internal ID. The shared Statistics avatar
+cache prevents per-frame downloads. Object identity and UTC timestamp appear in
+a keyboard-accessible Additional info disclosure, collapsed initially with stable
+per-message identity across redraws. Multiple-message counts sit at the bottom.
+
+The notice retains historical explanations, labels current review rounds and
+active exclusions, and does not treat superseded decisions as current. It shares
+the floating notice area with workflow-change notices. Newest messages appear
+first; earlier or replaced feedback is explicitly labelled. Long content scrolls
+directly. Short viewports show the event title as a button opening full feedback
+in a bounded non-modal window. Dismissal lasts for the opened context; an accepted
+reload or reopening installs a new notice. Image, dataset, workflow and view
+changes invalidate the old context. Revisiting a completed review creates no
+notification without saved feedback.
 
 | Saved input | Display mapping |
 | --- | --- |

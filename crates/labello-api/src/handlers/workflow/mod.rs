@@ -285,7 +285,7 @@ pub(crate) async fn get_image_reasons(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
     headers: HeaderMap,
-) -> ApiResult<Json<Vec<labello_domain::WorkflowReason>>> {
+) -> ApiResult<Json<Vec<labello_client::WorkflowReasonEntry>>> {
     image_id.validate_path_segment()?;
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
@@ -295,10 +295,26 @@ pub(crate) async fn get_image_reasons(
     let events = repo.load_events(&image_id).await?;
     let image_state = labello_domain::rebuild_state(image_id, &events)
         .map_err(labello_storage::StorageError::from)?;
-    Ok(Json(labello_domain::workflow_reasons(
-        &image_state,
-        &events,
-    )))
+    let accounts: std::collections::BTreeMap<_, _> = state
+        .server_store
+        .users()?
+        .into_iter()
+        .map(|account| (account.user_id.clone(), account))
+        .collect();
+    Ok(Json(
+        labello_domain::workflow_reasons(&image_state, &events)
+            .into_iter()
+            .map(|reason| {
+                let author = accounts.get(&reason.actor_user_id).map(|account| {
+                    labello_client::WorkflowReasonAuthor {
+                        github_login: account.github_login.clone(),
+                        github_user_id: account.github_user_id.clone(),
+                    }
+                });
+                labello_client::WorkflowReasonEntry { reason, author }
+            })
+            .collect(),
+    ))
 }
 
 pub(crate) async fn get_image_record(
