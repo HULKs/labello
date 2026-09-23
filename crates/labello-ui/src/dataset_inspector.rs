@@ -890,6 +890,94 @@ mod tests {
     }
 
     #[test]
+    fn inspector_filter_menus_fit_viewport_and_keep_dense_accessible_choices() {
+        for size in [
+            egui::vec2(1440.0, 1000.0),
+            egui::vec2(390.0, 844.0),
+            egui::vec2(320.0, 320.0),
+        ] {
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app());
+            harness.run();
+            if size.x < 1288.0 {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, "Images")
+                    .click();
+                harness.run();
+            }
+            harness
+                .get_all_by_value("All statuses")
+                .next()
+                .unwrap()
+                .click();
+            harness.run();
+            for status in statuses() {
+                let node = harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, status_label(&status));
+                let rect = node.rect();
+                assert!(rect.height() <= 32.0, "{rect:?}");
+                assert!(
+                    rect.top() >= 0.0 && rect.bottom() <= size.y,
+                    "{size:?}: {rect:?}"
+                );
+            }
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "Completed")
+                .click();
+            harness.run();
+            assert_eq!(
+                harness.state().inspection.query.status,
+                Some(TaskStatus::Completed)
+            );
+        }
+    }
+
+    #[test]
+    fn inspector_workflow_menu_uses_full_viewport_and_scrolls_overflow() {
+        for height in [1000.0, 320.0] {
+            let mut application = app();
+            let template = application.work.tasks[0].clone();
+            application.work.tasks = (0..18)
+                .map(|index| {
+                    let mut task = template.clone();
+                    task.task_id = format!("choice-{index}").into();
+                    task.name = format!("Workflow {index:02}");
+                    task
+                })
+                .collect();
+            let mut harness = Harness::builder()
+                .with_size(egui::vec2(1440.0, height))
+                .build_eframe(|_| application);
+            harness.run();
+            harness.get_by_value("All workflows").click();
+            harness.run();
+            let first = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 00")
+                .next_back()
+                .unwrap()
+                .rect();
+            let last = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 17")
+                .next_back()
+                .unwrap()
+                .rect();
+            assert_eq!(first.height(), 32.0);
+            assert!(first.top() >= 0.0);
+            if height == 1000.0 {
+                assert!(last.bottom() <= height, "{last:?}");
+                assert!(last.top() - first.top() > 500.0);
+            } else {
+                assert!(
+                    last.bottom() > height,
+                    "overflow must be inside a scroll area"
+                );
+            }
+            harness.key_press(egui::Key::Escape);
+            harness.run();
+            assert!(!egui::Popup::is_any_open(&harness.ctx));
+        }
+    }
+
+    #[test]
     fn inspector_metadata_continues_without_scroll_and_replaces_counts() {
         let mut app = app();
         let mut page = app.inspection.page.clone().unwrap();

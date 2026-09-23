@@ -65,6 +65,13 @@ and history.
 - Truncate or wrap long content deliberately; expose the complete value by
   tooltip or accessibility text.
 
+- Dataset inspector filter menus use compact 32-point choices inside standard
+  44-point triggers. Workflow-type icons, class-color markers and status symbols
+  support the full accessible choice names; truncated labels retain tooltips.
+  Menus use the available viewport height instead of an arbitrary fixed height,
+  and scroll only when their contents cannot fit. This density exception applies
+  to the inspector's workflow, class and status choices.
+
 ## State And Safety
 
 - Each remote region shows one base state: initial loading, loaded, empty,

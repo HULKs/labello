@@ -14,7 +14,7 @@ use labello_client::{
 };
 use labello_domain::{
     Actor, DatasetId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageExplorerPage,
-    PrelabelConfig, TaskDefinition,
+    PrelabelConfig, TaskDefinition, TaskStatus,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -886,6 +886,12 @@ async fn list_images(
         if query.status.as_ref().is_some_and(|status| {
             if let Some(task_id) = query.task_id.as_ref() {
                 item.task_statuses.get(task_id) != Some(status)
+            } else if *status == TaskStatus::Completed {
+                metadata.tasks.is_empty()
+                    || !metadata
+                        .tasks
+                        .iter()
+                        .all(|task| item.task_statuses.get(&task.task_id) == Some(status))
             } else {
                 !item
                     .task_statuses

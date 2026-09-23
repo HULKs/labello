@@ -407,8 +407,8 @@ is verified against its authoritative BLAKE3 hash before every cache read.
 Responses use `Cache-Control: private, no-store`; encoded dimension and profile
 headers are exposed by credentialed CORS. Encoded responses are at most 16 MiB.
 Limits are configured under [previews](configuration.md#image-preview-limits).
-Oversized source/pixel/decoder requests return 413; busy workers, exhausted cache
-quota, or stale source identity return 409; unsupported/unavailable sources and
+Oversized source/pixel/decoder requests return 413; full preview admission queues,
+cache ownership conflicts, exhausted cache quota, or stale source identity return 409; unsupported/unavailable sources and
 decoding failures return 422; unavailable cache/encoder failures return 500.
 Errors never include source paths or decoder text.
 
@@ -579,7 +579,12 @@ before selecting the page. A cold summary loads authoritative image state once;
 subsequent queries reuse it until that image changes. Configuration defaults and
 image records come from the current request, not cached workflow definitions.
 A workflow filter identifies configured workflow status, including Pending on
-unannotated images; selecting a workflow alone need not reduce the image count. Browsing
+unannotated images; selecting a workflow alone need not reduce the image count.
+With All workflows, Completed requires every currently configured workflow
+(including disabled workflows) to be Completed, and a dataset without workflows
+matches no completed images. Historical workflow IDs do not affect this check.
+With a specific workflow selected, Completed checks only that workflow. Other
+status filters match any workflow when no workflow is selected. Browsing
 and changing overlay visibility require no assignment and append no events.
 
 `POST /datasets/{dataset_id}/images/{image_id}/return-to-review` requires a
