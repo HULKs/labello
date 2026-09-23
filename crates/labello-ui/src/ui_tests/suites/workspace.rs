@@ -2888,9 +2888,9 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
         harness.state().work.current_texture.as_ref().unwrap().id(),
         current_texture
     );
-    assert!(harness.query_by_role_and_label(
+    assert!(harness.get_by_role_and_label(
         egui::accesskit::Role::Button, "Previous image"
-    ).is_none());
+    ).accesskit_node().is_disabled());
     for label in ["Approve", "Submit correction"] {
         let action = harness.query_by_role_and_label(egui::accesskit::Role::Button, label);
         assert!(
@@ -2933,7 +2933,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
     for clipped in &harness.output().shapes {
         collect_text(&clipped.shape, &mut rendered_text);
     }
-    let opening_status_visible = rendered_text
+    let opening_placeholder_visible = rendered_text
         .iter()
         .any(|text| text.contains("Opening previous review…"));
 
@@ -2962,8 +2962,8 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
         current_image
     );
     assert!(
-        opening_status_visible,
-        "a delayed Previous request must render an opening status, got {rendered_text:?}"
+        !opening_placeholder_visible,
+        "a delayed Previous request must retain the bar summary, got {rendered_text:?}"
     );
 }
 
@@ -3034,7 +3034,8 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
             .query_by_label("Assignment transition dialog")
             .is_none()
     );
-    assert!(harness.query_by_label("Opening previous review…").is_some());
+    assert!(harness.query_by_label("Opening previous review…").is_none());
+    assert!(harness.get_by_label_contains("Review details: Workflow:").accesskit_node().is_disabled());
     assert_eq!(
         harness
             .state()

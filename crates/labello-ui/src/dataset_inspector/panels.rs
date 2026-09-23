@@ -1,6 +1,12 @@
 use super::*;
 
 impl LabelloApp {
+    pub(crate) fn inspection_initial_loading(&self) -> bool {
+        self.view == crate::app::AppView::Inspect
+            && self.inspection.page.is_none()
+            && self.inspection.gallery_error.is_none()
+    }
+
     pub(crate) fn inspection_panels(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         if self.inspection.drawer.is_none() && self.inspection.drawer_invoker.is_some() {
             if ui.ctx().memory(|m| m.top_modal_layer().is_none()) {
@@ -85,6 +91,9 @@ impl LabelloApp {
     }
 
     fn inspection_context(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
+        if self.inspection_initial_loading() {
+            return;
+        }
         ui.spacing_mut().interact_size.x = ui.spacing().interact_size.x.max(44.0);
         let navigation_allowed = self.inspection.reason.is_empty()
             && !self.inspection.busy()

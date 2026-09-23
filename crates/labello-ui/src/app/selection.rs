@@ -293,14 +293,14 @@ impl LabelloApp {
         if self.view == AppView::Review {
             return self.review_context_bar_height(ctx, layout, viewport.x);
         }
-        56.0
+        58.0
     }
 
     pub(crate) fn workspace_actions_height(&self, layout: LayoutMode, viewport: egui::Vec2) -> f32 {
         if layout != LayoutMode::Wide && self.view == AppView::Review {
-            if Self::short_viewport(viewport) { 96.0 } else { 112.0 }
-        } else if layout == LayoutMode::Compact && self.manual_migration_active() {
-            if Self::short_viewport(viewport) { 44.0 } else { 112.0 }
+            if Self::short_viewport(viewport) { 98.0 } else { 114.0 }
+        } else if layout == LayoutMode::Compact && self.bar_migration_active() {
+            if Self::short_viewport(viewport) { 46.0 } else { 114.0 }
         } else {
             68.0
         }

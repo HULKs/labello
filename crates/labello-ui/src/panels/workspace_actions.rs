@@ -5,8 +5,8 @@ impl LabelloApp {
             && self.work.pending_transition.is_none();
         let compact = LayoutMode::for_width(ui.ctx().content_rect().width()) != LayoutMode::Wide;
         let secondary = |app: &mut Self, ui: &mut egui::Ui| {
-            let removable = app.migration_review_removal().is_some();
-            let count = (if app.work.previous_assignment.is_some() { 4.0 } else { 3.0 })
+            let removable = app.bar_review_removable();
+            let count = (if app.bar_has_previous_image() { 4.0 } else { 3.0 })
                 + if removable { 1.0 } else { 0.0 };
             let width = compact.then(|| ((ui.available_width() - (count - 1.0) * ui.spacing().item_spacing.x) / count).floor().max(44.0));
             app.review_object_navigation(ui, width);
@@ -39,7 +39,7 @@ impl LabelloApp {
     }
 
     fn previous_review_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
-        if self.view == AppView::Review && self.work.previous_assignment.is_some()
+        if self.view == AppView::Review && self.bar_has_previous_image()
             && workspace_action_button(ui, !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none(),
                 "Previous image", WorkspaceActionIcon::PreviousImage, width, theme::Intent::Neutral).on_hover_text("Return to the immediately previous eligible assignment.").clicked()
         {
@@ -54,14 +54,12 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        if !self.work_view()
-            || self.loading.session || self.loading.dataset || self.loading.image
-            || self.work.current.is_none()
-            || (self.runtime.api.is_some() && self.work.assignment.is_none())
-        { return; }
+        if !self.work_view() || self.workspace_bars_blank() { return; }
+        if self.workspace_bars_loading() { ui.disable(); }
+        if self.navigation.workspace_bars.presentation.is_none() { return; }
         if self.view == AppView::Review {
             self.review_bottom_actions(ui);
-        } else if self.manual_migration_active() {
+        } else if self.bar_migration_active() {
             self.migration_workspace_actions(ui, layout == LayoutMode::Compact);
         } else {
             self.annotation_bottom_actions(ui);
@@ -77,7 +75,7 @@ impl LabelloApp {
         let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
             && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
         let dirty = matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
-        let previous = self.work.previous_assignment.is_some();
+        let previous = self.bar_has_previous_image();
         let count = 4 + usize::from(previous);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
             / count as f32).floor().max(44.0);
@@ -122,7 +120,7 @@ impl LabelloApp {
         let ready = self.work.assignment.is_some() && !self.loading.saving && !self.loading.image
             && !self.work.migration.busy && self.work.pending_transition.is_none()
             && self.work.review_corrections.submission.is_none() && position < count;
-        if workspace_toolbar_button(ui, ready, if position + 1 == count { "Overview" } else { "Next object" }, WorkspaceActionIcon::Next, width, theme::Intent::Neutral)
+        if workspace_toolbar_button(ui, ready, self.bar_review_next_label(), WorkspaceActionIcon::Next, width, theme::Intent::Neutral)
             .on_hover_text("Continue within this image, retaining valid corrections, then show the full-image overview.").clicked() {
             self.cycle_review_item(1);
         }
@@ -214,6 +212,7 @@ fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {
 pub(crate) enum WorkspaceActionIcon { Approve, PreviousImage, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
 
 pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &str, icon: WorkspaceActionIcon, width: Option<f32>, intent: theme::Intent) -> egui::Response {
+    let enabled = enabled && ui.is_enabled();
     let width = width.unwrap_or_else(|| text_button_width(ui, label).min(ui.available_size_before_wrap().x.max(44.0)));
     let icon_only = text_button_width(ui, label) > width;
     let button = egui::Button::new(if icon_only { "" } else { label }).min_size(egui::vec2(width, 44.0));

@@ -61,8 +61,18 @@ clears account and dataset state before scheduling requests against the new API.
 
 Workspace rendering is grouped by the reason it changes:
 
+- `panels/loading_bars.rs`: transient bar presentation scoped to auth/workspace
+  epochs, view, dataset and selected workflow. It retains only display data and
+  migration action descriptions through an image load; it does not retain or
+  restore assignments, image state, drafts or command ownership. Shell rendering
+  refreshes this presentation after accepted responses and navigation. Loading
+  disables retained controls and their keyboard actions. Empty/error completion
+  and scope changes discard the retained presentation;
+
 - `panels/app_bar.rs`: global navigation, utilities and account controls, with
-  measured label widths and icon fallback before the navigation drawer;
+  measured label widths and icon fallback before the navigation drawer. This
+  global bar stays visible during loading and is outside the view-specific
+  blank/retained presentation policy;
 - `panels/workspace_actions.rs`: persistent bottom workflow actions for all
   layouts, including separate Previous image and Previous object commands;
   review object navigation uses the existing correction-retaining navigation
