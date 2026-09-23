@@ -1,6 +1,8 @@
 pub mod admin;
 pub mod app;
+mod avatar;
 pub mod canvas;
+mod dataset_inspector;
 mod export_flow;
 pub mod folder_upload;
 mod image_transfer;
@@ -15,8 +17,6 @@ mod missing_objects;
 pub mod panels;
 mod persistence;
 mod presence;
-pub use presence::set_reduced_motion;
-mod dataset_inspector;
 pub mod queue;
 mod review_context;
 mod review_corrections;

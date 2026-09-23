@@ -71,13 +71,14 @@ pub(super) async fn server_presence(
         .into_iter()
         .map(|(user_id, mut datasets)| {
             datasets.sort_by(|a, b| a.dataset_id.cmp(&b.dataset_id));
-            let github_login = state
-                .server_store
-                .user(&user_id)?
-                .and_then(|user| user.github_login);
+            let account = state.server_store.user(&user_id)?;
+            let (github_login, github_user_id) = account
+                .map(|user| (user.github_login, user.github_user_id))
+                .unwrap_or_default();
             Ok(PresentUser {
                 user_id,
                 github_login,
+                github_user_id,
                 datasets,
             })
         })

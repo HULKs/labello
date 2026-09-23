@@ -22,6 +22,9 @@ pub struct PresentUser {
     /// Presentation metadata only; identity and ownership use `user_id`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_login: Option<String>,
+    /// Public avatar metadata; never used for identity or ownership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_user_id: Option<String>,
     pub datasets: Vec<PresenceDataset>,
 }
 
@@ -51,11 +54,15 @@ mod presence_tests {
             r#"{"userId":"github_42","datasets":[]}"#,
         ).unwrap();
         assert_eq!(user.presence_name(), "github_42");
+        assert_eq!(user.github_user_id, None);
+        user.github_user_id = Some("42".into());
         user.github_login = Some("octocat".into());
         assert_eq!(user.presence_name(), "@octocat");
         assert_eq!(user.user_id.as_str(), "github_42");
         let json = serde_json::to_value(&user).unwrap();
         assert_eq!(json["githubLogin"], "octocat");
+        assert_eq!(json["githubUserId"], "42");
+        assert_eq!(serde_json::from_value::<PresentUser>(json).unwrap(), user);
         user.github_login = Some(String::new());
         assert_eq!(user.presence_name(), "github_42");
     }

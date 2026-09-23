@@ -394,31 +394,30 @@ pointer or keyboard event; forced extra frames can conceal a cached-height gap.
 
 ## Workspace presence
 
-Presence belongs in the existing top header, with muted body text and a small
-semantic-color connection dot. Right-align the presence text and dot immediately
-before the navigation action icons. The signed-in account has no separate username label in the
-top bar; qualifying active leases include it in presence. Navigation icons run right to left: Logout, Home/Setup, authorized
-Admin, shortcut settings, and statistics. Keep the dataset pill centered in the
-header when space permits. A successful empty presence sample reads "No active labellers". Do not add a presence bar, daily-count footer or
-extra row. Reserve a 44-point focusable target for the dot while painting only a
-9-point circle. Names use measured horizontal space and collapse to a people
-count; full usernames and active datasets remain available on hover, activation
-and through accessible names. On narrow screens, presence takes precedence over
-the header's dataset badge.
-
-Check alone, multiple/long names, initial loading, temporary connection loss,
-disconnection, saving/unsaved work and application errors. Color is accompanied
-by textual status in the dot's accessible name and details. No lease-duration
-explanation is added to the presence tooltip. Preserve a single header row,
+Presence belongs in the existing top header, with compact circular GitHub profile
+photos and a small semantic-color connection dot. Right-align the avatars and
+dot immediately before the navigation action icons. The signed-in account has no
+separate username label; qualifying active leases include it in presence.
+Navigation icons run right to left: Logout, Home/Setup, authorized Admin,
+shortcut settings, and statistics. Keep the dataset pill centered when space
+permits; on narrow screens it yields to presence. Preserve one header row,
 primary action targets, canvas space and keyboard focus through resizing.
 
-Presence uses `@githubLogin` consistently in the header, details and accessible
-names, falling back to the internal user ID when no login exists. Counts include
-the current user under the same active-lease rules. Visible header names have a
-slightly diagonal, low-contrast brightening sweep lasting two seconds every eight
-seconds. It changes only glyph color, preserves text geometry and accessible
-labels, and adds no highlight to counts, empty, loading or unavailable states.
-The browser observes `prefers-reduced-motion` at startup and on changes; reduced
-motion disables the sweep. Integrations without a preference adapter keep it
-static. Idle gaps schedule one repaint at the next sweep rather than continuous
-animation frames.
+Avatars are 28 points inside a single focusable target at least 44 points high
+and wide. Show as many as fit, then `+N` for the remaining users. Missing, pending
+or failed photos use initials. The shared statistics/presence loader caches
+public GitHub photos and failures; it sends no browser credentials. Full
+`@githubLogin` handles and active datasets remain available on hover, activation
+and through the control's accessible name. Missing logins use the internal user
+ID in those details. Counts include the current user under the same active-lease
+rules. Avatars and initials stay static; the former text highlight is removed.
+
+A successful empty sample reads "No active labellers". Keep the existing loading,
+temporary failure and unavailable states. Do not add a presence bar, daily-count
+footer, extra row or lease-duration explanation. Reserve a 44-point focusable
+target for the connection dot while painting only a 9-point circle. Color is
+accompanied by textual status in its accessible name and details.
+
+Check one and many users, overflow, long handles and dataset names, missing and
+failed photos, initial loading, connection loss/recovery, saving/unsaved work,
+application errors, and keyboard activation.

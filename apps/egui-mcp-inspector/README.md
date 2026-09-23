@@ -195,7 +195,7 @@ not establish subagent-host MCP isolation or parallel live-server behavior.
 The default is the annotation preset. Use `-- --preset <name>` with Cargo or
 `--preset <name>` with the local headless launcher for another frozen state.
 
-Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-reduced-motion`, `setup`, `about`, `build-mismatch`,
+Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
@@ -253,11 +253,11 @@ refresh and browser clipboard success/rejection require Chromium. Without a
 clipboard adapter, the native About screen offers selectable manual-copy text
 and reports that automatic copying is unavailable.
 
-The presence presets show a GitHub handle, the current user, and a local-ID
-fallback in the shared work header. `presence` explicitly enables the sweep;
-`presence-reduced-motion` keeps the same content static. Other native presets
-and live mode default to static presence because the inspector has no operating
-system motion-preference adapter. Browser media-query behavior requires Chromium.
+The presence presets show the current user and a local-ID fallback in the shared
+work header. `presence` seeds the shared avatar cache with a synthetic image;
+`presence-fallback` seeds an unavailable photo. Both are deterministic and make
+no avatar requests. Hover and activation expose the GitHub handle and dataset
+names. Photos and initials are static. Browser avatar networking requires Chromium.
 
 The `workflow-reasons` preset shows a synthetic rejection comment and earlier approval
 feedback alongside a workflow-change notice. Use it to inspect event headings,

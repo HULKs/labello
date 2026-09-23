@@ -2,6 +2,7 @@ fn presence_sample() -> labello_client::ServerPresence {
     labello_client::ServerPresence { users: vec![labello_client::PresentUser {
         user_id: UserId::from("alexandria_long_username"),
         github_login: None,
+        github_user_id: None,
         datasets: vec![labello_client::PresenceDataset { dataset_id: DatasetId::from("other"), name: "Another dataset".into() }],
     }] }
 }
@@ -214,7 +215,31 @@ fn presence_includes_self_deduplicates_by_id_and_uses_handles_in_details() {
 }
 
 #[test]
-fn presence_counts_and_animation_keep_header_geometry_and_accessible_names_stable() {
+fn presence_avatars_share_cached_photos_and_keep_overflow_details_and_focus() {
+    let mut app = LabelloApp::default();
+    let mut sample = presence_sample();
+    sample.users[0].github_login = Some("octocat".into());
+    sample.users[0].github_user_id = Some("42".into());
+    for i in 0..12 {
+        let mut user = sample.users[0].clone();
+        user.user_id = format!("user_{i}").into();
+        user.github_login = Some(format!("long-github-handle-{i}"));
+        user.github_user_id = None;
+        sample.users.push(user);
+    }
+    app.runtime.presence.value = Some(sample);
+    let mut harness = Harness::builder().with_size(egui::vec2(190.0, 60.0))
+        .build_ui_state(|ui, app: &mut LabelloApp| {
+            let key = egui::Id::new(("github-avatar", 42_u64));
+            if ui.ctx().data(|data| data.get_temp::<Option<egui::TextureHandle>>(key)).is_none() {
+                let texture = ui.ctx().load_texture("cached-photo", egui::ColorImage::filled([2, 2], egui::Color32::RED), Default::default());
+                ui.ctx().data_mut(|data| data.insert_temp(key, Some(texture)));
+            }
+            app.presence_summary(ui);
+        }, app);
+    let texture_id = harness.ctx.data(|data| data.get_temp::<Option<egui::TextureHandle>>(egui::Id::new(("github-avatar", 42_u64)))).unwrap().unwrap().id();
+    harness.step();
+    assert!(harness.output().shapes.iter().any(|s| s.shape.texture_id() == texture_id), "presence reuses the statistics avatar cache");
     fn text_in(shape: &egui::Shape, expected: &str) -> bool {
         match shape {
             egui::Shape::Text(text) => text.galley.job.text == expected,
@@ -222,32 +247,74 @@ fn presence_counts_and_animation_keep_header_geometry_and_accessible_names_stabl
             _ => false,
         }
     }
+    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "+9")));
+    harness.get_by_label_contains("Labelling presence:").focus();
+    harness.step();
+    for width in [44.0, 80.0, 190.0, 1200.0] {
+        harness.set_size(egui::vec2(width, 60.0));
+        harness.step();
+        let node = harness.get_by_label_contains("Labelling presence:");
+        assert!(node.is_focused());
+        assert!(node.accesskit_node().label().unwrap().contains("@long-github-handle-11"));
+        assert!(node.rect().right() <= width);
+        assert_eq!(node.rect().height(), 44.0);
+    }
+    harness.key_press(egui::Key::Enter);
+    harness.step();
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Label,
+        harness.get_by_label_contains("Labelling presence:").accesskit_node().label().unwrap().trim_start_matches("Labelling presence: ")).is_some());
+    harness.key_press(egui::Key::Escape);
+    harness.step();
+    assert!(harness.get_by_label_contains("Labelling presence:").is_focused());
+    // The same cache entry represents pending or failed downloads. Both retain initials.
+    harness.ctx.data_mut(|data| data.insert_temp(egui::Id::new(("github-avatar", 42_u64)), None::<egui::TextureHandle>));
+    harness.step();
+    assert!(!harness.output().shapes.iter().any(|s| s.shape.texture_id() == texture_id));
+    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "O")));
+    assert!(harness.ctx.data(|data| data.get_temp::<Option<egui::TextureHandle>>(egui::Id::new(("github-avatar", 42_u64)))).unwrap().is_none());
+}
+
+#[test]
+fn presence_header_hides_handle_text_but_keeps_accessible_identity() {
     let mut app = LabelloApp::default();
     let mut sample = presence_sample();
-    sample.users[0].github_login = Some("a-very-long-github-handle-for-testing".into());
+    sample.users[0].github_login = Some("octocat".into());
     app.runtime.presence.value = Some(sample);
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(190.0, 60.0))
+    let mut harness = Harness::builder().with_size(egui::vec2(400.0, 60.0))
         .build_ui_state(|ui, app: &mut LabelloApp| app.presence_summary(ui), app);
     harness.step();
-    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "1 person is labelling")));
-    let users = &mut harness.state_mut().runtime.presence.value.as_mut().unwrap().users;
-    let mut other = users[0].clone();
-    other.user_id = "another_user".into();
-    users.push(other);
-    harness.step();
-    assert!(harness.output().shapes.iter().any(|s| text_in(&s.shape, "2 people are labelling")));
-    harness.set_size(egui::vec2(1200.0, 60.0));
-    harness.step();
-    let rect = harness.get_by_label_contains("Labelling presence:").rect();
-    let label = harness.get_by_label_contains("Labelling presence:").accesskit_node().label().unwrap().to_owned();
-    crate::set_reduced_motion(&harness.ctx, false);
-    for time in [0.1, 0.5, 1.0, 1.5, 3.0, 8.1, 9.0] {
-        harness.input_mut().time = Some(time);
-        harness.step();
-        assert_eq!(harness.get_by_label(&label).rect(), rect);
+    fn has_handle(shape: &egui::Shape) -> bool {
+        match shape {
+            egui::Shape::Text(text) => text.galley.job.text.contains("@octocat"),
+            egui::Shape::Vec(shapes) => shapes.iter().any(has_handle),
+            _ => false,
+        }
     }
-    crate::set_reduced_motion(&harness.ctx, true);
-    harness.step();
-    assert_eq!(harness.get_by_label(&label).rect(), rect);
+    assert!(harness.query_by_label("Labelling presence: @octocat: Another dataset").is_some());
+    assert!(!harness.output().shapes.iter().any(|s| has_handle(&s.shape)),
+        "the header must show an avatar instead of the handle");
+}
+
+#[test]
+fn presence_avatar_states_keep_details_and_do_not_move_work() {
+    for review in [false, true] {
+        let mut harness = if review { loaded_review_harness(Rc::new(SpyApi::new())) }
+            else { loaded_work_harness(Rc::new(SpyApi::new())) };
+        let assignment = harness.state().work.assignment.clone();
+        harness.state_mut().runtime.presence.value = None;
+        harness.step();
+        assert!(harness.query_by_label("Labelling presence: Checking presence…").is_some());
+        harness.state_mut().runtime.presence.value = Some(presence_sample());
+        for failures in 0..=3 {
+            harness.state_mut().runtime.presence.failures = failures;
+            harness.step();
+            let expected = if failures == 3 { "Presence unavailable" } else { "alexandria_long_username: Another dataset" };
+            assert!(harness.query_by_label(&format!("Labelling presence: {expected}")).is_some());
+        }
+        harness.state_mut().runtime.presence.failures = 0;
+        harness.state_mut().runtime.presence.value = Some(labello_client::ServerPresence { users: vec![] });
+        harness.step();
+        assert!(harness.query_by_label("Labelling presence: No active labellers").is_some());
+        assert_eq!(harness.state().work.assignment, assignment);
+    }
 }
