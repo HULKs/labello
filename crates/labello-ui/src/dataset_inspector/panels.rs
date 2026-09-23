@@ -1,4 +1,5 @@
 use super::*;
+use egui::AtomExt as _;
 
 impl LabelloApp {
     pub(crate) fn inspection_initial_loading(&self) -> bool {
@@ -388,7 +389,10 @@ pub(super) fn return_workflow_choice(
                     ui.set_width(width);
                     let choice = egui::Button::new((
                         egui::Atom::custom(icon_id, egui::vec2(28.0, 28.0)),
-                        task.name.as_str(),
+                        task.name
+                            .as_str()
+                            .atom_grow(true)
+                            .atom_align(egui::Align2::LEFT_CENTER),
                     ))
                     .selected(selected)
                     .min_size(egui::vec2(width, 44.0))
