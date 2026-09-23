@@ -5,8 +5,8 @@
   "dpr": 1,
   "scale": 1,
   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
-  "before": "https://github.com/HULKs/labello/blob/82891d4d0f0c77f8b63751736dec2baf128aa1a0/README.md",
-  "after": "https://github.com/HULKs/labello/blob/5a50292fb09cf67a317f481ec945b65281993dcd/README.md",
+  "before": "https://github.com/HULKs/labello/blob/49c2b2f26186138cae84fc6aa9829e51b5033044/README.md",
+  "after": "https://github.com/HULKs/labello/blob/fc607344f38016c35c83d5f3291951bf71ee69fa/README.md",
   "wiki": "https://github.com/HULKs/labello/wiki",
   "wikiCommit": "8aff3987039b56da10a43d49672b3cff968d45a3"
 }
