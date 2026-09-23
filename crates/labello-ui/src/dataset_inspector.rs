@@ -579,34 +579,50 @@ impl LabelloApp {
                 &AnnotationType::Skeleton,
                 "Skeletons",
             );
-            egui::ComboBox::from_id_salt("overlay-statuses")
-                .width(ui.available_width())
-                .wrap_mode(egui::TextWrapMode::Truncate)
-                .selected_text(if self.inspection.hidden_statuses.is_empty() {
-                    "All statuses".to_owned()
-                } else {
-                    format!(
-                        "{} statuses shown",
-                        5 - self.inspection.hidden_statuses.len()
-                    )
-                })
-                .show_ui(ui, |ui| {
+            let summary = if self.inspection.hidden_statuses.is_empty() {
+                "All statuses".to_owned()
+            } else {
+                format!(
+                    "{} statuses shown",
+                    statuses().len() - self.inspection.hidden_statuses.len()
+                )
+            };
+            gallery::filter_menu(
+                ui,
+                "overlay-statuses",
+                ui.available_width(),
+                summary.clone(),
+                |ui| {
+                    gallery::filter_menu_width(ui, statuses().iter().map(status_label));
                     for status in statuses() {
-                        let mut visible = !self.inspection.hidden_statuses.contains(&status);
-                        if ui.checkbox(&mut visible, status_label(&status)).changed() {
+                        let visible = !self.inspection.hidden_statuses.contains(&status);
+                        if gallery::filter_option(
+                            ui,
+                            visible,
+                            status_label(&status),
+                            gallery::FilterIcon::Status(&status),
+                        )
+                        .clicked()
+                        {
                             if visible {
-                                self.inspection.hidden_statuses.retain(|old| old != &status);
-                            } else {
                                 self.inspection.hidden_statuses.push(status);
+                            } else {
+                                self.inspection.hidden_statuses.retain(|old| old != &status);
                             }
                         }
                     }
-                })
-                .response
-                .on_hover_text("Filter overlays by workflow status")
-                .widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Overlay statuses")
-                });
+                },
+            )
+            .on_hover_text("Filter overlays by workflow status")
+            .widget_info(|| {
+                let mut info = egui::WidgetInfo::labeled(
+                    egui::WidgetType::ComboBox,
+                    ui.is_enabled(),
+                    "Overlay statuses",
+                );
+                info.current_text_value = Some(summary.clone());
+                info
+            });
         });
         ui.add_space(theme::SPACE_2);
         if let Some(state) = &self.inspection.state {
@@ -861,6 +877,78 @@ mod tests {
             crate::inspector_presets::InspectorPreset::DatasetInspection,
             &egui::Context::default(),
         )
+    }
+
+    #[test]
+    fn overlay_status_menu_matches_gallery_choices_and_keeps_multi_selection() {
+        for size in [
+            egui::vec2(1440.0, 1000.0),
+            egui::vec2(1288.0, 820.0),
+            egui::vec2(600.0, 800.0),
+            egui::vec2(390.0, 844.0),
+            egui::vec2(320.0, 568.0),
+            egui::vec2(320.0, 320.0),
+        ] {
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app());
+            harness.run();
+            if size.x < 1288.0 {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, "Overlays")
+                    .click();
+                harness.run();
+            }
+            let trigger = harness.get_by_label("Overlay statuses");
+            assert_eq!(trigger.rect().height(), 44.0);
+            trigger.click();
+            harness.run();
+            for status in statuses() {
+                let choice = harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, status_label(&status));
+                assert_eq!(choice.rect().height(), 32.0);
+                assert!(choice.rect().top() >= 0.0 && choice.rect().bottom() <= size.y);
+                assert!(choice.rect().left() >= 0.0 && choice.rect().right() <= size.x);
+                assert_eq!(
+                    choice.accesskit_node().toggled(),
+                    Some(egui::accesskit::Toggled::True)
+                );
+            }
+            for status in [TaskStatus::Completed, TaskStatus::Pending] {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, status_label(&status))
+                    .click();
+                harness.run();
+                assert!(harness.state().inspection.hidden_statuses.contains(&status));
+                harness.get_by_label("Overlay statuses").click();
+                harness.run();
+                assert_eq!(
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::Button, status_label(&status))
+                        .accesskit_node()
+                        .toggled(),
+                    Some(egui::accesskit::Toggled::False)
+                );
+            }
+            assert_eq!(harness.state().inspection.hidden_statuses.len(), 2);
+            assert_eq!(harness.state().inspection.query.status, None);
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "Completed")
+                .click();
+            harness.run();
+            assert_eq!(
+                harness.state().inspection.hidden_statuses,
+                vec![TaskStatus::Pending]
+            );
+            harness.get_by_label("Overlay statuses").click();
+            harness.run();
+            harness.key_press(egui::Key::Escape);
+            harness.run();
+            assert!(
+                harness
+                    .query_by_role_and_label(egui::accesskit::Role::Button, "Pending")
+                    .is_none()
+            );
+            assert!(harness.get_by_label("Overlay statuses").is_focused());
+        }
     }
 
     #[test]

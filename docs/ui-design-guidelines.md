@@ -61,7 +61,9 @@ the user workflow.
   support the full accessible choice names; truncated labels retain tooltips.
   Menus use the available viewport height instead of an arbitrary fixed height,
   and scroll only when their contents cannot fit. This density exception applies
-  to the inspector's workflow, class and status choices.
+  to the inspector's workflow, class and status choices. The Images and Overlays
+  status menus share these triggers and icon rows; Overlays keeps independent
+  selected states for each visible status.
 
 ## State and safety
 
