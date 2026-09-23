@@ -1,13 +1,13 @@
-fn test_workflow_reason(app: &LabelloApp, text: &str) -> labello_domain::WorkflowReason {
+fn test_workflow_reason(app: &LabelloApp, text: &str) -> labello_client::WorkflowReasonEntry {
     let assignment = app.work.assignment.as_ref().unwrap();
-    labello_domain::WorkflowReason {
+    labello_client::WorkflowReasonEntry { author: None, reason: labello_domain::WorkflowReason {
         image_id: assignment.image_id.clone(), event_id: labello_domain::EventId::from("reason-event"),
         event_sequence: 1, actor_user_id: app.config.user_id.clone(), timestamp: labello_domain::now(),
         action: labello_domain::WorkflowReasonAction::ReviewerCorrection,
                 review_decision: None,
         task_id: Some(assignment.task_id.clone()), annotation_id: None, object_group_id: None,
         text: Some(text.into()), category: None, current_round: true, current_exclusion: false, superseded: false,
-    }
+    }}
 }
 
 #[test]
@@ -68,9 +68,9 @@ fn workflow_reasons_notice_dismissal_reopen_and_scope_are_explicit() {
     harness.state_mut().work.selected_task_id = Some(TaskId::from("another-workflow"));
     harness.run_steps(4);
     assert!(harness.query_by_label("Dismiss image feedback").is_none());
-    harness.state_mut().work.selected_task_id = reason.task_id.clone();
+    harness.state_mut().work.selected_task_id = reason.reason.task_id.clone();
     let mut stale = reason.clone();
-    stale.image_id = ImageId::from("another-image");
+    stale.reason.image_id = ImageId::from("another-image");
     harness.state_mut().install_reason_notice(vec![stale]);
     // Another image's feedback must never be installed.
     harness.run_steps(4);
@@ -110,7 +110,7 @@ fn workflow_reasons_load_with_annotation_and_review_retry_without_becoming_empty
         }
         let mut harness = if review { loaded_review_harness(api.clone()) } else { loaded_work_harness(api.clone()) };
         let reason = test_workflow_reason(harness.state(), "Synthetic reason loaded through the assignment owner");
-        api.state.borrow_mut().workflow_reasons.insert(reason.image_id.clone(), vec![reason.clone()]);
+        api.state.borrow_mut().workflow_reasons.insert(reason.reason.image_id.clone(), vec![reason.clone()]);
         api.state.borrow_mut().fail_next_reasons = true;
         harness.state_mut().retry_assignment_load();
         step_until(&mut harness, 16, |app| !app.loading.image);
@@ -161,7 +161,7 @@ fn workflow_reasons_previous_navigation_reopens_notices_in_both_work_views() {
         }), true); }
         let mut harness = if review { loaded_review_harness(api.clone()) } else { loaded_work_harness(api.clone()) };
         let reason = test_workflow_reason(harness.state(), "Explanation on the previous image");
-        let original = reason.image_id.clone();
+        let original = reason.reason.image_id.clone();
         api.state.borrow_mut().workflow_reasons.insert(original.clone(), vec![reason.clone()]);
         harness.state_mut().install_reason_notice(vec![reason]);
         harness.run_steps(3);
@@ -192,7 +192,7 @@ fn workflow_reasons_stale_assignment_response_cannot_replace_the_open_notice() {
         queued: app.work.current.clone().unwrap(), annotations: app.work.annotations.clone(),
         state: app.work.current_state.clone().unwrap(), color_image: None,
     };
-    loaded.reasons[0].text = Some("Stale response explanation".into());
+    loaded.reasons[0].reason.text = Some("Stale response explanation".into());
     app.runtime.tx.send(UiMessage::ImageLoaded {
         request: test_request(app, u64::MAX, Some("demo")), operation_id: u64::MAX,
         assignment: Some(loaded.assignment.clone()), result: Box::new(Ok(Some(loaded))),
@@ -243,13 +243,13 @@ fn workflow_feedback_names_the_event_and_puts_the_explanation_before_audit_detai
         let mut harness = loaded_work_harness(api);
         harness.run_steps(3);
         let mut reason = test_workflow_reason(harness.state(), "Move the left shoulder onto the visible joint.");
-        reason.action = action;
-        reason.review_decision = decision;
+        reason.reason.action = action;
+        reason.reason.review_decision = decision;
         let mut earlier = reason.clone();
-        earlier.current_round = false;
-        earlier.superseded = true;
-        earlier.text = Some("Earlier explanation retained for context.".into());
-        earlier.action = WorkflowReasonAction::AnnotationEdit;
+        earlier.reason.current_round = false;
+        earlier.reason.superseded = true;
+        earlier.reason.text = Some("Earlier explanation retained for context.".into());
+        earlier.reason.action = WorkflowReasonAction::AnnotationEdit;
         harness.state_mut().install_reason_notice(vec![earlier, reason]);
         harness.run_steps(4);
         assert!(harness.query_by_label(title).is_some());
@@ -280,4 +280,108 @@ fn previous_review_only_shows_saved_feedback_without_revisit_guidance() {
     assert!(harness.query_by_label("The box was adjusted to include the foot.").is_some());
     assert!(harness.query_by_label("Revisiting a completed review").is_none());
     assert!(harness.query_by_label("The saved decision stays in effect until you submit your review. Submitting corrections starts a new review round.").is_none());
+}
+
+#[test]
+fn workflow_feedback_filters_same_image_by_workflow_in_both_work_views() {
+    for review in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        if review { seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.2, y: 0.2, width: 0.3, height: 0.3,
+        }), true); }
+        let mut harness = if review { loaded_review_harness(api) } else { loaded_work_harness(api) };
+        let relevant = test_workflow_reason(harness.state(), "Relevant explanation");
+        let mut unrelated = relevant.clone();
+        unrelated.reason.task_id = Some(TaskId::from("penalty-spots"));
+        unrelated.reason.text = Some("Unrelated exclusion".into());
+        unrelated.reason.action = labello_domain::WorkflowReasonAction::MigrationExclusion;
+        unrelated.reason.current_exclusion = true;
+        let mut unscoped = relevant.clone();
+        unscoped.reason.task_id = None;
+        unscoped.reason.text = Some("Unscoped explanation".into());
+        harness.state_mut().install_reason_notice(vec![relevant, unrelated.clone(), unscoped.clone()]);
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Relevant explanation").is_some());
+        assert!(harness.query_by_label("Unrelated exclusion").is_none());
+        assert!(harness.query_by_label("Unscoped explanation").is_none());
+        harness.state_mut().install_reason_notice(vec![unrelated.clone(), unscoped]);
+        harness.run_steps(4);
+        assert!(!harness.state().reason_notice_visible());
+        // A new assignment on the same image owns a different set of feedback.
+        let task = unrelated.reason.task_id.clone().unwrap();
+        harness.state_mut().work.assignment.as_mut().unwrap().task_id = task.clone();
+        harness.state_mut().work.selected_task_id = Some(task);
+        harness.state_mut().install_reason_notice(vec![unrelated]);
+        assert!(harness.state().reason_notice_visible());
+    }
+}
+
+#[test]
+fn workflow_feedback_loads_github_identity_without_statistics_and_handles_missing_authors() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    let mut reason = test_workflow_reason(harness.state(), "Saved explanation");
+    reason.author = Some(labello_client::WorkflowReasonAuthor {
+        github_login: Some("example-reviewer".into()), github_user_id: None,
+    });
+    api.state.borrow_mut().workflow_reasons.insert(reason.reason.image_id.clone(), vec![reason.clone()]);
+    harness.state_mut().retry_assignment_load();
+    step_until(&mut harness, 16, |app| !app.loading.image);
+    harness.run_steps(4);
+    assert!(harness.query_by_label("@example-reviewer").is_some());
+    assert!(harness.query_by_label(reason.reason.actor_user_id.as_str()).is_none());
+    for author in [None, Some(labello_client::WorkflowReasonAuthor { github_login: None, github_user_id: None })] {
+        reason.author = author;
+        harness.state_mut().install_reason_notice(vec![reason.clone()]);
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Unknown author").is_some());
+        assert!(harness.query_by_label("Saved explanation").is_some());
+    }
+}
+
+#[test]
+fn workflow_feedback_groups_heading_and_text_and_hides_audit_details() {
+    for size in [egui::vec2(320.0,568.0), egui::vec2(390.0,844.0), egui::vec2(600.0,800.0), egui::vec2(1288.0,820.0), egui::vec2(1440.0,1000.0)] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_work_harness(api);
+        let mut reason = test_workflow_reason(harness.state(), "Adjust the box.");
+        reason.reason.annotation_id = Some(labello_domain::AnnotationId::from("audit-object"));
+        reason.author = Some(labello_client::WorkflowReasonAuthor {
+            github_login: Some("very-long-example-reviewer-for-notices".into()), github_user_id: None,
+        });
+        let timestamp = reason.reason.timestamp.format("%Y-%m-%d %H:%M UTC").to_string();
+        harness.state_mut().install_reason_notice(vec![reason]);
+        harness.set_size(size);
+        harness.run_steps(5);
+        let title = harness.get_by_label("Reviewer corrections saved");
+        let explanation = harness.get_by_label("Adjust the box.");
+        let gap = explanation.rect().top() - title.rect().bottom();
+        assert!((3.0..=5.0).contains(&gap), "{size:?}: gap {gap}");
+        assert!(harness.query_by_label("Object audit-object").is_none());
+        assert!(harness.query_by_label(&timestamp).is_none());
+        let details = harness.get_by_label("Additional info");
+        let author = harness.get_by_label("@very-long-example-reviewer-for-notices");
+        let row = details.rect();
+        assert_eq!(details.accesskit_node().data().is_expanded(), Some(false));
+        assert!((row.height() - 24.0).abs() < 1.0, "{size:?}: metadata row must match the avatar height");
+        let workflow_label = format!("{} · Current review round", harness.state().work.tasks[0].name);
+        let workflow = harness.get_by_label(&workflow_label);
+        assert!((row.top() - workflow.rect().bottom() - theme::SPACE_2).abs() < 1.0, "{size:?}: use the normal gap above metadata");
+        assert!((author.rect().center().y - row.center().y).abs() < 1.0, "{size:?}: author and disclosure must share one row");
+        assert!(author.rect().right() < row.left(), "{size:?}: disclosure must be right of author");
+        let content_left = title.rect().left();
+        details.focus();
+        harness.key_press(egui::Key::Enter);
+        harness.run_steps(10);
+        harness.get_by_label("Object audit-object").scroll_to_me();
+        harness.run_steps(4);
+        let object = harness.get_by_label("Object audit-object");
+        assert_eq!(harness.get_by_label("Additional info").accesskit_node().data().is_expanded(), Some(true));
+        let details_bottom = harness.get_by_label("Additional info").rect().bottom();
+        assert!((object.rect().top() - details_bottom - theme::SPACE_2).abs() < 1.0, "{size:?}: use the normal gap below metadata");
+        assert!((object.rect().left() - content_left).abs() < 1.0, "{size:?}: details must use the full content width");
+        assert!(harness.query_by_label(&timestamp).is_some());
+        harness.run_steps(4);
+        assert!(harness.query_by_label("Object audit-object").is_some());
+    }
 }

@@ -543,13 +543,18 @@ records and contributor activity remain available through their existing APIs.
 ### Saved workflow reasons
 
 `GET /datasets/{dataset_id}/images/{image_id}/reasons` requires a session and any
-role in that dataset, matching image-state access. It returns `WorkflowReason[]`
+role in that dataset, matching image-state access. It returns `WorkflowReasonEntry[]`
 projected from one authoritative event-log snapshot. Each entry identifies the
 image, event sequence/ID, actor, timestamp, action, optional workflow and object
 identities, optional text and structured exclusion category. Optional
 `reviewDecision` preserves the recorded decision for review and revised-review
 comments; absent values remain neutral comments rather than inferred rejections.
-This is read-only transport metadata, not a persisted-event change. `currentRound`,
+The existing reason fields remain at the top level. Each entry additionally has
+an optional `author` with `githubLogin` and `githubUserId`, resolved from current
+server account data for that event's actor. Missing accounts produce `null`;
+local accounts can have null GitHub fields. No account timestamps, display names,
+roles, or unrelated accounts are included. Older responses without `author`
+remain readable. This is read-only transport metadata, not a persisted-event change. `currentRound`,
 `superseded` and `currentExclusion` describe that snapshot's relevance. Historical
 entries remain ordered by source event, with copied exclusion sources and the
 legacy correction's identical review comment deduplicated. Blank text and known

@@ -88,7 +88,7 @@ pub trait ImageApi {
         &'a self,
         dataset_id: &'a DatasetId,
         image_id: &'a ImageId,
-    ) -> ApiFuture<'a, Vec<labello_domain::WorkflowReason>>;
+    ) -> ApiFuture<'a, Vec<crate::WorkflowReasonEntry>>;
 
     fn get_image_state<'a>(
         &'a self,

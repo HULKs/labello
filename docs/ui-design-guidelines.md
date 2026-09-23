@@ -97,7 +97,8 @@ and history.
   keyboard events before other controls process them.
 - Use a danger action plus concise confirmation for destructive work. Never use
   double-click as confirmation.
-- Preserve 44-point targets, visible focus, tooltips, associated field labels,
+- Preserve 44-point targets, except for the compact saved-feedback disclosure
+  specified below. Preserve visible focus, tooltips, associated field labels,
   and complete, contextual AccessKit names.
 - Expose selected, open, disabled, loading, and modal states semantically. Never
   rely on color alone; retain text, stroke, pattern, thickness, handle, or shape
@@ -275,16 +276,24 @@ has been recorded.
   Loading alone must not change its layout. The dataset
   inspector reserves its context row during initial gallery loading and retains
   its fixed controls across image loads.
-- **Saved reasons:** share the persistent, dismissible notification area with
-  workflow-change notices. Lead with the actual event, such as Review rejected
-  or Reviewer corrections saved, and the explanation. Do not put a generic
-  Reason heading or accordion above the message. Keep workflow, object, author
-  and date secondary; label earlier feedback explicitly. Wrap long explanations
-  in a bounded scroll area; at short heights the event title opens full feedback
-  in a bounded non-modal window. Use amber only for current rejection/exclusion
-  feedback, not routine history. Revisiting a completed review alone creates no notice. Dismissal
-  applies to the opened image context. Object and submission reason inputs name
-  their scope, optional/required rule and total byte limit; failures retain input.
+- **Saved reasons:** show only feedback matching the active image and workflow,
+  sharing the persistent, dismissible area with workflow-change notices. Lead
+  with the event and explanation at a four-point gap; keep the 44-point dismiss
+  target beside the content so it cannot inflate that gap. Use eight-point
+  grouping gaps, existing text roles and quiet borders. Keep workflow and status
+  visible, then a 24-point avatar with the GitHub username immediately to its right.
+  Reuse cached avatars and initials fallback; unavailable identity reads Unknown
+  author. Align Additional info to the right of that same 24-point author row.
+  Keep eight-point gaps above and below the row, without extra vertical button
+  padding. When expanded, object IDs and UTC timestamps use the full
+  content width below the row. The explanation itself never requires
+  expansion. Show message counts at the bottom. Keep earlier/replaced feedback
+  explicit and newest messages first. Wrap long explanations in a bounded scroll
+  area; at short heights the event title opens full feedback in a bounded non-modal
+  window. Use amber only for current rejection/exclusion feedback. Revisiting a
+  completed review alone creates no notice. Dismissal applies to the opened
+  context. Object and submission reason inputs retain their scope, validation
+  and input-preservation behavior.
 - **Skeleton outcomes:** present **Visible** and **Occluded** as selected
   coordinate-placement modes with one concise dynamic instruction. Present
   **Not present** as a coordinate-free outcome for one optional keypoint.

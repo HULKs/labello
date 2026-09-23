@@ -353,7 +353,18 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             rejection.event_sequence = 2;
             rejection.action = labello_domain::WorkflowReasonAction::ReviewComment;
             rejection.review_decision = Some(labello_domain::ReviewDecision::Rejected);
-            app.install_reason_notice(vec![historical, rejection]);
+            app.install_reason_notice(
+                vec![historical, rejection]
+                    .into_iter()
+                    .map(|reason| labello_client::WorkflowReasonEntry {
+                        reason,
+                        author: Some(labello_client::WorkflowReasonAuthor {
+                            github_login: Some("example-reviewer".into()),
+                            github_user_id: None,
+                        }),
+                    })
+                    .collect(),
+            );
             app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
                 previous: "Synthetic previous workflow".into(),
                 current: "Synthetic current workflow".into(),
