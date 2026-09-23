@@ -363,7 +363,10 @@ fn workflow_feedback_groups_heading_and_text_and_hides_audit_details() {
         let author = harness.get_by_label("@very-long-example-reviewer-for-notices");
         let row = details.rect();
         assert_eq!(details.accesskit_node().data().is_expanded(), Some(false));
-        assert!(row.height() >= 44.0);
+        assert!((row.height() - 24.0).abs() < 1.0, "{size:?}: metadata row must match the avatar height");
+        let workflow_label = format!("{} · Current review round", harness.state().work.tasks[0].name);
+        let workflow = harness.get_by_label(&workflow_label);
+        assert!((row.top() - workflow.rect().bottom() - theme::SPACE_2).abs() < 1.0, "{size:?}: use the normal gap above metadata");
         assert!((author.rect().center().y - row.center().y).abs() < 1.0, "{size:?}: author and disclosure must share one row");
         assert!(author.rect().right() < row.left(), "{size:?}: disclosure must be right of author");
         let content_left = title.rect().left();
@@ -374,7 +377,8 @@ fn workflow_feedback_groups_heading_and_text_and_hides_audit_details() {
         harness.run_steps(4);
         let object = harness.get_by_label("Object audit-object");
         assert_eq!(harness.get_by_label("Additional info").accesskit_node().data().is_expanded(), Some(true));
-        assert!(object.rect().top() >= harness.get_by_label("Additional info").rect().bottom(), "{size:?}: details must be below the entire row");
+        let details_bottom = harness.get_by_label("Additional info").rect().bottom();
+        assert!((object.rect().top() - details_bottom - theme::SPACE_2).abs() < 1.0, "{size:?}: use the normal gap below metadata");
         assert!((object.rect().left() - content_left).abs() < 1.0, "{size:?}: details must use the full content width");
         assert!(harness.query_by_label(&timestamp).is_some());
         harness.run_steps(4);

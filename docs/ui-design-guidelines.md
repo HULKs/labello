@@ -97,7 +97,8 @@ and history.
   keyboard events before other controls process them.
 - Use a danger action plus concise confirmation for destructive work. Never use
   double-click as confirmation.
-- Preserve 44-point targets, visible focus, tooltips, associated field labels,
+- Preserve 44-point targets, except for the compact saved-feedback disclosure
+  specified below. Preserve visible focus, tooltips, associated field labels,
   and complete, contextual AccessKit names.
 - Expose selected, open, disabled, loading, and modal states semantically. Never
   rely on color alone; retain text, stroke, pattern, thickness, handle, or shape
@@ -282,8 +283,9 @@ has been recorded.
   grouping gaps, existing text roles and quiet borders. Keep workflow and status
   visible, then a 24-point avatar with the GitHub username immediately to its right.
   Reuse cached avatars and initials fallback; unavailable identity reads Unknown
-  author. Align Additional info to the right of that same author row, preserving
-  its 44-point target. When expanded, object IDs and UTC timestamps use the full
+  author. Align Additional info to the right of that same 24-point author row.
+  Keep eight-point gaps above and below the row, without extra vertical button
+  padding. When expanded, object IDs and UTC timestamps use the full
   content width below the row. The explanation itself never requires
   expansion. Show message counts at the bottom. Keep earlier/replaced feedback
   explicit and newest messages first. Wrap long explanations in a bounded scroll
