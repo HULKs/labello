@@ -62,6 +62,58 @@ pub struct ContributorDay {
     pub rejected: usize,
 }
 
+pub const DAILY_LABEL_GOAL: usize = 20;
+pub const DAILY_REVIEW_GOAL: usize = 30;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LabelStreak {
+    pub days: usize,
+    pub labeled_today: usize,
+    pub reviewed_today: usize,
+}
+
+impl LabelStreak {
+    pub fn lit(self) -> bool {
+        self.labeled_today >= DAILY_LABEL_GOAL || self.reviewed_today >= DAILY_REVIEW_GOAL
+    }
+}
+
+impl ContributorStats {
+    /// UTC labeling or review days; yesterday's streak remains available to extend today.
+    pub fn label_streak(&self, today: chrono::NaiveDate) -> LabelStreak {
+        let days: BTreeMap<chrono::NaiveDate, LabelStreak> = self
+            .history
+            .iter()
+            .filter_map(|day| {
+                day.day.parse().ok().map(|date| {
+                    (
+                        date,
+                        LabelStreak {
+                            labeled_today: day.labeled,
+                            reviewed_today: day.reviewed,
+                            ..Default::default()
+                        },
+                    )
+                })
+            })
+            .collect();
+        let mut streak = days.get(&today).copied().unwrap_or_default();
+        let mut cursor = if streak.lit() {
+            Some(today)
+        } else {
+            today.pred_opt()
+        };
+        while let Some(day) = cursor {
+            if !days.get(&day).copied().unwrap_or_default().lit() {
+                break;
+            }
+            streak.days += 1;
+            cursor = day.pred_opt();
+        }
+        streak
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignmentBalanceStats {
@@ -160,6 +212,96 @@ pub struct ThroughputPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streak_requires_twenty_and_expires_only_after_a_missed_utc_day() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let mut person = ContributorStats {
+            history: [
+                ("2025-12-31", 20),
+                ("2025-12-30", 25),
+                ("2025-12-28", 30),
+                ("2026-01-02", 50),
+                ("invalid", 50),
+                ("2026-01-01", 19),
+            ]
+            .into_iter()
+            .map(|(day, labeled)| ContributorDay {
+                day: day.into(),
+                labeled,
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        };
+        person.history.last_mut().unwrap().reviewed = 29;
+        assert_eq!(
+            person.label_streak(today),
+            LabelStreak {
+                days: 2,
+                labeled_today: 19,
+                reviewed_today: 29,
+            }
+        );
+        assert!(!person.label_streak(today).lit());
+        person.history.last_mut().unwrap().labeled = 20;
+        assert_eq!(
+            person.label_streak(today),
+            LabelStreak {
+                days: 3,
+                labeled_today: 20,
+                reviewed_today: 29,
+            }
+        );
+        assert!(person.label_streak(today).lit());
+        assert_eq!(
+            person.label_streak(today + chrono::Days::new(4)),
+            LabelStreak::default()
+        );
+        assert_eq!(
+            ContributorStats::default().label_streak(today),
+            LabelStreak::default()
+        );
+    }
+
+    #[test]
+    fn review_goal_extends_labeling_streaks_without_combining_partial_goals() {
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 1, 3).unwrap();
+        let mut person = ContributorStats {
+            history: [
+                ("2026-01-01", 0, 30),
+                ("2026-01-02", 20, 0),
+                ("2026-01-03", 19, 29),
+            ]
+            .into_iter()
+            .map(|(day, labeled, reviewed)| ContributorDay {
+                day: day.into(),
+                labeled,
+                reviewed,
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        };
+        assert_eq!(person.label_streak(today).days, 2);
+        assert!(!person.label_streak(today).lit());
+        let day = person.history.last_mut().unwrap();
+        day.labeled = 0;
+        day.reviewed = 30;
+        assert_eq!(
+            person.label_streak(today),
+            LabelStreak {
+                days: 3,
+                labeled_today: 0,
+                reviewed_today: 30,
+            }
+        );
+        assert!(person.label_streak(today).lit());
+        person.history.last_mut().unwrap().labeled = 20;
+        assert_eq!(person.label_streak(today).days, 3);
+        assert_eq!(person.label_streak(today + chrono::Days::new(1)).days, 3);
+        assert_eq!(person.label_streak(today + chrono::Days::new(2)).days, 0);
+    }
 
     #[test]
     fn statistics_from_older_servers_decode_without_contributor_support() {

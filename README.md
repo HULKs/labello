@@ -22,7 +22,9 @@ Labello currently supports:
 - dataset contributor leaderboards, top-three podiums and selectable user history
   in Statistics, with labeling/review counts, acceptance percentages, and
   [contribution scores](docs/scoring.md) including historical work, weighted
-  labels, daily multipliers, focus-workflow bonuses, and rejection deductions;
+  labels, daily multipliers, focus-workflow bonuses, and rejection deductions, plus daily
+  streaks (20 distinct image/task submissions or 30 reviews per dataset per UTC day), shown
+  with leaderboard and top-bar flames;
 - atomic new-dataset import for explicit YOLO detection/pose and COCO
   instances/keypoints ground-truth profiles;
 - original-image detection and pose dataset export with explicit

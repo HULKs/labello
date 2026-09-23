@@ -142,16 +142,15 @@ impl LabelloApp {
 
     pub(crate) fn refresh_stats_if_due(&mut self) {
         if self.runtime.api.is_none()
-            || self.datasets.metadata.is_none()
             || self.loading.stats
-            || !(self.statistics_visible() || self.view == AppView::Annotate)
+            || (!self.statistics_visible() && !self.streak_available())
         {
             return;
         }
         let due = self
             .datasets
             .last_stats_attempt
-            .is_none_or(|last| last.elapsed() >= Duration::from_secs(if self.statistics_visible() { 3 } else { 60 }));
+            .is_none_or(|last| last.elapsed() >= self.statistics_refresh_interval());
         if due {
             self.request_stats();
         }

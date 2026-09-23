@@ -974,11 +974,10 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
             .as_ref()
             .is_some_and(|assignment| assignment.status == AssignmentStatus::Completed)
     );
-    harness.step();
-    assert_eq!(api.counts().migration_commands, 1);
-    assert!(
+    step_until(&mut harness, 8, |_| {
         api.counts().assignment_availability > availability_checks_before
-    );
+    });
+    assert_eq!(api.counts().migration_commands, 1);
 }
 
 #[cfg(feature = "inspector-presets")]

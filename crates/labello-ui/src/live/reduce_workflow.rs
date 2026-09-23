@@ -385,6 +385,7 @@ impl LabelloApp {
                             let completed_assignment = self.work.assignment.clone();
                             self.runtime.error = None;
                             self.apply_state(state);
+                            self.request_stats();
                             if phase == crate::app::ReviewPhase::FullImage && let Some(assignment) = completed_assignment.as_ref() {
                                 self.clear_current_work_draft(assignment);
                             }
@@ -406,7 +407,6 @@ impl LabelloApp {
                                         assignment.status = labello_domain::AssignmentStatus::Completed;
                                         self.remember_previous_assignment(assignment);
                                     }
-                                    self.request_stats();
                                     if !self.promote_prepared_assignment(ctx, None) {
                                         self.clear_current_image();
                                     }

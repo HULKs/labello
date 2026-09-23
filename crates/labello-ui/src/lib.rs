@@ -24,6 +24,7 @@ mod review_revision;
 mod review_sequence;
 pub mod setup;
 mod statistics;
+pub use statistics::set_reduced_motion;
 pub mod theme;
 mod workspace_canvas;
 

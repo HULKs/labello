@@ -88,6 +88,7 @@ Workspace rendering is grouped by the reason it changes:
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
   `avatar.rs` owns public avatar loading, caching and painting shared by statistics
   and presence; `statistics/avatar.rs` owns contributor rows;
+  `statistics/streak.rs` renders daily flames from the domain streak projection;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -208,8 +209,14 @@ Statistics data, remote status, and active request identity remain dataset-owned
 Scores reuse these owners and the leaderboard/history renderer, with identity
 reset before rendering. Domain owns [scoring policy](scoring.md); storage owns
 durable focus selection and aggregation. UI never awards points. Annotation
-refreshes focus statistics each minute and hides expired or failed-refresh data.
+refreshes focus statistics in the background and hides expired or failed-refresh data.
 The shared renderer orders score podium, rankings, activity, then aggregates.
+The domain derives streaks from contributor history; `statistics/streak.rs` owns
+flame rendering and reduced-motion-aware goal animation. The app-bar flame opens
+Statistics; leaderboard state owns streak sorting. Background statistics refresh
+runs every 30 seconds (three while open), with saves, reviews, and migration
+completions requesting an immediate refresh. In-flight requests coalesce into one
+follow-up. Existing epoch gates reject stale responses.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar
 counts without hover and clamps to the current period after a period change.
