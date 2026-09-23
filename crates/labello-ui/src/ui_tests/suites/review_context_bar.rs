@@ -238,12 +238,10 @@ fn review_bar_tracks_correction_final_loading_and_missing_preview_without_stale_
     assert_review_bar_paints(&harness, "Image overview");
     harness.state_mut().loading.image = true;
     harness.run_steps(3);
-    assert!(
-        harness
-            .query_by_label_contains("Review details: Workflow:")
-            .is_none()
-    );
-    assert!(harness.query_by_label("Loading review target…").is_some());
+    let retained = harness.get_by_label_contains("Review details: Workflow:");
+    assert!(retained.accesskit_node().is_disabled());
+    assert_review_bar_paints(&harness, "Image overview");
+    assert!(harness.query_by_label("Loading review target…").is_none());
     harness.state_mut().loading.image = false;
     harness.state_mut().work.assignment = None;
     harness.run_steps(3);

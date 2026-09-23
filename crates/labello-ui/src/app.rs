@@ -375,6 +375,7 @@ impl DatasetState {
 
 #[derive(Default)]
 pub(crate) struct NavigationState {
+    pub(crate) workspace_bars: crate::panels::WorkspaceBars,
     pub(crate) drawer_open: bool,
     pub(crate) restore_drawer_trigger_focus: bool,
     pub(crate) statistics: StatisticsOverlayState,

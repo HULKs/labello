@@ -54,6 +54,7 @@ impl AppBarAction {
     }
 }
 
+include!("panels/loading_bars.rs");
 include!("panels/app_bar.rs");
 include!("panels/workspace_actions.rs");
 include!("panels/workspace_overflow.rs");

@@ -139,6 +139,7 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
+        if self.workspace_bars_loading() && action != UserAction::OpenSettings { return; }
         if action == UserAction::NextImage && self.view == AppView::Review {
             self.confirm_review_item();
             return;

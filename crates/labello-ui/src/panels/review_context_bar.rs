@@ -1,4 +1,5 @@
-struct ReviewBarContent {
+#[derive(Clone)]
+pub(crate) struct ReviewBarContent {
     identity: String,
     type_and_phase: Option<(String, String)>,
     accessible: String,
@@ -28,13 +29,7 @@ impl ReviewBarContent {
                 accessible: format!("Review details: {}. Toggle Inspector.", context.accessible_summary()),
             }
         } else {
-            let message = if app.loading.image
-                && matches!(app.work.pending_transition, Some(PendingTransition::PreviousAssignment(_)))
-            {
-                "Opening previous review…"
-            } else if app.loading.image || app.loading.dataset || app.loading.session {
-                "Loading review target…"
-            } else if app.work.assignment.is_none() {
+            let message = if app.work.assignment.is_none() {
                 "No active review assignment"
             } else {
                 "Review target unavailable"
@@ -106,8 +101,7 @@ impl LabelloApp {
 
     fn review_inline_availability_loading(&self, layout: LayoutMode) -> bool {
         layout != LayoutMode::Wide
-            && self.work.availability.loading
-            && self.work.availability.tasks.is_empty()
+            && self.bar_availability_loading()
     }
 
     pub(crate) fn review_context_bar_height(
@@ -116,14 +110,14 @@ impl LabelloApp {
         layout: LayoutMode,
         viewport_width: f32,
     ) -> f32 {
-        let content = ReviewBarContent::from_app(self);
+        let content = self.displayed_review_bar();
         let width = self.review_summary_width(ctx, layout, viewport_width - 28.0);
         let text = ReviewBarText::measure(ctx, &content, width, self.review_inline_availability_loading(layout));
-        text.height + 4.0
+        text.height + 14.0
     }
 
     fn review_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        let content = ReviewBarContent::from_app(self);
+        let content = self.displayed_review_bar();
         let width = self.review_summary_width(ui.ctx(), layout, ui.available_width());
         let text = ReviewBarText::measure(ui.ctx(), &content, width, self.review_inline_availability_loading(layout));
         let valid = content.type_and_phase.is_some();
@@ -137,19 +131,19 @@ impl LabelloApp {
                 self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
             })
         } else {
-            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
+            workspace_context_row(ui, self.bar_availability_loading(), |ui| {
                 self.review_details_button(ui, &content, &text);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                 });
-                if let Some(current) = self.work.current.as_ref()
+                if let Some(current) = self.displayed_bar_image().as_ref()
                     && ui.available_size_before_wrap().x >= 80.0
                 {
                     ui.add_sized(
                         [ui.available_size_before_wrap().x.min(160.0), 44.0],
-                        egui::Label::new(&current.image.file_name).truncate(),
+                        egui::Label::new(&current.file_name).truncate(),
                     )
-                    .on_hover_text(&current.image.file_name);
+                    .on_hover_text(&current.file_name);
                 }
             })
         };

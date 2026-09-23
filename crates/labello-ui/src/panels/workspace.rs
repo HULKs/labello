@@ -238,13 +238,14 @@ impl LabelloApp {
 
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         self.clear_workflow_change_outside_scope();
+        if self.workspace_bars_blank() { return; }
+        if self.workspace_bars_loading() { ui.disable(); }
         if self.view == AppView::Review {
             self.review_context_bar(ui, layout);
             return;
         }
-        let current = self.work.current.clone();
+        let current = self.displayed_bar_image();
         let workflow = self.selected_workflow().map(|workflow| workflow.label());
-        let loading_image = self.loading.image;
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
         let add_summary = |ui: &mut egui::Ui, filename_width: f32| {
@@ -252,10 +253,10 @@ impl LabelloApp {
                 if filename_width > 0.0 {
                     ui.add_sized(
                         [filename_width, 44.0],
-                        egui::Label::new(RichText::new(&current.image.file_name).strong())
+                        egui::Label::new(RichText::new(&current.file_name).strong())
                             .truncate(),
                     )
-                    .on_hover_text(&current.image.file_name);
+                    .on_hover_text(&current.file_name);
                 }
                 if layout == LayoutMode::Wide {
                     ui.add_sized(
@@ -263,15 +264,12 @@ impl LabelloApp {
                         egui::Label::new(
                             RichText::new(format!(
                                 "{} x {}",
-                                current.image.width, current.image.height
+                                current.width, current.height
                             ))
                             .color(theme::MUTED),
                         ),
                     );
                 }
-            } else if loading_image {
-                ui.spinner();
-                ui.label("Loading assignment...");
             } else if has_assignment {
                 ui.label(RichText::new("Preview unavailable").color(theme::WARNING));
             } else {
@@ -282,9 +280,9 @@ impl LabelloApp {
         let response = if layout == LayoutMode::Compact {
             ui.horizontal(|ui| {
                 let control_count = if current.is_some() {
-                    if self.manual_migration_active() { 5.0 } else { 4.0 }
+                    if self.bar_migration_active() { 5.0 } else { 4.0 }
                 } else { 2.0 };
-                let loading_availability = self.work.availability.loading && self.work.availability.tasks.is_empty();
+                let loading_availability = self.bar_availability_loading();
                 let spinner_width = if loading_availability { 12.0 + ui.spacing().item_spacing.x } else { 0.0 };
                 let summary_width = (ui.available_width()
                     - control_count * (44.0 + ui.spacing().item_spacing.x) - spinner_width).max(0.0);
@@ -293,8 +291,8 @@ impl LabelloApp {
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         let label = current.as_ref().map_or_else(
-                            || if loading_image { "Loading assignment..." } else if has_assignment { "Preview unavailable" } else { "No active assignment" }.to_owned(),
-                            |current| workflow.clone().unwrap_or_else(|| current.image.file_name.clone()),
+                            || if has_assignment { "Preview unavailable" } else { "No active assignment" }.to_owned(),
+                            |current| workflow.clone().unwrap_or_else(|| current.file_name.clone()),
                         );
                         ui.add(egui::Label::new(&label).truncate()).on_hover_text(label);
                     },
@@ -313,7 +311,7 @@ impl LabelloApp {
                 }
             })
         } else {
-            workspace_context_row(ui, self.work.availability.loading && self.work.availability.tasks.is_empty(), |ui| {
+            workspace_context_row(ui, self.bar_availability_loading(), |ui| {
                 add_summary(
                     ui,
                     if short {
@@ -372,7 +370,7 @@ impl LabelloApp {
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         ui.horizontal(|ui| {
-            let show_refocus = self.view == AppView::Review || self.manual_migration_active();
+            let show_refocus = self.view == AppView::Review || self.bar_migration_active();
             let dense = layout == LayoutMode::Compact
                 || (show_refocus && (layout != LayoutMode::Wide || ui.ctx().content_rect().width() < 1366.0));
             if self.view != AppView::Review {

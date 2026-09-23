@@ -35,6 +35,9 @@ pub enum InspectorPreset {
     BuildUnavailable,
     Review,
     ReviewCorrection,
+    ReviewInitialLoad,
+    ReviewNextImage,
+    MigrationNextImage,
     WorkflowReasons,
     Admin,
     ExportSelection,
@@ -84,7 +87,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 57] = [
+    pub const ALL: [Self; 60] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -96,6 +99,9 @@ impl InspectorPreset {
         Self::BuildUnavailable,
         Self::Review,
         Self::ReviewCorrection,
+        Self::ReviewInitialLoad,
+        Self::ReviewNextImage,
+        Self::MigrationNextImage,
         Self::WorkflowReasons,
         Self::Admin,
         Self::ExportSelection,
@@ -157,6 +163,9 @@ impl InspectorPreset {
             Self::BuildUnavailable => "build-unavailable",
             Self::Review => "review",
             Self::ReviewCorrection => "review-correction",
+            Self::ReviewInitialLoad => "review-initial-load",
+            Self::ReviewNextImage => "review-next-image",
+            Self::MigrationNextImage => "migration-next-image",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::ExportSelection => "export-selection",
@@ -214,6 +223,26 @@ impl InspectorPreset {
 
 pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
     let mut app = match preset {
+        InspectorPreset::ReviewInitialLoad
+        | InspectorPreset::ReviewNextImage
+        | InspectorPreset::MigrationNextImage => {
+            let mut app = build(
+                if preset == InspectorPreset::MigrationNextImage {
+                    InspectorPreset::MigrationFullImage
+                } else {
+                    InspectorPreset::Review
+                },
+                ctx,
+            );
+            app.sync_review_selection();
+            app.sync_manual_migration();
+            if preset != InspectorPreset::ReviewInitialLoad {
+                app.sync_workspace_bars();
+            }
+            app.clear_current_image();
+            app.loading.image = true;
+            app
+        }
         InspectorPreset::OverlayAnnotation
         | InspectorPreset::OverlayReview
         | InspectorPreset::OverlayCorrection

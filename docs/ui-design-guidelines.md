@@ -70,8 +70,12 @@ and history.
 - Each remote region shows one base state: initial loading, loaded, empty,
   initial failure with Retry, loaded while refreshing, or loaded and stale after
   refresh failure.
-- Never show empty content while loading, zero placeholders after failure, or
-  stale data without a marker. Keep loaded data visible during refresh.
+- Keep loaded data visible during refresh. View bars start blank with their
+  layout space reserved. Within the same view and workflow, retain their last
+  loaded contents while the next or previous image loads and disable the
+  retained controls. Loading feedback belongs in the image region. Do not
+  show zero placeholders after failure or present retained contents as newly
+  loaded data.
 - Put validation and failures in the affected field, section, or page. Reserve
   global notices for cross-screen events.
 - Hide account-scoped content while authentication is unresolved. Clear stale
@@ -260,8 +264,17 @@ has been recorded.
   a separate Workflow control stays reachable, and canvas controls share the same
   row. Annotation also keeps canvas and panel controls together in one compact row. Compact availability feedback shares the truncatable identity line; it
   must not take width from the full type/phase line or add a context row.
-  Short viewports retain identity and phase. Loading or missing targets replace
-  the previous summary rather than pairing old identity with a new phase.
+  Short viewports retain identity and phase. During a same-view image load,
+  retain the complete previous bar presentation, including control placement
+  and summary dimensions. Update identity, phase and actions together once the
+  new image is ready. First load and changes of view, workflow, dataset or
+  account show blank reserved bars until ready. Empty and failed loads discard
+  retained presentation and use the normal empty/error state. Never pair old
+  identity with a new phase. The header also starts blank while the initial
+  view, session or dataset is loading. Within a loaded view, its global controls
+  remain available during image transitions. The dataset
+  inspector reserves its context row during initial gallery loading and retains
+  its fixed controls across image loads.
 - **Saved reasons:** share the persistent, dismissible notification area with
   workflow-change notices. Lead with the actual event, such as Review rejected
   or Reviewer corrections saved, and the explanation. Do not put a generic
