@@ -1,85 +1,54 @@
-# Documentation
+# Labello documentation
 
-> **Status:** Documentation index and governance reference
-> **Owner:** Labello maintainers
-> **Audience:** All contributors and operators
-> **Last verified:** 2026-07-30 at `4f9c332`
+Start with [getting started](getting-started.md), then choose the guide for your
+work. These pages describe the implemented application. Code and tests resolve
+any disagreement with the prose.
 
-## Current References
+## Use Labello
 
-The code and tests are the source of truth for current behavior. These
-documents are maintained current references:
+| Guide | Contents |
+| --- | --- |
+| [Getting started](getting-started.md) | Local setup, first dataset, sign-in, connection troubleshooting |
+| [Annotation and review](annotation.md) | Boxes, skeletons, controls, corrections, navigation, drafts |
+| [Dataset administration](administration.md) | Schema reuse, roles, image ingestion, inspection, statistics, snapshots |
+| [Dataset import](import.md) | Supported YOLO/COCO profiles, source upload, planning, coverage, publication |
+| [Guided migration](migration.md) | Box-to-skeleton work, exclusions, discoveries, companion reconciliation |
+| [Dataset export](export.md) | Selection, completeness, artifacts, preservation and round trips |
+| [Assignment](assignment.md) | Eligibility, leases, completion, balance, previous review, correction transactions |
+| [Contribution scoring](scoring.md) | Rewards, deductions, daily tiers, focus workflows, leaderboard meaning |
+| [Current limitations](limitations.md) | Partial features, unsupported behavior, operating constraints |
 
-| Document | Status | Owner | Audience | Purpose |
-| --- | --- | --- | --- | --- |
-| [HTTP API contract](api.md) | Normative current; internal/unversioned | API maintainers | Client, API, UI maintainers | Routes, roles, transport limits, errors, and compatibility policy |
-| [Architecture](architecture.md) | Normative current | Labello maintainers | Maintainers, contributors | Crate boundaries and implementation ownership |
-| [Assignment](assignment.md) | Normative current | Workflow maintainers | Operators, data administrators, maintainers | Assignment eligibility, completion balance, counts, boundaries, and cache consistency |
-| [Contribution scoring](scoring.md) | Normative current | Domain and UI maintainers | Contributors, operators, maintainers | Label weights, bonuses, review deductions, historical credit, and leaderboard interpretation |
-| [Server configuration](configuration.md) | Normative current | Server maintainers | Operators, maintainers | Supported settings, defaults, validation, and deployment configuration |
-| [Dataset import](import.md) | Normative current | Import maintainers | Operators, maintainers, UI contributors | Supported sources, lifecycle, invariants, and ownership |
-| [Dataset export](export.md) | Normative current | Storage and API maintainers | Dataset administrators, operators, contributors | Selection, capture, artifacts, and explicit round-trip guarantees |
-| [Release and deployment](deployment.md) | Normative current | Release and operations maintainers | Operators, maintainers | Stable release, rootless guest transaction, rollback, and rollout contract |
-| [Operations](operations.md) | Normative current | Server maintainers | Operators, maintainers | Logging, redaction, health, deployment, backup, upgrade, and recovery |
-| [Persistence and recovery](persistence.md) | Normative current | Storage maintainers | Operators, maintainers | On-disk authority, schema compatibility, atomicity, snapshots, and repair |
-| [UI and design guidelines](ui-design-guidelines.md) | Normative current | UI maintainers | UI designers and contributors | UI behavior, design, accessibility, and verification acceptance |
-| [UI ownership](ui-ownership.md) | Normative current | UI maintainers | UI maintainers and contributors | UI state, request, persistence, and rendering boundaries |
-| [Verification and acceptance](verification.md) | Normative current | Labello maintainers | Maintainers, contributors, reviewers | Canonical checks, risk profiles, evidence, CI, and independent acceptance |
+## Operate a server
 
-Supporting project material is grouped by purpose:
+| Guide | Contents |
+| --- | --- |
+| [Configuration](configuration.md) | Server and browser settings, authentication, environment, resource limits |
+| [Release and deployment](deployment.md) | Release verification, guest transaction, readiness, rollback |
+| [Guest setup](../deployment/guest/README.md) | Debian LXC provisioning, permissions, user services, Caddy |
+| [Operations](operations.md) | Logging, health, capacity, backup, restore, upgrades, incident handling |
+| [Persistence and recovery](persistence.md) | Artifact authority, event transactions, schema compatibility, recovery |
+| [Event history](event-history.md) | Workflow event replay, historical compatibility, server-owned commands |
 
-- The [parallel development guide](parallel-development.md) defines the
-  contributor workflow for issue tracks, stacked PRs, isolated worktrees, and
-  combined group verification.
-- The [native inspector guide](../apps/egui-mcp-inspector/README.md) covers
-  headless setup, MCP operation, parallel-agent isolation, and native UI
-  verification. Browser acceptance remains in the verification reference.
-- [`plans/`](plans/) is indexed by explicit status and contains active,
-  completed, and historical implementation records plus the current
-  [workflow policy ownership](plans/structural-refactor-policy-ownership.md)
-  inventory.
-- [`history/`](history/) contains baselines and delivery records retained for
-  context. Historical records are not normative for current behavior.
+## Develop Labello
 
-Planned work is tracked in [GitHub issues](https://github.com/HULKs/labello/issues)
-and organized for authorized maintainers in the
-[Labello project](https://github.com/orgs/HULKs/projects/12). Neither is
-evidence of current product support.
+| Guide | Contents |
+| --- | --- |
+| [Contributing](../CONTRIBUTING.md) | Setup and change/review workflow |
+| [Architecture](architecture.md) | Crates, dependency direction, shared interfaces |
+| [Workflow policy](workflow-policy.md) | Domain validation, API authorization, storage transaction boundaries |
+| [HTTP API](api.md) | Routes, access, wire types, limits, responses |
+| [UI design](ui-design-guidelines.md) | Layout, interaction, accessibility, viewport acceptance |
+| [UI implementation](ui-ownership.md) | State, async requests, rendering, browser recovery |
+| [Native inspector](../apps/egui-mcp-inspector/README.md) | Headless setup, presets, live inspection, evidence |
+| [Verification](verification.md) | Canonical checks, risk profiles, CI, review gates |
+| [Parallel development](parallel-development.md) | Worktrees, dependent branches, combined verification |
+| [Documentation and wiki](wiki.md) | Editing, checking links, publication, archive boundary |
 
-[`labello.md`](../labello.md) is target product intent and can describe
-unimplemented behavior. The root [`README.md`](../README.md) is the current
-repository overview and setup guide.
+Update the relevant current page when behavior changes. Keep each detailed
+contract in one place and link to it from user guides. Documents have no owner,
+status, date, or revision headers; Git records their history.
 
-## Status And Metadata
-
-Documents use these statuses:
-
-- **Normative current:** describes supported current behavior and must agree
-  with code and tests.
-- **Proposed:** design work that has not been accepted for implementation.
-- **Active:** an accepted implementation plan with unfinished work.
-- **Completed:** an implemented plan retained for its decisions and acceptance
-  record.
-- **Historical:** a baseline or delivery record retained only for context.
-- **Target product:** desired product behavior that is not evidence of current
-  implementation.
-
-Every normative current document must name its status, role-based owner,
-audience, and last verified date/revision. Add `Supersedes` when an older
-document could otherwise be mistaken for current guidance. Plan status and
-replacement documents live in the [plans index](plans/README.md). Historical
-documents may retain the revision-specific paths and wording they recorded,
-but must link to the current replacement when one exists.
-
-## Freshness Rules
-
-Review a normative document when a change affects its routes, configuration,
-persistence, lifecycle states, logging/events, redaction, ownership boundary,
-UI behavior, or operator procedure. Update its `Last verified` marker only
-after checking the complete affected flow against code and tests.
-
-At minimum, maintainers review current references before each release and after
-schema or security changes. A stale verification marker is a prompt to audit,
-not proof that later code still matches. Documentation-only changes require
-content, local-link/anchor, and diff checks. Historical documents are exempt
-from current code-path checks only when their historical status is explicit.
+Plans, proposals, target requirements, and delivery records belong in the
+repository-only [archive](archive/README.md). They are preserved for context and
+excluded from the wiki. Planned work is tracked in
+[GitHub issues](https://github.com/HULKs/labello/issues).

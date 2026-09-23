@@ -19,11 +19,14 @@ Use documentation according to its status:
 
 - Code and tests are the source of truth for current behavior.
 - `README.md` is the current setup, supported-feature, and limitation overview.
-- `docs/README.md` defines documentation status, ownership, and freshness.
+- `docs/README.md` indexes current documentation; `docs/wiki.md` defines wiki
+  publication and the archive boundary.
 - `docs/api.md` is the current internal/unversioned HTTP route and access
   contract.
 - `docs/persistence.md` is the current on-disk authority, compatibility,
   recovery, and repair contract.
+- `docs/event-history.md` defines workflow event replay and historical
+  compatibility; read it before changing persisted workflow events.
 - `docs/configuration.md`, `docs/import.md`, and `docs/operations.md` define
   server configuration, import behavior, and operational/security rules.
 - Read `docs/export.md` before changing export selection, capture, delivery,
@@ -33,17 +36,18 @@ Use documentation according to its status:
   deployment code, workflows, or assets.
 - `docs/ui-design-guidelines.md` and `docs/ui-ownership.md` define current UI
   acceptance and implementation ownership.
-- `docs/plans/README.md` classifies plans. Completed and historical plans are
-  not current behavior references unless a maintained document says otherwise.
+- `docs/archive/` retains all plans, feature drafts, and historical records.
+  These are excluded from the wiki and are not current behavior references.
 - [GitHub issues](https://github.com/HULKs/labello/issues) track planned work;
   the maintainer-only [Labello project](https://github.com/orgs/HULKs/projects/12)
   carries workflow metadata. Neither is a supported-behavior contract.
-- `labello.md` is target product intent and may describe unimplemented behavior.
+- `docs/archive/labello.md` is target product intent and may describe
+  unimplemented behavior.
 
 When behavior changes, update the relevant normative current document in the
-same change. Update a `Last verified` marker only after checking the complete
-affected flow against code and tests. Preserve historical documents as
-revision-specific records instead of silently rewriting them as current.
+same change after checking the complete affected flow against code and tests.
+Keep document owner, status, date, and revision metadata out of Markdown; Git
+records document history. Preserve archived material as historical records.
 
 ## Repository Map
 
@@ -70,8 +74,8 @@ revision-specific records instead of silently rewriting them as current.
 - `tools/labello-deploy`: release verification and deployment transactions.
 - `deployment/`: release images, guest setup, Caddy, and systemd assets.
 - `assets/`: tracked icon and font assets used by the product.
-- `docs/`: normative references, active/completed plans, and historical
-  delivery records.
+- `docs/`: current guides and references; `docs/archive/` holds non-current
+  material outside wiki publication.
 
 Keep dependencies flowing from domain types toward storage/client, then API/UI,
 then executable apps. Do not move HTTP, filesystem, browser, or egui concerns
@@ -100,7 +104,7 @@ of production crates and the root workspace graph.
   recoverable conveniences, never authoritative workflow state.
 
 Read `docs/architecture.md`,
-`docs/plans/structural-refactor-policy-ownership.md`, `docs/import.md`,
+`docs/workflow-policy.md`, `docs/import.md`,
 `docs/persistence.md`, and `docs/ui-ownership.md` before moving behavior across
 these boundaries.
 

@@ -1,36 +1,71 @@
 # Assignment
 
-> **Status:** Normative current reference
-> **Owner:** Workflow maintainers
-> **Audience:** Operators, data administrators, and maintainers
-> **Last verified:** 2026-08-25 for issue #11 implementation
-
 Labello assigns work per enabled task. Availability and prepared queue results
 are advisory; the storage claim transaction repeats the same eligibility checks
 before creating an assignment.
 
-## Migration companions
+Annotation requires annotator authority; review requires reviewer authority.
+Mutations bind the exact image, task, actor, assignment kind, and live lease.
+Claim retries and successful assignment-backed writes renew the 30-minute lease.
+Prepared queues can hold two future assignments in addition to current work; availability
+does not reserve completion-balance capacity.
 
-An active manual-migration annotation assignment authorizes a compound
-skeleton/box mutation only for that migration's configured guide task and class.
-Dataset configuration and role publication is serialized with migration commands,
-including add, edit, delete, explicit reconciliation and administrator repair.
-A command holds a configuration read guard from metadata capture through commit,
-then the same image lock guards both objects. A competing active guide-task
-assignment rejects the mutation; it is not implicitly cancelled or stolen.
-The box task enters `NeedsCorrection`, clears its previous final outcome and
-retains prior review records as history. Normal box-task claims, corrections,
-review policy and completion projections then apply.
+For controls and the user sequence, see [annotation and review](annotation.md).
 
-The frozen imported migration target count does not grow when a companion is
-created. Migration review defaults to canonical dispositions, discovered skeletons
-in stable annotation-ID order, and then full-image confirmation. Exact current
-items may be approved in any order, including after an earlier locally retained
-correction. Final confirmation requires all current items to be approved by the
-reviewer in the current submission round. Each discovery
-decision binds the current exact skeleton version. A box review cannot approve
-its skeleton, and migration approval cannot approve its box.
+## Single-reviewer completion
 
+Approval tasks admit one active reviewer per image and task. That reviewer
+performs object-level decisions and the final full-image check. Final approval
+atomically records the decision, marks the task `Completed` with its approved
+outcome, completes the owned assignment, and cancels any outstanding competing
+review leases. Rejection requires substantive corrections and returns work to a fresh
+`Submitted` review round.
+A task configured with review workflow `none` completes on annotation submission.
+
+Task statistics use five mutually exclusive states: Pending, In progress,
+Awaiting review, Needs correction, and Completed. Approved and reviewer-corrected
+completed tasks both count as Completed. Enabled-task eligibility and excluded
+import coverage retain the completion-denominator rules above. Review decisions
+remain in audit history and contributor activity.
+
+## Reviewer correction submissions
+
+Both ordinary and guided migration reviews accumulate unsaved corrections.
+A submission must edit geometry, add an annotation, remove an erroneous object,
+or change a canonical migration disposition. Empty changes, unchanged geometry,
+comment-only changes, unchanged exclusion reasons, bare rejection, and new
+missing-object markers cannot reject work. The legacy `allowReviewerCorrections`
+configuration field remains readable but no longer gates approval review.
+
+The review UI edits the focused item directly. Approve is available for an
+unchanged item; Reject retains a valid correction locally and advances. Earlier
+corrections do not disable approval of another unchanged item. Reset restores the
+item and requires a new decision. A valid retained correction satisfies that item's
+rejection requirement when navigating to the overview; unchanged items still need
+explicit approval. Navigation alone does not approve items.
+The final overview permits adding missing annotations and revisiting existing
+items. Once every original item has a decision, it submits approval if there are
+no corrections, or submits the complete correction batch with rejection. Invalid
+or unfinished additions block submission. No corrected-item rejection reaches the
+server before this overview submission.
+
+The transaction holds the configuration guard and image lock, reloads state,
+checks the exact reviewer lease, captured round, task definition and target
+fingerprint, validates the complete correction batch, then publishes all changes,
+reviewer attribution, rejection, assignment completion and fresh submission in
+one atomic event-log replacement. Canonical skeletons retain their guide/group
+identities. Discovered skeletons retain the derived-box pairing rules above.
+
+Corrected work remains `Submitted` with no completion outcome. Other review
+leases are cancelled, and the same reviewer can claim a fresh assignment.
+One reviewer must approve every current object and the final image in the new
+round. Previous approvals remain historical evidence and cannot count toward it.
+
+The correction ID and complete request identify an exact retry. Changed retries,
+stale versions or targets, lost ownership, and changed configuration fail without
+appending a partial correction. Cancelling navigation preserves staged edits;
+failed requests retain the immutable submission for retry. Browser recovery is
+best effort and does not replace the server event log.
 
 ## Previous review and decision revisions
 
@@ -141,81 +176,6 @@ Assignment leases, per-image eligibility, review workflow rules, and exact
 assignment ownership still apply after the dataset-level balance check. See the
 [HTTP API contract](api.md#assignment-and-image-routes) for routes and access.
 
-## Direct Canonical Revisit
-
-Direct canonical revisit records a `ManualSelection` dependency for a valid guide,
-including a previously annotated or excluded target. That selected target remains
-the durable cursor while another target acquires a dependency. Its successful
-save/exclusion clears only its own marker; the next cursor resolves remaining
-pending/dependent work, then full-image confirmation. Guide/disposition versions
-and assignment ownership are revalidated before mutation. A changed selected guide
-replaces its selection with the applicable correction dependency and stale writes
-are rejected. Existing global correction-pass records retain their audit history. The latest
-pass for the current assignment owns outstanding decisions and the completion
-gate; earlier passes do not reopen when later edits change an annotation.
-
-## Reviewer correction submissions
-
-Both ordinary and guided migration reviews accumulate unsaved corrections.
-A submission must edit geometry, add an annotation, remove an erroneous object,
-or change a canonical migration disposition. Empty changes, unchanged geometry,
-comment-only changes, unchanged exclusion reasons, bare rejection, and new
-missing-object markers cannot reject work. The legacy `allowReviewerCorrections`
-configuration field remains readable but no longer gates approval review.
-
-The review UI edits the focused item directly. Approve is available for an
-unchanged item; Reject retains a valid correction locally and advances. Earlier
-corrections do not disable approval of another unchanged item. Reset restores the
-item and requires a new decision. A valid retained correction satisfies that item's
-rejection requirement when navigating to the overview; unchanged items still need
-explicit approval. Navigation alone does not approve items.
-The final overview permits adding missing annotations and revisiting existing
-items. Once every original item has a decision, it submits approval if there are
-no corrections, or submits the complete correction batch with rejection. Invalid
-or unfinished additions block submission. No corrected-item rejection reaches the
-server before this overview submission.
-
-The transaction holds the configuration guard and image lock, reloads state,
-checks the exact reviewer lease, captured round, task definition and target
-fingerprint, validates the complete correction batch, then publishes all changes,
-reviewer attribution, rejection, assignment completion and fresh submission in
-one atomic event-log replacement. Canonical skeletons retain their guide/group
-identities. Discovered skeletons retain the derived-box pairing rules above.
-
-Corrected work remains `Submitted` with no completion outcome. Other review
-leases are cancelled, and the same reviewer can claim a fresh assignment.
-One reviewer must approve every current object and the final image in the new
-round. Previous approvals remain historical evidence and cannot count toward it.
-
-The correction ID and complete request identify an exact retry. Changed retries,
-stale versions or targets, lost ownership, and changed configuration fail without
-appending a partial correction. Cancelling navigation preserves staged edits;
-failed requests retain the immutable submission for retry. Browser recovery is
-best effort and does not replace the server event log.
-
-## Historical missing-object evidence
-
-Active review no longer creates location markers. A missing object is corrected
-by creating its annotation. Existing marker events, revision records and evidence
-remain replayable, available in snapshots/offline data, and visible as read-only
-history. Historical records never become annotations implicitly.
-
-## Single-reviewer completion
-
-Approval tasks admit one active reviewer per image and task. That reviewer
-performs object-level decisions and the final full-image check. Final approval
-atomically records the decision, marks the task `Completed` with its approved
-outcome, completes the owned assignment, and cancels any outstanding competing
-review leases. Rejection requires substantive corrections and returns work to a fresh
-`Submitted` review round.
-A task configured with review workflow `none` completes on annotation submission.
-
-Task statistics use five mutually exclusive states: Pending, In progress,
-Awaiting review, Needs correction, and Completed. Approved and reviewer-corrected
-completed tasks both count as Completed. Enabled-task eligibility and excluded
-import coverage retain the completion-denominator rules above. Review decisions
-remain in audit history and contributor activity.
-
 ## Return completed work from the inspector
 
 Any dataset member may inspect indexed images without claiming an assignment.
@@ -235,3 +195,45 @@ reviewer. Every current object and the full-image target require fresh decisions
 Migration work retains its current confirmation and must pass the existing
 migration terminal-state checks. Tasks without approval review and unfinished,
 disabled or actively assigned work cannot be returned through this action.
+
+## Migration companions
+
+An active manual-migration annotation assignment authorizes a compound
+skeleton/box mutation only for that migration's configured guide task and class.
+Dataset configuration and role publication is serialized with migration commands,
+including add, edit, delete, explicit reconciliation and administrator repair.
+A command holds a configuration read guard from metadata capture through commit,
+then the same image lock guards both objects. A competing active guide-task
+assignment rejects the mutation; it is not implicitly cancelled or stolen.
+The box task enters `NeedsCorrection`, clears its previous final outcome and
+retains prior review records as history. Normal box-task claims, corrections,
+review policy and completion projections then apply.
+
+The frozen imported migration target count does not grow when a companion is
+created. Migration review defaults to canonical dispositions, discovered skeletons
+in stable annotation-ID order, and then full-image confirmation. Exact current
+items may be approved in any order, including after an earlier locally retained
+correction. Final confirmation requires all current items to be approved by the
+reviewer in the current submission round. Each discovery
+decision binds the current exact skeleton version. A box review cannot approve
+its skeleton, and migration approval cannot approve its box.
+
+## Direct canonical revisit
+
+Direct canonical revisit records a `ManualSelection` dependency for a valid guide,
+including a previously annotated or excluded target. That selected target remains
+the durable cursor while another target acquires a dependency. Its successful
+save/exclusion clears only its own marker; the next cursor resolves remaining
+pending/dependent work, then full-image confirmation. Guide/disposition versions
+and assignment ownership are revalidated before mutation. A changed selected guide
+replaces its selection with the applicable correction dependency and stale writes
+are rejected. Existing global correction-pass records retain their audit history. The latest
+pass for the current assignment owns outstanding decisions and the completion
+gate; earlier passes do not reopen when later edits change an annotation.
+
+## Historical missing-object evidence
+
+Active review no longer creates location markers. A missing object is corrected
+by creating its annotation. Existing marker events, revision records and evidence
+remain replayable, available in snapshots/offline data, and visible as read-only
+history. Historical records never become annotations implicitly.

@@ -1,10 +1,5 @@
 # Dataset export
 
-> **Status:** Normative current reference
-> **Owner:** Storage and API maintainers
-> **Audience:** Dataset administrators, operators, and contributors
-> **Last verified:** 2026-09-05 at `7b9f03b`, including production round trips, native UI and Chromium
-
 Dataset administrators can export authoritative ground truth as
 `ultralytics_yolo_detect_v1` or `ultralytics_yolo_pose_v1`. Each export is a
 private, retained job with preflight, explicit start, cancellation, status,

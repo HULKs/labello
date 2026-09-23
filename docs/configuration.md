@@ -1,9 +1,4 @@
-# Server Configuration
-
-> **Status:** Normative current reference
-> **Owner:** Server maintainers
-> **Audience:** Operators and maintainers
-> **Last verified:** 2026-07-30 at `5f10153`
+# Server configuration
 
 Labello reads its server configuration from `labello.server.toml` in the
 current working directory. Set `LABELLO_CONFIG` to use a different path. If the
@@ -22,7 +17,133 @@ cp labello.server.example.toml labello.server.toml
 Keep production secrets in the environment or another secret-management
 system.
 
-## Browser Runtime Configuration
+## Configuration file
+
+The [complete example](../labello.server.example.toml) lists supported server
+fields. Top-level settings and `[developmentAuth]` are required; unknown fields
+are rejected. OAuth and import sections are optional, but require their complete
+settings when present. Individual import, preview, and export limits use their
+documented defaults when omitted. Environment overrides apply after file loading.
+
+## Top-Level settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `bind` | `"127.0.0.1:8080"` | Socket address on which the API listens. It must parse as an IP address and port, such as `127.0.0.1:8080` or `[::1]:8080`. `LABELLO_BIND` overrides it. |
+| `datasetsRoot` | `"datasets"` | Filesystem directory containing all datasets and server authentication state. Relative paths are resolved from the server process working directory. `LABELLO_DATASETS_ROOT` overrides it. |
+| `bootstrapAdmins` | `["admin"]` | Internal user IDs allowed to create datasets. This does not replace per-dataset role checks. GitHub users have IDs such as `github_123456`. |
+| `browserOrigins` | Local Trunk origins | Exact browser origins allowed to make credentialed cross-origin API requests. At least one origin is required. |
+| `sessionCookieSecure` | `false` | Whether session cookies receive the `Secure` attribute. Set this to `true` when the browser reaches the API through HTTPS. |
+
+### Browser origins
+
+Each `browserOrigins` entry must be an `http` or `https` origin with a host and
+optional port. Paths, credentials, queries, fragments, wildcards, and empty
+lists are rejected. For example:
+
+```toml
+browserOrigins = ["https://label.example.com"]
+```
+
+Use the exact hostname seen by the browser. `localhost` and `127.0.0.1` are
+different origins and different cookie hosts.
+
+Authenticated unsafe requests require the session-bound token returned as
+`csrfToken` by the login and `GET /me` responses. Send it in
+`x-csrf-token`. Browser mutations must also carry an `Origin` that exactly
+matches `browserOrigins`; token-bearing native clients may omit `Origin`.
+Local development login always requires a configured browser origin.
+
+Credentialed CORS preflights allow `content-type`, `x-csrf-token`,
+`idempotency-key`, `upload-offset`, `upload-length`, and `digest` for current
+and planned mutation protocols.
+
+### Bootstrap administrators
+
+`bootstrapAdmins` grants only the server-level ability to create a dataset.
+Dataset access remains controlled by the annotator, reviewer, and
+data-admin roles stored with each dataset. Keep at least one reachable account
+in the list when dataset creation is required.
+
+## Local development login
+
+The `[developmentAuth]` section is required.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `developmentAuth.localAdminLogin` | `true` | Enables one-click session login as the first configured bootstrap administrator. It requires a loopback bind address and a valid bootstrap administrator. |
+
+Local administrator login is intended only for a trusted local environment.
+Disable it for any internet-facing deployment:
+
+```toml
+[developmentAuth]
+localAdminLogin = false
+```
+
+## GitHub OAuth
+
+GitHub OAuth is disabled when `[githubOauth]` is absent. To configure it in the
+file, uncomment the entire section and replace every placeholder:
+
+```toml
+[githubOauth]
+clientId = "your-github-client-id"
+clientSecret = "your-github-client-secret"
+redirectUri = "https://api.example.com/auth/github/callback"
+```
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `githubOauth.clientId` | None | Client ID from the GitHub OAuth App. |
+| `githubOauth.clientSecret` | None | Client secret from the GitHub OAuth App. Do not commit a real value. |
+| `githubOauth.redirectUri` | None | API callback URI registered with GitHub, ending in `/auth/github/callback`. |
+
+The browser application's public URL belongs in the GitHub OAuth App's
+homepage field. The callback must point to the API, not the browser client.
+Keep the browser and callback hostnames consistent throughout local cookie
+flows.
+
+`redirectUri` must be an absolute HTTP(S) URL without user information, query,
+or fragment. Its path must end exactly in `/auth/github/callback`. An optional
+deployment prefix consists of nonempty slash-separated segments containing only
+ASCII letters, digits, `-`, `_`, `.`, or `~`. Dot segments `.` and `..`, repeated
+slashes, backslashes, whitespace, cookie-attribute delimiters, and all percent
+encoding are rejected at startup. Encoded paths are rejected rather than decoded
+or normalized, so the configured public path is the cookie path's authority.
+
+The OAuth flow cookie uses the callback's parent path for both creation and
+expiry. For example, callbacks at `/auth/github/callback`,
+`/api/auth/github/callback`, and `/labello/api/auth/github/callback` use
+`/auth/github`, `/api/auth/github`, and `/labello/api/auth/github`, respectively.
+The proxy may strip the deployment prefix before forwarding to the API; browsers
+match cookies against the public path before that forwarding happens. Session
+cookies retain `Path=/`. The flow cookie retains its ten-minute lifetime,
+HttpOnly and configured Secure/SameSite attributes. See the
+[rollout instructions](operations.md#oauth-cookie-path-rollout) when replacing a
+proxy cookie-path workaround.
+
+## Environment variables
+
+The server first loads or creates the TOML file, then applies environment
+overrides.
+
+| Variable | Effect |
+| --- | --- |
+| `LABELLO_CONFIG` | Selects the configuration file path. Defaults to `labello.server.toml`. |
+| `LABELLO_DATASETS_ROOT` | Overrides `datasetsRoot`. |
+| `LABELLO_BIND` | Overrides `bind`. |
+| `GITHUB_CLIENT_ID` | Overrides `githubOauth.clientId` when all three `GITHUB_*` variables are present. |
+| `GITHUB_CLIENT_SECRET` | Overrides `githubOauth.clientSecret` when all three `GITHUB_*` variables are present. |
+| `GITHUB_REDIRECT_URI` | Overrides `githubOauth.redirectUri` when all three `GITHUB_*` variables are present. |
+| `RUST_LOG` | Sets the tracing filter. This is not a TOML setting. |
+| `LABELLO_LOG_FORMAT` | Selects `text` or `json` logs. Defaults to `text` and is not a TOML setting. |
+
+All three `GITHUB_*` variables must be present for the environment to enable or
+replace GitHub OAuth. A partial set is ignored. See
+[`operations.md`](operations.md) for logging and redaction requirements.
+
+## Browser runtime configuration
 
 The Axum server and browser distribution are deployed separately. The WASM
 application therefore cannot safely read `labello.server.toml`: it must know
@@ -83,210 +204,7 @@ public artifact and must never contain OAuth credentials, cookies, tokens, or
 other secrets. Static hosting must return a real 404 for an absent
 `labello.client.json`, rather than rewriting that path to `index.html`.
 
-## Complete Configuration
-
-The uncommented values below are the defaults. GitHub OAuth has no default
-configuration, so its complete optional section is commented with placeholder
-values.
-
-```toml
-bind = "127.0.0.1:8080"
-datasetsRoot = "datasets"
-bootstrapAdmins = ["admin"]
-browserOrigins = [
-    "http://127.0.0.1:8081",
-    "http://localhost:8081",
-]
-sessionCookieSecure = false
-
-[developmentAuth]
-localAdminLogin = true
-
-# [githubOauth]
-# clientId = "your-github-client-id"
-# clientSecret = "your-github-client-secret"
-# redirectUri = "https://api.example.com/auth/github/callback"
-
-# [import]
-# enabled = true
-# retainRawSource = false
-# failedRetentionHours = 24
-# successfulMetadataRetentionDays = 30
-
-# [import.limits]
-# concurrentBuildJobs = 1
-# imageValidationWorkers = 8
-# decodedImageMemoryBytes = 5_368_709_120
-# concurrentBrowserUploadJobs = 2
-# activeReservationsPerOwner = 2
-# browserSourceFiles = 25_000
-# browserSourceBytes = 21_474_836_480
-# serverSourceFiles = 50_000
-# totalSourceBytes = 107_374_182_400
-# selectedImages = 10_000
-# singleSourceFileBytes = 4_294_967_296
-# descriptorBytes = 16_777_216
-# uploadChunkBytes = 8_388_608
-# sourcePathBytes = 1_024
-# sourcePathDepth = 32
-# sourceComponentBytes = 255
-# selectedCategories = 100
-# selectedTasks = 200
-# coverageEntries = 2_000_000
-# annotationsTotal = 1_000_000
-# annotationsPerImage = 10_000
-# generatedFileBytesPerImage = 67_108_864
-# keypointsPerSkeleton = 512
-# yoloLineBytes = 1_048_576
-# yoloColumns = 4_096
-# structuredDataNesting = 64
-# decodedImagePixels = 50_000_000
-# decodedImageBytes = 536_870_912
-# stagedBytes = 268_435_456_000
-# diagnosticExamplesPerCode = 100
-
-# [[import.serverRoots]]
-# id = "curated-releases"
-# path = "/srv/labello-imports"
-# allowedOwners = ["admin"]
-```
-
-The parser rejects unknown fields. Every uncommented field shown above is
-required. The `[githubOauth]` and `[import]` sections are optional, but their
-documented fields are required when the corresponding section is present.
-`[import.limits]` is optional, and each field within it independently defaults
-to the value shown above.
-
-## Dataset assignment balance
-
-Assignment balance belongs to each versioned `labello.dataset.toml`, not the
-server configuration above. Data administrators edit it through the
-Administration Automation view or the dataset administration API.
-
-This example enforces an absolute window of five completed images:
-
-```toml
-[imbalance]
-enforce = true
-maxDifference = 5
-```
-
-`maxDifference` is a non-negative 64-bit integer; zero is valid. Ratio-based
-configuration is not supported. Before starting this release, replace any
-existing ratio setting such as:
-
-```toml
-[imbalance]
-maxRatio = 2.0
-enforce = true
-```
-
-with an explicitly chosen `maxDifference`. Labello rejects `maxRatio`, tagged
-`policy` objects, negative values, and values larger than an unsigned 64-bit
-integer rather than guessing an absolute window. Omitting `imbalance`, or
-setting `enforce = false`, disables assignment blocking. See
-[Assignment](assignment.md#completion-balance) for count, denominator, peer,
-zero-count, and exact-boundary semantics.
-
-## Top-Level Settings
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `bind` | `"127.0.0.1:8080"` | Socket address on which the API listens. It must parse as an IP address and port, such as `127.0.0.1:8080` or `[::1]:8080`. `LABELLO_BIND` overrides it. |
-| `datasetsRoot` | `"datasets"` | Filesystem directory containing all datasets and server authentication state. Relative paths are resolved from the server process working directory. `LABELLO_DATASETS_ROOT` overrides it. |
-| `bootstrapAdmins` | `["admin"]` | Internal user IDs allowed to create datasets. This does not replace per-dataset role checks. GitHub users have IDs such as `github_123456`. |
-| `browserOrigins` | Local Trunk origins | Exact browser origins allowed to make credentialed cross-origin API requests. At least one origin is required. |
-| `sessionCookieSecure` | `false` | Whether session cookies receive the `Secure` attribute. Set this to `true` when the browser reaches the API through HTTPS. |
-
-### Browser Origins
-
-Each `browserOrigins` entry must be an `http` or `https` origin with a host and
-optional port. Paths, credentials, queries, fragments, wildcards, and empty
-lists are rejected. For example:
-
-```toml
-browserOrigins = ["https://label.example.com"]
-```
-
-Use the exact hostname seen by the browser. `localhost` and `127.0.0.1` are
-different origins and different cookie hosts.
-
-Authenticated unsafe requests require the session-bound token returned as
-`csrfToken` by the login and `GET /me` responses. Send it in
-`x-csrf-token`. Browser mutations must also carry an `Origin` that exactly
-matches `browserOrigins`; token-bearing native clients may omit `Origin`.
-Local development login always requires a configured browser origin.
-
-Credentialed CORS preflights allow `content-type`, `x-csrf-token`,
-`idempotency-key`, `upload-offset`, `upload-length`, and `digest` for current
-and planned mutation protocols.
-
-### Bootstrap Administrators
-
-`bootstrapAdmins` grants only the server-level ability to create a dataset.
-Dataset access remains controlled by the annotator, reviewer, and
-data-admin roles stored with each dataset. Keep at least one reachable account
-in the list when dataset creation is required.
-
-## Local Development Login
-
-The `[developmentAuth]` section is required.
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `developmentAuth.localAdminLogin` | `true` | Enables one-click session login as the first configured bootstrap administrator. It requires a loopback bind address and a valid bootstrap administrator. |
-
-Local administrator login is intended only for a trusted local environment.
-Disable it for any internet-facing deployment:
-
-```toml
-[developmentAuth]
-localAdminLogin = false
-```
-
-## GitHub OAuth
-
-GitHub OAuth is disabled when `[githubOauth]` is absent. To configure it in the
-file, uncomment the entire section and replace every placeholder:
-
-```toml
-[githubOauth]
-clientId = "your-github-client-id"
-clientSecret = "your-github-client-secret"
-redirectUri = "https://api.example.com/auth/github/callback"
-```
-
-| Setting | Default | Description |
-| --- | --- | --- |
-| `githubOauth.clientId` | None | Client ID from the GitHub OAuth App. |
-| `githubOauth.clientSecret` | None | Client secret from the GitHub OAuth App. Do not commit a real value. |
-| `githubOauth.redirectUri` | None | API callback URI registered with GitHub, ending in `/auth/github/callback`. |
-
-The browser application's public URL belongs in the GitHub OAuth App's
-homepage field. The callback must point to the API, not the browser client.
-Keep the browser and callback hostnames consistent throughout local cookie
-flows.
-
-`redirectUri` must be an absolute HTTP(S) URL without user information, query,
-or fragment. Its path must end exactly in `/auth/github/callback`. An optional
-deployment prefix consists of nonempty slash-separated segments containing only
-ASCII letters, digits, `-`, `_`, `.`, or `~`. Dot segments `.` and `..`, repeated
-slashes, backslashes, whitespace, cookie-attribute delimiters, and all percent
-encoding are rejected at startup. Encoded paths are rejected rather than decoded
-or normalized, so the configured public path is the cookie path's authority.
-
-The OAuth flow cookie uses the callback's parent path for both creation and
-expiry. For example, callbacks at `/auth/github/callback`,
-`/api/auth/github/callback`, and `/labello/api/auth/github/callback` use
-`/auth/github`, `/api/auth/github`, and `/labello/api/auth/github`, respectively.
-The proxy may strip the deployment prefix before forwarding to the API; browsers
-match cookies against the public path before that forwarding happens. Session
-cookies retain `Path=/`. The flow cookie retains its ten-minute lifetime,
-HttpOnly and configured Secure/SameSite attributes. See the
-[rollout instructions](operations.md#oauth-cookie-path-rollout) when replacing a
-proxy cookie-path workaround.
-
-## Dataset Import
+## Dataset import
 
 Dataset import is disabled when `[import]` is absent. Enabling it exposes the
 four version-one YOLO detection, YOLO pose, COCO instances, and COCO keypoints
@@ -295,7 +213,10 @@ no-replace publication guarantees. Startup fails if configured server roots do
 not exist, overlap the datasets root, overlap each other, or use duplicate or
 unsafe IDs.
 
-The complete example declares one `[[import.serverRoots]]` entry. For a
+The tracked example shows `enabled = true`, `retainRawSource = false`,
+`failedRetentionHours = 24`, and `successfulMetadataRetentionDays = 30` when
+import is configured. These are explicit settings, not defaults for a missing
+section. It also declares one `[[import.serverRoots]]` entry. For a
 browser-upload-only deployment, omit that array entry and set
 `serverRoots = []` inside `[import]`.
 
@@ -316,7 +237,7 @@ expires abandoned non-protected jobs; it does not provide periodic cleanup of
 retained failed, cancelled, or successful metadata. See
 [Dataset Import operations](operations.md#dataset-import).
 
-### Import Limits
+### Import limits
 
 The optional `[import.limits]` section controls every limit enforced by the
 storage import service. Omit the section to retain all storage defaults, or set
@@ -392,42 +313,7 @@ mutation lock shared with normal dataset creation. Run only one server process
 per datasets root. Import staging under `.labello-server/imports` is private
 server state and is never listed as a dataset.
 
-## Environment Variables
-
-The server first loads or creates the TOML file, then applies environment
-overrides.
-
-| Variable | Effect |
-| --- | --- |
-| `LABELLO_CONFIG` | Selects the configuration file path. Defaults to `labello.server.toml`. |
-| `LABELLO_DATASETS_ROOT` | Overrides `datasetsRoot`. |
-| `LABELLO_BIND` | Overrides `bind`. |
-| `GITHUB_CLIENT_ID` | Overrides `githubOauth.clientId` when all three `GITHUB_*` variables are present. |
-| `GITHUB_CLIENT_SECRET` | Overrides `githubOauth.clientSecret` when all three `GITHUB_*` variables are present. |
-| `GITHUB_REDIRECT_URI` | Overrides `githubOauth.redirectUri` when all three `GITHUB_*` variables are present. |
-| `RUST_LOG` | Sets the tracing filter. This is not a TOML setting. |
-| `LABELLO_LOG_FORMAT` | Selects `text` or `json` logs. Defaults to `text` and is not a TOML setting. |
-
-All three `GITHUB_*` variables must be present for the environment to enable or
-replace GitHub OAuth. A partial set is ignored. See
-[`operations.md`](operations.md) for logging and redaction requirements.
-
-## Production Guidance
-
-- Terminate TLS in front of the browser client and API.
-- Set `sessionCookieSecure = true` for HTTPS.
-- Set `developmentAuth.localAdminLogin = false` outside local development.
-- Store OAuth secrets outside tracked files.
-- Restrict `browserOrigins` to the exact deployed browser origins.
-- Run only one Labello server process against a dataset root because filesystem
-  locking is process-local.
-- Back up `datasetsRoot`, including `.labello-server/auth.json`, separately from
-  the application binaries.
-- Follow the rootless [release and deployment contract](deployment.md) for the
-  fixed `/var/lib/labello/data` root, matching executable/configuration
-  generations, Caddy gateway, and transactional full-root backup.
-
-## Image Preview Limits
+## Image preview limits
 
 The optional `[previews]` section has `cacheRoot = ".labello-preview-cache"`,
 relative to the process working directory. It must be separate from, and neither
@@ -459,14 +345,15 @@ workers, thumbnails use at most `workers - 1` slots so opening an image retains
 foreground capacity. A single-worker configuration serializes both lanes.
 Cancelled waiting requests release admission; already-started work retains its
 permits until it finishes. Identical source/profile requests share one generation.
-Encoded output is limited to 16 MiB. Cache accounting includes per-entry metadata and reserves
-space before temporary publication; the zero-byte lock file is not charged.
+Encoded output is limited to 16 MiB. Cache accounting includes per-entry metadata
+and reserves space before temporary publication; the zero-byte lock file is not
+charged.
 
 The service rejects zero/out-of-range limits and unknown settings. Changing
 limits requires restart. Smaller cache limits trigger eviction on first access.
 See [operations](operations.md#derived-preview-cache) for disposal and recovery.
 
-## Export Limits
+## Export limits
 
 Linux servers initialize dataset export when `[export]` is absent. Other
 platforms advertise export as unavailable. The section uses camelCase fields
@@ -502,6 +389,36 @@ See [export operations](operations.md#dataset-export) for disk planning and
 recovery. An optional `maxMetadataBytes` also bounds source configuration,
 image-index and per-image event-log reads, as well as generated metadata.
 
+## Dataset assignment balance
+
+Assignment balance belongs to each versioned `labello.dataset.toml`, not the
+server configuration above. Data administrators edit it through the
+Administration Automation view or the dataset administration API.
+
+This example enforces an absolute window of five completed images:
+
+```toml
+[imbalance]
+enforce = true
+maxDifference = 5
+```
+
+`maxDifference` is a non-negative 64-bit integer; zero is valid. Ratio-based
+configuration is not supported. Legacy ratio settings must be replaced before startup. For example, replace:
+
+```toml
+[imbalance]
+maxRatio = 2.0
+enforce = true
+```
+
+with an explicitly chosen `maxDifference`. Labello rejects `maxRatio`, tagged
+`policy` objects, negative values, and values larger than an unsigned 64-bit
+integer rather than guessing an absolute window. Omitting `imbalance`, or
+setting `enforce = false`, disables assignment blocking. See
+[Assignment](assignment.md#completion-balance) for count, denominator, peer,
+zero-count, and exact-boundary semantics.
+
 ## Reviewer corrections
 
 Dataset task review configuration retains the legacy `allowReviewerCorrections`
@@ -511,3 +428,10 @@ rejection requires substantive reviewer changes and creates a fresh review round
 One reviewer approves all current-round objects and the final image, including
 guided migration. Historical `requiredReviews` values are normalized by the
 dataset review-policy upgrade.
+
+## Production guidance
+
+Use TLS, secure session cookies, exact browser origins, and external secret
+injection. Disable local admin login. Run one server per datasets root and back
+up that root, including authentication state. Follow [deployment](deployment.md)
+for the supported guest layout and [operations](operations.md) for backup and recovery.

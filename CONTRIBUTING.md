@@ -1,70 +1,55 @@
-# Contributing To Labello
+# Contributing to Labello
 
-Labello changes move through three distinct gates: contributor evidence,
-mechanical verification, and independent acceptance. An implementation is
-**Awaiting CI** after its evidence is assembled. It becomes **Ready for review**
-only after the required check succeeds on the pull request's exact current head;
-it is not accepted merely because its author or implementation agent reports
-that its tests pass.
+Use the [architecture](docs/architecture.md) to locate the behavior's owner and
+read the affected [current documentation](docs/README.md) before editing. Code and
+tests define current behavior; plans and historical records stay in
+[docs/archive](docs/archive/README.md).
 
-## Issue Workflow
+## Set up and verify
 
-The sequence below covers end-to-end issue implementation. For analysis,
-publication of prepared changes, or a separate review handoff, use the
-[workflow scope](docs/verification.md#workflow-scope) to determine the requested
-endpoint. Before orchestrating multiple issues, read the
-[parallel development guide](docs/parallel-development.md).
+`rustup show` installs the pinned Rust 1.98.0 compiler, rustfmt, Clippy, and WASM
+target. Install Trunk 0.21.14. Native Linux builds also need Wayland, X11,
+XKBCommon, and OpenGL development libraries used by eframe.
 
-1. Confirm the issue is current, actionable, and not already owned elsewhere.
-2. Read the affected normative contracts and trace the complete production
-   path, including target-specific adapters and failure boundaries.
-3. Convert the issue requirements into observable acceptance criteria and
-   establish a fail-before reproduction.
-4. Implement the narrowest complete production change with regression
-   protection and coordinated documentation updates.
-5. Run the canonical changed-path verification from the repository root:
+Run from the repository root:
 
-   ```sh
-   ./scripts/verify.sh changed origin/main
-   ```
+```sh
+./scripts/verify.sh changed origin/main
+```
 
-6. Complete the applicable risk profile in
-   [the verification contract](docs/verification.md), including manual,
-   visual, browser, recovery, authorization, compatibility, and redaction
-   checks that cannot be inferred from compilation or unit tests.
-7. Fill in the pull-request template with exact commands and results, an
-   acceptance-criterion-to-evidence map, omitted checks, and unrelated-change
-   confirmation. Open or update the pull request as **Awaiting CI**.
-8. Wait for the required check to succeed on the exact current head. A failure
-   returns the change to implementation; a pending, cancelled, unavailable, or
-   stale check does not satisfy the gate.
-9. After that success, use the pull-request author as the accountable
-   implementation owner and assign both the issue and pull request to that
-   user. Preserve existing reviewer requests. Request review as a lifecycle
-   transition by reporting the change as **Ready for review** and moving its
-   project item to `In review`. The agent does not add or remove requested
-   reviewers.
-10. Have a human reviewer or separately instructed verification agent inspect
-    the original issue, final diff, and evidence and try to disprove the
-    completion claims. The implementer must not make the independent acceptance
-    decision.
-11. Integrate only through a pull request after the required `Testing` check
-   and independent review pass. Repository
-   administrators must protect `main` against direct pushes and require this
-   status check before merge.
+The script selects documentation checks or the locked native/inspector/WASM
+baseline, plus a release browser build for affected paths. An unclassified path,
+unavailable required check, or stale lockfile fails verification. Use a recorded
+comparison-base SHA for stacked work. The [verification guide](docs/verification.md)
+defines exact commands and additional risk-specific checks.
 
-Never close an issue or mark a change accepted from implementation
-self-assessment alone. A failing or unavailable required check is recorded as
-not verified; it is never silently treated as passing.
+## Make a change
 
-## Verification Prerequisites
+1. Inspect status/diffs and preserve unrelated work. Trace the complete production
+   flow, callers, failure boundaries, and platform adapters.
+2. Implement the narrowest complete change at its shared owner. Add a focused
+   regression test for nontrivial behavior and update its current documentation.
+3. Run canonical verification and applicable manual checks. Use egui_kittest and
+   the [native inspector](apps/egui-mcp-inspector/README.md) for shared UI; use
+   Chromium for browser claims.
+4. Fill the PR template with requirements, evidence, commands/results, omissions,
+   risks, and preserved unrelated changes. Visual changes require reviewer-accessible
+   screenshots or recordings when opening the draft.
+5. Publish a verified draft as Awaiting CI when publication is requested. Only
+   exact-current-head success of the required `Testing` check permits an authorized
+   Ready for review handoff. Independent review decides acceptance.
 
-Install a current stable Rust toolchain, the `wasm32-unknown-unknown` target,
-and Trunk 0.21.14. Native Linux builds also require the Wayland, X11,
-XKBCommon, and OpenGL development libraries used by `eframe`. The canonical
-script uses tracked lockfiles with Cargo and Trunk locked mode, so verification
-fails instead of rewriting dependency resolution.
+The requested endpoint determines whether the task also owns CI fixes, assignments,
+and project transitions. Follow [workflow scope](docs/verification.md#workflow-scope).
+Preserve existing reviewer requests. Merging, closing issues, and marking accepted
+require user authorization, passing CI, and independent review. Before coordinating
+several issues or testing stacked PRs together, read [parallel development](docs/parallel-development.md).
 
-See [the verification contract](docs/verification.md) for the baseline,
-changed-path classification, risk profiles, CI equivalence, branch settings,
-and evidence requirements.
+## Edit documentation
+
+Edit current Markdown in this repository; the wiki is generated from those files.
+Run `python3 scripts/docs.py check` for links, anchors, metadata, and publication
+coverage. Keep proposals and delivery records under `docs/archive/`; the publisher
+rejects archive entries. See [documentation and wiki](docs/wiki.md) for the page
+list, local preview, and publishing procedure. Use Git history in place of document
+owner, status, date, or commit headers.

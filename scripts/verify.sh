@@ -157,6 +157,8 @@ classify_changes() {
 audit() {
     run bash -n scripts/verify.sh
     run git diff --check
+    run python3 -B scripts/docs.py check
+    run python3 -B -m unittest discover -s scripts -p test_docs.py
 
     require_literal README.md './scripts/verify.sh changed origin/main'
     require_literal CONTRIBUTING.md './scripts/verify.sh changed origin/main'
