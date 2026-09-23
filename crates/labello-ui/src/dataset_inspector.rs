@@ -1061,6 +1061,36 @@ mod tests {
     }
 
     #[test]
+    fn inspector_keeps_labels_for_thin_boxes_at_the_viewport_edge() {
+        let mut app = app();
+        let state = app.inspection.state.as_mut().unwrap();
+        let mut annotation = state.active_annotations().next().unwrap().clone();
+        let labello_domain::AnnotationGeometry::BoundingBox(bbox) = &mut annotation.geometry else {
+            panic!("expected box fixture");
+        };
+        bbox.x = 0.0;
+        bbox.y = 0.4;
+        bbox.width = 0.005;
+        bbox.height = 0.2;
+        let name = app
+            .work
+            .classes
+            .iter()
+            .find(|class| class.class_id == annotation.class_id)
+            .unwrap()
+            .name
+            .clone();
+        state
+            .annotations
+            .insert(annotation.annotation_id.clone(), vec![annotation]);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run();
+        assert!(harness.query_by_label(&format!("Class: {name}")).is_some());
+    }
+
+    #[test]
     fn inspector_completed_boxes_have_full_width_selection_and_explain_exclusions() {
         let mut app = app();
         assert_eq!(

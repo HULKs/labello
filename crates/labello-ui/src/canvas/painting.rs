@@ -155,7 +155,8 @@ fn paint_canvas(
             .intersect(image_rect);
         match &annotation.geometry {
             AnnotationGeometry::BoundingBox(bbox) => {
-                let bounds = bbox_to_screen_rect(image_rect, *bbox).intersect(visible);
+                let bounds = bbox_to_screen_rect(image_rect, *bbox)
+                    .intersect(viewport.intersect(image_rect));
                 if bounds.is_positive() {
                     paint_class_label(
                         ui,
@@ -176,7 +177,7 @@ fn paint_canvas(
                         && let Some(point) = keypoint.point
                     {
                         let point = normalized_to_screen(image_rect, pos2(point.x, point.y));
-                        if visible.contains(point) {
+                        if viewport.intersect(image_rect).contains(point) {
                             paint_class_label(
                                 ui,
                                 &painter,
