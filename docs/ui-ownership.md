@@ -606,3 +606,22 @@ identity, and success is reported only after the server responds. Refresh reload
 state and prepares a new request identity while retaining the reason. A pending
 return request or entered reason blocks navigation until it finishes or the user
 explicitly discards the draft. Return-to-review does not implement notifications.
+
+## Schema reuse during dataset creation
+
+Setup owns the “Copy schema from” dropdown, defaulting to None, its selected
+source, preview request identity, and local loading/error state. Options come
+from dataset summaries with DataAdmin access and display names plus IDs.
+Selecting None clears the preview and creates empty classes and workflows.
+Selecting a source loads its current admin configuration through a dedicated
+command without changing the active workspace. Only the latest selection's
+response can populate the preview; session and workspace invalidation clear
+preview ownership. A selected source blocks creation until its preview and
+catalog entry are available. Failures offer reload and never select None
+implicitly. The server rechecks source access and configuration on creation.
+
+The preview lists classes, workflows, and ordered keypoints. It explains omitted
+source resources, independent subsequent edits, and matching export selections.
+Tutorial image references and prelabel bindings are omitted; remaining portable
+workflow definitions retain their task/class identities. Creation still opens
+the destination's administration screen.

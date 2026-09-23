@@ -585,6 +585,12 @@ async fn create_dataset(
         assigned_at: labello_domain::now(),
         assigned_by: None,
     });
+    if let Some(source_id) = request.schema_source_dataset_id {
+        let source = state.repo(&source_id)?.load_dataset_config().await?;
+        ensure_dataset_role(&source, &actor, DatasetRole::DataAdmin)?;
+        metadata.copy_annotation_schema_from(&source);
+        validate_annotation_schema(&metadata.label_classes, &metadata.tasks)?;
+    }
     repo.initialize(metadata.clone()).await?;
     tracing::info!(
         event = "dataset.created",
@@ -1077,33 +1083,7 @@ fn validate_config_update(
             "at least one image root is required".to_string(),
         ));
     }
-    let class_ids: BTreeSet<_> = request
-        .label_classes
-        .iter()
-        .map(|class| class.class_id.clone())
-        .collect();
-    if class_ids.len() != request.label_classes.len() {
-        return Err(ApiError::BadRequest("duplicate class ids".to_string()));
-    }
-    let task_ids: BTreeSet<_> = request
-        .tasks
-        .iter()
-        .map(|task| task.task_id.clone())
-        .collect();
-    if task_ids.len() != request.tasks.len() {
-        return Err(ApiError::BadRequest("duplicate task ids".to_string()));
-    }
-    for task in &request.tasks {
-        validate_enabled_task(task)?;
-        for class_id in &task.class_ids {
-            if !class_ids.contains(class_id) {
-                return Err(ApiError::BadRequest(format!(
-                    "task {} references unknown class {class_id}",
-                    task.task_id
-                )));
-            }
-        }
-    }
+    validate_annotation_schema(&request.label_classes, &request.tasks)?;
     let mut role_users = BTreeSet::new();
     for assignment in &request.role_assignments {
         if assignment.roles.contains(&DatasetRole::LegacyAdjudicator) {
@@ -1147,6 +1127,46 @@ fn validate_config_update(
         return Err(ApiError::BadRequest(
             "cannot remove your own data_admin role through the API".to_string(),
         ));
+    }
+    Ok(())
+}
+
+fn validate_annotation_schema(
+    classes: &[labello_domain::LabelClass],
+    tasks: &[TaskDefinition],
+) -> ApiResult<()> {
+    let class_ids: BTreeSet<_> = classes.iter().map(|class| class.class_id.clone()).collect();
+    if class_ids.len() != classes.len() {
+        return Err(ApiError::BadRequest("duplicate class ids".to_string()));
+    }
+    let task_ids: BTreeSet<_> = tasks.iter().map(|task| task.task_id.clone()).collect();
+    if task_ids.len() != tasks.len() {
+        return Err(ApiError::BadRequest("duplicate task ids".to_string()));
+    }
+    for task in tasks {
+        validate_enabled_task(task)?;
+        for class_id in &task.class_ids {
+            if !class_ids.contains(class_id) {
+                return Err(ApiError::BadRequest(format!(
+                    "task {} references unknown class {class_id}",
+                    task.task_id
+                )));
+            }
+        }
+    }
+    for class in classes {
+        class.class_id.validate_path_segment()?;
+    }
+    for task in tasks {
+        task.task_id.validate_path_segment()?;
+        if let Some(migration) = &task.manual_box_guide_migration {
+            let guide = tasks
+                .iter()
+                .find(|guide| guide.task_id == migration.guide_task_id)
+                .ok_or_else(|| ApiError::BadRequest("unknown migration guide workflow".into()))?;
+            task.validate_manual_migration(guide)
+                .map_err(|_| ApiError::BadRequest("invalid migration guide workflow".into()))?;
+        }
     }
     Ok(())
 }

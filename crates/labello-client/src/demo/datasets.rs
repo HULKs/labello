@@ -21,11 +21,14 @@ impl DatasetApi for DemoLabelloApi {
         request: CreateDatasetRequest,
     ) -> crate::ApiFuture<'a, DatasetMetadata> {
         Box::pin(async move {
-            let metadata = DatasetMetadata::new(
+            let mut metadata = DatasetMetadata::new(
                 request.dataset_id.clone(),
                 request.name,
                 labello_domain::now(),
             );
+            if let Some(source_id) = request.schema_source_dataset_id {
+                metadata.copy_annotation_schema_from(&self.dataset(&source_id)?);
+            }
             self.state
                 .borrow_mut()
                 .datasets

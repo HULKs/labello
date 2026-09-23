@@ -47,6 +47,17 @@ impl DatasetMetadata {
         }
     }
 
+    /// Copy portable annotation definitions, keeping dataset identity and data independent.
+    pub fn copy_annotation_schema_from(&mut self, source: &Self) {
+        self.label_classes = source.label_classes.clone();
+        self.tasks = source.tasks.clone();
+        for task in &mut self.tasks {
+            // These resources belong to the source dataset, not the annotation schema.
+            task.instructions.example_images.clear();
+            task.prelabel_config_ids.clear();
+        }
+    }
+
     pub fn task(&self, task_id: &crate::TaskId) -> Option<&TaskDefinition> {
         self.tasks.iter().find(|task| &task.task_id == task_id)
     }

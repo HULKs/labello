@@ -272,6 +272,10 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         result: Result<Vec<DatasetSummary>, UiRequestError>,
     },
+    SchemaSourceLoaded {
+        request: RequestIdentity,
+        result: Box<Result<DatasetMetadata, UiRequestError>>,
+    },
     DatasetCreated {
         request: RequestIdentity,
         result: Box<Result<DatasetMetadata, UiRequestError>>,
@@ -520,11 +524,16 @@ pub(crate) enum UiCommand {
     DatasetList {
         request: RequestIdentity,
     },
+    LoadSchemaSource {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+    },
     CreateDataset {
         request: RequestIdentity,
         dataset_id: DatasetId,
         name: String,
         admin_user_id: UserId,
+        schema_source_dataset_id: Option<DatasetId>,
     },
     LoadDataset {
         request: RequestIdentity,
@@ -708,6 +717,7 @@ impl UiCommand {
             | Self::LocalAdminLogin { request }
             | Self::Logout { request }
             | Self::GithubLogin { request, .. }
+            | Self::LoadSchemaSource { request, .. }
             | Self::DatasetList { request }
             | Self::CreateDataset { request, .. }
             | Self::LoadDataset { request, .. }
@@ -847,7 +857,7 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
-            Self::DatasetCreated { result, .. } => result
+            Self::SchemaSourceLoaded { result, .. } | Self::DatasetCreated { result, .. } => result
                 .as_ref()
                 .as_ref()
                 .err()
@@ -990,6 +1000,7 @@ impl UiMessage {
             | Self::LogoutFinished { request, .. }
             | Self::GithubLoginUrl { request, .. }
             | Self::DatasetList { request, .. }
+            | Self::SchemaSourceLoaded { request, .. }
             | Self::DatasetCreated { request, .. }
             | Self::DatasetLoaded { request, .. }
             | Self::AdminLoaded { request, .. }

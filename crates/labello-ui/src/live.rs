@@ -75,6 +75,14 @@ impl LabelloApp {
                     }
                 }
                 UiMessage::RequestFailed { request, error }
+                    if self.setup.schema_copy.pending == Some(request.request_id) =>
+                {
+                    UiMessage::SchemaSourceLoaded {
+                        request,
+                        result: Box::new(Err(error.into())),
+                    }
+                }
+                UiMessage::RequestFailed { request, error }
                     if self.builds.pending_request_id == Some(request.request_id) =>
                 {
                     UiMessage::BuildInformationLoaded {

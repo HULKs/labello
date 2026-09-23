@@ -297,10 +297,19 @@ impl Default for AdminToolsState {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct SchemaCopyState {
+    pub source: Option<DatasetId>,
+    pub preview: Option<DatasetMetadata>,
+    pub pending: Option<u64>,
+    pub error: Option<String>,
+}
+
 pub(crate) struct SetupState {
     pub api_base_url_draft: String,
     pub create_dataset_id: String,
     pub create_dataset_name: String,
+    pub schema_copy: SchemaCopyState,
     pub started: bool,
     pub section: SetupSection,
 }

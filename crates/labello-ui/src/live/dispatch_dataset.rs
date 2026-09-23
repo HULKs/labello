@@ -11,11 +11,20 @@ impl LabelloApp {
                     result: api.list_datasets().await.map_err(UiRequestError::from),
                 }
             }),
+            UiCommand::LoadSchemaSource { request, dataset_id } => {
+                self.spawn_message(request.clone(), async move {
+                    UiMessage::SchemaSourceLoaded {
+                        request,
+                        result: Box::new(api.get_admin_dataset(&dataset_id).await.map_err(UiRequestError::from)),
+                    }
+                });
+            }
             UiCommand::CreateDataset {
                 request,
                 dataset_id,
                 name,
                 admin_user_id,
+                schema_source_dataset_id,
             } => self.spawn_message(request.clone(), async move {
                 UiMessage::DatasetCreated {
                     request,
@@ -24,6 +33,7 @@ impl LabelloApp {
                             dataset_id,
                             name,
                             admin_user_id,
+                            schema_source_dataset_id,
                         })
                         .await
                         .map_err(UiRequestError::from),

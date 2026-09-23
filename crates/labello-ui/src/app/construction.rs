@@ -31,6 +31,7 @@ impl LabelloApp {
             api_base_url_draft: config.api_base_url.clone(),
             create_dataset_id: config.dataset_id.to_string(),
             create_dataset_name: "Demo Dataset".to_string(),
+            schema_copy: Default::default(),
             started: true,
             section: SetupSection::default(),
         };

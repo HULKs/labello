@@ -640,3 +640,88 @@ async fn both_profiles_round_trip_through_production_import_with_explicit_losses
         }
     }
 }
+
+#[tokio::test]
+async fn copied_schema_exports_identical_class_and_keypoint_meanings() {
+    let root = tempfile::tempdir().unwrap();
+    let (original, _) = source(root.path()).await;
+    let source_metadata = original.load_dataset_config().await.unwrap();
+    let destination_root = tempfile::tempdir().unwrap();
+    // Generate independent synthetic annotation content for the second dataset.
+    let (copied, _) = source(destination_root.path()).await;
+    let mut metadata = DatasetMetadata::new("copied".into(), "Copied", now());
+    metadata.copy_annotation_schema_from(&source_metadata);
+    copied.save_dataset(&metadata).await.unwrap();
+    let service = ExportService::new(root.path(), ExportLimits::default())
+        .await
+        .unwrap();
+    for (profile, task_prefix) in [
+        (ExportProfile::UltralyticsYoloDetectV1, "boxes"),
+        (ExportProfile::UltralyticsYoloPoseV1, "pose"),
+    ] {
+        let options = ExportOptions {
+            profile,
+            classes: ["a", "b"]
+                .into_iter()
+                .map(|suffix| ExportClassSelection {
+                    task_id: format!("{task_prefix}-{suffix}").into(),
+                    class_id: format!("class-{suffix}").into(),
+                })
+                .collect(),
+            fallback_split: ExportSplit::Train,
+            splits: ExportSplit::all(),
+            split_choices: BTreeMap::new(),
+        };
+        let mut outputs = Vec::new();
+        for (id, repo) in [
+            (DatasetId::from("native"), original.clone()),
+            (DatasetId::from("copied"), copied.clone()),
+        ] {
+            let job = service.preflight(&id, repo, options.clone()).await.unwrap();
+            let wait = async {
+                loop {
+                    let job = service.job(&id, &job.job_id).await.unwrap();
+                    if !job.phase.is_active() {
+                        break job;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            };
+            let ready = tokio::time::timeout(std::time::Duration::from_secs(15), wait)
+                .await
+                .unwrap();
+            assert_eq!(ready.phase, ExportPhase::Ready, "{:?}", ready.summary);
+            service.start(&id, &job.job_id).await.unwrap();
+            let completed = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                loop {
+                    let job = service.job(&id, &job.job_id).await.unwrap();
+                    if !job.phase.is_active() {
+                        break job;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(completed.phase, ExportPhase::Succeeded);
+            let (file, _, _permit) = service.download(&id, &job.job_id).await.unwrap();
+            let mut archive = zip::ZipArchive::new(file).unwrap();
+            let mut payloads = BTreeMap::new();
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).unwrap();
+                if file.name() == "data.yaml" || file.name().starts_with("labels/") {
+                    let mut text = String::new();
+                    std::io::Read::read_to_string(&mut file, &mut text).unwrap();
+                    payloads.insert(file.name().to_string(), text);
+                }
+            }
+            assert!(payloads.contains_key("data.yaml"));
+            assert!(payloads.keys().any(|key| key.starts_with("labels/")));
+            outputs.push(payloads);
+        }
+        assert_eq!(
+            outputs[0], outputs[1],
+            "class indices, keypoint layout, and label rows must match"
+        );
+    }
+}
