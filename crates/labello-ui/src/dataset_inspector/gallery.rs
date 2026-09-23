@@ -405,7 +405,7 @@ fn compact_menu_style(style: &mut egui::Style) {
     style.spacing.button_padding.y = 2.0;
 }
 
-enum FilterIcon<'a> {
+pub(super) enum FilterIcon<'a> {
     All,
     Workflow(&'a AnnotationType),
     Class(egui::Color32),
@@ -419,8 +419,19 @@ fn filter_choice<T: PartialEq>(
     label: &str,
     icon: FilterIcon<'_>,
 ) {
-    let icon_id = ui.id().with(("filter-icon", label));
     let selected = *current == value;
+    if filter_option(ui, selected, label, icon).clicked() {
+        *current = value;
+    }
+}
+
+pub(super) fn filter_option(
+    ui: &mut egui::Ui,
+    selected: bool,
+    label: &str,
+    icon: FilterIcon<'_>,
+) -> egui::Response {
+    let icon_id = ui.id().with(("filter-icon", label));
     let icon_width = if matches!(icon, FilterIcon::Workflow(_)) {
         28.0
     } else {
@@ -516,12 +527,10 @@ fn filter_choice<T: PartialEq>(
     choice.response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, label)
     });
-    if choice.response.clicked() {
-        *current = value;
-    }
+    choice.response
 }
 
-fn filter_menu_width<'a>(ui: &mut egui::Ui, labels: impl Iterator<Item = &'a str>) {
+pub(super) fn filter_menu_width<'a>(ui: &mut egui::Ui, labels: impl Iterator<Item = &'a str>) {
     let font = egui::TextStyle::Button.resolve(ui.style());
     let text_width = ui.fonts_mut(|fonts| {
         labels
@@ -538,7 +547,7 @@ fn filter_menu_width<'a>(ui: &mut egui::Ui, labels: impl Iterator<Item = &'a str
     ui.set_min_width((text_width + 60.0).min(ui.ctx().content_rect().width() - 32.0));
 }
 
-fn filter_menu(
+pub(super) fn filter_menu(
     ui: &mut egui::Ui,
     id: &str,
     width: f32,
