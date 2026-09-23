@@ -451,9 +451,15 @@ Source bytes, decoded pixel count, decoder allocation budget and decoded output
 bytes are checked before generation. Resize/encoder work is additionally bounded
 by source pixels and the fixed output profiles; `maxDecodedBytes` is a decoder
 budget, not a total process-RSS cap. The same worker pool and source/decoder
-limits cover encoded previews and legacy RGBA fallback. Saturated workers fail
-promptly; identical source/profile requests share one generation. Encoded output
-is limited to 16 MiB. Cache accounting includes per-entry metadata and reserves
+limits cover encoded previews, original-detail reads and legacy RGBA fallback.
+Thumbnail and foreground requests have separate bounded admission queues, each
+allowing at most `16 * workers` waiting or running requests. Admitted requests
+wait for a worker; only a full admission queue fails promptly. With two or more
+workers, thumbnails use at most `workers - 1` slots so opening an image retains
+foreground capacity. A single-worker configuration serializes both lanes.
+Cancelled waiting requests release admission; already-started work retains its
+permits until it finishes. Identical source/profile requests share one generation.
+Encoded output is limited to 16 MiB. Cache accounting includes per-entry metadata and reserves
 space before temporary publication; the zero-byte lock file is not charged.
 
 The service rejects zero/out-of-range limits and unknown settings. Changing

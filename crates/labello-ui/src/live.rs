@@ -190,6 +190,12 @@ impl LabelloApp {
         {
             ctx.request_repaint();
         }
+        if let UiCommand::Inspect { request, .. } = &command
+            && !self.inspection_request_pending(request.request_id)
+        {
+            self.runtime.active_requests.remove(&request.request_id);
+            return;
+        }
         let Some(api) = self.runtime.api.clone() else {
             self.rollback_command(&command, "API is not configured");
             return;

@@ -601,6 +601,53 @@ async fn unfiltered_gallery_loads_only_requested_page_states() {
     }
 }
 
+#[tokio::test]
+async fn inspector_filters_and_totals_follow_warm_annotation_and_status_changes() {
+    use labello_domain::{Actor, AnnotationGeometry, AnnotationType, AnnotationVersion, BoundingBox, ClassId, TaskState};
+    let temp = tempfile::tempdir().unwrap();
+    let api = ApiState::new(temp.path());
+    let app = router(api.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    upload_test_image(&app, "alpha.png", &png_bytes(2, 2)).await;
+    upload_test_image(&app, "beta.png", &png_bytes(3, 2)).await;
+    let repo = api.repo(&DatasetId::from("ds")).unwrap();
+    let index = repo.load_images_index().await.unwrap();
+    let image = index.images_by_hash.values().find(|r| r.file_name == "alpha.png").unwrap();
+    let actor = Actor { user_id: "admin".into(), role: DatasetRole::Annotator };
+    let task = TaskId::from("bounding_box:pixel");
+    let mut annotation = AnnotationVersion::native("box".into(), task.clone(), ClassId::from("pixel"), AnnotationType::BoundingBox,
+        AnnotationGeometry::BoundingBox(BoundingBox { x: 0.1, y: 0.1, width: 0.5, height: 0.5 }), actor.user_id.clone(), now());
+    repo.append_payload(&image.image_id, &actor, EventPayload::AnnotationVersionCreated { annotation: annotation.clone(), previous_version: None, reason: None }).await.unwrap();
+    let mut task_state = TaskState::new(task.clone(), now());
+    task_state.status = TaskStatus::Completed;
+    repo.append_payload(&image.image_id, &actor, EventPayload::TaskStateChanged { task_state }).await.unwrap();
+    for _ in 0..2 {
+        for (query, count) in [
+            ("", 2), ("search=ALPHA", 1), ("classId=pixel", 1), ("status=completed", 1),
+            ("taskId=bounding_box%3Apixel&status=pending", 1),
+            ("search=ALPHA&classId=pixel&status=completed&taskId=bounding_box%3Apixel", 1),
+            ("search=BETA&classId=pixel", 0), ("classId=missing", 0),
+        ] {
+            let response = app.clone().oneshot(Request::builder().uri(format!("/datasets/ds/images?pageSize=1&{query}"))
+                .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let page: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!(page["totalItems"], count, "query {query}");
+            assert_eq!(page["items"].as_array().unwrap().len(), count.min(1) as usize);
+        }
+    }
+    annotation.version = 2;
+    annotation.deleted = true;
+    annotation.revision_source = labello_domain::RevisionSource::Human { action: labello_domain::HumanRevisionKind::Edited };
+    repo.append_payload(&image.image_id, &actor, EventPayload::AnnotationVersionCreated { annotation, previous_version: Some(1), reason: None }).await.unwrap();
+    let response = app.oneshot(Request::builder().uri("/datasets/ds/images?classId=pixel")
+        .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let page: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(page["totalItems"], 0);
+}
+
 async fn create_with_schema(app: &axum::Router, id: &str, source: Option<&str>, actor: &str) -> axum::response::Response {
     app.clone().oneshot(Request::builder().method("POST").uri("/datasets")
         .header("x-test-user-id", actor)
@@ -688,4 +735,53 @@ async fn schema_copy_rejects_unavailable_unauthorized_and_invalid_sources_withou
     repo.save_dataset(&source).await.unwrap();
     assert_eq!(create_with_schema(&app, "invalid-copy", Some("ds"), "admin").await.status(), StatusCode::BAD_REQUEST);
     assert!(!temp.path().join("invalid-copy").exists());
+}
+
+#[tokio::test]
+async fn completed_inspector_filter_requires_every_current_workflow_before_pagination() {
+    let temp = tempfile::tempdir().unwrap();
+    let api = ApiState::new(temp.path());
+    let app = router(api.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    for (name, width) in [("all.png", 2), ("some.png", 3), ("none.png", 4)] {
+        upload_test_image(&app, name, &png_bytes(width, 2)).await;
+    }
+    let repo = api.repo(&DatasetId::from("ds")).unwrap();
+    let mut config = repo.load_dataset_config().await.unwrap();
+    let first = config.tasks[0].task_id.clone();
+    let mut second = config.tasks[0].clone();
+    second.task_id = "second".into();
+    second.enabled = false;
+    config.tasks.push(second.clone());
+    repo.save_dataset(&config).await.unwrap();
+    let actor = labello_domain::Actor { user_id: "admin".into(), role: DatasetRole::Annotator };
+    for image in repo.load_images_index().await.unwrap().images_by_hash.values() {
+        for task_id in [first.clone(), second.task_id.clone(), TaskId::from("retired")] {
+            let completed = image.file_name == "all.png" && task_id != TaskId::from("retired")
+                || image.file_name == "some.png" && task_id == first;
+            if completed || task_id == TaskId::from("retired") {
+                let mut task_state = labello_domain::TaskState::new(task_id, now());
+                if completed { task_state.status = TaskStatus::Completed; }
+                repo.append_payload(&image.image_id, &actor, EventPayload::TaskStateChanged { task_state }).await.unwrap();
+            }
+        }
+    }
+    for _ in 0..2 {
+        for (query, count) in [("status=completed", 1), ("status=completed&taskId=bounding_box%3Apixel", 2), ("status=pending", 3)] {
+            let response = app.clone().oneshot(Request::builder().uri(format!("/datasets/ds/images?pageSize=1&{query}"))
+                .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let page: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!(page["totalItems"], count, "{query}");
+            assert_eq!(page["items"].as_array().unwrap().len(), 1);
+            if query == "status=completed" { assert_eq!(page["items"][0]["image"]["fileName"], "all.png"); }
+        }
+    }
+    config.tasks.clear();
+    repo.save_dataset(&config).await.unwrap();
+    let response = app.oneshot(Request::builder().uri("/datasets/ds/images?status=completed")
+        .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+    let page: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(page["totalItems"], 0);
 }

@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex, Weak},
 };
-use tokio::sync::{Mutex as AsyncMutex, Semaphore};
+use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
 
 mod codec;
 mod disk;
@@ -133,6 +133,9 @@ struct Inner {
     root: PathBuf,
     config: PreviewConfig,
     workers: Arc<Semaphore>,
+    thumbnail_workers: Arc<Semaphore>,
+    foreground_requests: Arc<Semaphore>,
+    thumbnail_requests: Arc<Semaphore>,
     flights: Mutex<BTreeMap<String, Weak<AsyncMutex<()>>>>,
     disk: Mutex<disk::CacheState>,
     #[cfg(test)]
@@ -147,6 +150,11 @@ impl PreviewCache {
             inner: Arc::new(Inner {
                 root: root.into(),
                 workers: Arc::new(Semaphore::new(config.workers)),
+                thumbnail_workers: Arc::new(Semaphore::new(
+                    config.workers.saturating_sub(1).max(1),
+                )),
+                foreground_requests: Arc::new(Semaphore::new(config.workers * 16)),
+                thumbnail_requests: Arc::new(Semaphore::new(config.workers * 16)),
                 config,
                 flights: Mutex::new(BTreeMap::new()),
                 disk: Mutex::new(disk::CacheState::default()),
@@ -156,12 +164,37 @@ impl PreviewCache {
         })
     }
 
+    // Bound waiting callers separately so a gallery cannot consume foreground
+    // admission. Permits stay with started blocking work even after cancellation.
+    fn admit(&self, thumbnail: bool) -> Result<OwnedSemaphorePermit, PreviewError> {
+        let requests = if thumbnail {
+            &self.inner.thumbnail_requests
+        } else {
+            &self.inner.foreground_requests
+        };
+        requests
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| PreviewError::Busy)
+    }
+
+    async fn worker(&self) -> Result<OwnedSemaphorePermit, PreviewError> {
+        self.inner
+            .workers
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| PreviewError::Busy)
+    }
+
     pub async fn get(
         &self,
         repo: &DatasetRepository,
         record: &ImageRecord,
         profile: PreviewProfile,
     ) -> Result<EncodedPreview, PreviewError> {
+        let thumbnail = profile == PreviewProfile::ThumbnailV1;
+        let admission = self.admit(thumbnail)?;
         let key = cache_key(repo, record, profile);
         let flight = {
             let mut flights = self.inner.flights.lock().map_err(|_| PreviewError::Cache)?;
@@ -175,19 +208,27 @@ impl PreviewCache {
             }
         };
         let guard = flight.lock_owned().await;
-        let permit = self
-            .inner
-            .workers
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PreviewError::Busy)?;
+        let thumbnail_permit = if thumbnail {
+            Some(
+                self.inner
+                    .thumbnail_workers
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .map_err(|_| PreviewError::Busy)?,
+            )
+        } else {
+            None
+        };
+        let permit = self.worker().await?;
         let inner = self.inner.clone();
         let repo_root = repo.root().to_path_buf();
         let record = record.clone();
         // Once started, a cancelled caller leaves one bounded worker to finish or
         // clean up publication. Its flight and worker permits remain held.
         tokio::task::spawn_blocking(move || {
-            let (_guard, _permit) = (guard, permit);
+            let (_guard, _permit, _thumbnail, _admission) =
+                (guard, permit, thumbnail_permit, admission);
             let source = codec::source_bytes(&repo_root, &record, &inner.config)?;
             {
                 let mut disk = inner.disk.lock().map_err(|_| PreviewError::Cache)?;
@@ -224,17 +265,13 @@ impl PreviewCache {
         repo: &DatasetRepository,
         record: &ImageRecord,
     ) -> Result<Vec<u8>, PreviewError> {
-        let permit = self
-            .inner
-            .workers
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PreviewError::Busy)?;
+        let admission = self.admit(false)?;
+        let permit = self.worker().await?;
         let inner = self.inner.clone();
         let root = repo.root().to_path_buf();
         let record = record.clone();
         tokio::task::spawn_blocking(move || {
-            let _permit = permit;
+            let (_permit, _admission) = (permit, admission);
             let source = codec::source_bytes(&root, &record, &inner.config)?;
             // Validate decoder headers and configured allocation/pixel bounds before transfer.
             drop(codec::decoder(&source, &record, &inner.config)?);
@@ -251,17 +288,13 @@ impl PreviewCache {
         record: &ImageRecord,
         max_edge: u32,
     ) -> Result<RgbaPreview, PreviewError> {
-        let permit = self
-            .inner
-            .workers
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PreviewError::Busy)?;
+        let admission = self.admit(false)?;
+        let permit = self.worker().await?;
         let inner = self.inner.clone();
         let root = repo.root().to_path_buf();
         let record = record.clone();
         tokio::task::spawn_blocking(move || {
-            let _permit = permit;
+            let (_permit, _admission) = (permit, admission);
             let source = codec::source_bytes(&root, &record, &inner.config)?;
             codec::resize(&source, &record, max_edge.clamp(256, 4096), &inner.config)
         })

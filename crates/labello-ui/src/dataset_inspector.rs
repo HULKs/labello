@@ -17,8 +17,8 @@ use std::{
     rc::Rc,
 };
 
-const PAGE_SIZE: usize = 24;
-const MAX_THUMBNAILS: usize = 24;
+const PAGE_SIZE: usize = 100;
+const MAX_THUMBNAILS: usize = 48;
 const MAX_IMAGE_REQUESTS: usize = 2;
 
 #[derive(Clone, Debug)]
@@ -56,7 +56,6 @@ pub(crate) struct InspectorState {
     skeletons: bool,
     return_tasks: BTreeSet<TaskId>,
     reason: String,
-    return_open: bool,
     gallery_error: Option<String>,
     failed_query: Option<ImageExplorerQuery>,
     retry: Option<ReturnToReviewRequest>,
@@ -104,7 +103,6 @@ impl Default for InspectorState {
             skeletons: true,
             return_tasks: BTreeSet::new(),
             reason: String::new(),
-            return_open: false,
             gallery_error: None,
             failed_query: None,
             retry: None,
@@ -177,7 +175,7 @@ impl LabelloApp {
     ) {
         let transfer = matches!(
             action,
-            InspectorAction::Thumbnail(_) | InspectorAction::Image(_)
+            InspectorAction::Thumbnail(_) | InspectorAction::Image(_) | InspectorAction::List(_)
         )
         .then(|| self.inspection.transfers.transfer(request.request_id));
         self.spawn_message(request.clone(), async move {
@@ -311,6 +309,8 @@ impl LabelloApp {
                 }
                 self.inspection.gallery_error = None;
                 self.inspection.failed_query = None;
+                // Fetch metadata independently of scrolling and image decoding.
+                self.load_more_inspection_images();
             }
             InspectorReply::Thumbnail(id, preview) => {
                 if self
@@ -361,7 +361,6 @@ impl LabelloApp {
                 self.inspection.retry = None;
                 self.inspection.error = None;
                 self.inspection.notice = Some("Selected workflows returned to review.".into());
-                self.inspection.return_open = false;
                 self.reset_inspection_gallery();
                 self.invalidate_assignment_availability(None);
             }
@@ -403,6 +402,10 @@ impl LabelloApp {
         if self.inspection.busy() || !self.inspection.reason.is_empty() {
             return;
         }
+        self.cancel_obsolete_inspection_previews(
+            &BTreeSet::from([record.image_id.clone()]),
+            Some(&record.image_id),
+        );
         self.inspection.texture = self.inspection.thumbnails.get(&record.image_id).cloned();
         self.inspection.preview_loaded = false;
         self.inspection.image_error = None;
@@ -412,11 +415,34 @@ impl LabelloApp {
         self.inspection.error = None;
         self.inspection.notice = None;
         self.inspection.return_tasks.clear();
-        self.inspection.return_open = false;
         self.inspection.retry = None;
         self.inspect_request(InspectorAction::State(record.image_id.clone()));
         self.inspection.selected = Some(record);
         self.inspection.drawer = None;
+    }
+    fn cancel_obsolete_inspection_previews(
+        &mut self,
+        visible: &BTreeSet<ImageId>,
+        selected: Option<&ImageId>,
+    ) {
+        let obsolete: Vec<_> = self
+            .inspection
+            .pending
+            .iter()
+            .filter_map(|(request, action)| {
+                let obsolete = match action {
+                    InspectorAction::Thumbnail(id) => !visible.contains(id) && selected != Some(id),
+                    InspectorAction::Image(id) => selected != Some(id),
+                    _ => false,
+                };
+                obsolete.then_some(*request)
+            })
+            .collect();
+        for request in obsolete {
+            self.inspection.transfers.cancel(request);
+            self.inspection.pending.remove(&request);
+            self.runtime.active_requests.remove(&request);
+        }
     }
     fn schedule_inspection_image(&mut self) {
         let Some(record) = self.inspection.selected.clone() else {
@@ -479,7 +505,6 @@ impl LabelloApp {
             .collect();
         let styles = annotations
             .iter()
-            .filter(|a| a.annotation_type == AnnotationType::Skeleton)
             .map(|annotation| {
                 let color = self
                     .work
@@ -488,10 +513,25 @@ impl LabelloApp {
                     .find(|class| class.class_id == annotation.class_id)
                     .and_then(|class| crate::workspace_canvas::parse_class_color(&class.color))
                     .unwrap_or(theme::ANNOTATION);
-                (
-                    annotation.annotation_id.clone(),
-                    crate::canvas::CanvasAnnotationStyle::solid(color),
-                )
+                let mut style = crate::canvas::CanvasAnnotationStyle::solid(color);
+                let labelled_box = annotation.annotation_type == AnnotationType::Skeleton
+                    && annotation.object_group_id.as_ref().is_some_and(|group| {
+                        annotations.iter().any(|other| {
+                            other.annotation_type == AnnotationType::BoundingBox
+                                && other.object_group_id.as_ref() == Some(group)
+                        })
+                    });
+                if !labelled_box {
+                    style.label = Some(
+                        self.work
+                            .classes
+                            .iter()
+                            .find(|c| c.class_id == annotation.class_id)
+                            .map(|c| c.name.clone())
+                            .unwrap_or_else(|| annotation.class_id.to_string()),
+                    );
+                }
+                (annotation.annotation_id.clone(), style)
             })
             .collect();
         let mut interaction = CanvasInteraction::annotations(false);
@@ -629,49 +669,33 @@ impl LabelloApp {
     }
     fn inspection_return_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
         ui.separator();
-        if !self.inspection.return_open {
-            if ui
-                .add_enabled(!busy, egui::Button::new("Return to review"))
-                .clicked()
-            {
-                self.inspection.return_open = true;
-            }
-            return;
-        }
         ui.strong("Return to review");
         ui.weak("Select completed workflows and give a reason.");
         let mut changed = false;
         ui.add_enabled_ui(!busy, |ui| {
             for task in &self.work.tasks {
-                let eligible = task.enabled
-                    && task.review.workflow == labello_domain::ReviewWorkflow::Approval
-                    && self
-                        .inspection
-                        .state
-                        .as_ref()
-                        .and_then(|s| s.task_states.get(&task.task_id))
-                        .is_some_and(|s| s.status == TaskStatus::Completed);
-                let mut selected = self.inspection.return_tasks.contains(&task.task_id);
-                let response = ui
-                    .add_enabled_ui(eligible, |ui| {
-                        ui.horizontal(|ui| {
-                            let response = panels::annotation_type_toggle(
-                                ui,
-                                &mut selected,
-                                &task.annotation_type,
-                                &format!("Return {} to review", task.name),
-                            );
-                            ui.add(
-                                egui::Label::new(&task.name)
-                                    .truncate()
-                                    .halign(egui::Align::Min),
-                            )
-                            .on_hover_text(&task.name);
-                            response
-                        })
-                        .inner
-                    })
-                    .inner;
+                let block =
+                    self.inspection.state.as_ref().and_then(|state| {
+                        state.return_to_review_block(task, labello_domain::now())
+                    });
+                let eligible = self.inspection.state.is_some() && block.is_none();
+                if !eligible {
+                    self.inspection.return_tasks.remove(&task.task_id);
+                }
+                let selected = self.inspection.return_tasks.contains(&task.task_id);
+                let mut response = panels::return_workflow_choice(
+                    ui,
+                    task,
+                    selected,
+                    eligible,
+                    block.map(|block| block.message()),
+                );
+                let selected = if response.clicked() {
+                    response.mark_changed();
+                    !selected
+                } else {
+                    selected
+                };
                 if response.changed() {
                     changed = true;
                     if selected {
@@ -722,7 +746,6 @@ impl LabelloApp {
                     self.inspect_request(InspectorAction::Return(record.image_id.clone(), request));
                 }
                 if ui.button("Discard return draft").clicked() {
-                    self.inspection.return_open = false;
                     self.inspection.reason.clear();
                     self.inspection.return_tasks.clear();
                     self.inspection.retry = None;
@@ -838,6 +861,428 @@ mod tests {
             crate::inspector_presets::InspectorPreset::DatasetInspection,
             &egui::Context::default(),
         )
+    }
+
+    #[test]
+    fn inspector_filter_menus_fit_viewport_and_keep_dense_accessible_choices() {
+        for size in [
+            egui::vec2(1440.0, 1000.0),
+            egui::vec2(390.0, 844.0),
+            egui::vec2(320.0, 320.0),
+        ] {
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app());
+            harness.run();
+            if size.x < 1288.0 {
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, "Images")
+                    .click();
+                harness.run();
+            }
+            harness
+                .get_all_by_value("All statuses")
+                .next()
+                .unwrap()
+                .click();
+            harness.run();
+            for status in statuses() {
+                let node = harness
+                    .get_by_role_and_label(egui::accesskit::Role::Button, status_label(&status));
+                let rect = node.rect();
+                assert!(rect.height() <= 32.0, "{rect:?}");
+                assert!(
+                    rect.top() >= 0.0 && rect.bottom() <= size.y,
+                    "{size:?}: {rect:?}"
+                );
+            }
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "Completed")
+                .click();
+            harness.run();
+            assert_eq!(
+                harness.state().inspection.query.status,
+                Some(TaskStatus::Completed)
+            );
+        }
+    }
+
+    #[test]
+    fn inspector_workflow_menu_uses_full_viewport_and_scrolls_overflow() {
+        let mut application = app();
+        let template = application.work.tasks[0].clone();
+        application.work.tasks = (0..18)
+            .map(|index| {
+                let mut task = template.clone();
+                task.task_id = format!("choice-{index}").into();
+                task.name = format!("Workflow {index:02}");
+                task
+            })
+            .collect();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| application);
+        for height in [1000.0, 320.0, 1000.0] {
+            harness.set_size(egui::vec2(1440.0, height));
+            harness.run_steps(20);
+            harness.get_by_value("All workflows").click();
+            harness.run();
+            let first = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 00")
+                .next_back()
+                .unwrap()
+                .rect();
+            let last = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 17")
+                .next_back()
+                .unwrap()
+                .rect();
+            assert_eq!(first.height(), 32.0);
+            assert!(first.top() >= 0.0);
+            if height == 1000.0 {
+                assert!(last.bottom() <= height, "{last:?}");
+                assert!(last.top() - first.top() > 500.0);
+            } else {
+                assert!(
+                    last.bottom() > height,
+                    "overflow must be inside a scroll area"
+                );
+            }
+            harness.hover_at(first.center());
+            harness.event(egui::Event::MouseWheel {
+                phase: egui::TouchPhase::Move,
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -100.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(20);
+            let after_scroll = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 00")
+                .next_back()
+                .unwrap()
+                .rect();
+            if height == 1000.0 {
+                assert_eq!(after_scroll, first, "A menu that fits must not scroll");
+            } else {
+                assert!(
+                    after_scroll.top() < first.top(),
+                    "Overflow must remain scrollable"
+                );
+            }
+            harness.key_press(egui::Key::Escape);
+            harness.run();
+            assert!(!egui::Popup::is_any_open(&harness.ctx));
+        }
+    }
+
+    #[test]
+    fn inspector_metadata_continues_without_scroll_and_replaces_counts() {
+        let mut app = app();
+        let mut page = app.inspection.page.clone().unwrap();
+        page.total_items = 25;
+        page.total_pages = 2;
+        let request = app.request_identity(Some(app.config.dataset_id.clone()));
+        app.inspection.pending.insert(
+            request.request_id,
+            InspectorAction::List(app.inspection.query.clone()),
+        );
+        app.accept_inspection(
+            &egui::Context::default(),
+            request,
+            Ok(InspectorReply::List(page.clone())),
+        );
+        let (id, query) = app
+            .inspection
+            .pending
+            .iter()
+            .find_map(|(id, action)| match action {
+                InspectorAction::List(q) => Some((*id, q.clone())),
+                _ => None,
+            })
+            .expect("next metadata batch is queued before any scrolling");
+        assert_eq!(query.page, 2);
+        page.page = 2;
+        page.items.truncate(1);
+        page.items[0].image.image_id = "last-image".into();
+        let request = RequestIdentity {
+            request_id: id,
+            ..app.request_identity(Some(app.config.dataset_id.clone()))
+        };
+        app.accept_inspection(
+            &egui::Context::default(),
+            request,
+            Ok(InspectorReply::List(page)),
+        );
+        assert_eq!(app.inspection.page.as_ref().unwrap().items.len(), 25);
+        assert!(
+            !app.inspection
+                .pending
+                .values()
+                .any(|a| matches!(a, InspectorAction::List(_)))
+        );
+        let mut empty = app.inspection.page.clone().unwrap();
+        empty.items.clear();
+        empty.page = 1;
+        empty.total_items = 0;
+        empty.total_pages = 0;
+        app.reset_inspection_gallery();
+        let id = *app.inspection.pending.keys().next().unwrap();
+        let request = RequestIdentity {
+            request_id: id,
+            ..app.request_identity(Some(app.config.dataset_id.clone()))
+        };
+        app.accept_inspection(
+            &egui::Context::default(),
+            request,
+            Ok(InspectorReply::List(empty)),
+        );
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run();
+        assert!(harness.query_by_label("0 matching images").is_some());
+        assert!(
+            harness
+                .query_by_label("No images match these filters.")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn inspector_cancels_offscreen_previews_without_cancelling_current_image() {
+        let mut app = app();
+        let selected = app.inspection.selected.as_ref().unwrap().image_id.clone();
+        app.inspection
+            .pending
+            .insert(80, InspectorAction::Thumbnail("offscreen".into()));
+        app.inspection
+            .pending
+            .insert(81, InspectorAction::Thumbnail("visible".into()));
+        app.inspection
+            .pending
+            .insert(82, InspectorAction::Image(selected.clone()));
+        app.inspection
+            .pending
+            .insert(83, InspectorAction::Image("old-selection".into()));
+        app.cancel_obsolete_inspection_previews(
+            &BTreeSet::from(["visible".into()]),
+            Some(&selected),
+        );
+        assert_eq!(
+            app.inspection.pending.keys().copied().collect::<Vec<_>>(),
+            vec![81, 82]
+        );
+        let late = RequestIdentity {
+            request_id: 80,
+            ..app.request_identity(Some(app.config.dataset_id.clone()))
+        };
+        app.accept_inspection(
+            &egui::Context::default(),
+            late,
+            Ok(InspectorReply::Thumbnail(
+                "offscreen".into(),
+                ImagePreview {
+                    image_id: "offscreen".into(),
+                    width: 1,
+                    height: 1,
+                    rgba: vec![0, 0, 0, 255],
+                },
+            )),
+        );
+        assert!(
+            !app.inspection
+                .thumbnails
+                .contains_key(&ImageId::from("offscreen"))
+        );
+    }
+
+    #[test]
+    fn inspector_class_labels_follow_visible_groups() {
+        use labello_domain::{
+            AnnotationGeometry, KeypointAnnotation, KeypointState, NormalizedPoint,
+            SkeletonGeometry,
+        };
+        let mut app = app();
+        let state = app.inspection.state.as_mut().unwrap();
+        let mut bbox = state.active_annotations().next().unwrap().clone();
+        bbox.object_group_id = Some("group".into());
+        state
+            .annotations
+            .insert(bbox.annotation_id.clone(), vec![bbox.clone()]);
+        let mut skeleton = bbox.clone();
+        skeleton.annotation_id = "skeleton-label".into();
+        skeleton.annotation_type = AnnotationType::Skeleton;
+        skeleton.geometry = AnnotationGeometry::Skeleton(SkeletonGeometry {
+            keypoints: vec![KeypointAnnotation {
+                name: "center".into(),
+                point: Some(NormalizedPoint { x: 0.5, y: 0.5 }),
+                state: KeypointState::Visible,
+            }],
+        });
+        state
+            .annotations
+            .insert(skeleton.annotation_id.clone(), vec![skeleton]);
+        let label = format!(
+            "Class: {}",
+            app.work
+                .classes
+                .iter()
+                .find(|c| c.class_id == bbox.class_id)
+                .unwrap()
+                .name
+        );
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run();
+        // A grouped box and skeleton share one visible label.
+        assert!(harness.query_by_label(&label).is_some());
+        harness.state_mut().inspection.boxes = false;
+        harness.run();
+        // Hiding the box gives its now-unboxed keypoint a class label.
+        assert!(harness.query_by_label(&label).is_some());
+        harness.state_mut().inspection.skeletons = false;
+        harness.run();
+        assert!(harness.query_by_label(&label).is_none());
+    }
+
+    #[test]
+    fn inspector_keeps_labels_for_thin_boxes_at_the_viewport_edge() {
+        let mut app = app();
+        let state = app.inspection.state.as_mut().unwrap();
+        let mut annotation = state.active_annotations().next().unwrap().clone();
+        let labello_domain::AnnotationGeometry::BoundingBox(bbox) = &mut annotation.geometry else {
+            panic!("expected box fixture");
+        };
+        bbox.x = 0.0;
+        bbox.y = 0.4;
+        bbox.width = 0.005;
+        bbox.height = 0.2;
+        let name = app
+            .work
+            .classes
+            .iter()
+            .find(|class| class.class_id == annotation.class_id)
+            .unwrap()
+            .name
+            .clone();
+        state
+            .annotations
+            .insert(annotation.annotation_id.clone(), vec![annotation]);
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run();
+        assert!(harness.query_by_label(&format!("Class: {name}")).is_some());
+    }
+
+    #[test]
+    fn inspector_completed_boxes_have_full_width_selection_and_explain_exclusions() {
+        let app = app();
+        assert_eq!(
+            app.work.tasks[0].annotation_type,
+            AnnotationType::BoundingBox
+        );
+        let task = app.work.tasks[0].clone();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| app);
+        harness.run();
+        let button_label = format!("Return {} to review", task.name);
+        let button = harness.get_by_label(&button_label);
+        assert!(
+            button.rect().width() > 200.0,
+            "the workflow name belongs to the clickable row"
+        );
+        button.click();
+        harness.run();
+        assert!(
+            harness
+                .state()
+                .inspection
+                .return_tasks
+                .contains(&task.task_id)
+        );
+        harness.state_mut().inspection.reason = "Recheck this work".into();
+        harness.get_by_label("Discard return draft").click();
+        harness.run();
+        assert!(harness.state().inspection.return_tasks.is_empty());
+        assert!(harness.state().inspection.reason.is_empty());
+        harness.get_by_label(&button_label).click();
+        harness.run();
+        harness.state_mut().work.tasks[0].review.workflow = labello_domain::ReviewWorkflow::None;
+        harness.run();
+        let explanation = "Approval review is not enabled for this workflow.";
+        assert!(harness.query_by_label(explanation).is_none());
+        let info_label = format!("Why {} cannot return to review", task.name);
+        harness.get_by_label(&info_label).click();
+        harness.run();
+        assert!(harness.query_by_label(explanation).is_some());
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert!(harness.get_by_label(&info_label).is_focused());
+        assert!(harness.query_by_label(explanation).is_none());
+        assert!(harness.state().inspection.return_tasks.is_empty());
+        harness.state_mut().work.tasks[0].review.workflow =
+            labello_domain::ReviewWorkflow::Approval;
+        harness
+            .state_mut()
+            .inspection
+            .state
+            .as_mut()
+            .unwrap()
+            .task_states
+            .get_mut(&task.task_id)
+            .unwrap()
+            .status = TaskStatus::Submitted;
+        harness.run();
+        let explanation = "Only completed workflows can be returned to review.";
+        assert!(harness.query_by_label(explanation).is_none());
+        harness.get_by_label(&info_label).click();
+        harness.run();
+        assert!(harness.query_by_label(explanation).is_some());
+    }
+
+    #[test]
+    fn inspector_return_choices_include_type_icons_inside_the_row() {
+        for (kind, icon_label) in [
+            (AnnotationType::BoundingBox, "bounding box annotation type"),
+            (AnnotationType::Skeleton, "skeleton annotation type"),
+        ] {
+            for size in [
+                egui::vec2(1440.0, 1000.0),
+                egui::vec2(390.0, 844.0),
+                egui::vec2(320.0, 568.0),
+            ] {
+                let mut application = app();
+                let task = &mut application.work.tasks[0];
+                task.annotation_type = kind.clone();
+                task.name = "A long workflow name that wraps across multiple lines".into();
+                task.review.workflow = labello_domain::ReviewWorkflow::None;
+                let label = format!("Return {} to review", task.name);
+                let info_label = format!("Why {} cannot return to review", task.name);
+                let mut harness = Harness::builder()
+                    .with_size(size)
+                    .build_eframe(|_| application);
+                harness.run();
+                if size.x < 1288.0 {
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::Button, "Overlays")
+                        .click();
+                    harness.run();
+                }
+                let row = harness.get_by_label(&label).rect();
+                assert!(
+                    harness.get_all_by_label(icon_label).any(|icon| {
+                        let rect = icon.rect();
+                        row.contains(rect.min) && row.contains(rect.max)
+                    }),
+                    "{icon_label} must be inside the return choice"
+                );
+                let info = harness.get_by_label(&info_label).rect();
+                assert!(row.right() <= info.left());
+                assert!(info.right() <= size.x);
+                assert_eq!(info.size(), egui::vec2(44.0, 44.0));
+            }
+        }
     }
 
     #[test]
@@ -965,7 +1410,7 @@ mod tests {
         assert!(
             harness
                 .query_by_label("Reason for returning work")
-                .is_none()
+                .is_some()
         );
         let preview = harness.get_by_label("Inspect Sample 0").rect();
         let second = harness.get_by_label("Inspect Sample 1").rect();
@@ -979,8 +1424,6 @@ mod tests {
         assert!(fourth.top() > preview.bottom());
         assert!(third.right() <= 420.0);
         assert!(harness.get_by_label("Fit image").rect().bottom() < preview.top());
-        harness.get_by_label("Return to review").click();
-        harness.run();
         let submit = harness.get_by_label("Return selected workflows").rect();
         assert!(submit.right() <= 1440.0 && submit.bottom() <= 1000.0);
     }
@@ -1028,8 +1471,6 @@ mod tests {
                     .contains(&task.task_id)
             );
             assert!(harness.state().inspection.return_tasks.is_empty());
-            harness.get_by_label("Return to review").click();
-            harness.run();
             harness
                 .get_by_role_and_label(
                     egui::accesskit::Role::Button,

@@ -256,9 +256,9 @@ async fn source_pixel_decoder_and_worker_limits_cover_encoded_and_legacy_paths()
     let permit = fixture
         .cache
         .inner
-        .workers
+        .foreground_requests
         .clone()
-        .acquire_owned()
+        .acquire_many_owned(16)
         .await
         .unwrap();
     assert_eq!(
@@ -384,7 +384,7 @@ async fn cancelled_started_worker_retains_permits_and_publishes_atomically() {
     // blocks publication while the caller disconnects.
     let disk = fixture.cache.inner.disk.lock().unwrap();
     let worker_fixture = fixture.clone();
-    let caller = tokio::spawn(async move { worker_fixture.get(PreviewProfile::StandardV1).await });
+    let caller = tokio::spawn(async move { worker_fixture.get(PreviewProfile::ThumbnailV1).await });
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while fixture.cache.inner.workers.available_permits() != 0 {
         assert!(std::time::Instant::now() < deadline);
@@ -392,13 +392,25 @@ async fn cancelled_started_worker_retains_permits_and_publishes_atomically() {
     }
     caller.abort();
     assert_eq!(fixture.cache.inner.workers.available_permits(), 0);
+    assert_eq!(fixture.cache.inner.thumbnail_workers.available_permits(), 0);
+    // Opening a different representation while the cancelled worker still owns
+    // the only slot must wait, rather than surface a conflict to the browser.
+    let mut foreground = Box::pin(fixture.get(PreviewProfile::DataSaverV1));
+    assert!(
+        std::future::Future::poll(
+            foreground.as_mut(),
+            &mut std::task::Context::from_waker(std::task::Waker::noop()),
+        )
+        .is_pending()
+    );
     drop(disk);
+    assert!(!foreground.await.unwrap().webp.is_empty());
     assert!(caller.await.unwrap_err().is_cancelled());
-    let result = fixture.get(PreviewProfile::StandardV1).await.unwrap();
+    let result = fixture.get(PreviewProfile::ThumbnailV1).await.unwrap();
     assert!(!result.webp.is_empty());
-    assert_eq!(fixture.generations(), 1);
-    assert_eq!(fixture.cache_files().len(), 1);
-    assert_eq!(fs::read_dir(&fixture.cache.inner.root).unwrap().count(), 2);
+    assert_eq!(fixture.generations(), 2);
+    assert_eq!(fixture.cache_files().len(), 2);
+    assert_eq!(fs::read_dir(&fixture.cache.inner.root).unwrap().count(), 3);
 }
 
 #[tokio::test]
@@ -547,4 +559,59 @@ async fn thumbnail_proxy_is_bounded_and_reused_after_restart() {
         first.webp
     );
     assert_eq!(cache.inner.generations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn thumbnail_queue_cannot_block_foreground_admission_or_reserved_worker() {
+    let fixture = Fixture::new(73, 47, PreviewConfig::default());
+    assert_eq!(fixture.cache.inner.thumbnail_workers.available_permits(), 1);
+    let lane = fixture
+        .cache
+        .inner
+        .thumbnail_workers
+        .clone()
+        .acquire_owned()
+        .await
+        .unwrap();
+    let mut thumbnail = Box::pin(fixture.get(PreviewProfile::ThumbnailV1));
+    assert!(
+        std::future::Future::poll(
+            thumbnail.as_mut(),
+            &mut std::task::Context::from_waker(std::task::Waker::noop())
+        )
+        .is_pending()
+    );
+    let admission = fixture
+        .cache
+        .inner
+        .thumbnail_requests
+        .clone()
+        .acquire_many_owned(31)
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture.get(PreviewProfile::ThumbnailV1).await.unwrap_err(),
+        PreviewError::Busy
+    );
+    // The saturated background queue does not reject any foreground route.
+    fixture.get(PreviewProfile::StandardV1).await.unwrap();
+    fixture
+        .cache
+        .original_detail(&fixture.repo, &fixture.record)
+        .await
+        .unwrap();
+    fixture
+        .cache
+        .rgba(&fixture.repo, &fixture.record, 1600)
+        .await
+        .unwrap();
+    drop(thumbnail);
+    assert_eq!(
+        fixture.cache.inner.thumbnail_requests.available_permits(),
+        1
+    );
+    assert_eq!(fixture.generations(), 1);
+    drop((lane, admission));
+    fixture.get(PreviewProfile::ThumbnailV1).await.unwrap();
+    assert_eq!(fixture.generations(), 2);
 }

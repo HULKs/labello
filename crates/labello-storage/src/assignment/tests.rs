@@ -4607,9 +4607,47 @@ async fn review_policy_upgrade_preserves_a_fresh_correction_round() {
 
 #[tokio::test]
 async fn inspector_returns_completed_work_with_durable_retry_and_fresh_review_round() {
-    for annotation_type in [AnnotationType::BoundingBox, AnnotationType::Skeleton] {
+    for (annotation_type, paired) in [
+        (AnnotationType::BoundingBox, false),
+        (AnnotationType::BoundingBox, true),
+        (AnnotationType::Skeleton, false),
+    ] {
         let (temp, repo, image, task, annotator, reviewers) =
             correction_repo(annotation_type, false).await;
+        if paired {
+            let state = repo.load_image_state(&image).await.unwrap();
+            let mut bbox = state.active_annotations().next().unwrap().clone();
+            bbox.annotation_id = "paired-box".into();
+            bbox.object_group_id = Some("paired-group".into());
+            let mut pose = bbox.clone();
+            pose.annotation_id = "paired-pose".into();
+            pose.task_id = "skeleton:person".into();
+            pose.annotation_type = AnnotationType::Skeleton;
+            pose.geometry = AnnotationGeometry::Skeleton(SkeletonGeometry {
+                keypoints: vec![KeypointAnnotation {
+                    name: "nose".into(),
+                    point: Some(NormalizedPoint { x: 0.5, y: 0.5 }),
+                    state: KeypointState::Visible,
+                }],
+            });
+            let actor = Actor {
+                user_id: annotator.clone(),
+                role: DatasetRole::Annotator,
+            };
+            for annotation in [bbox, pose] {
+                repo.append_payload(
+                    &image,
+                    &actor,
+                    EventPayload::AnnotationVersionCreated {
+                        annotation,
+                        previous_version: None,
+                        reason: None,
+                    },
+                )
+                .await
+                .unwrap();
+            }
+        }
         let assignment = claim_review(&repo, &image, &task, &reviewers[0]).await;
         let before = finalize_test_review(&repo, &assignment, ReviewDecision::Approved).await;
         assert_eq!(before.task_states[&task].status, TaskStatus::Completed);

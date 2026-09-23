@@ -39,7 +39,63 @@ impl ReturnToReviewRequest {
     }
 }
 
+/// Shared eligibility explanation for the inspector and the validated transition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReturnToReviewBlock {
+    Disabled,
+    ReviewDisabled,
+    NotCompleted,
+    Assigned,
+    InvalidTargets,
+}
+
+impl ReturnToReviewBlock {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Disabled => "This workflow is disabled.",
+            Self::ReviewDisabled => "Approval review is not enabled for this workflow.",
+            Self::NotCompleted => "Only completed workflows can be returned to review.",
+            Self::Assigned => "An active assignment must finish or expire first.",
+            Self::InvalidTargets => {
+                "Review targets are incomplete. Refresh the image or repair the workflow."
+            }
+        }
+    }
+}
+
 impl ImageState {
+    pub fn return_to_review_block(
+        &self,
+        task: &TaskDefinition,
+        timestamp: Timestamp,
+    ) -> Option<ReturnToReviewBlock> {
+        if !task.enabled {
+            return Some(ReturnToReviewBlock::Disabled);
+        }
+        if task.review.workflow != ReviewWorkflow::Approval {
+            return Some(ReturnToReviewBlock::ReviewDisabled);
+        }
+        if self
+            .task_states
+            .get(&task.task_id)
+            .is_none_or(|s| s.status != TaskStatus::Completed)
+        {
+            return Some(ReturnToReviewBlock::NotCompleted);
+        }
+        if self.assignments.iter().any(|a| {
+            a.task_id == task.task_id
+                && a.status == AssignmentStatus::Active
+                && a.expires_at
+                    .unwrap_or(a.updated_at + std::time::Duration::from_secs(1800))
+                    > timestamp
+        }) {
+            return Some(ReturnToReviewBlock::Assigned);
+        }
+        self.review_targets(task)
+            .err()
+            .map(|_| ReturnToReviewBlock::InvalidTargets)
+    }
+
     pub fn validate_return_to_review(
         &self,
         request: &ReturnToReviewRequest,
@@ -58,25 +114,9 @@ impl ImageState {
             return Err(invalid());
         }
         for (task, id) in tasks.iter().zip(&request.task_ids) {
-            if task.task_id != *id
-                || !task.enabled
-                || task.review.workflow != ReviewWorkflow::Approval
-                || self
-                    .task_states
-                    .get(id)
-                    .is_none_or(|state| state.status != TaskStatus::Completed)
-                || self.assignments.iter().any(|assignment| {
-                    assignment.task_id == *id
-                        && assignment.status == AssignmentStatus::Active
-                        && assignment
-                            .expires_at
-                            .unwrap_or(assignment.updated_at + std::time::Duration::from_secs(1800))
-                            > timestamp
-                })
-            {
+            if task.task_id != *id || self.return_to_review_block(task, timestamp).is_some() {
                 return Err(invalid());
             }
-            self.review_targets(task)?;
         }
         Ok(())
     }

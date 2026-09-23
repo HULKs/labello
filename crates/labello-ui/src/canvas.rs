@@ -47,10 +47,11 @@ pub struct KeypointSelection {
     pub keypoint_index: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CanvasAnnotationStyle {
     pub color: Color32,
     pub dashed_box: bool,
+    pub label: Option<String>,
 }
 
 impl CanvasAnnotationStyle {
@@ -58,6 +59,7 @@ impl CanvasAnnotationStyle {
         Self {
             color,
             dashed_box: false,
+            label: None,
         }
     }
 
@@ -65,6 +67,7 @@ impl CanvasAnnotationStyle {
         Self {
             color,
             dashed_box: true,
+            label: None,
         }
     }
 }
@@ -417,6 +420,31 @@ mod tests {
         Harness,
         kittest::{NodeT, Queryable},
     };
+
+    #[test]
+    fn class_label_contrast_meets_normal_text_threshold_across_the_palette() {
+        let luminance = |color: Color32| {
+            let values = [color.r(), color.g(), color.b()].map(|channel| {
+                let srgb = f64::from(channel) / 255.0;
+                if srgb <= 0.04045 {
+                    srgb / 12.92
+                } else {
+                    ((srgb + 0.055) / 1.055).powf(2.4)
+                }
+            });
+            values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722
+        };
+        for red in (0..=255).step_by(17) {
+            for green in (0..=255).step_by(17) {
+                for blue in (0..=255).step_by(17) {
+                    let background = Color32::from_rgb(red, green, blue);
+                    let light = luminance(background);
+                    let text = luminance(class_label_text_color(background));
+                    assert!((light.max(text) + 0.05) / (light.min(text) + 0.05) >= 4.5);
+                }
+            }
+        }
+    }
 
     #[test]
     fn loaded_image_paint_keeps_texture_without_grid_strokes() {

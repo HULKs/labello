@@ -13,8 +13,8 @@ use labello_client::{
     SessionInfo, SetDatasetRolesRequest, UpdateDatasetConfigRequest,
 };
 use labello_domain::{
-    Actor, DatasetId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageExplorerItem,
-    ImageExplorerPage, PrelabelConfig, TaskDefinition, TaskStatus,
+    Actor, DatasetId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, ImageExplorerPage,
+    PrelabelConfig, TaskDefinition, TaskStatus,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -882,30 +882,16 @@ async fn list_images(
     }
     let mut items = Vec::new();
     for image in images {
-        let state = repo.load_image_state(&image.image_id).await?;
-        let mut task_statuses = metadata
-            .tasks
-            .iter()
-            .map(|task| (task.task_id.clone(), TaskStatus::Pending))
-            .collect::<std::collections::BTreeMap<_, _>>();
-        task_statuses.extend(
-            state
-                .task_states
-                .iter()
-                .map(|(task_id, task_state)| (task_id.clone(), task_state.status.clone())),
-        );
-        let class_ids = state
-            .active_annotations()
-            .map(|annotation| annotation.class_id.clone())
-            .collect();
-        let item = ImageExplorerItem {
-            image,
-            task_statuses,
-            class_ids,
-        };
+        let item = repo.image_explorer_item(image, &metadata.tasks).await?;
         if query.status.as_ref().is_some_and(|status| {
             if let Some(task_id) = query.task_id.as_ref() {
                 item.task_statuses.get(task_id) != Some(status)
+            } else if *status == TaskStatus::Completed {
+                metadata.tasks.is_empty()
+                    || !metadata
+                        .tasks
+                        .iter()
+                        .all(|task| item.task_statuses.get(&task.task_id) == Some(status))
             } else {
                 !item
                     .task_statuses

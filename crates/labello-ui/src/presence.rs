@@ -31,8 +31,7 @@ impl PresenceState {
 
 impl LabelloApp {
     fn presence_available(&self) -> bool {
-        self.work_view()
-            && self.runtime.api.is_some()
+        self.runtime.api.is_some()
             && self
                 .auth
                 .account

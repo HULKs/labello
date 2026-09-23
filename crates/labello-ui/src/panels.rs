@@ -455,36 +455,6 @@ fn view_label(view: AppView) -> &'static str {
     }
 }
 
-fn status_text(status: SaveStatus) -> &'static str {
-    match status {
-        SaveStatus::Idle => "Idle",
-        SaveStatus::Dirty => "Unsaved",
-        SaveStatus::Saved => "Saved",
-        SaveStatus::Saving => "Saving",
-        SaveStatus::Retry => "Retry",
-    }
-}
-
-fn compact_status_text(status: SaveStatus) -> &'static str {
-    match status {
-        SaveStatus::Idle => "Idle",
-        SaveStatus::Dirty => "Edit",
-        SaveStatus::Saved => "Done",
-        SaveStatus::Saving => "Wait",
-        SaveStatus::Retry => "Retry",
-    }
-}
-
-fn status_intent(status: SaveStatus) -> theme::Intent {
-    match status {
-        SaveStatus::Idle => theme::Intent::Neutral,
-        SaveStatus::Dirty => theme::Intent::Warning,
-        SaveStatus::Saved => theme::Intent::Success,
-        SaveStatus::Saving => theme::Intent::Info,
-        SaveStatus::Retry => theme::Intent::Error,
-    }
-}
-
 fn keypoint_state_label(state: &KeypointState) -> &'static str {
     match state {
         KeypointState::Visible => "visible",

@@ -2,9 +2,23 @@ use super::*;
 
 impl LabelloApp {
     pub(super) fn reset_inspection_gallery(&mut self) {
-        self.inspection
+        let obsolete: Vec<_> = self
+            .inspection
             .pending
-            .retain(|_, a| !matches!(a, InspectorAction::List(_)));
+            .iter()
+            .filter_map(|(id, action)| matches!(action, InspectorAction::List(_)).then_some(*id))
+            .collect();
+        for id in obsolete {
+            self.inspection.transfers.cancel(id);
+            self.inspection.pending.remove(&id);
+            self.runtime.active_requests.remove(&id);
+        }
+        let selected = self
+            .inspection
+            .selected
+            .as_ref()
+            .map(|r| r.image_id.clone());
+        self.cancel_obsolete_inspection_previews(&BTreeSet::new(), selected.as_ref());
         self.inspection.navigate_page = None;
         self.inspection.query.page = 1;
         self.inspection.gallery_error = None;
@@ -72,98 +86,135 @@ impl LabelloApp {
                 self.inspection.query.status.clone(),
             );
             let width = ui.available_width();
-            egui::ComboBox::from_id_salt("gallery-workflow")
-                .width(width)
-                .wrap_mode(egui::TextWrapMode::Truncate)
-                .selected_text(
-                    self.inspection
-                        .query
-                        .task_id
-                        .as_ref()
-                        .map(|id| {
-                            self.work
-                                .tasks
-                                .iter()
-                                .find(|t| t.task_id == *id)
-                                .map(|t| t.name.as_str())
-                                .unwrap_or(id.as_str())
-                        })
-                        .unwrap_or("All workflows"),
-                )
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.inspection.query.task_id, None, "All workflows");
+            filter_menu(
+                ui,
+                "gallery-workflow",
+                width,
+                (self
+                    .inspection
+                    .query
+                    .task_id
+                    .as_ref()
+                    .map(|id| {
+                        self.work
+                            .tasks
+                            .iter()
+                            .find(|t| t.task_id == *id)
+                            .map(|t| t.name.as_str())
+                            .unwrap_or(id.as_str())
+                    })
+                    .unwrap_or("All workflows"))
+                .to_owned(),
+                |ui| {
+                    filter_menu_width(
+                        ui,
+                        std::iter::once("All workflows")
+                            .chain(self.work.tasks.iter().map(|task| task.name.as_str())),
+                    );
+                    filter_choice(
+                        ui,
+                        &mut self.inspection.query.task_id,
+                        None,
+                        "All workflows",
+                        FilterIcon::All,
+                    );
                     for task in &self.work.tasks {
-                        ui.selectable_value(
+                        filter_choice(
+                            ui,
                             &mut self.inspection.query.task_id,
                             Some(task.task_id.clone()),
                             &task.name,
+                            FilterIcon::Workflow(&task.annotation_type),
                         );
                     }
-                })
-                .response
-                .on_hover_text("Filter images by workflow");
+                },
+            )
+            .on_hover_text("Filter images by workflow");
             ui.horizontal(|ui| {
-                egui::ComboBox::from_id_salt("gallery-class")
-                    .width((width - 6.0) / 2.0)
-                    .wrap_mode(egui::TextWrapMode::Truncate)
-                    .selected_text(
-                        self.inspection
-                            .query
-                            .class_id
-                            .as_ref()
-                            .map(|id| {
-                                self.work
-                                    .classes
-                                    .iter()
-                                    .find(|c| c.class_id == *id)
-                                    .map(|c| c.name.as_str())
-                                    .unwrap_or(id.as_str())
-                            })
-                            .unwrap_or("All classes"),
-                    )
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
+                filter_menu(
+                    ui,
+                    "gallery-class",
+                    (width - 6.0) / 2.0,
+                    (self
+                        .inspection
+                        .query
+                        .class_id
+                        .as_ref()
+                        .map(|id| {
+                            self.work
+                                .classes
+                                .iter()
+                                .find(|c| c.class_id == *id)
+                                .map(|c| c.name.as_str())
+                                .unwrap_or(id.as_str())
+                        })
+                        .unwrap_or("All classes"))
+                    .to_owned(),
+                    |ui| {
+                        filter_menu_width(
+                            ui,
+                            std::iter::once("All classes")
+                                .chain(self.work.classes.iter().map(|class| class.name.as_str())),
+                        );
+                        filter_choice(
+                            ui,
                             &mut self.inspection.query.class_id,
                             None,
                             "All classes",
+                            FilterIcon::All,
                         );
                         for class in &self.work.classes {
-                            ui.selectable_value(
+                            filter_choice(
+                                ui,
                                 &mut self.inspection.query.class_id,
                                 Some(class.class_id.clone()),
                                 &class.name,
+                                FilterIcon::Class(
+                                    crate::workspace_canvas::parse_class_color(&class.color)
+                                        .unwrap_or(theme::INFO),
+                                ),
                             );
                         }
-                    })
-                    .response
-                    .on_hover_text("Filter images by class");
-                egui::ComboBox::from_id_salt("gallery-status")
-                    .width((width - 6.0) / 2.0)
-                    .wrap_mode(egui::TextWrapMode::Truncate)
-                    .selected_text(
-                        self.inspection
-                            .query
-                            .status
-                            .as_ref()
-                            .map(status_label)
-                            .unwrap_or("All statuses"),
-                    )
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
+                    },
+                )
+                .on_hover_text("Filter images by class");
+                filter_menu(
+                    ui,
+                    "gallery-status",
+                    (width - 6.0) / 2.0,
+                    (self
+                        .inspection
+                        .query
+                        .status
+                        .as_ref()
+                        .map(status_label)
+                        .unwrap_or("All statuses"))
+                    .to_owned(),
+                    |ui| {
+                        filter_menu_width(
+                            ui,
+                            std::iter::once("All statuses")
+                                .chain(statuses().iter().map(status_label)),
+                        );
+                        filter_choice(
+                            ui,
                             &mut self.inspection.query.status,
                             None,
                             "All statuses",
+                            FilterIcon::All,
                         );
                         for status in statuses() {
-                            ui.selectable_value(
+                            filter_choice(
+                                ui,
                                 &mut self.inspection.query.status,
                                 Some(status.clone()),
                                 status_label(&status),
+                                FilterIcon::Status(&status),
                             );
                         }
-                    })
-                    .response
-                    .on_hover_text("Filter images by status");
+                    },
+                )
+                .on_hover_text("Filter images by status");
             });
             refresh |= previous
                 != (
@@ -184,6 +235,14 @@ impl LabelloApp {
                 }
             }
         }
+        let replacing = self
+            .inspection
+            .pending
+            .values()
+            .any(|a| matches!(a, InspectorAction::List(q) if q.page == 1));
+        if replacing {
+            ui.label("Applying filters… Previous results remain visible.");
+        }
         let Some(page) = self.inspection.page.as_ref() else {
             if loading {
                 ui.spinner();
@@ -191,7 +250,10 @@ impl LabelloApp {
             return;
         };
         ui.horizontal(|ui| {
-            ui.weak(format!("{} images", page.total_items));
+            ui.weak(format!("{} matching images", page.total_items));
+            if page.items.len() < page.total_items {
+                ui.weak(format!("{} listed", page.items.len()));
+            }
             if loading {
                 ui.spinner();
             }
@@ -293,10 +355,12 @@ impl LabelloApp {
                 },
             );
         self.inspection.scroll = output.state.offset.y;
-        if output.state.offset.y + output.inner_rect.height() >= output.content_size.y - row_height
-        {
-            self.load_more_inspection_images();
-        }
+        let selected = self
+            .inspection
+            .selected
+            .as_ref()
+            .map(|r| r.image_id.clone());
+        self.cancel_obsolete_inspection_previews(&visible, selected.as_ref());
         // Texture memory follows the visible rows, not the ever-growing result list.
         self.inspection.thumbnails.retain(|id, _| {
             visible.contains(id)
@@ -333,4 +397,187 @@ impl LabelloApp {
             self.select_inspection_image(record);
         }
     }
+}
+
+fn compact_menu_style(style: &mut egui::Style) {
+    style.spacing.interact_size.y = 32.0;
+    style.spacing.item_spacing.y = 2.0;
+    style.spacing.button_padding.y = 2.0;
+}
+
+enum FilterIcon<'a> {
+    All,
+    Workflow(&'a AnnotationType),
+    Class(egui::Color32),
+    Status(&'a TaskStatus),
+}
+
+fn filter_choice<T: PartialEq>(
+    ui: &mut egui::Ui,
+    current: &mut T,
+    value: T,
+    label: &str,
+    icon: FilterIcon<'_>,
+) {
+    let icon_id = ui.id().with(("filter-icon", label));
+    let selected = *current == value;
+    let icon_width = if matches!(icon, FilterIcon::Workflow(_)) {
+        28.0
+    } else {
+        20.0
+    };
+    let atoms = (
+        egui::Atom::custom(icon_id, egui::vec2(icon_width, 28.0)),
+        label,
+    );
+    let choice = egui::Button::new(atoms)
+        .min_size(egui::vec2(ui.available_width(), 32.0))
+        .selected(selected)
+        .wrap_mode(egui::TextWrapMode::Truncate)
+        .atom_ui(ui);
+    if let Some(rect) = choice.rect(icon_id) {
+        let center = rect.center();
+        let stroke = ui.style().interact(&choice.response).fg_stroke;
+        match icon {
+            FilterIcon::Workflow(kind) => {
+                crate::panels::workflow_type_icon(ui, icon_id, rect, kind)
+            }
+            FilterIcon::Class(color) => {
+                ui.painter().circle_filled(center, 6.0, color);
+            }
+            FilterIcon::All => {
+                for y in [-4.0, 4.0] {
+                    for x in [-4.0, 4.0] {
+                        ui.painter()
+                            .circle_filled(center + egui::vec2(x, y), 2.0, stroke.color);
+                    }
+                }
+            }
+            FilterIcon::Status(status) => {
+                let painter = ui.painter();
+                match status {
+                    TaskStatus::Completed => {
+                        painter.line_segment(
+                            [
+                                center + egui::vec2(-6.0, 0.0),
+                                center + egui::vec2(-2.0, 4.0),
+                            ],
+                            egui::Stroke::new(2.0, theme::SUCCESS),
+                        );
+                        painter.line_segment(
+                            [
+                                center + egui::vec2(-2.0, 4.0),
+                                center + egui::vec2(7.0, -5.0),
+                            ],
+                            egui::Stroke::new(2.0, theme::SUCCESS),
+                        );
+                    }
+                    TaskStatus::NeedsCorrection => {
+                        painter.line_segment(
+                            [
+                                center + egui::vec2(0.0, -6.0),
+                                center + egui::vec2(0.0, 2.0),
+                            ],
+                            egui::Stroke::new(2.0, theme::DANGER),
+                        );
+                        painter.circle_filled(center + egui::vec2(0.0, 6.0), 1.5, theme::DANGER);
+                    }
+                    TaskStatus::Submitted => {
+                        painter.line_segment(
+                            [
+                                center + egui::vec2(-7.0, 0.0),
+                                center + egui::vec2(7.0, 0.0),
+                            ],
+                            stroke,
+                        );
+                        painter.line_segment(
+                            [
+                                center + egui::vec2(2.0, -5.0),
+                                center + egui::vec2(7.0, 0.0),
+                            ],
+                            stroke,
+                        );
+                        painter.line_segment(
+                            [center + egui::vec2(2.0, 5.0), center + egui::vec2(7.0, 0.0)],
+                            stroke,
+                        );
+                    }
+                    _ => {
+                        painter.circle_stroke(center, 7.0, stroke);
+                        if *status == TaskStatus::InProgress {
+                            painter.line_segment([center, center + egui::vec2(0.0, -5.0)], stroke);
+                            painter.line_segment([center, center + egui::vec2(4.0, 0.0)], stroke);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    choice.response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, label)
+    });
+    if choice.response.clicked() {
+        *current = value;
+    }
+}
+
+fn filter_menu_width<'a>(ui: &mut egui::Ui, labels: impl Iterator<Item = &'a str>) {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let text_width = ui.fonts_mut(|fonts| {
+        labels
+            .map(|label| {
+                fonts
+                    .layout_no_wrap(label.to_owned(), font.clone(), egui::Color32::WHITE)
+                    .size()
+                    .x
+            })
+            .fold(0.0, f32::max)
+    });
+    // Let choices grow wider than their trigger, retaining bounded truncation
+    // only when the full label cannot fit across the viewport.
+    ui.set_min_width((text_width + 60.0).min(ui.ctx().content_rect().width() - 32.0));
+}
+
+fn filter_menu(
+    ui: &mut egui::Ui,
+    id: &str,
+    width: f32,
+    selected: String,
+    choices: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
+    ui.push_id(id, |ui| {
+        let response = ui.add(
+            egui::Button::new(&selected)
+                .right_text("▼")
+                .min_size(egui::vec2(width, 44.0))
+                .truncate(),
+        );
+        response.widget_info(|| {
+            let mut info = egui::WidgetInfo::new(egui::WidgetType::ComboBox);
+            info.enabled = ui.is_enabled();
+            info.current_text_value = Some(selected.clone());
+            info
+        });
+        let popup = egui::Popup::menu(&response)
+            .width(response.rect.width())
+            .style(compact_menu_style);
+        let was_open = popup.is_open();
+        popup.show(|ui| {
+            let margin = egui::Frame::popup(ui.style()).total_margin().sum().y;
+            let height = (ui.ctx().content_rect().height() - margin).max(1.0);
+            // ScrollArea also clamps to its parent's available height. Reset the
+            // popup's cached/default area height before creating the scroll area.
+            ui.set_max_height(height);
+            egui::ScrollArea::vertical()
+                .max_height(height)
+                .show(ui, choices);
+        });
+        if was_open
+            && !egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&response))
+        {
+            response.request_focus();
+        }
+        response
+    })
+    .inner
 }

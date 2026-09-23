@@ -531,3 +531,20 @@ version-3 histories still replay; version-2 output rejects this new event.
 Generated schemas, snapshot event logs and offline bundle event fragments retain
 it. Raw event and offline mutation interfaces cannot author it. A missing or
 interrupted state cache rebuilds from the committed event log.
+
+## Inspector filter metadata
+
+The repository shares a process-local cache of per-image workflow statuses and
+active annotation class IDs. This is a disposable query projection, not an
+authoritative artifact. Initial access loads the event-validated image state;
+queries and writers share the per-image lock. Event publication invalidates the
+image summary before the atomic rename so cancellation, directory-sync failure,
+or a failed subsequent state-cache write cannot leave a stale summary. Explicit
+state repair also invalidates the summary. Concurrent cold reads coalesce through
+the image lock, and a changed image does not invalidate other images.
+
+Image-index saves discard summaries for removed identities. Record/path changes
+and configured Pending defaults are composed from current index/configuration
+values. Restart rebuilds summaries lazily. No schema, snapshot, import/export
+identity, or audit-history change is introduced. Warm filtering still evaluates
+lightweight metadata in memory; this does not claim constant-time queries.

@@ -19,6 +19,12 @@ impl ImageTransfers {
         }
     }
 
+    pub fn cancel(&self, id: u64) {
+        if let Some(handle) = self.transfers.borrow_mut().remove(&id) {
+            handle.abort();
+        }
+    }
+
     pub fn cancel_all(&self) {
         for (_, handle) in std::mem::take(&mut *self.transfers.borrow_mut()) {
             handle.abort();

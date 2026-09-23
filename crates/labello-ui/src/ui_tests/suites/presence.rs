@@ -318,3 +318,32 @@ fn presence_avatar_states_keep_details_and_do_not_move_work() {
         assert_eq!(harness.state().work.assignment, assignment);
     }
 }
+
+#[test]
+fn connection_dot_and_refresh_are_available_in_every_authenticated_view() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    for view in [AppView::Setup, AppView::Inspect, AppView::Admin, AppView::Annotate, AppView::Review] {
+        {
+            let app = harness.state_mut();
+            app.view = view;
+            app.runtime.presence = Default::default();
+            app.runtime.commands.clear();
+            app.request_presence();
+            assert!(app.runtime.presence.pending_request.is_some(), "{view:?}");
+            let request = app.runtime.commands.back().unwrap().request().clone();
+            app.accept_presence(request, Ok(presence_sample()));
+            app.runtime.commands.clear();
+            app.runtime.error = Some("Connection test error".into());
+        }
+        for size in [egui::vec2(1440.0, 1000.0), egui::vec2(320.0, 568.0)] {
+            harness.set_size(size);
+            harness.run_steps(20);
+            let dot = harness.get_by_label_contains("Connection status:");
+            assert!(harness.state().connection_status().1.contains("Connection test error"));
+            let rect = dot.rect();
+            assert_eq!(rect.size(), egui::vec2(44.0, 44.0));
+            assert!(rect.left() >= 0.0 && rect.right() <= size.x);
+            assert!(harness.query_by_label("Status: Ready").is_none());
+        }
+    }
+}

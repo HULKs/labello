@@ -1,4 +1,5 @@
 use super::*;
+use egui::AtomExt as _;
 
 impl LabelloApp {
     pub(crate) fn inspection_initial_loading(&self) -> bool {
@@ -101,7 +102,7 @@ impl LabelloApp {
                 .inspection
                 .pending
                 .values()
-                .any(|a| matches!(a, InspectorAction::List(_)));
+                .any(|a| matches!(a, InspectorAction::List(q) if q.page == 1));
         ui.horizontal_wrapped(|ui| {
             for (right, title) in [(false, "Images"), (true, "Overlays")] {
                 let selected = if layout == LayoutMode::Wide {
@@ -361,6 +362,85 @@ pub(super) fn annotation_type_toggle(
                 )
             });
             response
+        })
+        .inner
+    })
+    .inner
+}
+
+pub(super) fn return_workflow_choice(
+    ui: &mut egui::Ui,
+    task: &labello_domain::TaskDefinition,
+    selected: bool,
+    eligible: bool,
+    explanation: Option<&str>,
+) -> egui::Response {
+    ui.push_id(("return-workflow", &task.task_id), |ui| {
+        ui.horizontal(|ui| {
+            let info_width = if explanation.is_some() {
+                44.0 + ui.spacing().item_spacing.x
+            } else {
+                0.0
+            };
+            let width = ui.available_width() - info_width;
+            let icon_id = ui.id().with("type-icon");
+            let choice = ui
+                .add_enabled_ui(eligible, |ui| {
+                    ui.set_width(width);
+                    let choice = egui::Button::new((
+                        egui::Atom::custom(icon_id, egui::vec2(28.0, 28.0)),
+                        task.name
+                            .as_str()
+                            .atom_grow(true)
+                            .atom_align(egui::Align2::LEFT_CENTER),
+                    ))
+                    .selected(selected)
+                    .min_size(egui::vec2(width, 44.0))
+                    .wrap()
+                    .atom_ui(ui);
+                    if let Some(rect) = choice.rect(icon_id) {
+                        crate::panels::workflow_type_icon(ui, icon_id, rect, &task.annotation_type);
+                    }
+                    choice.response
+                })
+                .inner;
+            choice.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::Button,
+                    eligible && ui.is_enabled(),
+                    selected,
+                    format!("Return {} to review", task.name),
+                )
+            });
+            if let Some(explanation) = explanation {
+                let info = ui.add_sized([44.0, 44.0], egui::Button::new("i").frame(false));
+                ui.painter().circle_stroke(
+                    info.rect.center(),
+                    9.0,
+                    ui.style().interact(&info).fg_stroke,
+                );
+                info.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        ui.is_enabled(),
+                        format!("Why {} cannot return to review", task.name),
+                    )
+                });
+                ui.ctx()
+                    .accesskit_node_builder(info.id, |node| node.set_description(explanation));
+                info.clone().on_hover_text(explanation);
+                let popup = egui::Popup::menu(&info);
+                let restore_focus =
+                    popup.is_open() && ui.input(|input| input.key_pressed(egui::Key::Escape));
+                popup.show(|ui| {
+                    ui.set_max_width(260.0);
+                    ui.label(explanation);
+                });
+                if restore_focus {
+                    info.request_focus();
+                }
+            }
+            choice
         })
         .inner
     })
