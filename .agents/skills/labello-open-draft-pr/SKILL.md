@@ -23,6 +23,12 @@ Proceed only when the invoking request or caller authorizes the task-scoped comm
 
 An equivalent direct user handoff is acceptable. Missing scope, verification, or authorization returns `PREPARATION REQUIRED` without changing Git or GitHub state.
 
+For any visual change, require captures and their captions that satisfy
+[visual evidence in pull requests](../../../docs/verification.md#visual-evidence-in-pull-requests).
+Check the complete diff for visible effects, regardless of changed paths. Missing
+captures return `PREPARATION REQUIRED`; stale captures return `PREPARATION STALE`.
+Arrange reviewer-accessible hosting before creating or updating the draft.
+
 ## Revalidate the handoff
 
 1. Read the repository instructions governing commits, generated files, runtime data, and sensitive content.
@@ -35,8 +41,8 @@ An equivalent direct user handoff is acceptable. Missing scope, verification, or
 1. Stage only approved pending paths. Commit them with a message describing the prepared change; do not create an empty commit when all approved work is already committed.
 2. Push the current `<type>/<description>` branch without disturbing unrelated local or remote work.
 3. Create an evidence-backed draft pull request, or update the existing draft for the branch. Use the supplied issue reference when present and never invent one.
-4. Fill the repository pull-request template from the handoff. Record behavior, production ownership, acceptance evidence, regression protection, exact verification results, manual evidence, documentation impact, risks, omitted checks, and preserved worktree changes. Check `Awaiting CI` and reviewer-request preservation; leave CI success, ownership, Ready for review, and independent-review items unchecked.
-5. Read back the pull request. Confirm its URL and number, draft state, base and head branches, and exact head SHA. Confirm the head SHA equals the pushed local head.
+4. Fill the repository pull-request template from the handoff. Record behavior, production ownership, acceptance evidence, regression protection, exact verification results, manual evidence, documentation impact, risks, omitted checks, and preserved worktree changes. For visual changes, embed or link the required captures and captions in `Visual or browser evidence`. Check `Awaiting CI` and reviewer-request preservation; leave CI success, ownership, Ready for review, and independent-review items unchecked.
+5. Read back the pull request. Confirm its URL and number, draft state, base and head branches, and exact head SHA. Confirm the head SHA equals the pushed local head and all required visual evidence is present and accessible to reviewers. Repair missing or broken evidence before returning `AWAITING CI`; report a publication blocker if that cannot be completed.
 
 Return `AWAITING CI` with the pull-request URL and number, exact head SHA, branch, comparison base and verified base SHA, committed files, verification summary, omitted checks, residual risks, and remaining worktree changes.
 

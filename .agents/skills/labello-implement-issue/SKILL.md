@@ -58,6 +58,11 @@ Run focused checks first and broaden them in proportion to risk. Before any remo
 
 For every command, retain the exact command, result, and material limitation. Review the complete focused diff, `git status`, documentation impact, and any lockfile changes. Do not silently describe skipped, unavailable, flaky, or failing checks as passing.
 
+For any visual change, prepare the screenshots or recordings required by
+[visual evidence in pull requests](../../../docs/verification.md#visual-evidence-in-pull-requests).
+Include the captures, captions, and reviewer-accessible hosting details in the
+publication handoff. Refresh them after CI fixes that change the depicted result.
+
 ## Publish, fix CI, and hand off
 
 Do not call a change **Ready for review** merely because local checks pass. Use the shared PR skills for their owned remote-state transitions; keep implementation decisions and all CI-driven code changes here.

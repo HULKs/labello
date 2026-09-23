@@ -110,4 +110,7 @@ Keep evidence tied to the tested revision and report missing checks explicitly.
 For a critique-only request, report the observed design problems and proposed
 changes with their user impact. For implementation, report what changed, the
 inspection and test evidence, and remaining limitations. Use the authorized
-Labello publication workflow when the user also requests a PR.
+Labello publication workflow when the user also requests a PR. Supply the
+captures and captions required by
+[visual evidence in pull requests](../../../docs/verification.md#visual-evidence-in-pull-requests)
+so reviewers can see the visual changes in the PR itself.

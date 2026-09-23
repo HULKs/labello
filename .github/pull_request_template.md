@@ -22,7 +22,7 @@
 
 ## Visual or browser evidence
 
-<!-- For applicable changes, list states, viewports, DPR/zoom, keyboard/accessibility checks, and artifact links. Otherwise explain why this is not applicable. Do not attach sensitive content. -->
+<!-- Any visual change requires embedded screenshots/recordings or direct links to reviewer-accessible captures when opening or updating the draft. Follow docs/verification.md#visual-evidence-in-pull-requests for comparisons, captions, freshness, and redaction. Record applicable browser, keyboard, and accessibility checks too. Use Not applicable only when there is no visual change, and explain why. -->
 
 ## Documentation
 
