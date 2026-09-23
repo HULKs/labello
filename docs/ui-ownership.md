@@ -214,9 +214,9 @@ The shared renderer orders score podium, rankings, activity, then aggregates.
 The domain derives streaks from contributor history; `statistics/streak.rs` owns
 flame rendering and reduced-motion-aware goal animation. The app-bar flame opens
 Statistics; leaderboard state owns streak sorting. Background statistics refresh
-runs every 30 seconds (three while open), with saves requesting a refresh and
-in-flight requests coalescing into one follow-up. Existing epoch gates reject
-stale responses.
+runs every 30 seconds (three while open), with saves, reviews, and migration
+completions requesting an immediate refresh. In-flight requests coalesce into one
+follow-up. Existing epoch gates reject stale responses.
 Dataset-owned leaderboard state retains the shared period, contributor filters,
 history selection and selected activity day. The day selector exposes calendar
 counts without hover and clamps to the current period after a period change.

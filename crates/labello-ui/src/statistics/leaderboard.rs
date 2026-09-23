@@ -259,7 +259,13 @@ impl LeaderboardState {
     fn compact_sort(&mut self, ui: &mut egui::Ui, metrics: &[usize]) {
         let previous = (!self.sort_by_name).then_some(self.ranking_metric);
         let mut selected = previous;
-        let label = previous.map_or("Person", |metric| if metric == STREAK { "Streak" } else { METRICS[metric] });
+        let label = previous.map_or("Person", |metric| {
+            if metric == STREAK {
+                "Streak"
+            } else {
+                METRICS[metric]
+            }
+        });
         let width = if ui.available_width() < 180.0 {
             ui.available_width()
         } else {
@@ -633,19 +639,22 @@ impl LeaderboardState {
                         };
                         ui.separator();
                         let width = ui.available_width();
-                        ui.horizontal_wrapped(|ui| {
-                            let badge_width = super::streak::badge_width(ui, row.streak);
-                            let name_width =
-                                (width - badge_width - ui.spacing().item_spacing.x).max(44.0);
-                            avatar::person(
-                                ui,
-                                row.person,
-                                RichText::new(format!("{rank}  {}", row.name)).strong(),
-                                egui::vec2(name_width, 28.0),
-                                None,
-                            )
-                            .on_hover_text(row.id.as_str());
-                            super::streak::badge(ui, row.streak, row.name);
+                        ui.scope(|ui| {
+                            ui.spacing_mut().interact_size.y = 28.0;
+                            ui.horizontal_wrapped(|ui| {
+                                let badge_width = super::streak::badge_width(ui, row.streak);
+                                let name_width =
+                                    (width - badge_width - ui.spacing().item_spacing.x).max(44.0);
+                                avatar::person(
+                                    ui,
+                                    row.person,
+                                    RichText::new(format!("{rank}  {}", row.name)).strong(),
+                                    egui::vec2(name_width, 28.0),
+                                    None,
+                                )
+                                .on_hover_text(row.id.as_str());
+                                super::streak::badge(ui, row.streak, row.name);
+                            });
                         });
                         ui.scope(|ui| {
                             ui.spacing_mut().interact_size.y = 20.0;

@@ -12,6 +12,7 @@ mod avatar;
 mod leaderboard;
 mod streak;
 pub(crate) use leaderboard::LeaderboardState;
+pub use streak::set_reduced_motion;
 
 impl LabelloApp {
     pub(crate) fn statistics_visible(&self) -> bool {

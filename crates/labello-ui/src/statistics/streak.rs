@@ -3,6 +3,12 @@ use labello_domain::{DAILY_LABEL_GOAL, DAILY_REVIEW_GOAL, LabelStreak};
 
 use crate::{LabelloApp, theme};
 
+/// Integrations without a motion preference adapter keep decorative motion off.
+pub fn set_reduced_motion(ctx: &egui::Context, reduced: bool) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("reduced-motion"), reduced));
+    ctx.request_repaint();
+}
+
 pub(super) fn badge_width(ui: &egui::Ui, streak: LabelStreak) -> f32 {
     let text = egui::WidgetText::from(format!("{} d", streak.days)).into_galley(
         ui,
@@ -31,7 +37,7 @@ pub(super) fn badge(ui: &mut egui::Ui, streak: LabelStreak, name: &str) {
 
 fn description(streak: LabelStreak, name: &str) -> String {
     format!(
-        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} labels today · {}/{DAILY_REVIEW_GOAL} reviews today · Flame {}. Complete {DAILY_LABEL_GOAL} distinct image/task submissions or {DAILY_REVIEW_GOAL} reviews per UTC day in this dataset.",
+        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} labels today · {}/{DAILY_REVIEW_GOAL} reviews today · Flame {}.",
         streak.days,
         streak.labeled_today,
         streak.reviewed_today,

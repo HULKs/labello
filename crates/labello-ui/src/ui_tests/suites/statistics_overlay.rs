@@ -22,7 +22,7 @@ fn daily_flame_threshold_motion_and_header_fit() {
     assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 labels today · 0/30 reviews today · Flame unlit").rect().height() >= 44.0);
     harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 20;
     harness.step();
-    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 20/20 labels today · 0/30 reviews today · Flame lit").is_some());
+    assert!(harness.query_by_label("Your streak: 2 day streak · 20/20 labels today · 0/30 reviews today · Flame lit.").is_some());
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
     for _ in 0..60 { harness.step(); }
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_none()));
@@ -144,6 +144,65 @@ fn daily_flame_refreshes_without_statistics_and_retains_a_followup() {
     assert!(app.loading.stats);
     assert_eq!(app.datasets.stats.total_images, 20);
     assert_eq!(app.runtime.commands.iter().filter(|command| matches!(command, UiCommand::Stats { .. })).count(), 2);
+}
+
+#[test]
+fn daily_flame_refreshes_after_successful_object_review_without_waiting_for_poll() {
+    for succeeds in [false, true] {
+        let mut harness = loaded_review_harness(Rc::new(SpyApi::new()));
+        step_until(&mut harness, 20, |app| !app.loading.stats);
+        let app = harness.state_mut();
+        assert!(!app.statistics_visible());
+        app.datasets.last_stats_attempt = Some(Instant::now());
+        let assignment_id = app.work.assignment.as_ref().unwrap().assignment_id.clone();
+        let result = Box::new(if succeeds {
+            Ok(app.work.current_state.clone().unwrap())
+        } else {
+            Err("Synthetic review failure".to_string().into())
+        });
+        app.work.active_operation_id = Some(77);
+        app.runtime.active_requests.insert(77);
+        let request = test_request(app, 77, Some("demo"));
+        app.runtime.tx.send(UiMessage::ReviewFinished {
+            request,
+            operation_id: 77,
+            assignment_id,
+            phase: crate::app::ReviewPhase::Object,
+            decision: labello_domain::ReviewDecision::Approved,
+            result,
+        }).unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.runtime.commands.iter().any(|command| matches!(command, UiCommand::Stats { .. })), succeeds);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn daily_flame_refreshes_on_migration_completion_but_not_navigation() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for completed in [false, true] {
+        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+        app.runtime.api = Some(Rc::new(SpyApi::new()));
+        app.datasets.last_stats_attempt = Some(Instant::now());
+        let mut assignment = app.work.assignment.clone().unwrap();
+        if completed {
+            assignment.status = labello_domain::AssignmentStatus::Completed;
+        }
+        let result = labello_client::ManualMigrationCommandResult {
+            image_state: app.work.current_state.clone().unwrap(),
+            progress: labello_client::ManualMigrationProgress { expected: 0, annotated: 0, excluded: 0, pending: 0 },
+            cursor: Some(labello_domain::MigrationCursor::FullImage),
+            active_pass: None,
+            confirmation: None,
+            assignment: Some(assignment),
+            annotation_id: None,
+        };
+        let request = test_request(&app, 77, Some("demo"));
+        app.runtime.active_requests.insert(77);
+        app.runtime.tx.send(UiMessage::MigrationFinished { request, result: Box::new(Ok(result)) }).unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.runtime.commands.iter().any(|command| matches!(command, UiCommand::Stats { .. })), completed);
+    }
 }
 
 #[test]
