@@ -86,27 +86,26 @@ impl LabelloApp {
                 self.inspection.query.status.clone(),
             );
             let width = ui.available_width();
-            egui::ComboBox::from_id_salt("gallery-workflow")
-                .width(width)
-                .height(ui.ctx().content_rect().height() - 16.0)
-                .popup_style(compact_menu_style.into())
-                .wrap_mode(egui::TextWrapMode::Truncate)
-                .selected_text(
-                    self.inspection
-                        .query
-                        .task_id
-                        .as_ref()
-                        .map(|id| {
-                            self.work
-                                .tasks
-                                .iter()
-                                .find(|t| t.task_id == *id)
-                                .map(|t| t.name.as_str())
-                                .unwrap_or(id.as_str())
-                        })
-                        .unwrap_or("All workflows"),
-                )
-                .show_ui(ui, |ui| {
+            filter_menu(
+                ui,
+                "gallery-workflow",
+                width,
+                (self
+                    .inspection
+                    .query
+                    .task_id
+                    .as_ref()
+                    .map(|id| {
+                        self.work
+                            .tasks
+                            .iter()
+                            .find(|t| t.task_id == *id)
+                            .map(|t| t.name.as_str())
+                            .unwrap_or(id.as_str())
+                    })
+                    .unwrap_or("All workflows"))
+                .to_owned(),
+                |ui| {
                     filter_menu_width(
                         ui,
                         std::iter::once("All workflows")
@@ -128,31 +127,30 @@ impl LabelloApp {
                             FilterIcon::Workflow(&task.annotation_type),
                         );
                     }
-                })
-                .response
-                .on_hover_text("Filter images by workflow");
+                },
+            )
+            .on_hover_text("Filter images by workflow");
             ui.horizontal(|ui| {
-                egui::ComboBox::from_id_salt("gallery-class")
-                    .width((width - 6.0) / 2.0)
-                    .height(ui.ctx().content_rect().height() - 16.0)
-                    .popup_style(compact_menu_style.into())
-                    .wrap_mode(egui::TextWrapMode::Truncate)
-                    .selected_text(
-                        self.inspection
-                            .query
-                            .class_id
-                            .as_ref()
-                            .map(|id| {
-                                self.work
-                                    .classes
-                                    .iter()
-                                    .find(|c| c.class_id == *id)
-                                    .map(|c| c.name.as_str())
-                                    .unwrap_or(id.as_str())
-                            })
-                            .unwrap_or("All classes"),
-                    )
-                    .show_ui(ui, |ui| {
+                filter_menu(
+                    ui,
+                    "gallery-class",
+                    (width - 6.0) / 2.0,
+                    (self
+                        .inspection
+                        .query
+                        .class_id
+                        .as_ref()
+                        .map(|id| {
+                            self.work
+                                .classes
+                                .iter()
+                                .find(|c| c.class_id == *id)
+                                .map(|c| c.name.as_str())
+                                .unwrap_or(id.as_str())
+                        })
+                        .unwrap_or("All classes"))
+                    .to_owned(),
+                    |ui| {
                         filter_menu_width(
                             ui,
                             std::iter::once("All classes")
@@ -177,23 +175,22 @@ impl LabelloApp {
                                 ),
                             );
                         }
-                    })
-                    .response
-                    .on_hover_text("Filter images by class");
-                egui::ComboBox::from_id_salt("gallery-status")
-                    .width((width - 6.0) / 2.0)
-                    .height(ui.ctx().content_rect().height() - 16.0)
-                    .popup_style(compact_menu_style.into())
-                    .wrap_mode(egui::TextWrapMode::Truncate)
-                    .selected_text(
-                        self.inspection
-                            .query
-                            .status
-                            .as_ref()
-                            .map(status_label)
-                            .unwrap_or("All statuses"),
-                    )
-                    .show_ui(ui, |ui| {
+                    },
+                )
+                .on_hover_text("Filter images by class");
+                filter_menu(
+                    ui,
+                    "gallery-status",
+                    (width - 6.0) / 2.0,
+                    (self
+                        .inspection
+                        .query
+                        .status
+                        .as_ref()
+                        .map(status_label)
+                        .unwrap_or("All statuses"))
+                    .to_owned(),
+                    |ui| {
                         filter_menu_width(
                             ui,
                             std::iter::once("All statuses")
@@ -215,9 +212,9 @@ impl LabelloApp {
                                 FilterIcon::Status(&status),
                             );
                         }
-                    })
-                    .response
-                    .on_hover_text("Filter images by status");
+                    },
+                )
+                .on_hover_text("Filter images by status");
             });
             refresh |= previous
                 != (
@@ -519,7 +516,7 @@ fn filter_choice<T: PartialEq>(
     choice.response.widget_info(|| {
         egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), selected, label)
     });
-    if choice.response.on_hover_text(label).clicked() {
+    if choice.response.clicked() {
         *current = value;
     }
 }
@@ -539,4 +536,48 @@ fn filter_menu_width<'a>(ui: &mut egui::Ui, labels: impl Iterator<Item = &'a str
     // Let choices grow wider than their trigger, retaining bounded truncation
     // only when the full label cannot fit across the viewport.
     ui.set_min_width((text_width + 60.0).min(ui.ctx().content_rect().width() - 32.0));
+}
+
+fn filter_menu(
+    ui: &mut egui::Ui,
+    id: &str,
+    width: f32,
+    selected: String,
+    choices: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
+    ui.push_id(id, |ui| {
+        let response = ui.add(
+            egui::Button::new(&selected)
+                .right_text("▼")
+                .min_size(egui::vec2(width, 44.0))
+                .truncate(),
+        );
+        response.widget_info(|| {
+            let mut info = egui::WidgetInfo::new(egui::WidgetType::ComboBox);
+            info.enabled = ui.is_enabled();
+            info.current_text_value = Some(selected.clone());
+            info
+        });
+        let popup = egui::Popup::menu(&response)
+            .width(response.rect.width())
+            .style(compact_menu_style);
+        let was_open = popup.is_open();
+        popup.show(|ui| {
+            let margin = egui::Frame::popup(ui.style()).total_margin().sum().y;
+            let height = (ui.ctx().content_rect().height() - margin).max(1.0);
+            // ScrollArea also clamps to its parent's available height. Reset the
+            // popup's cached/default area height before creating the scroll area.
+            ui.set_max_height(height);
+            egui::ScrollArea::vertical()
+                .max_height(height)
+                .show(ui, choices);
+        });
+        if was_open
+            && !egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&response))
+        {
+            response.request_focus();
+        }
+        response
+    })
+    .inner
 }

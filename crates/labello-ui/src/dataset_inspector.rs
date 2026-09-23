@@ -56,7 +56,6 @@ pub(crate) struct InspectorState {
     skeletons: bool,
     return_tasks: BTreeSet<TaskId>,
     reason: String,
-    return_open: bool,
     gallery_error: Option<String>,
     failed_query: Option<ImageExplorerQuery>,
     retry: Option<ReturnToReviewRequest>,
@@ -104,7 +103,6 @@ impl Default for InspectorState {
             skeletons: true,
             return_tasks: BTreeSet::new(),
             reason: String::new(),
-            return_open: false,
             gallery_error: None,
             failed_query: None,
             retry: None,
@@ -363,7 +361,6 @@ impl LabelloApp {
                 self.inspection.retry = None;
                 self.inspection.error = None;
                 self.inspection.notice = Some("Selected workflows returned to review.".into());
-                self.inspection.return_open = false;
                 self.reset_inspection_gallery();
                 self.invalidate_assignment_availability(None);
             }
@@ -418,7 +415,6 @@ impl LabelloApp {
         self.inspection.error = None;
         self.inspection.notice = None;
         self.inspection.return_tasks.clear();
-        self.inspection.return_open = false;
         self.inspection.retry = None;
         self.inspect_request(InspectorAction::State(record.image_id.clone()));
         self.inspection.selected = Some(record);
@@ -673,15 +669,6 @@ impl LabelloApp {
     }
     fn inspection_return_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
         ui.separator();
-        if !self.inspection.return_open {
-            if ui
-                .add_enabled(!busy, egui::Button::new("Return to review"))
-                .clicked()
-            {
-                self.inspection.return_open = true;
-            }
-            return;
-        }
         ui.strong("Return to review");
         ui.weak("Select completed workflows and give a reason.");
         let mut changed = false;
@@ -771,7 +758,6 @@ impl LabelloApp {
                     self.inspect_request(InspectorAction::Return(record.image_id.clone(), request));
                 }
                 if ui.button("Discard return draft").clicked() {
-                    self.inspection.return_open = false;
                     self.inspection.reason.clear();
                     self.inspection.return_tasks.clear();
                     self.inspection.retry = None;
@@ -933,21 +919,22 @@ mod tests {
 
     #[test]
     fn inspector_workflow_menu_uses_full_viewport_and_scrolls_overflow() {
-        for height in [1000.0, 320.0] {
-            let mut application = app();
-            let template = application.work.tasks[0].clone();
-            application.work.tasks = (0..18)
-                .map(|index| {
-                    let mut task = template.clone();
-                    task.task_id = format!("choice-{index}").into();
-                    task.name = format!("Workflow {index:02}");
-                    task
-                })
-                .collect();
-            let mut harness = Harness::builder()
-                .with_size(egui::vec2(1440.0, height))
-                .build_eframe(|_| application);
-            harness.run();
+        let mut application = app();
+        let template = application.work.tasks[0].clone();
+        application.work.tasks = (0..18)
+            .map(|index| {
+                let mut task = template.clone();
+                task.task_id = format!("choice-{index}").into();
+                task.name = format!("Workflow {index:02}");
+                task
+            })
+            .collect();
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|_| application);
+        for height in [1000.0, 320.0, 1000.0] {
+            harness.set_size(egui::vec2(1440.0, height));
+            harness.run_steps(20);
             harness.get_by_value("All workflows").click();
             harness.run();
             let first = harness
@@ -969,6 +956,27 @@ mod tests {
                 assert!(
                     last.bottom() > height,
                     "overflow must be inside a scroll area"
+                );
+            }
+            harness.hover_at(first.center());
+            harness.event(egui::Event::MouseWheel {
+                phase: egui::TouchPhase::Move,
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -100.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(20);
+            let after_scroll = harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Button, "Workflow 00")
+                .next_back()
+                .unwrap()
+                .rect();
+            if height == 1000.0 {
+                assert_eq!(after_scroll, first, "A menu that fits must not scroll");
+            } else {
+                assert!(
+                    after_scroll.top() < first.top(),
+                    "Overflow must remain scrollable"
                 );
             }
             harness.key_press(egui::Key::Escape);
@@ -1180,12 +1188,11 @@ mod tests {
 
     #[test]
     fn inspector_completed_boxes_have_full_width_selection_and_explain_exclusions() {
-        let mut app = app();
+        let app = app();
         assert_eq!(
             app.work.tasks[0].annotation_type,
             AnnotationType::BoundingBox
         );
-        app.inspection.return_open = true;
         let task = app.work.tasks[0].clone();
         let mut harness = Harness::builder()
             .with_size(egui::vec2(1440.0, 1000.0))
@@ -1206,6 +1213,13 @@ mod tests {
                 .return_tasks
                 .contains(&task.task_id)
         );
+        harness.state_mut().inspection.reason = "Recheck this work".into();
+        harness.get_by_label("Discard return draft").click();
+        harness.run();
+        assert!(harness.state().inspection.return_tasks.is_empty());
+        assert!(harness.state().inspection.reason.is_empty());
+        harness.get_by_label(&button_label).click();
+        harness.run();
         harness.state_mut().work.tasks[0].review.workflow = labello_domain::ReviewWorkflow::None;
         harness.run();
         assert!(
@@ -1359,7 +1373,7 @@ mod tests {
         assert!(
             harness
                 .query_by_label("Reason for returning work")
-                .is_none()
+                .is_some()
         );
         let preview = harness.get_by_label("Inspect Sample 0").rect();
         let second = harness.get_by_label("Inspect Sample 1").rect();
@@ -1373,8 +1387,6 @@ mod tests {
         assert!(fourth.top() > preview.bottom());
         assert!(third.right() <= 420.0);
         assert!(harness.get_by_label("Fit image").rect().bottom() < preview.top());
-        harness.get_by_label("Return to review").click();
-        harness.run();
         let submit = harness.get_by_label("Return selected workflows").rect();
         assert!(submit.right() <= 1440.0 && submit.bottom() <= 1000.0);
     }
@@ -1422,8 +1434,6 @@ mod tests {
                     .contains(&task.task_id)
             );
             assert!(harness.state().inspection.return_tasks.is_empty());
-            harness.get_by_label("Return to review").click();
-            harness.run();
             harness
                 .get_by_role_and_label(
                     egui::accesskit::Role::Button,

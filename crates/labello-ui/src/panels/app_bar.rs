@@ -27,16 +27,6 @@ impl LabelloApp {
             })
             .unwrap_or(self.config.dataset_id.as_str())
             .to_owned();
-        let runtime_status = if let Some(error) = &self.runtime.storage_error {
-            Some(("Error", error.clone(), theme::Intent::Error))
-        } else if let Some(error) = &self.runtime.error {
-            Some(("Error", error.clone(), theme::Intent::Error))
-        } else {
-            self.runtime
-                .notice
-                .clone()
-                .map(|notice| ("Update", notice, theme::Intent::Success))
-        };
         let dataset_label = format!("Dataset {dataset_name}");
         let bar_rect = ui.available_rect_before_wrap();
         let response = ui.allocate_rect(bar_rect, egui::Sense::hover());
@@ -51,13 +41,7 @@ impl LabelloApp {
             .map(|(_, label)| navigation_width(label))
             .sum::<f32>()
             + spacing * destinations.len().saturating_sub(1) as f32;
-        let status_width = if self.work_view() {
-            44.0
-        } else if layout == LayoutMode::Compact {
-            64.0
-        } else {
-            76.0
-        };
+        let status_width = 44.0;
         let dataset_width = if layout == LayoutMode::Compact { 46.0 } else { 142.0 };
         let dataset_rect = egui::Rect::from_center_size(
             bar_rect.center(),
@@ -190,11 +174,9 @@ impl LabelloApp {
         } else {
             self.streak_indicator(&mut right_ui);
         }
+        self.connection_indicator(&mut right_ui);
         if self.work_view() {
-            self.connection_indicator(&mut right_ui);
             self.presence_summary(&mut right_ui);
-        } else {
-            self.status_pill(&mut right_ui, runtime_status, status_width, layout);
         }
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Application bar")
@@ -524,76 +506,6 @@ impl LabelloApp {
                 );
             }
         }
-    }
-
-    fn status_pill(
-        &mut self,
-        ui: &mut egui::Ui,
-        runtime_status: Option<(&'static str, String, theme::Intent)>,
-        width: f32,
-        layout: LayoutMode,
-    ) {
-        let (text, detail, intent, accessible_label) = if self.work_view() {
-            let full = status_text(self.work.save_status);
-            let mut text = if layout == LayoutMode::Compact {
-                compact_status_text(self.work.save_status)
-            } else {
-                full
-            };
-            let mut detail = format!("Annotation status: {full}");
-            let mut accessible_label = format!("Status: {full}");
-            let mut intent = status_intent(self.work.save_status);
-            if let Some((_, runtime_detail, runtime_intent)) = runtime_status {
-                let prefix = if matches!(runtime_intent, theme::Intent::Error) {
-                    "Error"
-                } else {
-                    "Update"
-                };
-                detail.push_str(&format!("\n{prefix}: {runtime_detail}"));
-                accessible_label.push_str(&format!(". {prefix}: {runtime_detail}"));
-                if matches!(runtime_intent, theme::Intent::Error) {
-                    text = "Error";
-                    intent = theme::Intent::Error;
-                }
-            }
-            (text, detail, intent, accessible_label)
-        } else if let Some((text, detail, intent)) = runtime_status {
-            let prefix = if matches!(intent, theme::Intent::Error) {
-                "Status error"
-            } else {
-                "Status update"
-            };
-            (text, detail.clone(), intent, format!("{prefix}: {detail}"))
-        } else {
-            (
-                "Ready",
-                "Labello is ready.".to_string(),
-                theme::Intent::Neutral,
-                "Status: Ready".to_string(),
-            )
-        };
-        let color = intent.color();
-        let response = ui
-            .add_sized(
-                [width, 44.0],
-                egui::Button::new(RichText::new(text).color(color).strong())
-                    .fill(egui::Color32::from_rgba_unmultiplied(
-                        color.r(),
-                        color.g(),
-                        color.b(),
-                        36,
-                    ))
-                    .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
-                    .corner_radius(12.0),
-            )
-            .on_hover_text(&detail);
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, accessible_label.clone())
-        });
-        egui::Popup::menu(&response).show(|ui| {
-            ui.set_max_width(320.0);
-            ui.label(detail);
-        });
     }
 
 }

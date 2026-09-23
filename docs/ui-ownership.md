@@ -481,12 +481,12 @@ wrapping and does not discard a pass or replay input commands.
 `runtime.presence` owns endpoint/account identity, the current server-wide
 presence sample, one outstanding request, poll timing and consecutive failures.
 The shared command/reducer path polls authenticated `/presence` every ten
-seconds in annotation and review workspaces. The transport times out after eight
+seconds in every authenticated application view. The transport times out after eight
 seconds. Visibility return requests an immediate coalesced refresh. Auth and
 workspace epoch invalidation clears the owner; obsolete replies cannot restore
 another account's names or modify assignments, drafts or save state.
 
-The existing application header shows presence between navigation and a compact
+Annotation and review headers show presence between navigation and the
 status dot. The dataset badge yields its space to presence on narrower screens.
 `presence.rs` renders a static row of 28-point avatars inside one stable,
 44-point focusable button. It measures available width and replaces overflow
@@ -503,7 +503,7 @@ motion-preference adapter have been removed.
 There is no daily-count footer or automatic daily-count polling. The existing
 daily-count API remains available for future Statistics work.
 
-The dot replaces the workspace Idle/status pill. Green means a successful
+Every authenticated application header uses the same connection status dot. Green means a successful
 connection with no pending problem. Yellow covers initial checking, one or two
 failed polls, saving and unsaved edits. Red covers three consecutive failed
 polls, save failure or application/storage errors. Hover and activation expose
@@ -611,6 +611,10 @@ position survive panel changes. The read-only canvas retains the available space
 
 The wider Images panel has a three-column thumbnail grid with filenames bounded
 by each tile. Search and workflow/class/status filters stay above the grid.
+Filter popups reset their available height to the current viewport on every frame,
+so a cached smaller popup cannot keep a fitting list scrollable. Oversized lists
+scroll within that viewport; menus that fit have no vertical scroll range.
+Selectable filter choices do not repeat their labels in hover tooltips.
 Metadata batches of up to 100 items load consecutively without waiting for
 scrolling or preview downloads; there are no page controls. The result total
 means matching images, with a separate loaded-list count while metadata arrives.
@@ -647,8 +651,9 @@ text for at least 4.5:1 contrast. Labels use screen-space text, bounded two-line
 layout, full accessible names/tooltips, and the canvas clip/mask. Crowded labels
 move downward where space permits; small boxes may need labels wider than the box.
 
-Reviewer/data-admin return controls open from a secondary Return to review action
-and select workflows independently of overlays. Discard or success closes the form.
+Reviewer/data-admin return controls are immediately available in the Overlays
+panel or drawer and select workflows independently of overlay visibility.
+Discard or success clears the draft while keeping the controls available.
 A nonblank bounded reason is required; failures retain the draft and exact retry
 identity, and success is reported only after the server responds. Refresh reloads
 state and prepares a new request identity while retaining the reason. A pending
