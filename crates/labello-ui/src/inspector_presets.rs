@@ -17,7 +17,10 @@ use labello_domain::{
     UserId, migration_target_set_hash,
 };
 
-use crate::app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupSection};
+use crate::{
+    app::{AppView, CorrectionDraft, LabelloApp, PendingTransition, SetupSection},
+    theme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InspectorPreset {
@@ -25,7 +28,7 @@ pub enum InspectorPreset {
     DatasetInspection,
     Annotation,
     Presence,
-    PresenceReducedMotion,
+    PresenceFallback,
     Setup,
     About,
     BuildMismatch,
@@ -86,7 +89,7 @@ impl InspectorPreset {
         Self::DatasetInspection,
         Self::Annotation,
         Self::Presence,
-        Self::PresenceReducedMotion,
+        Self::PresenceFallback,
         Self::Setup,
         Self::About,
         Self::BuildMismatch,
@@ -147,7 +150,7 @@ impl InspectorPreset {
             Self::DatasetInspection => "dataset-inspection",
             Self::Annotation => "annotation",
             Self::Presence => "presence",
-            Self::PresenceReducedMotion => "presence-reduced-motion",
+            Self::PresenceFallback => "presence-fallback",
             Self::Setup => "setup",
             Self::About => "about",
             Self::BuildMismatch => "build-mismatch",
@@ -221,14 +224,30 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
-        InspectorPreset::Presence | InspectorPreset::PresenceReducedMotion => {
+        InspectorPreset::Presence | InspectorPreset::PresenceFallback => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
-            crate::set_reduced_motion(ctx, preset == InspectorPreset::PresenceReducedMotion);
+            let avatar = (preset == InspectorPreset::Presence).then(|| {
+                ctx.load_texture(
+                    "presence-fixture",
+                    egui::ColorImage::new(
+                        [2, 2],
+                        vec![
+                            theme::ACCENT,
+                            theme::TEXT_MUTED,
+                            theme::TEXT_MUTED,
+                            theme::ACCENT,
+                        ],
+                    ),
+                    Default::default(),
+                )
+            });
+            ctx.data_mut(|data| data.insert_temp(egui::Id::new(("github-avatar", 42_u64)), avatar));
             app.runtime.presence.value = Some(labello_client::ServerPresence {
                 users: vec![
                     labello_client::PresentUser {
                         user_id: app.config.user_id.clone(),
                         github_login: Some("demo-annotator".into()),
+                        github_user_id: Some("42".into()),
                         datasets: vec![labello_client::PresenceDataset {
                             dataset_id: "demo".into(),
                             name: "Robot match footage".into(),
@@ -237,6 +256,7 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
                     labello_client::PresentUser {
                         user_id: "local_reviewer".into(),
                         github_login: None,
+                        github_user_id: None,
                         datasets: vec![labello_client::PresenceDataset {
                             dataset_id: "other".into(),
                             name: "Another dataset".into(),

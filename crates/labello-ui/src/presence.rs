@@ -12,52 +12,6 @@ use crate::{
 
 const INTERVAL: Duration = Duration::from_secs(10);
 
-/// Integrations without a motion preference adapter keep decorative motion off.
-pub fn set_reduced_motion(ctx: &egui::Context, reduced: bool) {
-    ctx.data_mut(|data| data.insert_temp(egui::Id::new("reduced-motion"), reduced));
-    ctx.request_repaint();
-}
-
-fn presence_text(ui: &egui::Ui, text: &str, animate: bool) -> std::sync::Arc<egui::Galley> {
-    let mut galley = ui.painter().layout_no_wrap(
-        text.to_owned(),
-        egui::TextStyle::Body.resolve(ui.style()),
-        theme::TEXT_MUTED,
-    );
-    let reduced = ui.ctx().data(|data| {
-        data.get_temp::<bool>(egui::Id::new("reduced-motion"))
-            .unwrap_or(true)
-    });
-    if !animate || reduced || !ui.is_visible() {
-        return galley;
-    }
-    // Two seconds of smooth brightening, then six seconds with no motion.
-    let phase = ui.input(|input| input.time).rem_euclid(8.0);
-    if phase >= 2.0 {
-        ui.ctx()
-            .request_repaint_after(Duration::from_secs_f64(8.0 - phase));
-        return galley;
-    }
-    ui.ctx().request_repaint_after(Duration::from_millis(33));
-    brighten_presence_text(std::sync::Arc::make_mut(&mut galley), phase as f32 / 2.0);
-    galley
-}
-
-fn brighten_presence_text(galley: &mut egui::Galley, progress: f32) {
-    let band = 28.0;
-    let center = egui::lerp(-band..=galley.size().x + band, progress);
-    for placed in &mut galley.rows {
-        let row = std::sync::Arc::make_mut(&mut placed.row);
-        for vertex in &mut row.visuals.mesh.vertices {
-            // Tilt the band slightly while leaving glyph geometry and UVs untouched.
-            let x = vertex.pos.x + placed.pos.x + (vertex.pos.y + placed.pos.y) * 0.2;
-            let distance = ((x - center) / band).abs().min(1.0);
-            let weight = (1.0 + (distance * std::f32::consts::PI).cos()) * 0.5;
-            vertex.color = theme::TEXT_MUTED.lerp_to_gamma(theme::TEXT, weight * 0.22);
-        }
-    }
-}
-
 #[derive(Default)]
 pub(crate) struct PresenceState {
     pub identity: Option<(String, UserId)>,
@@ -176,65 +130,42 @@ impl LabelloApp {
             .as_ref()
             .map(|v| v.users.as_slice())
             .unwrap_or_default();
-        let names = users
-            .iter()
-            .map(PresentUser::presence_name)
-            .collect::<Vec<_>>()
-            .join(" · ");
-        let mut shows_names = false;
         let label = if state.failures >= 3 {
-            "Presence unavailable".to_owned()
+            Some("Presence unavailable")
         } else if state.value.is_none() {
-            "Checking presence…".to_owned()
+            Some("Checking presence…")
         } else if users.is_empty() {
-            "No active labellers".to_owned()
+            Some("No active labellers")
         } else {
-            let font = egui::TextStyle::Body.resolve(ui.style());
-            if ui
-                .painter()
-                .layout_no_wrap(names.clone(), font, theme::TEXT_MUTED)
-                .size()
-                .x
-                <= ui.available_width() - 2.0 * ui.spacing().button_padding.x
-            {
-                shows_names = true;
-                names
-            } else {
-                if users.len() == 1 {
-                    "1 person is labelling".into()
-                } else {
-                    format!("{} people are labelling", users.len())
-                }
-            }
+            None
         };
-        let full = if state.failures < 3 && !users.is_empty() {
-            users.iter().map(user_detail).collect::<Vec<_>>().join("\n")
-        } else {
-            label.clone()
-        };
-        let label_width = ui
-            .painter()
-            .layout_no_wrap(
-                label.clone(),
-                egui::TextStyle::Body.resolve(ui.style()),
-                theme::TEXT_MUTED,
-            )
-            .size()
-            .x
-            + 2.0 * ui.spacing().button_padding.x;
-        let text: egui::WidgetText = if shows_names {
-            presence_text(ui, &label, true).into()
-        } else {
-            egui::RichText::new(&label).color(theme::TEXT_MUTED).into()
-        };
+        let full = label
+            .map(str::to_owned)
+            .unwrap_or_else(|| users.iter().map(user_detail).collect::<Vec<_>>().join("\n"));
         let response = ui
             .scope_builder(
                 egui::UiBuilder::new().id(egui::Id::new("workspace-presence")),
                 |ui| {
-                    ui.add_sized(
-                        [label_width.min(ui.available_width()), 44.0],
-                        egui::Button::new(text).frame(false).truncate(),
-                    )
+                    if let Some(label) = label {
+                        let width = ui
+                            .painter()
+                            .layout_no_wrap(
+                                label.to_owned(),
+                                egui::TextStyle::Body.resolve(ui.style()),
+                                theme::TEXT_MUTED,
+                            )
+                            .size()
+                            .x
+                            + 2.0 * ui.spacing().button_padding.x;
+                        ui.add_sized(
+                            [width.min(ui.available_width()), 44.0],
+                            egui::Button::new(egui::RichText::new(label).color(theme::TEXT_MUTED))
+                                .frame(false)
+                                .truncate(),
+                        )
+                    } else {
+                        presence_avatars(ui, users)
+                    }
                 },
             )
             .inner;
@@ -248,9 +179,15 @@ impl LabelloApp {
         response
             .clone()
             .on_hover_ui(|ui| workspace_status_details(ui, &full));
-        egui::Popup::menu(&response).show(|ui| {
+        let popup = egui::Popup::menu(&response);
+        let restore_focus =
+            popup.is_open() && ui.input(|input| input.key_pressed(egui::Key::Escape));
+        popup.show(|ui| {
             workspace_status_details(ui, &full);
         });
+        if restore_focus {
+            response.request_focus();
+        }
     }
 
     pub(crate) fn connection_status(&self) -> (egui::Color32, String) {
@@ -354,63 +291,62 @@ fn workspace_status_details(ui: &mut egui::Ui, details: &str) {
         });
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sample(ctx: &egui::Context, time: f64, animate: bool) -> std::sync::Arc<egui::Galley> {
-        let mut text = None;
-        let _ = ctx.run_ui(
-            egui::RawInput {
-                time: Some(time),
-                ..Default::default()
-            },
-            |ui| text = Some(presence_text(ui, "@octocat · local_reviewer", animate)),
-        );
-        text.unwrap()
-    }
-
-    #[test]
-    fn presence_sweep_changes_only_glyph_color_and_honors_motion_changes() {
-        let ctx = egui::Context::default();
-        let baseline = sample(&ctx, 0.0, true);
-        // Unknown integration preferences keep text static.
-        assert_eq!(baseline, sample(&ctx, 1.0, true));
-        set_reduced_motion(&ctx, false);
-        let animated = sample(&ctx, 1.1, true);
-        assert_ne!(baseline, animated);
-        assert_eq!(baseline.job, animated.job);
-        assert_eq!(baseline.rect, animated.rect);
-        assert_eq!(baseline.mesh_bounds, animated.mesh_bounds);
-        for (before, after) in baseline.rows.iter().zip(&animated.rows) {
-            assert_eq!(before.pos, after.pos);
-            assert_eq!(before.glyphs, after.glyphs);
-            assert_eq!(before.visuals.mesh.indices, after.visuals.mesh.indices);
-            for (a, b) in before
-                .visuals
-                .mesh
-                .vertices
-                .iter()
-                .zip(&after.visuals.mesh.vertices)
-            {
-                assert_eq!(a.pos, b.pos);
-                assert_eq!(a.uv, b.uv);
-                for (base, color) in a.color.to_array().into_iter().zip(b.color.to_array()) {
-                    assert!(color >= base && color <= base.saturating_add(18));
-                }
-            }
+// One stable focus target exposes every user, including those hidden by overflow.
+fn presence_avatars(ui: &mut egui::Ui, users: &[PresentUser]) -> egui::Response {
+    const SIZE: f32 = 28.0;
+    const GAP: f32 = 4.0;
+    let padding = ui.spacing().button_padding.x;
+    let available = (ui.available_width() - 2.0 * padding).max(0.0);
+    let mut visible = users.len().min(((available + GAP) / (SIZE + GAP)) as usize);
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let (overflow, width) = loop {
+        let hidden = users.len() - visible;
+        let overflow = (hidden > 0).then(|| {
+            ui.painter()
+                .layout_no_wrap(format!("+{hidden}"), font.clone(), theme::TEXT_MUTED)
+        });
+        let avatars_width = visible as f32 * (SIZE + GAP) - if visible > 0 { GAP } else { 0.0 };
+        let width = avatars_width
+            + overflow.as_ref().map_or(0.0, |text| {
+                text.size().x + if visible > 0 { GAP } else { 0.0 }
+            });
+        if width <= available || visible == 0 {
+            break (overflow, width);
         }
-        assert_eq!(
-            baseline,
-            sample(&ctx, 1.2, false),
-            "counts and status text stay static"
+        visible -= 1;
+    };
+    let response = ui.add_sized(
+        [
+            (width + 2.0 * padding).max(44.0).min(ui.available_width()),
+            44.0,
+        ],
+        egui::Button::new("").frame(false),
+    );
+    let painter = ui
+        .painter()
+        .with_clip_rect(response.rect.intersect(ui.clip_rect()));
+    let mut avatar_ui = ui.new_child(egui::UiBuilder::new().max_rect(response.rect));
+    avatar_ui.set_clip_rect(painter.clip_rect());
+    let mut x = response.rect.center().x - width / 2.0;
+    for user in &users[..visible] {
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(x + SIZE / 2.0, response.rect.center().y),
+            egui::Vec2::splat(SIZE),
         );
-        assert_eq!(baseline, sample(&ctx, 4.0, true), "idle interval is static");
-        set_reduced_motion(&ctx, true);
-        assert_eq!(
-            baseline,
-            sample(&ctx, 9.1, true),
-            "preference changes stop the sweep"
+        crate::avatar::paint(
+            &avatar_ui,
+            user.github_user_id.as_deref(),
+            &user.presence_name(),
+            rect,
+        );
+        x += SIZE + GAP;
+    }
+    if let Some(text) = overflow {
+        painter.galley(
+            egui::pos2(x, response.rect.center().y - text.size().y / 2.0),
+            text,
+            theme::TEXT_MUTED,
         );
     }
+    response
 }

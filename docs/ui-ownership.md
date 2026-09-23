@@ -76,7 +76,8 @@ Workspace rendering is grouped by the reason it changes:
 - `statistics.rs`: the dataset statistics modal and its existing metric renderer;
   `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
   podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
-  `statistics/avatar.rs` owns public avatar loading, caching and shared person rows;
+  `avatar.rs` owns public avatar loading, caching and painting shared by statistics
+  and presence; `statistics/avatar.rs` owns contributor rows;
 - `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
   modals;
 - `panels/prelabels.rs`: prelabel visibility and actions;
@@ -469,16 +470,19 @@ workspace epoch invalidation clears the owner; obsolete replies cannot restore
 another account's names or modify assignments, drafts or save state.
 
 The existing application header shows presence between navigation and a compact
-status dot. The dataset badge shares the header when there is enough room and yields its space to presence on narrower screens. Names form one muted horizontal
-line, falling back to a people count when measured text does not fit. Hover or
-activation exposes the usernames and active dataset names. An empty successful
-sample reads `No active labellers`; an initial sample reads `Checking presence…`.
-Presence retains the requester and deduplicates by internal ID. `PresentUser`
-resolves the presentation name from `githubLogin` with internal-ID fallback.
-The shared `presence.rs` renderer owns the stationary glyph-color sweep and
-sparse repaint schedule. The WASM `motion` adapter observes the browser's
-reduced-motion media query and updates the shared context preference, including
-changes while the app is open. Unknown preferences default to static text.
+status dot. The dataset badge yields its space to presence on narrower screens.
+`presence.rs` renders a static row of 28-point avatars inside one stable,
+44-point focusable button. It measures available width and replaces overflow
+with `+N`. Hover or activation exposes all usernames and active dataset names,
+including hidden users, and the accessible name contains the same details.
+An empty successful sample reads `No active labellers`; an initial sample reads
+`Checking presence…`. Presence retains the requester and deduplicates by internal
+ID. `PresentUser` supplies optional `githubUserId` for the shared avatar loader
+and resolves detail names from `githubLogin` with internal-ID fallback. Missing,
+pending and failed photos show initials. `avatar.rs` shares the statistics
+texture cache, download bounds, and credential-free browser requests; rendering
+does not retry pending or failed downloads. The former text sweep and its WASM
+motion-preference adapter have been removed.
 There is no daily-count footer or automatic daily-count polling. The existing
 daily-count API remains available for future Statistics work.
 

@@ -29,6 +29,7 @@ async fn presence_requires_auth_and_lists_cross_dataset_leases_without_granting_
     assert_eq!(value.users.iter().filter(|u| u.user_id == UserId::from("reviewer_2")).count(), 1);
     assert_eq!(user.datasets.len(), 2);
     assert_eq!(user.github_login, None);
+    assert_eq!(user.github_user_id, None);
     assert_eq!(user.datasets[1].name, "Other project");
     assert_eq!(user.datasets[0].dataset_id, DatasetId::from("ds"));
     assert_eq!(user.datasets[0].name, repo.load_dataset_config().await.unwrap().name);
@@ -49,6 +50,7 @@ async fn presence_requires_auth_and_lists_cross_dataset_leases_without_granting_
     assert_eq!(self_value.users.len(), 1, "the only active user is the requester");
     assert_eq!(self_value.users[0].user_id, UserId::from("reviewer_2"));
     assert_eq!(self_value.users[0].github_login.as_deref(), Some("octocat"));
+    assert_eq!(self_value.users[0].github_user_id.as_deref(), Some("42"));
     assert_eq!(self_value.users[0].presence_name(), "@octocat");
     assert_eq!(self_value.users[0].datasets, user.datasets);
     repo.release_assignment(&UserId::from("reviewer_2"), &assignment.assignment_id, &image, &task, labello_domain::AssignmentKind::Review).await.unwrap();
