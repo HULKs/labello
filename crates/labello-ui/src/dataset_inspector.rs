@@ -683,25 +683,13 @@ impl LabelloApp {
                     self.inspection.return_tasks.remove(&task.task_id);
                 }
                 let selected = self.inspection.return_tasks.contains(&task.task_id);
-                let mut response = ui.add_enabled(
+                let mut response = panels::return_workflow_choice(
+                    ui,
+                    task,
+                    selected,
                     eligible,
-                    egui::Button::new(&task.name)
-                        .selected(selected)
-                        .min_size(egui::vec2(ui.available_width(), 44.0))
-                        .wrap(),
+                    block.map(|block| block.message()),
                 );
-                response.widget_info(|| {
-                    egui::WidgetInfo::selected(
-                        egui::WidgetType::Button,
-                        eligible && !busy,
-                        selected,
-                        format!("Return {} to review", task.name),
-                    )
-                });
-                if let Some(block) = block {
-                    response = response.on_disabled_hover_text(block.message());
-                    ui.weak(block.message());
-                }
                 let selected = if response.clicked() {
                     response.mark_changed();
                     !selected
@@ -1222,11 +1210,16 @@ mod tests {
         harness.run();
         harness.state_mut().work.tasks[0].review.workflow = labello_domain::ReviewWorkflow::None;
         harness.run();
-        assert!(
-            harness
-                .query_by_label("Approval review is not enabled for this workflow.")
-                .is_some()
-        );
+        let explanation = "Approval review is not enabled for this workflow.";
+        assert!(harness.query_by_label(explanation).is_none());
+        let info_label = format!("Why {} cannot return to review", task.name);
+        harness.get_by_label(&info_label).click();
+        harness.run();
+        assert!(harness.query_by_label(explanation).is_some());
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert!(harness.get_by_label(&info_label).is_focused());
+        assert!(harness.query_by_label(explanation).is_none());
         assert!(harness.state().inspection.return_tasks.is_empty());
         harness.state_mut().work.tasks[0].review.workflow =
             labello_domain::ReviewWorkflow::Approval;
@@ -1241,11 +1234,55 @@ mod tests {
             .unwrap()
             .status = TaskStatus::Submitted;
         harness.run();
-        assert!(
-            harness
-                .query_by_label("Only completed workflows can be returned to review.")
-                .is_some()
-        );
+        let explanation = "Only completed workflows can be returned to review.";
+        assert!(harness.query_by_label(explanation).is_none());
+        harness.get_by_label(&info_label).click();
+        harness.run();
+        assert!(harness.query_by_label(explanation).is_some());
+    }
+
+    #[test]
+    fn inspector_return_choices_include_type_icons_inside_the_row() {
+        for (kind, icon_label) in [
+            (AnnotationType::BoundingBox, "bounding box annotation type"),
+            (AnnotationType::Skeleton, "skeleton annotation type"),
+        ] {
+            for size in [
+                egui::vec2(1440.0, 1000.0),
+                egui::vec2(390.0, 844.0),
+                egui::vec2(320.0, 568.0),
+            ] {
+                let mut application = app();
+                let task = &mut application.work.tasks[0];
+                task.annotation_type = kind.clone();
+                task.name = "A long workflow name that wraps across multiple lines".into();
+                task.review.workflow = labello_domain::ReviewWorkflow::None;
+                let label = format!("Return {} to review", task.name);
+                let info_label = format!("Why {} cannot return to review", task.name);
+                let mut harness = Harness::builder()
+                    .with_size(size)
+                    .build_eframe(|_| application);
+                harness.run();
+                if size.x < 1288.0 {
+                    harness
+                        .get_by_role_and_label(egui::accesskit::Role::Button, "Overlays")
+                        .click();
+                    harness.run();
+                }
+                let row = harness.get_by_label(&label).rect();
+                assert!(
+                    harness.get_all_by_label(icon_label).any(|icon| {
+                        let rect = icon.rect();
+                        row.contains(rect.min) && row.contains(rect.max)
+                    }),
+                    "{icon_label} must be inside the return choice"
+                );
+                let info = harness.get_by_label(&info_label).rect();
+                assert!(row.right() <= info.left());
+                assert!(info.right() <= size.x);
+                assert_eq!(info.size(), egui::vec2(44.0, 44.0));
+            }
+        }
     }
 
     #[test]

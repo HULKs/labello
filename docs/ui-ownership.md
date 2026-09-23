@@ -653,6 +653,9 @@ move downward where space permits; small boxes may need labels wider than the bo
 
 Reviewer/data-admin return controls are immediately available in the Overlays
 panel or drawer and select workflows independently of overlay visibility.
+Each choice includes its workflow-type icon. Ineligible choices show an adjacent
+info control with the exclusion reason on hover or activation; keyboard and
+assistive-technology users can access the same explanation.
 Discard or success clears the draft while keeping the controls available.
 A nonblank bounded reason is required; failures retain the draft and exact retry
 identity, and success is reported only after the server responds. Refresh reloads
