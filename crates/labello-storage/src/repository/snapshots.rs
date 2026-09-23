@@ -64,6 +64,15 @@ impl DatasetRepository {
                 );
                 write_snapshot_bytes(&temporary, &relative, &state_bytes, &mut files).await?;
             }
+            {
+                let _scoring = self.scoring.lock().await;
+                let relative = ".labello/scoring/focus-v1.json";
+                let path = self.root.join(relative);
+                if tokio::fs::try_exists(&path).await.with_path(&path)? {
+                    self.snapshot_copy_file(relative, &temporary, &mut files)
+                        .await?;
+                }
+            }
             files.sort_by(|left, right| left.path.cmp(&right.path));
             let manifest = DatasetSnapshot {
                 schema_version: SCHEMA_VERSION,

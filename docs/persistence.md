@@ -64,6 +64,7 @@ or external integrations.
 | `.labello/migrations/...` | Durable migration journal and staged generation | Recovery state until migration completion; do not remove during an interrupted migration |
 | `.labello/snapshots/` | Derived point-in-time annotation/audit packages | Downloadable but not directly restorable; retain according to operator policy |
 | Statistics and process caches | Derived | Recompute or invalidate after authoritative writes |
+| `.labello/scoring/focus-v1.json` | Authoritative versioned 20-minute focus selections | Preserve in full backups and snapshots; score totals rebuild from events plus this file. Never discard as a cache |
 
 Browser IndexedDB/local-storage drafts and availability caches are recoverable
 client conveniences. They are outside the server root and never authoritative
@@ -182,6 +183,10 @@ Snapshots omit:
 
 There is no native snapshot restore. Use the full-root procedure in
 [Backup And Restore](operations.md#backup-and-restore).
+
+Snapshots include recorded scoring focus history when present. Contribution
+scores themselves remain derived. See [Contribution scoring](scoring.md) for
+the first-activation, atomic-publication, historical-credit, and recovery rules.
 
 ## Repair Rules
 

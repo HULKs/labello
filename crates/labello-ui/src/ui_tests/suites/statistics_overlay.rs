@@ -77,6 +77,41 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
     }
 }
 
+#[test]
+fn contribution_score_sort_history_and_focus_marker_are_accessible() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|ctx| {
+        inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx)
+    });
+    harness.run_steps(4);
+    harness.get_by_label("Sort by Score").scroll_to_me();
+    harness.run_steps(4);
+    assert!(harness.get_by_label("Sort by Score").accesskit_node().value().unwrap().contains("Descending"));
+    harness.get_by_label("History graph").scroll_to_me();
+    harness.run_steps(4);
+    harness.get_by_label("History graph").click();
+    harness.run_steps(4);
+    assert!(harness.query_by_label("Score history graph").is_some());
+    harness.get_by_label("Close statistics").focus();
+    harness.key_press(egui::Key::Escape);
+    harness.run_steps(3);
+    assert!(!harness.state().navigation.statistics.open);
+
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|ctx| {
+        let mut app = inspector_presets::build(InspectorPreset::Annotation, &ctx.egui_ctx);
+        app.datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
+            starts_at: labello_domain::now(), ends_at: labello_domain::now() + chrono::Duration::minutes(20),
+            task_id: app.work.selected_task_id.clone(),
+        });
+        app
+    });
+    harness.run_steps(4);
+    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_some());
+    harness.state_mut().datasets.stats.scoring_focus.as_mut().unwrap().ends_at = labello_domain::now();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
+}
+
 #[cfg(feature = "inspector-presets")]
 #[test]
 fn contributor_periods_and_history_preserve_statistics_workspace() {
@@ -195,11 +230,11 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
             "rankings must display the cached profile picture"
         );
     }
-    assert!(
-        harness
-            .query_by_label("Labeled: rank 1, Taylor, 600")
-            .is_some()
-    );
+    harness.get_by_label("Other highlights").scroll_to_me();
+    harness.run_steps(3);
+    harness.get_by_label("Other highlights").click();
+    harness.run_steps(3);
+    assert!(harness.query_by_label("Labeled: rank 1, Taylor, 600").is_some());
     harness.get_by_label("Period").scroll_to_me();
     harness.run_steps(3);
     harness.get_by_label("Period").click();
@@ -400,7 +435,7 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
     harness.state_mut().auth_epoch += 1;
     harness.run_steps(3);
     assert!(harness.query_by_label("Sort by Rank").is_none());
-    assert!(harness.query_by_label("Sort by Labeled").is_some());
+    assert!(harness.query_by_label("Sort rankings").is_some());
     assert!(
         harness
             .query_by_role_and_label(egui::accesskit::Role::ComboBox, "Compare people")
@@ -815,7 +850,51 @@ fn statistics_overlay_resizes_using_immediate_repaints_without_waiting_for_refre
 }
 
 #[test]
-fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
+fn mobile_other_highlights_keep_charts_and_empty_states() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(195.0, 422.0),
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(320.0, 320.0),
+    ] {
+        let mut harness = Harness::builder().with_size(size).build_eframe(|ctx| {
+            inspector_presets::build(InspectorPreset::Statistics, &ctx.egui_ctx)
+        });
+        harness.run_steps(4);
+        harness.get_by_label("Other highlights").scroll_to_me();
+        harness.run_steps(4);
+        harness.get_by_label("Other highlights").click();
+        harness.run_steps(4);
+        let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        for metric in ["Labeled", "Reviewed", "Acceptance"] {
+            let prefix = format!("{metric}: rank 1, ");
+            harness.get_by_label_contains(&prefix).scroll_to_me();
+            harness.run_steps(4);
+            let bar = harness.get_by_label_contains(&prefix).rect();
+            assert!(viewport.contains_rect(bar), "highlight bar outside {size:?}: {bar:?}");
+        }
+        assert!(harness.get_by_label("Most labeled").rect().top()
+            < harness.get_by_label("Most reviewed").rect().top());
+        assert!(harness.get_by_label("Most reviewed").rect().top()
+            < harness.get_by_label("Highest acceptance").rect().top());
+        assert!(harness.query_by_label_contains("Reviewed: rank 1, Alexandra Long Contributor Name").is_some());
+        for person in harness.state_mut().datasets.stats.contributors.as_mut().unwrap().values_mut() {
+            for day in &mut person.history {
+                day.reviewed = 0;
+                day.accepted = 0;
+                day.rejected = 0;
+            }
+        }
+        harness.run_steps(4);
+        assert_eq!(harness.query_all_by_label("No ranked activity").count(), 2);
+        assert!(harness.query_by_label("Labeled: rank 1, Taylor, 600").is_some());
+    }
+}
+
+#[test]
+fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
     use crate::inspector_presets::{self, InspectorPreset};
     for size in [
         egui::vec2(195.0, 422.0),
@@ -831,8 +910,10 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
         });
         harness.run_steps(4);
         for (before, after) in [
-            ("Daily activity", "Contributor leaderboard"),
-            ("Rankings", "Dataset totals"),
+            ("Contributor leaderboard", "Highest score"),
+            ("Highest score", "Rankings"),
+            ("Rankings", "Daily activity"),
+            ("Daily activity", "Dataset totals"),
             ("Dataset totals", "Per Task"),
             ("Per Task", "Per Class"),
             ("Per Class", "Throughput"),
@@ -843,19 +924,15 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
                 "{before} must precede {after} at {size:?}"
             );
         }
-        if size.x < 1000.0 {
-            assert!(
-                harness.query_by_label("Most labeled").is_none(),
-                "compact podium must start collapsed"
-            );
-            assert!(
-                harness.get_by_label("Rankings").rect().top()
-                    - harness.get_by_label("Contributor leaderboard").rect().top()
-                    < if size.x < 260.0 { 500.0 } else { 360.0 }
-            );
-        }
+        assert!(harness.query_by_label("Most labeled").is_none(), "secondary podiums start collapsed");
+        assert!(harness.get_by_label("Highest score").rect().top()
+            - harness.get_by_label("Contributor leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
+            "score chart must lead without expanding a disclosure at {size:?}");
+        let score_bar = harness.get_by_label("Score: rank 1, Taylor, 1627").rect();
+        assert!(score_bar.width() > (size.x.min(1050.0) - 100.0) / 4.0,
+            "score chart must use the full content width at {size:?}: {score_bar:?}");
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
-        for label in [
+        let mut controls = vec![
             "Activity period",
             "Activity for",
             "Activity day",
@@ -863,11 +940,16 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
             "Next day",
             "History graph",
             "Period",
-            "Sort by Person",
-            "Sort by Labeled",
-            "Sort by Reviewed",
-            "Sort by Acceptance",
-        ] {
+        ];
+        let compact_sort = harness.query_by_label("Sort rankings").is_some();
+        if compact_sort {
+            controls.extend(["Sort rankings", "Reverse ranking order"]);
+            assert!(harness.query_by_label("Sort by Score").is_none());
+            assert_eq!(harness.get_by_label("Sort rankings").value().as_deref(), Some("Score"));
+        } else {
+            controls.extend(["Sort by Person", "Sort by Labeled", "Sort by Reviewed", "Sort by Acceptance", "Sort by Score"]);
+        }
+        for label in controls {
             harness.get_by_label(label).scroll_to_me();
             harness.run_steps(4);
             let rect = harness.get_by_label(label).rect();
@@ -880,6 +962,33 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
                 "{label} has a short touch target: {rect:?}"
             );
         }
+        if compact_sort {
+            for metric in ["Reviewed", "Acceptance", "Person", "Labeled", "Score"] {
+                harness.get_by_label("Sort rankings").scroll_to_me();
+                harness.run_steps(3);
+                harness.get_by_label("Sort rankings").click();
+                harness.run_steps(3);
+                harness.get_by_role_and_label(egui::accesskit::Role::Button, metric).scroll_to_me();
+                harness.run_steps(3);
+                harness.get_by_role_and_label(egui::accesskit::Role::Button, metric).click();
+                harness.run_steps(3);
+                assert_eq!(harness.get_by_label("Sort rankings").value().as_deref(), Some(metric));
+            }
+            harness.get_by_label("Reverse ranking order").focus();
+            harness.key_press(egui::Key::Space);
+            harness.run_steps(3);
+            assert_eq!(harness.get_by_label("Reverse ranking order").value().as_deref(), Some("Ascending"));
+            assert!(harness.get_by_label("#5  Alexandra Long Contributor Name").rect().top()
+                < harness.get_by_label("#1  Taylor").rect().top());
+            harness.key_press(egui::Key::Space);
+            harness.run_steps(3);
+            assert_eq!(harness.get_by_label("Reverse ranking order").value().as_deref(), Some("Descending"));
+            if size.x >= 320.0 {
+                let first = harness.get_by_label("#1  Taylor").rect();
+                let second = harness.get_by_label("#2  Charlie").rect();
+                assert!(second.top() - first.top() < 120.0, "mobile rankings should remain compact at {size:?}: {first:?} to {second:?}");
+            }
+        }
         let name = if size.x < 700.0 {
             "#5  Alexandra Long Contributor Name"
         } else {
@@ -890,7 +999,7 @@ fn statistics_activity_and_rankings_lead_and_mobile_controls_are_reachable() {
             "full contributor name must remain accessible"
         );
         harness.get_by_label("Close statistics").focus();
-        for _ in 0..12 {
+        for _ in 0..32 {
             harness.key_press(egui::Key::Tab);
             harness.run_steps(4);
             if harness.get_by_label("Previous day").is_focused() {
@@ -969,7 +1078,7 @@ fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() 
         harness.run();
         let rect = harness.get_by_label("Dataset statistics").rect();
         assert!(rect.left() >= -0.5 && rect.right() <= width + 0.5, "overflow at {width}: {rect:?}");
-        assert_label_inside(&harness, "Live Statistics", width, height);
+        assert_label_inside(&harness, "Statistics", width, height);
 
     }
 }
