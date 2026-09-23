@@ -1,0 +1,74 @@
+name: Documentation wiki
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'docs/wiki.json'
+      - 'scripts/docs.py'
+      - 'scripts/test_docs.py'
+      - '.github/workflows/wiki.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - 'docs/wiki.json'
+      - 'scripts/docs.py'
+      - 'scripts/test_docs.py'
+      - '.github/workflows/wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check links and publication rules
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_docs.py'
+          python3 scripts/docs.py check
+          python3 scripts/docs.py build "$RUNNER_TEMP/wiki-preview"
+
+  publish:
+    name: Publish current documentation
+    needs: check
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'HULKs/labello'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Publish wiki
+        env:
+          GH_TOKEN: ${{ secrets.WIKI_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo 'Configure the WIKI_TOKEN Actions secret with wiki Git write access; see docs/wiki.md.' >&2
+            exit 1
+          fi
+          wiki_dir="$RUNNER_TEMP/labello.wiki"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+            clone "https://github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki_dir"
+          python3 scripts/docs.py build "$wiki_dir"
+          git -C "$wiki_dir" config user.name 'github-actions[bot]'
+          git -C "$wiki_dir" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$wiki_dir" add --all
+          if git -C "$wiki_dir" diff --cached --quiet; then
+            echo 'Wiki already matches the documentation.'
+            exit 0
+          fi
+          git -C "$wiki_dir" commit -m 'Update current Labello documentation'
+          git -C "$wiki_dir" -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+            push origin HEAD

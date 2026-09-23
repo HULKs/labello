@@ -1,551 +1,115 @@
 # Labello
 
-> **Status:** Current repository overview and setup guide
-> **Owner:** Labello maintainers
-> **Audience:** Users, operators, and contributors
-> **Last verified:** 2026-07-30 at `5f10153`
+<img src="assets/labello-icon.svg" alt="Labello icon" width="96" />
 
-<img src="assets/labello-icon.svg" alt="Labello icon" width="128" />
+Labello is a browser-based image annotation system for bounding boxes and
+skeletons. It combines a Rust/egui WebAssembly client with an Axum API and stores
+images, annotations, reviews, and audit history on the filesystem.
 
-Labello is a browser-based image annotation system written in Rust. It combines
-an egui WebAssembly client with an Axum API and stores datasets, annotations,
-reviews, and audit history on the filesystem.
+[Documentation](docs/README.md) · [GitHub Wiki](https://github.com/HULKs/labello/wiki) ·
+[Contributing](CONTRIBUTING.md) · [Issues](https://github.com/HULKs/labello/issues)
 
-Labello currently supports:
+## What it does
 
-- bounding-box and skeleton/keypoint annotation;
-- autosave, undo/redo, and browser draft recovery;
-- automatic annotation and approval-review assignments;
-- object-level approval review, full-image checks, and correction workflows;
-- dataset, task, class, text-tutorial, role, and keybinding administration;
-- filesystem image ingestion, duplicate detection, statistics, and snapshots;
-- dataset contributor leaderboards, top-three podiums and selectable user history
-  in Statistics, with labeling/review counts, acceptance percentages, and
-  [contribution scores](docs/scoring.md) including historical work, weighted
-  labels, daily multipliers, focus-workflow bonuses, and rejection deductions, plus daily
-  streaks (20 distinct image/task submissions or 30 reviews per dataset per UTC day), shown
-  with leaderboard and top-bar flames;
-- atomic new-dataset import for explicit YOLO detection/pose and COCO
-  instances/keypoints ground-truth profiles;
-- original-image detection and pose dataset export with explicit
-  [round-trip guarantees](docs/export.md);
-- guided box-to-skeleton migration with audited exclusions, replayed progress,
-  assignment navigation, read-only browsing of resolved objects, and linked
-  box companions for manually discovered objects;
-- loopback-only local administrator login and GitHub OAuth;
-- verified stable GitHub releases and rootless transactional deployment to a
-  Debian 12 guest.
+- Annotate boxes and keypoints with autosave, undo/redo, configurable shortcuts,
+  prepared image queues, and account-scoped browser draft recovery.
+- Review each object and the full image. Reviewers can correct geometry or add
+  missing objects; one reviewer approves the resulting round to complete it.
+- Browse datasets without claiming work, inspect overlays, and return completed
+  workflows to review with an audited reason.
+- Manage classes, workflows, instructions, roles, images, and assignment balance.
+  Copy an existing dataset's schema when creating another dataset.
+- Import explicit YOLO/COCO ground-truth profiles into new datasets. Export
+  complete detection or pose datasets with original images and documented
+  [round-trip guarantees](docs/export.md).
+- Convert imported boxes into skeletons through guided migration, with recorded
+  exclusions and linked boxes for newly discovered objects.
+- Track task completion, contributor activity, scores, streaks, and leaderboards. Download
+  annotation snapshots and retain replayable event history.
 
-The project is under active development. See [Current limitations](#current-limitations)
-before using it in production.
+## Run locally
 
-All dataset members can use the dataset inspector to browse indexed images,
-filter the gallery, and inspect bounding-box and skeleton overlays. Reviewers
-and dataset administrators can return selected completed workflows to a fresh
-review round with an audited reason.
-
-## Quick Start
-
-### Prerequisites
-
-- Rust 1.98.0, pinned by `rust-toolchain.toml`, with rustfmt and Clippy
-- the `wasm32-unknown-unknown` Rust target
-- [Trunk](https://trunkrs.dev/)
-
-Install the pinned compiler and browser tooling from the repository root:
+Install [Rustup](https://rustup.rs/), then run these commands from the checkout.
+The repository pins Rust 1.98.0, its components, and the WASM target.
 
 ```sh
 rustup show
 cargo install --locked trunk --version 0.21.14
+cargo run --locked -p labello-server
 ```
 
-The root and standalone inspector workspaces both require Rust 1.98.
-Dependency updates must retain the locked native, inspector, and WASM
-[compatibility matrix](docs/verification.md#rust-compatibility-contract).
-
-Start the API from the repository root:
+The first server start creates `labello.server.toml` and listens on
+`127.0.0.1:8080`. In another terminal:
 
 ```sh
-cargo run -p labello-server
+cd apps/labello-wasm
+trunk serve --locked --address 127.0.0.1 --port 8081
 ```
 
-On first start, the server creates `labello.server.toml` and listens on
-`127.0.0.1:8080`.
+Open <http://127.0.0.1:8081> and choose **Continue as local admin**. Create a
+dataset, configure its classes and workflows, add images, and start annotating.
+Local admin login is for loopback development only.
 
-In another terminal, start the browser client from `apps/labello-wasm`:
+See [getting started](docs/getting-started.md) for the first dataset, login,
+connection setup, and troubleshooting. For a hosted installation, use the
+[configuration](docs/configuration.md), [deployment](docs/deployment.md), and
+[operations](docs/operations.md) guides. The API does not serve the browser build.
 
-```sh
-trunk serve --address 127.0.0.1 --port 8081
-```
+## Documentation
 
-Open <http://127.0.0.1:8081> and select `Continue as local admin`. The default
-loopback-only server configuration enables this session login for the `admin`
-bootstrap user, which can create the first dataset.
-
-The dedicated login page checks the session before showing the authentication
-methods enabled by the server. It shows separate loading, failure/retry, and
-no-enabled-method states. `About` is available before and after sign-in.
-Endpoint editing lives under `Advanced connection`; deployment configuration
-remains the normal source of the API URL.
-
-If a request indicates lost authentication, the UI rechecks the session before
-allowing more work. Sign-in recovery retains drafts for their original account;
-returning as another account cannot apply those drafts. Changing the endpoint
-immediately clears account and dataset state and rejects pending responses from
-the previous endpoint.
-
-The client selects its API URL from the `api` query parameter, then from the
-public `labello.client.json` file deployed beside the browser application, and
-finally from port `8080` on the same hostname used to open the UI. The tracked
-[`labello.client.example.json`](apps/labello-wasm/labello.client.example.json)
-contains every supported field with its default. Copy it before configuring a
-local client:
-
-```sh
-cp apps/labello-wasm/labello.client.example.json \
-  apps/labello-wasm/labello.client.json
-```
-
-Its default `null` value selects the hostname-derived port `8080` fallback.
-For example, replace it with the following value to make port `8090` the
-deployment default without putting it in every application URL:
-
-```json
-{
-  "apiBaseUrl": "http://127.0.0.1:8090"
-}
-```
-
-`apps/labello-wasm/labello.client.json` is ignored by Git and copied into a
-Trunk distribution when it exists. It is public browser configuration and must
-not contain secrets. A build without the file uses the hostname-derived
-fallback. Replace the deployed copy for each environment, or edit the source
-copy before starting a local `trunk serve` session. The `api` query parameter
-remains an explicit temporary override.
-
-The annotation and review workflows prepare two upcoming assignments by default; set
-`queueSize=1` to hold only one upcoming assignment. Values are clamped to
-`1..=2`, so a browser holds at most the current assignment and two prepared
-assignments.
-
-```text
-http://127.0.0.1:8081/?api=http://127.0.0.1:9000&queueSize=1
-```
-
-## Server Configuration
-
-The server creates `labello.server.toml` with local development defaults on its
-first start. A tracked configuration containing every supported setting is
-available at [`labello.server.example.toml`](labello.server.example.toml).
-
-See the complete [server configuration reference](docs/configuration.md) for
-all TOML keys, defaults, validation rules, environment overrides, OAuth setup,
-and production guidance.
-
-The default configuration is:
-
-```toml
-bind = "127.0.0.1:8080"
-datasetsRoot = "datasets"
-bootstrapAdmins = ["admin"]
-browserOrigins = [
-    "http://127.0.0.1:8081",
-    "http://localhost:8081",
-]
-sessionCookieSecure = false
-
-[developmentAuth]
-localAdminLogin = true
-```
-
-`browserOrigins` must contain exact browser origins without paths. Unknown or
-missing required configuration fields are rejected.
-
-The server supports these environment variables:
-
-| Variable | Purpose |
+| Task | Guide |
 | --- | --- |
-| `LABELLO_CONFIG` | Configuration file path; defaults to `labello.server.toml` |
-| `LABELLO_DATASETS_ROOT` | Overrides `datasetsRoot` |
-| `LABELLO_BIND` | Overrides `bind` |
-| `GITHUB_CLIENT_ID` | GitHub OAuth client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
-| `GITHUB_REDIRECT_URI` | GitHub OAuth callback URI |
-| `RUST_LOG` | Tracing filter |
-| `LABELLO_LOG_FORMAT` | `text` or `json`; defaults to `text` |
+| Label and review images | [Annotation and review](docs/annotation.md) |
+| Configure datasets and inspect results | [Dataset administration](docs/administration.md) |
+| Convert existing ground truth | [Import](docs/import.md), [guided migration](docs/migration.md), [export](docs/export.md) |
+| Understand work allocation and scores | [Assignment](docs/assignment.md), [scoring](docs/scoring.md) |
+| Run and recover a server | [Configuration](docs/configuration.md), [operations](docs/operations.md), [persistence](docs/persistence.md) |
+| Change the implementation | [Architecture](docs/architecture.md), [API](docs/api.md), [verification](docs/verification.md) |
 
-All three `GITHUB_*` variables must be set to enable or override GitHub OAuth.
-
-## Authentication
-
-### Local Development Login
-
-The local default enables one-click session login as the first configured
-bootstrap admin. This is accepted only on a loopback bind. Disable it on any
-internet-facing server:
-
-```toml
-[developmentAuth]
-localAdminLogin = false
-```
-
-Dataset permissions remain role-based. The available roles are annotator,
-reviewer, and data admin. Only users listed in `bootstrapAdmins`
-can create datasets.
-
-### GitHub OAuth
-
-Create a GitHub OAuth App and set its callback URL to the API callback route.
-For the default local setup, use:
-
-```text
-Homepage URL:              http://127.0.0.1:8081
-Authorization callback:   http://127.0.0.1:8080/auth/github/callback
-```
-
-Start the server with the OAuth credentials:
-
-```sh
-GITHUB_CLIENT_ID="..." \
-GITHUB_CLIENT_SECRET="..." \
-GITHUB_REDIRECT_URI="http://127.0.0.1:8080/auth/github/callback" \
-cargo run -p labello-server
-```
-
-Keep the hostname consistent throughout the flow. Cookies set for
-`127.0.0.1` are not available to `localhost`, or vice versa. Do not commit the
-client secret to `labello.server.toml`.
-
-GitHub accounts receive an internal ID such as `github_123456`. On first login,
-an account receives the annotator role on each existing dataset where it has no
-role assignment. A data admin can change those roles through the admin UI. Add
-the internal ID to `bootstrapAdmins` if the account should create datasets.
-
-## Annotation Controls
-
-Every Annotate workspace action has a configurable keyboard shortcut. Open
-`Settings` (`Ctrl+,` on Windows/Linux or `Cmd+,` on macOS) to record shortcuts,
-search actions, resolve contextual conflicts, or restore defaults. Changes are
-staged until `Save changes` is selected. The Pan toggle defaults to `P`. Its
-primary-button drag gesture has a separately configurable modifier that defaults
-to `Ctrl`.
-
-The canvas zooms with the mouse wheel, two-finger touchpad scrolling, pinch, or
-the configured zoom keys. Settings lists Zoom in and Zoom out with their current
-bindings and gesture instructions. The context bar keeps Pan, Fit, and the
-applicable Refocus control; it has no zoom buttons or percentage display.
-Press the configured Pan key to toggle Pan mode, then left-drag a zoomed image. Press it again or `Escape` to return to annotation input. The
-configured modifier plus left-drag (`Ctrl+left-drag` by default), middle-drag,
-touch gestures, and double-click-to-fit remain available. Use Refocus in the
-workspace context bar, or press its configurable shortcut (`R` by default), to
-center and zoom to the active review object or guided-migration guide.
-
-Approval review keeps Pan mode active so primary drag moves the focused image
-without an extra mode switch. Reviewer correction
-returns primary drag to editing controls; the configured modifier plus left-drag and middle-drag
-still pan while correcting. Refocus uses the active object's current correction
-geometry without leaving the assignment. Guided migration review likewise
-refocuses its active canonical guide or discovered skeleton. Discovered-object
-focus uses its linked box, positioned-keypoint bounds, or the full image when
-historical data has no positions.
-
-Review Previous, also available through the configured Previous image shortcut,
-returns to the immediately previous eligible skipped or completed review.
-Completed reviews open a revision that preserves the old outcome until the
-reviewer commits approval or submits substantive corrections. Later work can
-make the previous review ineligible. See [assignment rules](docs/assignment.md#previous-review-and-decision-revisions).
-
-Reviewers can edit, add, or remove boxes and skeletons, and change guided
-migration dispositions. The primary action is **Approve** for an unchanged item or
-**Submit correction** for a changed item (`Space` by default); either advances to
-the next item, retaining corrections locally. From the overview, the same action
-submits approval when nothing changed, or saves accumulated corrections and returns
-the image to a fresh review round. Rejection always requires
-a substantive change. Existing Y/N shortcuts remain available. Completing a missing
-skeleton keeps it locally so another can be added; click a previously approved or
-corrected item in the overview to revisit it. Select a locally added object and use
-the configured **Delete annotation** shortcut (`Delete` by default) to discard the
-whole addition without affecting other objects.
-Saving corrections never completes the task. The same reviewer may claim the
-new round, but must review its current objects and final image again; earlier
-approvals do not count. Unsaved previews are identified in the inspector, and
-cancelling navigation preserves the draft. Failed submissions retain the exact
-request for retry. Browser draft recovery is a convenience, not durable storage.
-
-Missing-object markers are retired from active review. Reviewers create the
-missing annotation instead. Historical locations remain available as read-only
-evidence and do not describe the current submission.
-
-Saving a missing migration object also creates a derived box in its configured
-box task and reopens that task for correction and ordinary review. Still-derived
-boxes follow skeleton edits and removal. Independently edited or reviewed boxes
-require explicit reconciliation. The full-image inspector reports pairing
-progress and offers per-object repair for historical discoveries; unresolved
-provenance or coordinate-less objects need action rather than guessed boxes.
-Migration reviews list each discovered skeleton separately before confirmation.
-A failed save or companion refresh retains unsaved skeleton input.
-
-While placing or revising a skeleton, drag any already placed keypoint on the
-selected object to correct its position. This works for ordinary annotation,
-guided migration drafts, and reviewer correction; read-only review remains
-non-editable.
-
-## Datasets
-
-A bootstrap admin creates a dataset in the setup view. A data admin can then:
-
-1. Define classes and bounding-box or skeleton tasks.
-2. Choose optional single-reviewer approval and configure user roles.
-3. Add relative filesystem image roots or upload a browser folder.
-4. Run ingestion to index images and detect duplicate content.
-5. Assign users to annotation, review, or administration roles.
-
-A bootstrap administrator can also select `Import a dataset` in Setup when the
-server advertises import capability. Import accepts the four explicit profiles
-`ultralytics_yolo_detect_v1`, `ultralytics_yolo_pose_v1`,
-`coco_instances_gt_v1`, and `coco_keypoints_gt_v1`. It creates a new dataset
-only; it never merges into or replaces an existing dataset.
-
-Server-directory import is preferred for large sources. Browser folder import
-is resumable within the advertised limits, but selecting the folder again is
-required after reload when the browser does not preserve a directory handle.
-Sources are sealed, preflighted, mapped, rebuilt from generated event logs, and
-published only after verification. YOLO paths must be portable and relative to
-the sealed source; absolute YAML paths, URLs, and `download` directives are not
-followed.
-
-Dataset administrators can use dataset export to select a detection or pose
-profile, preflight compatible tasks/classes, build a private archive, and
-download it after verification. Re-import requires local extraction and a new
-dataset; native workflow history and identities are not restored. See the
-[export contract](docs/export.md) for completeness rules and pose compatibility.
-
-The server stores each dataset below `datasetsRoot`:
-
-```text
-datasets/
-  .labello-server/
-    auth.json
-    imports/
-    exports/<job-id>/
-  <dataset-id>/
-    labello.dataset.toml
-    labello.schema.json
-    images-index.json
-    images/
-    annotations/<image-id>/
-      events.jsonl
-      state.json
-    users/<user-id>/
-      keybindings.toml
-    .labello/snapshots/
-    .labello/imports/<import-id>/
-      manifest.json
-      source-objects.jsonl
-```
-
-Per-image `events.jsonl` files are the authoritative audit history;
-`state.json` can be rebuilt from them. Snapshots include dataset metadata and
-annotation history but not image bytes, authentication data, or user
-keybindings. Import manifests and canonical source-object audit records are
-included, but imported image bytes remain excluded. Back up image bytes and
-authentication state separately.
-
-## Architecture
-
-```text
-labello-domain
-|-- labello-storage --+
-|-- labello-client ---+-- labello-api -- labello-server
-+---------------------+-- labello-ui --- labello-wasm
-```
-
-| Package | Responsibility |
-| --- | --- |
-| `labello-domain` | Shared domain types, validation, events, and workflow logic |
-| `labello-storage` | Filesystem persistence, ingestion, assignment, statistics, and snapshots |
-| `labello-client` | API contracts plus HTTP and demo implementations |
-| `labello-api` | Axum routes, authentication, authorization, and workflow orchestration |
-| `labello-ui` | Shared egui annotation and administration UI |
-| `labello-server` | Tokio/Axum API executable |
-| `labello-wasm` | Browser entry point and Trunk build target |
-
-Inside the crates, ownership follows the same direction. Domain modules own
-pure replay and workflow policy; storage modules own filesystem mechanics and
-transaction ordering; the API owns authorization and transport trust
-boundaries; and the UI owns explicit feature state with closed asynchronous
-commands and responses. `DatasetRepository`, `ImportService`, and `LabelloApi`
-are intentional capability facades, not generic abstraction layers.
-
-See the current [architecture and ownership map](docs/architecture.md), the
-[HTTP API contract](docs/api.md), the
-[persistence and recovery contract](docs/persistence.md), and the detailed
-[import](docs/import.md) and [UI](docs/ui-ownership.md) ownership references.
-
-The API server does not serve the browser distribution. Build and deploy
-`apps/labello-wasm/dist` separately.
-
-`apps/egui-mcp-inspector` is a standalone native development tool outside the
-main workspace. It reuses `labello-ui` with deterministic demo state by default
-and has an opt-in live mode for local development servers.
+The [documentation index](docs/README.md) covers the full suite. Current pages
+are the source for GitHub Wiki. Plans, feature drafts, the target product
+specification, and historical records are retained in [docs/archive](docs/archive/README.md)
+and excluded from wiki publication.
 
 ## Development
 
-Run the canonical changed-path verification from the repository root:
+The workspace separates domain policy, filesystem storage, client transport,
+HTTP handlers, shared UI, and executable apps. The standalone
+[native inspector](apps/egui-mcp-inspector/README.md) supports UI development;
+Chromium is required to verify browser behavior.
+
+Run changed-path verification from the repository root:
 
 ```sh
 ./scripts/verify.sh changed origin/main
 ```
 
-It checks formatting, Clippy, all-feature workspace tests, inspector-preset UI
-tests, the standalone inspector with its tracked lockfile, and the WASM target.
-It also runs the locked release browser build when affected paths require it.
-Use `./scripts/verify.sh all` to run every machine check regardless of changed
-paths. Prerequisites, risk-specific checks, CI equivalence, evidence, and
-independent acceptance are defined in the
-[contributor guide](CONTRIBUTING.md) and
-[verification contract](docs/verification.md).
+It selects documentation checks or the locked Rust baseline, plus the release
+browser build when applicable. [Contributing](CONTRIBUTING.md) describes the
+review workflow and [verification](docs/verification.md) defines additional
+checks. Build the browser distribution with `trunk build --release --locked`
+from `apps/labello-wasm`.
 
-To build only the browser distribution from `apps/labello-wasm`:
+## Current limitations
 
-```sh
-trunk build --release --locked
-```
+Labello is under active development. These boundaries matter when choosing it:
 
-The output is written to `apps/labello-wasm/dist`. The API health endpoint is
-`GET /health`.
+- Browser drafts are best-effort recovery. Offline annotation and conflict
+  resolution are unavailable; there is no supported native desktop client.
+- Independent multi-annotator labeling is unavailable. Prelabel controls return
+  placeholder geometry; they do not execute a model.
+- Tutorials render text only. Review has no swipe controls, and named stylus
+  devices and screen-reader/browser combinations have no verified support claim.
+- Import creates new datasets and accepts only the documented ground-truth
+  profiles. It does not merge datasets, import segmentation or predictions, or
+  fetch archives or remote sources.
+- Dataset configuration and keybindings use TOML. Schema version 3 is current;
+  version 2 is the only supported legacy version.
+- Snapshots omit images, authentication, keybindings, and private job state.
+  They have no native restore operation. Back up the complete data root.
+- One server process must own each data root. Assignment balance compares
+  enabled tasks, with no separate class-level aggregation. Large-scale imports
+  require capacity validation, and retained import cleanup is not scheduled.
 
-### GUI Inspection
-
-Install [egui_mcp](https://github.com/rerun-io/kittest_inspector) and run the
-native inspector from the repository root:
-
-```sh
-cargo install egui_mcp --locked
-EGUI_INSPECTION=1 cargo run --manifest-path apps/egui-mcp-inspector/Cargo.toml
-```
-
-To inspect the native UI against a running local server, enable local
-administrator login and start the inspector in live mode:
-
-```sh
-EGUI_INSPECTION=1 cargo run --manifest-path apps/egui-mcp-inspector/Cargo.toml -- --live
-```
-
-The repository's `opencode.json` configures the `egui` MCP server. Restart
-OpenCode after changing that configuration. The inspector exposes the shared
-egui accessibility tree and accepts inspection input after attaching. Live
-mode can mutate real server data through the local administrator session; use
-a disposable development dataset. Use Chromium to validate actual WASM
-startup, browser behavior, cookies, and responsive rendering.
-See the [inspector README](apps/egui-mcp-inspector/README.md) for details.
-
-## Production Notes
-
-- Terminate TLS in front of both the UI and API.
-- Set `sessionCookieSecure = true` when using HTTPS.
-- Disable `developmentAuth.localAdminLogin`.
-- Store OAuth secrets outside committed configuration.
-- Configure `browserOrigins` and the OAuth callback with exact public URLs.
-- Run one Labello server process per dataset root; filesystem locks are
-  process-local.
-- Back up the dataset root, image roots, and `.labello-server/auth.json`.
-- Use the [release and deployment guide](docs/deployment.md) for immutable
-  artifacts, rootless user services, Caddy, backup, rollback, and recovery.
-
-## Current Limitations
-
-### Product And Workflow Gaps
-
-- Session recovery retains account-scoped drafts but does not enable offline
-  work. Browser recovery remains a best-effort local cache; reloading or an OAuth
-  round trip relies on the existing persisted draft and assignment checks.
-
-- Offline bundle and synchronization APIs exist, but the browser UI cannot
-  download an offline workspace, author against it without a network
-  connection, retain versioned offline mutations, synchronize them, or
-  present merge conflicts. Browser draft recovery is not offline mode.
-- Independent multi-annotator labeling and agreement calculation are not operational.
-- Prelabel configuration, task association, queued loading, display,
-  acceptance, and discard controls exist, but annotators cannot choose among
-  the available configurations: every configuration associated with the task
-  is requested. No model is executed. The server returns fixed placeholder
-  geometry; browser-local WebGPU and CPU/WASM fallback execution are not
-  implemented. Accepted placeholders currently record a generic model identity
-  rather than the configured model's exact identity.
-- Task tutorials display configured title and text only. Administrators can
-  enter example-image paths, but those images are not loaded or shown to
-  annotators.
-- Approval review supports object decisions through buttons and configurable
-  shortcuts plus a final full-image check. Swipe-to-approve or reject is not
-  implemented.
-- The canvas routes a single pen like a generic pointer, but Labello does not
-  currently claim tested stylus support for a named browser/device combination
-  or guarantee that pen, mouse, and touch interactions do not conflict.
-- Assignment balance can enforce an absolute completion-count window across
-  enabled tasks. It does not separately aggregate and enforce class-level
-  balance when multiple tasks share a class.
-  See [Assignment](docs/assignment.md#completion-balance) for exact count and
-  boundary semantics.
-- There is no supported native desktop client. The native inspector is a
-  development tool, not an offline or production client.
-
-### Persistence And Compatibility Gaps
-
-- Current dataset configuration and keybindings are versioned TOML, while image
-  indexes, state, events, schemas, snapshots, and import records use JSON or
-  JSONL. This differs from the target design's all-JSON dataset-metadata
-  description.
-- Persisted schema version 3 is current and version 2 is the only supported
-  legacy version. Version 1 artifacts are rejected; no `1 -> 2` migration is
-  available despite the target design saying schema versions start at 1.
-- Snapshots are downloadable annotation/audit packages, not complete backups.
-  They omit image bytes, authentication state, user keybindings, and private
-  import/export control state, and there is no native snapshot-restore operation.
-
-### Production And Operational Boundaries
-
-- There is no browser end-to-end test suite. `egui_kittest` and the native
-  inspector do not validate WASM networking, cookies, IndexedDB, browser input,
-  or deployed responsive behavior.
-- Ingest jobs and some derived caches are process-local and do not survive
-  restarts as durable jobs.
-- Configured cleanup of retained import jobs is not invoked or scheduled by the
-  production server, and import API control/idempotency records have no complete
-  retention lifecycle.
-- `GET /health` is liveness only. `GET /deployment/readiness` checks
-  dataset-root traversal and authentication-store loading for deployment
-  admission, but it does not cover write capacity, free space, representative
-  dataset reads, OAuth, or browser networking.
-- Graceful shutdown is wired to Ctrl-C, but there is no application drain
-  deadline or documented SIGTERM handler.
-- Import format support is tested under configured limits, but official
-  COCO-scale operation remains a separate performance gate.
-- Import does not merge into existing datasets and does not support prediction
-  or prelabel import, segmentation, remote sources, or archive sources.
-  [Detection and pose export](docs/export.md) supports explicit ground-truth
-  round trips into new datasets; it does not restore native identities or history.
-- Import publication, assignment locking, and in-memory caches assume one
-  Labello server process per datasets root. Multi-process coordination is not
-  supported, including on a shared network filesystem.
-
-The broader product requirements and planned behavior are documented in
-[labello.md](labello.md). That document describes the target product and is
-not evidence of current support. Planned capabilities, partial behavior,
-contract disagreements, and implementation defects are tracked in
-[GitHub issues](https://github.com/HULKs/labello/issues) and organized for
-authorized maintainers in the
-[Labello project](https://github.com/orgs/HULKs/projects/12).
-
-## Working image previews
-
-Annotation, review and migration always use Data saver previews: lossy WebP at
-quality 80, with a maximum edge of 1280 pixels. Upcoming-image prefetch and retries
-use the same profile. There is no image-quality setting or original-detail action;
-previously saved quality preferences are ignored.
-
-Failed loads show **Retry image load** and never automatically fetch larger
-previews or original bytes. Annotation coordinates still use the original image
-dimensions. Preview limits are documented in
-[configuration](docs/configuration.md#image-preview-limits). Cached images do not
-provide an offline annotation workflow.
+See [all current limitations](docs/limitations.md) for operational, browser,
+compatibility, and recovery details.

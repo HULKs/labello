@@ -1,11 +1,4 @@
-# Dataset Import
-
-> **Status:** Normative current reference
-> **Owner:** Import maintainers
-> **Audience:** Operators, maintainers, and UI contributors
-> **Last verified:** 2026-07-30 at `4f9c332`
-> **Supersedes:** `history/dataset-import-design.md` and
-> `history/import-ownership.md` for current behavior
+# Dataset import
 
 Labello imports an externally annotated YOLO or COCO source by converting it
 into a new native dataset. Import never merges into, replaces, or restores an
@@ -18,7 +11,7 @@ This document describes current behavior and code ownership. See
 [operations](operations.md#dataset-import) for logging, recovery, monitoring,
 and redaction requirements.
 
-## Availability And Access
+## Availability and access
 
 Dataset import is disabled unless the server has an enabled `[import]`
 configuration. At startup, Labello probes the filesystem for secure
@@ -32,7 +25,7 @@ allowed to use them. The configured filesystem path is never exposed through
 the API. After publication, the importer receives the same initial dataset
 roles as a bootstrap administrator who creates a dataset normally.
 
-## Supported Profiles
+## Supported profiles
 
 The profile is explicit and versioned. Labello does not expose an ambiguous
 generic "YOLO" or "COCO" option.
@@ -54,7 +47,7 @@ COCO keypoint imports can pair an instances descriptor with a keypoints
 descriptor when both use the same release, split, and pairing group. The
 descriptor kinds and pairing are retained in the committed manifest.
 
-## Source Transports
+## Source transports
 
 Server-directory import is preferred for large sources. Operators configure
 safe source roots outside `datasetsRoot`; administrators browse them by opaque
@@ -71,7 +64,7 @@ collisions, symlinks, unsafe file types, source mutation, and configured byte,
 file, depth, and resource ceilings. Archive and URL transports are not
 supported.
 
-## Import Workflow
+## Import workflow
 
 1. The client loads capabilities, enabled profiles, transports, authorized
    server roots, parser versions, and public limits.
@@ -134,7 +127,7 @@ operational limitation.
 A retryable operation can resume only while the sealed source and accepted
 plan still match.
 
-## Mapping And Workflow Semantics
+## Mapping and workflow semantics
 
 Source categories map to Labello classes and task definitions. Direct source
 geometry is preserved with immutable provenance. Derived geometry, such as a
@@ -168,75 +161,24 @@ sealed sources from parser versions v1 and v2 are resealed with the current
 fingerprint before planning; source mutations still fail validation. This
 parser revision is separate from persisted dataset schema version 3.
 
-Box-to-skeleton conversion can use imported boxes as read-only guides for a
-manual migration workflow. Every expected guide must resolve to exactly one
-human-authored skeleton or an audited exclusion, followed by a full-image
-confirmation. Within a skeleton, `visible` records an exact positioned
-keypoint, `hidden` records an estimated position for an occluded keypoint, and
-`absent` records one optional keypoint without coordinates. The UI presents
-these outcomes as **Visible**, **Occluded**, and **Not present**. Exclusion is
-object-level: it records that no valid skeleton can be created for the entire
-imported object. Every newly saved, added, or edited manual-migration skeleton
-must contain at least one positioned visible or occluded keypoint. Historical
-all-absent skeleton versions remain replayable, but must be redrawn or the
-object excluded before another skeleton version can be saved. A template
-policy creates derived pending seeds, not authoritative skeleton labels.
+Box-to-skeleton conversion can create a [guided manual migration](migration.md).
+Imported boxes remain guides; every target requires a human skeleton or audited
+exclusion and a full-image confirmation. Template policies create derived pending
+seeds. Discovered skeletons receive linked guide-task boxes, with separate review
+and explicit reconciliation after independent box edits.
 
-An object discovered during full-image migration review creates both a manually
-authored skeleton and a bounding-box companion in the configured guide task.
-The companion carries exact skeleton-version provenance, uses visible and hidden
-positions, ignores absent keypoints, and spans at least 15% of image width and
-height with a one-original-pixel floor for tiny images. Bounds expand around
-the positioned points and shift inward at image edges to preserve coverage.
-This rule applies to newly derived geometry, including regeneration; loading
-and replay retain existing boxes, and human edits may use smaller extents. The box task reopens for correction and ordinary review.
+## Persistence and recovery
 
-The frozen imported target set and imported object groups do not change.
+Import-generated events encode provenance, coverage, grouping, and workflow
+initialization. Every cache must match replay before publication. Published
+datasets retain `.labello/imports/<import-id>/manifest.json` and
+`source-objects.jsonl`. Images remain ordinary dataset files; snapshots omit them.
+Raw source retention follows configuration. Private jobs, reservations, source
+indexes, upload state, and API controls live below `.labello-server/imports`.
+[Persistence](persistence.md) defines their authority; [operations](operations.md#dataset-import)
+covers startup recovery and unscheduled terminal-job cleanup.
 
-Still-derived companions update or withdraw with their skeleton. Independent
-box edits or reviews require explicit reconciliation before further automatic
-changes. The full-image workflow lists pairing progress and offers per-object
-reconciliation with confirmation; failed saves and reconciliation preserve the
-unsaved skeleton draft. Historical discoveries without positions remain visible
-at full-image focus and cannot receive fabricated boxes. Repair requires a
-recorded discovery creation event and never runs as a side effect of reading.
-
-Migration reviewers receive each discovered skeleton as an exact-version item
-before full-image confirmation. Focus uses its current valid companion box,
-then positioned-keypoint bounds, then the full image. The companion box is
-reviewed separately through the ordinary box task.
-
-From full-image confirmation, annotators can reopen any resolved canonical object
-through its overview button, completed skeleton, or excluded guide. Saving that
-object returns directly to the overview if other targets remain fresh; new
-outstanding dependencies take precedence over confirmation. Failed activation or
-saving retains the valid workspace and draft for retry. No global correction pass
-is needed for a direct edit, and the UI no longer offers a pass-start control.
-Assignments with a historical active pass resume their remaining objects through
-the normal keep, edit and exclude controls before full-image confirmation.
-
-## Persistence And Recovery
-
-Per-image `events.jsonl` remains the authoritative annotation and workflow
-history. Import-generated `state.json` files are rebuildable caches and must
-match replay before publication. Imported provenance, coverage, object
-grouping, and workflow initialization are represented by replayable domain
-events rather than by cache-only writes.
-
-Published datasets retain a portable import manifest and canonical
-source-object audit records under `.labello/imports/<import-id>/`. Raw staged
-source retention is controlled by configuration. Image bytes remain ordinary
-dataset files and are not added to snapshots.
-
-Private jobs, destination reservations, source indexes, upload state, and API
-control records live below `<datasetsRoot>/.labello-server/imports`. Startup
-recovery validates staged generations, resumes supported migrations,
-reconciles a completed publication with its job record, and expires abandoned
-inactive work without expiring active build, verification, or commit phases.
-Configured cleanup of retained terminal metadata is not currently scheduled by
-the production server.
-
-## Code Ownership
+## Code ownership
 
 Import representations remain separate across domain, storage, wire, API, and
 UI boundaries. Each representation either persists an invariant, crosses a
@@ -271,7 +213,7 @@ states, geometry policies, workflow intent, diagnostics, and persisted
 provenance. Adding a variant should create compiler-visible review points at
 each real boundary rather than rely on a boundary-erasing shared model.
 
-## Operational Boundaries
+## Operational boundaries
 
 The server enforces configured limits for concurrent work, source and staged
 bytes, file counts and sizes, image decoding, descriptors, annotations,
@@ -290,12 +232,3 @@ Import does not currently support merging into an existing dataset, native
 snapshot restore, prediction or prelabel import, segmentation, remote sources,
 archives or multi-process filesystem coordination. Separate [dataset export](export.md)
 supports the documented detection and pose round trips.
-
-## Historical Design Records
-
-The completed [dataset import feature design](history/dataset-import-design.md)
-contains the original format research, decision catalogue, implementation
-phases, and acceptance criteria. The archived
-[ownership and adapter inventory](history/import-ownership.md) preserves the
-detailed structural-refactor snapshot. These records explain past decisions;
-this document and the code define current behavior.

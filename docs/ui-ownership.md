@@ -1,683 +1,308 @@
-# UI ownership
+# UI implementation
 
-> **Status:** Normative current reference
-> **Owner:** UI maintainers
-> **Audience:** UI maintainers and contributors
-> **Last verified:** 2026-07-30 at `4f9c332`
+`LabelloApp` composes explicit feature state. It does not dereference implicitly
+to workflow state. Read [UI design](ui-design-guidelines.md) for presentation and
+acceptance, and [architecture](architecture.md) for crate boundaries.
 
-`LabelloApp` is the egui composition root. It owns navigation and the following
-explicit feature states:
+## State and requests
 
-- `runtime`: API transport, command queue, response channel, active requests,
-  repainting, and browser persistence scheduling.
-- `auth`: authentication-option discovery, session state and failures, the
-  active session request, and account-bound sign-in recovery.
-- `datasets`: dataset metadata, users, statistics, and dataset-scoped request
-  identities.
-- `admin`: administration filters, snapshots, roles, and staged configuration.
-- `import`: the import wizard, source registration, planning, and job progress.
-- `navigation`: responsive application-drawer visibility, atomic app-bar
-  collapse ownership, statistics-overlay visibility, and focus restoration.
-- `work`: assignment, annotation, review, migration, canvas, and
-  edit-history state.
+| Owner | State |
+| --- | --- |
+| `runtime` | API transport, command queue, responses, active requests, repainting, persistence scheduling, presence |
+| `auth` | Sign-in options, session discovery, failures, account-bound recovery |
+| `datasets` | Dataset metadata/users, statistics, leaderboard selection, dataset request identities |
+| `admin` | Filters, snapshots, roles, staged configuration, export |
+| `import` | Wizard, source registration, planning, durable job progress |
+| `navigation` | App drawer, statistics modal, focus restoration |
+| `work` | Assignment, annotation, review, migration, canvas, edit history |
 
-Callers must name the feature owner. `LabelloApp` does not implement
-`Deref<Target = WorkState>`, so an unqualified field cannot silently become
-workflow state.
+Closed `UiCommand` and `UiMessage` enums define the async boundary. The live loop
+checks request ownership before delegating to feature reducers and dispatchers.
+`live/ownership.rs` owns request IDs, auth/workspace/import epochs, command
+rollback, stale-response rejection, and prepared-assignment cleanup. Feature
+reducers use that gate rather than introducing their own.
 
-## Commands and responses
+Structured unauthorized failures survive dispatch. After an accepted failure is
+reduced, the root coalesces a session recheck. Recovery blocks work commands and
+hides account-scoped content while retaining the draft for its original account.
+A different account replaces the workspace. Endpoint replacement clears account,
+dataset, import, and pending ownership before new requests start.
 
-`UiCommand` and `UiMessage` remain closed enums. They are the static contract
-between egui and asynchronous API work; they are not a general event bus.
+## Rendering boundaries
 
-The root live loop performs only scheduling and exhaustive delegation:
+| Module | Responsibility |
+| --- | --- |
+| `setup.rs` | Login, advanced connection, pre-authentication About, dataset setup and schema-copy preview |
+| `panels/app_bar.rs` | Measured global navigation, utilities, account controls, drawer collapse; remains visible during loading |
+| `panels/loading_bars.rs` | Transient blank or retained view-specific bars during image loads |
+| `app/shell.rs` | Layout, persistent bottom action panel, resize repaint |
+| `panels/workspace.rs` | Canvas area, second-bar context, canvas controls |
+| `panels/workspace_actions.rs` | Workflow commands at every width, Previous image/object |
+| `panels/workspace_overflow.rs` | Action measurement, visible prefix, overflow focus and command identity |
+| `panels/task_selector.rs` | Task selection and committed-workflow marker |
+| `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, suggestions |
+| `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
+| `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
+| `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
+| `review_revision.rs` | Locally staged replacement decisions and stable commit retries |
+| `missing_objects.rs` | Read-only historical location evidence and browser exit warning |
+| `manual_migration.rs` | Migration cursor, discovery focus, companion reconciliation |
+| `workspace_canvas.rs` | Adapter from app state to reusable canvas |
+| `statistics.rs`, `statistics/leaderboard.rs` | Statistics modal, periods/ranks, podium, history and activity |
+| `statistics/streak.rs` | Daily flames and reduced-motion-aware goal animation from domain streak projections |
+| `avatar.rs`, `statistics/avatar.rs` | Shared bounded public-avatar cache and contributor rows |
+| `dataset_inspector` | Gallery, filters, preview scheduling, read-only canvas, return-to-review draft |
 
-1. request ownership and epoch checks reject stale responses;
-2. import, session, workflow, and support reducers apply accepted responses;
-3. import, migration, auth, dataset, support, and workflow dispatchers start
-   commands owned by those features.
+`panels/loading_bars.rs` scopes retained presentation to auth/workspace epochs,
+view, dataset and selected workflow. It stores only display data and migration
+action descriptions, never assignments, image state, drafts or command ownership.
+Shell rendering refreshes it after accepted responses and navigation. Loading
+disables retained controls and keyboard actions. Empty/error completion and
+scope changes discard the presentation. The global app bar is outside this
+blank/retained policy.
 
-Request IDs, auth/workspace/import epochs, command rollback, and prepared
-assignment reservation release live in `live/ownership.rs`. A reducer must not
-invent a second stale-response rule. Request failures retain structured
-unauthorized status through the dispatcher/message boundary. After the normal
-ownership checks and feature reducer, the central loop coalesces a session
-recheck for an authentication rejection. Sign-in recovery blocks further work
-commands, hides account-scoped rendering, and retains the draft until its owner
-returns or a different account replaces the workspace. Feature reducers may update
-their feature
-state and the explicitly named navigation, loading, notice, or error effects
-carried by the root.
-
-## Rendering
-
-`setup.rs` owns the dedicated login page, advanced connection view,
-pre-authentication About destination, and authenticated dataset setup. The
-section selector remains available across authenticated Setup destinations and
-puts About last, as does the signed-out secondary navigation. Each section owns
-its heading; there is no shared dataset welcome banner. Authentication methods are
-hidden until both options and session discovery finish. Endpoint replacement
-clears account and dataset state before scheduling requests against the new API.
-
-Workspace rendering is grouped by the reason it changes:
-
-- `panels/loading_bars.rs`: transient bar presentation scoped to auth/workspace
-  epochs, view, dataset and selected workflow. It retains only display data and
-  migration action descriptions through an image load; it does not retain or
-  restore assignments, image state, drafts or command ownership. Shell rendering
-  refreshes this presentation after accepted responses and navigation. Loading
-  disables retained controls and their keyboard actions. Empty/error completion
-  and scope changes discard the retained presentation;
-
-- `panels/app_bar.rs`: global navigation, utilities and account controls, with
-  measured label widths and icon fallback before the navigation drawer. This
-  global bar stays visible during loading and is outside the view-specific
-  blank/retained presentation policy;
-- `panels/workspace_actions.rs`: persistent bottom workflow actions for all
-  layouts, including separate Previous image and Previous object commands;
-  review object navigation uses the existing correction-retaining navigation
-  owner, and migration dispatch retains its audited revisit commands;
-- `panels/task_selector.rs`: task selection;
-- `panels/inspector.rs`: annotation and review controls;
-- `panels/workspace.rs`: central workspace and the second bar's image context
-  and canvas controls. It does not render workflow commands;
-- `app/shell.rs`: reserves the bottom action panel at every workspace width and
-  settles measured height after resizing;
-- `statistics.rs`: the dataset statistics modal and its existing metric renderer;
-  `statistics/leaderboard.rs` evaluates contributor periods/ranks and renders
-  podiums, the user table, history and daily activity; its selection state belongs to `datasets`;
-  `avatar.rs` owns public avatar loading, caching and painting shared by statistics
-  and presence; `statistics/avatar.rs` owns contributor rows;
-  `statistics/streak.rs` renders daily flames from the domain streak projection;
-- `panels/overlays.rs`: tutorial, recovery, transition, settings, and discard
-  modals;
-- `panels/prelabels.rs`: prelabel visibility and actions;
-- `review_corrections.rs`: accumulated correction drafts, canvas previews, stable submission retries and object/disposition editing.
-- `missing_objects.rs`: read-only historical location evidence and browser exit warning.
-
-- `panels/workspace_overflow.rs`: secondary-action measurement, prefix promotion,
-  stable command locations and overflow keyboard focus; workflow owners supply
-  action order, availability and command dispatch;
-- `panels/review_context_bar.rs`: measured review identity/type/phase, Inspector details
-  interaction and context-row height;
-- `review_context.rs`: immutable exact-target context shared by review presentation;
-  assignment identity and authoritative target order/version reject stale summaries;
-- `review_revision.rs`: local staged replacement decisions and stable commit retries;
-  effective decisions come from the domain review projection, not raw history;
-- `manual_migration.rs`: migration-specific workflow, discovered-object review focus,
-  companion status and explicit reconciliation with retained drafts;
-- `workspace_canvas.rs`: the adapter between app state and the reusable canvas.
-
-The canvas keeps its public state and entry points in `canvas.rs`. Its internal
-implementation is split only into rendering, painting, interaction,
-hit-testing, and viewport geometry. Gesture and geometry tests stay attached to
-the canvas module so these boundaries do not weaken behavioral coverage.
-The painting owner applies one outlined-stroke and keypoint-marker policy to
-annotations, drafts, correction previews, migration guides, and suggestions.
-The rendering owner describes the same projected keypoint states in AccessKit;
-view adapters do not define their own visibility markers.
-
-The shared workflow-state reducer retains every persisted annotation ID,
-including deleted versions. Undo/Redo rebases a restored annotation onto that
-latest authoritative version before saving; a failed save keeps the same draft
-available for retry. Visible annotations remain the active projection.
+`canvas.rs` keeps public entry points; rendering, painting, interaction,
+hit-testing, and viewport geometry remain separate internal concerns. Painting
+owns the shared keypoint/stroke policy. Rendering exposes the same projected
+states through AccessKit without image coordinates. Gesture tests stay with the
+canvas. The workflow reducer retains every persisted annotation ID, including
+deleted versions; Undo/Redo rebases a restored object on its latest version.
+Later keypoint autosaves mark an existing skeleton as a new human-edited revision.
 
 ## Browser persistence
 
-Browser persistence is a recoverable convenience cache, never workflow
-authority. Server assignments, image state, and event history remain
-authoritative.
+`persistence.rs` composes record validation, normalized storage identity, retry
+queues, restore orchestration, completion handling, IndexedDB, local storage,
+and an in-memory test store. Server and user identity scope keys. Applying a
+response or draft requires its complete identity and current workspace to match.
+Browser storage is recoverable convenience; server assignments and events remain
+authoritative. No second client domain model, offline authority, or synchronization
+framework belongs here.
 
-`persistence.rs` composes focused implementations for record validation,
-storage identity, the retry queue, restore orchestration, retry/completion
-handling, the memory test store, IndexedDB, and local storage. Storage keys
-include normalized server and user identity. A response or draft is applied
-only when its complete identity and current workspace still match.
+## Assignment navigation and review
 
-## YAGNI decisions
+`app/transitions.rs` gates view, About, and workflow changes. Untouched work releases
+before navigation; failure keeps the workspace. Pending navigation blocks edits
+and further transitions. `work.assignment_touched` records edits, decisions,
+correction input, migration placement/exclusions, and recovered drafts. Saving,
+undoing, discarding, or reloading the same assignment does not clear it. A new
+assignment resets it. Selection, pan/zoom, and target inspection alone do not set it.
 
-- Keep closed command and response enums; no dynamic message bus or reducer
-  registry is needed.
-- Keep one egui root; no dependency-injection container or feature framework is
-  introduced.
-- Keep direct feature-state mutation inside focused reducers; a second client
-  domain model would duplicate server workflow rules.
-- Keep the current canvas state model; no scene graph or generalized gesture
-  engine is justified by the supported annotation tools.
-- Keep the existing browser schemas and adapters; this refactor does not add
-  synchronization, offline authority, or a new persistence format.
+Previous review first reopens and loads the previous assignment, then releases the
+displaced one. Releasing first would make the displaced review the latest terminal
+assignment. The current image stays visible while opening; accepted confirmation
+closes its modal but keeps conflicting actions blocked until completion. Errors
+preserve current work. Statistics uses its separate assignment-preserving modal.
 
-Continuing an active skeleton after an earlier keypoint autosave creates the next
-human-edited annotation revision. The edit owner marks the persisted annotation
-modified before saving later keypoints, preserving Visible, Occluded and
-coordinate-free Not present outcomes through save and reload.
+Normal, migration, and revision review share the correction owner for item
+position, validity, local decisions, navigation, reset, and overview eligibility.
+Opening an editor is not a correction. Actual differences enable rejection and
+amber previews. `NextImage`, Space by default, approves an unchanged item or retains
+a valid correction. Y/N actions use the same owners. Ordinary unchanged approval
+uses its server command; revision approval is staged; corrected-item rejection
+stays local until overview submission. Reset invalidates the affected decision.
+Unchanged items still require approval, even when other items have corrections.
 
-## Build information
+Overview additions retain editor and undo history after completion. The next blank
+canvas placement starts another object. Reopened or recovered completed additions
+are staged before another starts; editing an earlier point in an unfinished
+skeleton does not overwrite it on placement. A selected positioned keypoint can
+toggle Visible/Hidden; hidden placement resets to Visible after use. Delete
+annotation discards the selected local addition as a whole, with text-focus,
+busy-state, and overlay guards. Invalid additions block confirmation.
 
-`build_information.rs` owns public artifact identity state, comparison, About
-rendering, clipboard feedback and the workspace status control. Server identity
-uses the closed client `BuildInformationApi` capability and existing typed
-`UiCommand`/`UiMessage` request ownership. Startup, About, explicit retry and the
-browser focus notifier coalesce while loading. Refresh clears the old result;
-endpoint changes invalidate old responses. A pending public request survives
-session discovery, authentication changes, and workspace transitions because
-its identity belongs to the endpoint. Its request ID admits exactly one
-completion; endpoint replacement clears that owner and rejects the old result.
-This metadata does not require a signed-in account or dataset.
+Only overview submission sends the complete correction batch. Failure retains
+an immutable retry request. The server starts a fresh review round and enforces
+all-current-item approval. Review context is derived from exact assignment and
+target identity, never stale display state. Completed migration review retains
+its outgoing position until replacement or clearing; it does not restart review.
 
-The WASM bootstrap injects its own compiled identity and supplies the clipboard
-promise and visible-focus adapters. It never treats mutable `release.json` as
-the executing artifact. The shared UI announces copying only after success,
-reports rejection or unavailable adapters and exposes complete selectable text
-in a manual-copy disclosure. Copy failure or an unavailable adapter opens that
-disclosure; egui retains its ordinary expanded state across redraws.
+## Migration and companions
 
-The lower-right mismatch control is rendered in a separate bottom status panel.
-It has no workflow side effects while rendering. Activation uses `open_view`
-and `PendingTransition::About`, retaining Admin, assignment and unsaved-draft
-protections; cancelling leaves work intact. The panel reserves no height without
-a mismatch. Presence belongs in the existing application header.
+Direct revisit uses the audited server command and returned cursor. Busy state
+blocks duplicate activation; discard confirmation preserves a draft until the
+new target is accepted. Failed opens/saves reuse stable retry identity. Canonical
+save conflicts require discard confirmation before reloading. Returning focus
+selects the overview entry or compact full-image action. The server chooses
+confirmation or outstanding dependency work; the UI does not override it.
+Historical passes resume the latest pass's outstanding decisions, with no new
+global pass-start control. Discovery editing and companion reconciliation retain
+their separate drafts and transaction rules.
 
-## Working image previews
+Bounding-box assignments without a restored selection select their first visible
+migration companion. Focus occurs once per activation of an annotation identity,
+not each version, autosave, or manual pan/zoom. Selecting another object and
+returning refocuses it; R can explicitly refocus. View padding never changes
+geometry or provenance. Migration canvas preparation initializes skeleton drafts
+independently of Inspector visibility.
 
-`live_workflow::load_working_preview` always requests the encoded Data Saver v1
-profile for annotation, review, migration, assignment reload/reopen and prefetch.
-It propagates transfer and decode failures without falling back to Standard,
-legacy RGBA or original bytes. The shared client decodes under the same bounds
-and geometry convention on native and WASM.
+## Images and reservations
 
-`image_transfer` owns transfer cancellation. Existing request/auth/workspace
-epochs own stale-response rejection, assignment identity and image-reference
-cleanup. Claims finish independently so obsolete reservations can be released.
-The command dispatcher schedules another frame while commands remain, including
-when it discards a superseded request.
+`live_workflow::load_working_preview` uses Data Saver v1 for loads, retries,
+reopen, reload, and prefetch. Failures never request Standard, legacy RGBA, or
+original bytes. Native and WASM decoding use the same bounds and geometry.
+`image_transfer` owns cancellation; existing request epochs reject stale replies.
+Old `:data-saver` preferences are ignored. The dispatcher requests another frame
+while commands remain, including after discarding superseded requests.
 
-Reservation cleanup retains dispatched assignment-load ownership across workspace
-and authentication invalidation. It waits until those responses have been reduced
-before releasing unused assignments, because repeated claims can return the same
-active assignment ID. Current work, prepared work, and queued commands targeting an
-exact assignment retain that reservation. New assignment loads wait for pending
-cleanup releases to finish. Failed prefetches use the same cleanup owner as stale
-responses, and cleanup uses the API instance that performed the original load.
+Claims finish independently of image cancellation. Cleanup retains dispatched
+load ownership across invalidation until replies are reduced, because repeated
+claims may share an assignment ID. Current/prepared work and queued commands
+retain their exact reservation. New loads wait for pending releases; stale and
+failed-prefetch cleanup use the original API instance.
 
-There is no image-quality selection, per-image representation override or saved
-quality preference. Old `:data-saver` browser keys are ignored. Existing image-load
-failure states and retry actions reload the same Data saver profile. Cached
-images never imply an active assignment or offline annotation support.
+## Statistics and presence
 
-Statistics data, remote status, and active request identity remain dataset-owned.
-Scores reuse these owners and the leaderboard/history renderer, with identity
-reset before rendering. Domain owns [scoring policy](scoring.md); storage owns
-durable focus selection and aggregation. UI never awards points. Annotation
-refreshes focus statistics in the background and hides expired or failed-refresh data.
-The shared renderer orders score podium, rankings, activity, then aggregates.
-The domain derives streaks from contributor history; `statistics/streak.rs` owns
-flame rendering and reduced-motion-aware goal animation. The app-bar flame opens
-Statistics; leaderboard state owns streak sorting. Background statistics refresh
-runs every 30 seconds (three while open), with saves, reviews, and migration
-completions requesting an immediate refresh. In-flight requests coalesce into one
-follow-up. Existing epoch gates reject stale responses.
-Dataset-owned leaderboard state retains the shared period, contributor filters,
-history selection and selected activity day. The day selector exposes calendar
-counts without hover and clamps to the current period after a period change.
-The modal scroll owner brings newly keyboard-focused content controls into view;
-its fixed header and separate popup layers keep their own placement.
-The navigation-owned modal does not perform an assignment transition or start a
-workspace epoch. Refresh uses the existing request/epoch gate and may run while
-assignment requests are active. Authentication/workspace invalidation dismisses
-the modal; losing its original assignment dismisses it without restoring work.
-Viewport changes trigger one modal sizing pass and an immediate follow-up repaint,
-so the open overlay stays constrained without waiting for statistics refresh or
-new input. This geometry cache belongs to egui and carries no workflow state.
+Statistics data and requests belong to `datasets`; visibility and focus belong
+to `navigation`. Opening or refreshing the modal changes no workspace epoch and
+preserves work. Legitimate workflow replies continue beneath it. Authentication
+or workspace invalidation and lost original ownership dismiss it. Recovery takes
+precedence; companion reconciliation temporarily covers it and then resumes it
+ahead of ordinary transition dialogs. Resize requests a sizing pass and immediate
+repaint. Keyboard focus scrolls content into view; fixed headers/popups keep their
+own placement.
 
-Required draft recovery and migration companion reconciliation take precedence
-when Statistics is open. Recovery clears the overlay under the existing recovery
-rules; reconciliation temporarily covers it without discarding its open state.
-After reconciliation is cancelled or completed, Statistics resumes ahead of
-ordinary revisit/assignment-transition dialogs. Closing Statistics preserves the
-underlying migration assignment and draft.
+Domain owns [scoring](scoring.md); storage selects focus and aggregates. UI never
+awards points. Background statistics refresh runs every 30 seconds, or every three
+seconds while the modal is open. Saves, reviews and migration completions request
+an immediate refresh; in-flight requests coalesce into one follow-up. Existing
+epoch gates reject stale responses, and expired or failed-refresh focus data is
+hidden. Dataset-owned state retains period, contributor/history selection, streak
+sorting and activity day, clamping the day after period changes.
 
-After a migration review assignment completes, its review position stays fixed
-until the next assignment is installed or the current image is cleared. The
-completion timestamp must not restart object review on the outgoing image.
-Active assignments still recompute their position from current-round approvals.
+Domain derives streaks from contributor history. `statistics/streak.rs` renders
+flames and reduced-motion-aware goal animation. The app-bar flame opens Statistics.
 
-## Direct Migration Revisit
-
-At full-image confirmation, the resolved-object overview uses named buttons and
-completed canonical skeletons and excluded guides can be selected on the canvas.
-Selection submits the existing audited revisit command. Busy/loading state blocks
-duplicate activation; canvas drags remain pan/edit gestures. Discard confirmation
-retains the current draft until the server accepts the new target. Failed opening
-can retry the exact request; repeated unchanged migration saves reuse their
-idempotency identity until acknowledged. Reloading after a canonical edit conflict
-requires discard confirmation; cancelling preserves the draft.
-
-The server owns the returned cursor. A direct save returns to full-image
-confirmation when all other targets are resolved and fresh, or to outstanding
-correction work when a dependency changed. The UI does not force confirmation.
-On return, keyboard focus goes to the overview entry, or the full-image primary
-control when the compact inspector is closed. Additional discovered objects keep
-their separate direct-edit and companion reconciliation workflow.
-
-The browser and shared UI do not start global correction passes. Existing passes
-remain readable. Reloading an assignment resumes its latest persisted pass at the
-first outstanding object. The normal keep, edit and exclude controls record exact
-current decisions until full-image confirmation is available. Resolved overview
-entries then use the same direct revisit path as assignments without a pass.
-
-## Assignment navigation
-
-`app/transitions.rs` owns the gate for view, About, and workflow changes. An
-untouched assignment releases through the existing release command without a
-confirmation dialog. The destination opens only after release succeeds. Release
-failure leaves the current workspace available with the error. Pending navigation
-blocks background editing and further transitions; request and workspace identities
-reject stale completions.
-
-`work.assignment_touched` records input for the current assignment. Annotation
-edits, entering reviewer correction, review decisions, migration keypoint or
-exclusion input, and migration decisions set it. Saving, undoing, discarding a
-correction, or reloading the same assignment does not clear it. Loading a different
-assignment resets it. Existing server annotations and review progress, selection,
-canvas pan/zoom, and migration target inspection do not set it. Recovered drafts
-retain confirmation protection. This state is local to the loaded assignment;
-server leases and persisted workflow history retain their existing authority.
-
-Unsent reviewer corrections count as work for the navigation gate.
-Touched assignments keep the existing confirmation. Review Previous uses the
-same touched-work check: untouched reviews switch directly, while changed
-reviews require confirmation. It first reopens and loads the previous review,
-then releases the displaced assignment. Releasing first would make the current
-review the newest terminal assignment and invalidate the previous target. Failed
-reopening preserves the current workspace and reports the error. While reopening,
-the current image and texture stay visible with an Opening previous review status.
-After confirmation the transition modal closes, but its pending transition remains
-to block conflicting actions and correction edits until loading finishes. Runtime failures
-show Error in the workspace status control, with the full error and annotation
-save status in its details, rather than retaining a success label. The
-Previous review control belongs to the shared review footer, including
-migration and compact layouts. Statistics continues to use its assignment-preserving overlay.
-
-Normal and revision review use the same correction owner. Its interaction module
-owns item position, locally decided targets, targets requiring another decision,
-editor validity, navigation, reset, aggregate overview eligibility, and contextual
-confirmation. The existing `NextImage` action applies to both annotation and review;
-Space (or its configured replacement) approves unchanged items or retains valid
-corrections through the same owners as the compatibility Y/N actions. Valid retained
-corrections satisfy their target's rejection requirement without a separate item
-decision; unchanged targets still require approval. Ordinary
-unchanged-item approvals retain the existing server command; corrected-item
-rejections remain local until overview submission. Revision approvals retain their
-existing staged decision owner. Opening the automatic editor does not mark work
-changed. Only actual differences enable rejection or receive amber preview styling.
-Persisted annotations remain unchanged while the canvas previews edits, additions,
-removals and migration replacements. Reset invalidates the affected local decision,
-and earlier corrections do not block approval of another unchanged item. Migration
-approval validates the requested current item independently of the server cursor;
-the cursor still resumes at the first unapproved item after reload. Final server
-approval remains gated on all current items, and submitting corrections starts
-a fresh review round without carrying earlier approvals forward.
-Each newly placed overview keypoint stays selected for immediate visibility edits,
-including the final point of a skeleton. Completed additions are staged locally
-while retaining their editor and undo history; the next blank-canvas placement
-starts another object instead of replacing the selected point. The shared placement
-owner also stages a reopened or recovered completed addition before starting another; selecting or
-dragging an earlier point of an unfinished addition does not overwrite it on new
-placement. Both ordinary and migration canvas adapters
-allow overview selection while an addition is open; navigation retains a valid
-editor or blocks an incomplete one before reopening the selected item.
-The `ToggleKeypointHidden` binding is WorkImage-scoped. In ordinary and migration
-review, it toggles the selected positioned keypoint between Visible and Hidden,
-or selects hidden placement for the next point when adding a skeleton. Placement
-consumes that mode and returns to Visible. Review dispatch handles this before
-annotation-mode migration handling, respects hidden-keypoint permission and
-busy/frozen guards, and records selected-point changes in correction undo history.
-`MarkKeypointAbsent` remains annotation-only; N retains its review rejection action.
-The existing `DeleteAnnotation` binding is also WorkImage-scoped. Review dispatch
-consumes it before annotation-mode migration handling and reuses the reset owner
-only for a selected, version-zero overview editor. It discards that whole local
-addition and clears selection; busy/frozen, dragging and keyboard-focus guards
-prevent mutation. Existing reviewed objects and other additions remain unchanged.
-
-The overview is the only correction submission point and requires a decision for
-every original target and valid geometry. Correction success advances the assignment
-after the server commits; failure retains the draft and frozen request. Local browser
-records include position, local decisions, reset targets, changes and retry request;
-assignment, round and sequence validation prevent cross-workspace recovery.
-Historical missing-object locations remain read-only. The second-bar review indicator
-owns its measured two-line presentation and toggles the existing Inspector panel or
-drawer, retaining focus-return behavior. It shows item position before workflow
-identity. The shared review footer owns Approve / Submit correction, labelled from
-the focused item's changes (aggregate changes in overview), and Previous, Discard and
-Skip across ordinary, migration and revision review. Compact layouts keep navigation
-and discard actions in a second bottom row. Remove item for added migration objects
-uses the same footer and the existing local correction owner. The Inspector starts closed.
-Migration canvas preparation initializes the active skeleton draft independently of
-Inspector visibility, so advancing targets keeps editing available with the panel closed.
-
-## Dataset export administration
-
-`admin.export`, implemented in `export_flow`, owns the saved-configuration
-selection, retained job history, current capture, summary acknowledgement and
-one pending export action. The closed `UiCommand::Export` and
-`UiMessage::ExportFinished` delegate to the export dispatcher and reducer.
-The shared request identity checks auth/workspace epochs and dataset ownership
-before applying any reply. Auth or workspace invalidation clears export state.
-Queue and dispatch failures clear pending state and remain in the export region.
-
-The Export section loads capabilities and server history, restores only active
-or Ready captures after reload or refresh, and polls active jobs at most once per second while
-that section is visible. Background polls preserve form appearance, layout, and
-selection controls. An explicit action can supersede a poll; late poll responses
-are rejected by the pending request ID. Explicit requests still coalesce. Failed refreshes retain the last
-loaded job with a stale marker and Retry. An uncertain mutation response retries
-by refreshing history, so it does not blindly create another preflight.
-
-Selection uses saved dataset metadata, explicit task/class identities and a
-versioned detect or pose profile. Train, validation, and test checkboxes are all
-selected by default and filter the output independently of the fallback. At least
-one split is required. Train is the default fallback for images
-without split provenance. Split conflicts offer explicit per-image choices.
-Domain `ExportOptions::class_mapping` supplies local compatibility feedback.
-An empty task/class selection disables preflight without showing a warning.
-Server preflight owns coverage, image, geometry, source consistency and bounds.
-Failed, blocked, cancelled, and succeeded jobs remain inspectable in history but
-are not automatically selected on reload. Editing a new selection or starting a
-preflight clears old terminal-job details. Blocked jobs do not retain a payload
-and do not prevent another preflight. An active or Ready capture must be
-cancelled before another preflight. Start requires
-a Ready job, an explicit summary acknowledgement, unchanged options and saved
-Admin configuration. Captured options and bounded omission/blocker examples
-remain inspectable in history.
-
-Completed exports use the client's authorization check and open the attachment
-URL with the existing browser session. WASM never buffers archive bytes. The UI
-reports only that a download was requested; the browser owns transfer progress
-and completion. Native inspection presets model shared states and do not create
-archives. Real download behavior requires an isolated server and Chromium.
-
-The import plan offers an explicit policy for YOLO pose rows with no placed
-keypoints. The default leaves coverage incomplete. PreserveAbsent is an opt-in
-assertion that all-zero entries explicitly represent absent keypoints on an
-existing object. The plan request and recovery preserve this choice, changing
-it invalidates an accepted plan, and encountered preservation diagnostics still
-require acknowledgement before commit. This choice does not infer labels for
-an unlabelled source.
-
-The explicit all-zero YOLO pose policy section bounds its selector, help, and acknowledgement warning to the visible content width. Earlier import mapping fields may expand their parent layout; that expansion must not push this choice or its warning beyond the viewport.
-
-## Automatic workflow changes
-
-The work state owns availability-fallback feedback separately from transient
-runtime notices. It snapshots the previous and new task/class names only when
-an accepted availability result changes the committed workflow. The shared
-workspace presents this nonmodal, dismissible status before claiming the next
-assignment. It does not require acknowledgement to continue work.
-
-The shared notice renderer records its current render pass when it is visible.
-The central workspace suppresses its fallback only when another workspace slot
-has already presented that notice in the same pass. A compact short fallback
-owns an inline slot before the canvas; the shell reclaims the vertical canvas
-inset for that slot, preserving the review identity and controls without covering
-the image. Viewport size or presentation in an earlier frame cannot suppress the current fallback or leave a claim deferred.
-
-Image loading, prefetch, retry and unrelated status updates preserve the notice.
-A later fallback replaces it with that transition's identities. Dismissal,
-committed explicit workflow selection, authentication changes, dataset changes
-and leaving the work view clear it. Existing request epochs reject stale
-availability results before they can change selection or feedback.
-
-
-Short review layout uses the shared review-context projection to keep revision
-mode in the existing context identity line. The central workspace adds no
-revisit notification or redundant caption. This presentation does not
-change captured targets, staging, or commit policy.
-
-## Automatic workflow changes
-
-The work state owns availability-fallback feedback separately from transient
-runtime notices. It snapshots the previous and new task/class names only when
-an accepted availability result changes the committed workflow. The shared
-workspace presents this nonmodal, dismissible status before claiming the next
-assignment. It does not require acknowledgement to continue work.
-
-The shared notice renderer records its current render pass when it is visible.
-The central workspace suppresses its fallback only when another workspace slot
-has already presented that notice in the same pass. A compact short fallback
-owns an inline slot before the canvas; the shell reclaims the vertical canvas
-inset for that slot, preserving the review identity and controls without covering
-the image. Viewport size or presentation in an earlier frame cannot suppress the current fallback or leave a claim deferred.
-
-Image loading, prefetch, retry and unrelated status updates preserve the notice.
-A later fallback replaces it with that transition's identities. Dismissal,
-committed explicit workflow selection, authentication changes, dataset changes
-and leaving the work view clear it. Existing request epochs reject stale
-availability results before they can change selection or feedback.
-
-Compact review availability uses a reserved slot in the identity line. Only that
-truncatable line gives up text width; type/phase and canvas allocation remain
-stable while loading. The shared spinner description retains its existing
-progress-indicator name and tooltip across workspace placements.
-The shared wrapped context row preserves its content container while availability
-starts and finishes, so removing the spinner does not change widget identities
-or trigger transient diagnostic outlines.
-
-The bottom action bar stays empty while session, dataset, or image loading is in
-progress, and until a current image and any required live assignment exist.
-Only the loaded workflow chooses its actions; unresolved migration state must
-not briefly show ordinary annotation commands. Background availability refresh
-does not hide actions for an already loaded image.
-
-The shared shell measures the compact action panel against its allocated bottom edge.
-When its height changes after a resize, it requests the next repaint to settle
-growing or shrinking content without waiting for pointer input. It compares the
-existing panel cache with the new measurement, so unchanged clipped content at
-an unsupported tiny size cannot cause a repaint loop. This preserves dynamic
-wrapping and does not discard a pass or replay input commands.
-
-## Workspace presence and connection status
-
-`runtime.presence` owns endpoint/account identity, the current server-wide
-presence sample, one outstanding request, poll timing and consecutive failures.
-The shared command/reducer path polls authenticated `/presence` every ten
-seconds in every authenticated application view. The transport times out after eight
-seconds. Visibility return requests an immediate coalesced refresh. Auth and
-workspace epoch invalidation clears the owner; obsolete replies cannot restore
-another account's names or modify assignments, drafts or save state.
-
-Annotation and review headers show presence between navigation and the
-status dot. The dataset badge yields its space to presence on narrower screens.
-`presence.rs` renders a static row of 28-point avatars inside one stable,
-44-point focusable button. It measures available width and replaces overflow
-with `+N`. Hover or activation exposes all usernames and active dataset names,
-including hidden users, and the accessible name contains the same details.
-An empty successful sample reads `No active labellers`; an initial sample reads
-`Checking presence…`. Presence retains the requester and deduplicates by internal
-ID. `PresentUser` supplies optional `githubUserId` for the shared avatar loader
-and resolves detail names from `githubLogin` with internal-ID fallback. Missing,
-pending and failed photos show initials. `avatar.rs` shares the statistics
-texture cache, download bounds, and credential-free browser requests; rendering
-does not retry pending or failed downloads. The former text sweep and its WASM
-motion-preference adapter have been removed.
-There is no daily-count footer or automatic daily-count polling. The existing
-daily-count API remains available for future Statistics work.
-
-Every authenticated application header uses the same connection status dot. Green means a successful
-connection with no pending problem. Yellow covers initial checking, one or two
-failed polls, saving and unsaved edits. Red covers three consecutive failed
-polls, save failure or application/storage errors. Hover and activation expose
-connection, save and error details; keyboard focus exposes the same accessible
-name. Successful recovery clears connection failures immediately. Last-known
-presence remains during one or two failures; three failures display `Presence
-unavailable` until a successful response arrives. The indicator does not change
-assignment ownership or present unsaved work as saved.
-
-## Migration companion annotation focus
-
-Opening a bounding-box annotation assignment without a restored selection selects
-the first visible migration companion in the selected workflow. The shared workspace canvas focuses a selected
-companion once per activation, using the existing context margin and bounded zoom.
-Focus tracks annotation identity rather than version, so editing, autosave and
-manual pan, zoom or Fit do not repeatedly reset the view. Selecting another object
-and returning focuses it again. Refocus active object, bound to R by default,
-also works for selected companions. Independent companion edits retain their link and
-focus behavior. Ordinary boxes retain their existing annotation viewport behavior.
-
-The domain companion derivation supplies the initial size described in
-[the API contract](api.md). Focus padding changes only the view;
-it does not write geometry, provenance, or review state.
-
-## Saved workflow reasons
-
-`workflow_reasons.rs` owns the image-and-workflow-scoped, dismissible reason notice in the
-shared annotation/review workspace. Assignment loading fetches the read-only
-reason projection alongside state and preview. The existing request, assignment
-and workspace gates apply to the entire load, including previous-assignment
-navigation, prefetch and reload. Failed loads use the existing retry path.
-Reasons never arrive through a separate unowned response.
-
-The notice admits only reasons whose image and workflow match the installed
-assignment. An unscoped reason is not inferred relevant from image identity.
-No matching reasons means no notice. The accepted load includes optional public
-GitHub author identity, so feedback does not depend on visiting Statistics.
-The API enriches transport data; persisted reasons and workflow policy stay unchanged.
-
-Each message leads with its event and explanation, separated by four logical
-points. The 44-point dismiss control sits beside the content and does not reserve
-a header row above the explanation. Workflow and current/historical status stay
-visible below the explanation. A 24-point avatar precedes the GitHub username;
-missing avatars use the Statistics initials fallback, and an unavailable login
-reads Unknown author rather than an internal ID. The shared Statistics avatar
-cache prevents per-frame downloads. Object identity and UTC timestamp appear in
-a keyboard-accessible Additional info disclosure, right-aligned on the author row
-at the avatar's 24-point height. The row uses the standard eight-point gaps above
-and below, with no extra vertical button padding. It starts collapsed and retains
-stable per-message identity across redraws. Expanded details use the full content
-width below the entire row. Multiple-message counts sit at the bottom.
-
-The notice retains historical explanations, labels current review rounds and
-active exclusions, and does not treat superseded decisions as current. It shares
-the floating notice area with workflow-change notices. Newest messages appear
-first; earlier or replaced feedback is explicitly labelled. Long content scrolls
-directly. Short viewports show the event title as a button opening full feedback
-in a bounded non-modal window. Dismissal lasts for the opened context; an accepted
-reload or reopening installs a new notice. Image, dataset, workflow and view
-changes invalidate the old context. Revisiting a completed review creates no
-notification without saved feedback.
-
-| Saved input | Display mapping |
-| --- | --- |
-| Annotation edit/deletion reason supplied through the API | Annotation edit/deletion with workflow and annotation identity; built-in machine markers are omitted |
-| Review comments, including historical/revised decisions | Review rejected / Review approved, or Review changed to rejected / approved for a revised decision; Reviewer comment when the decision is unavailable; superseded decisions remain historical |
-| Legacy reviewer correction reason | Reviewer corrections saved with its annotation; the transaction's identical review-comment copy is shown once |
-| Review correction submission reason | Reviewer corrections saved for the submission; object explanations retain explicit object labels inside the text |
-| Migration exclusion category and note | Object excluded from migration with workflow and object group; category and optional explanatory note remain distinct; replaced exclusions remain historical |
-| Imported-work reopening and coverage reasons | Imported work reopened or Imported coverage included with workflow identity |
-| Current browser annotation edits and unchanged review approvals | No reason entry; absent/blank comments and internal markers such as `annotator_edit` create no explanation |
-| Missing-object location evidence | Location evidence retains its existing presentation; it has no free-text reason field |
-
-Correction reason entry labels its scope as this object or whole submission.
-`ReviewCorrectionsDraft.object_reasons` retains input by annotation identity when
-moving between objects, participates in browser draft recovery, and clears with
-the corresponding reset/discard operation. Submission combines those explanations
-with object labels into the existing optional reason string. The existing
-2000 UTF-8 byte limit includes labels and separators; validation blocks excess
-input without truncation. Retry retains the same immutable submission. Migration
-exclusion categories remain required for the object, with a note required only
-for Other and optional otherwise.
-
-Dataset-inspector return-to-review reasons are persisted by the inspector action
-below but are not yet integrated into this notice projection.
+`runtime.presence` binds samples to endpoint/account, one request, poll timing,
+and consecutive failures. Every authenticated view polls every ten seconds with
+an eight-second timeout; visibility return coalesces an immediate refresh. Epoch
+invalidation clears names without modifying drafts or assignments. Avatar loading
+shares bounded credential-free public GitHub requests and caches failures.
+Last-known presence survives one or two failures; three show unavailable until
+recovery. Annotation and review headers show active users; all authenticated
+headers show the same connection dot. Green means connected without a pending
+problem; yellow covers initial checking, one or two failed polls, saving, or
+unsaved edits; red covers three failures, save failure, or application/storage
+errors. Hover, activation, and keyboard focus expose the same details. Recovery
+clears connection failures immediately. Presence has no daily-count footer.
 
 ## Dataset inspector
 
-`dataset_inspector` owns gallery filters, accumulated results and scroll position,
-previews, read-only canvas, overlay visibility and the explicit return-to-review
-draft.
-The Inspect destination is available to every dataset member. Its closed
-`Inspect`/`Inspected` commands use the existing request/auth/workspace ownership
-checks and structured session-recovery failures. Leaving the workspace clears
-inspection data and cancels image transfers.
-Browser workspace preferences restore the Inspect destination. Gallery filters
-and return drafts remain in memory; they are not restored after a page reload.
-Same-account session recovery retains the reason while cancelling obsolete reads.
+Inspect uses closed commands and the shared auth/workspace/request gate. Leaving
+clears its data and cancels transfers. Workspace preferences restore the destination;
+gallery filters, scroll state, and return drafts are memory-only. Same-account
+recovery retains the reason and cancels obsolete reads.
 
-The second bar owns previous/next image navigation, Fit, refresh, and panel
-toggles using the same icons as Review. Image names appear beneath thumbnails.
-Wide layouts have collapsible Images and Overlays side panels;
-Medium and Compact use modal drawers with focus restoration. Filters and scroll
-position survive panel changes. The read-only canvas retains the available space.
+Filters apply before pagination under the [API rules](api.md#dataset-inspection-and-return-to-review).
+Filter menus recalculate available viewport height each frame and scroll only
+when needed. Choices keep full accessible names without repeating them in hover
+tooltips. The gallery loads consecutive metadata batches of up to 100 without
+waiting for scrolling or previews. Counts distinguish matching images from the
+loaded list. Pending filter replacement labels the still-displayed previous
+results; accepted replacement resets the list, and obsolete replies are rejected.
+Failures preserve displayed results and require Retry.
 
-The wider Images panel has a three-column thumbnail grid with filenames bounded
-by each tile. Search and workflow/class/status filters stay above the grid.
-Filter popups reset their available height to the current viewport on every frame,
-so a cached smaller popup cannot keep a fitting list scrollable. Oversized lists
-scroll within that viewport; menus that fit have no vertical scroll range.
-Selectable filter choices do not repeat their labels in hover tooltips.
-Metadata batches of up to 100 items load consecutively without waiting for
-scrolling or preview downloads; there are no page controls. The result total
-means matching images, with a separate loaded-list count while metadata arrives.
-Pending filter replacements explicitly identify the still-displayed previous results. A filter change resets results and rejects obsolete batch replies.
-Failed loads preserve displayed results and require an explicit retry.
-Virtualized rows request visible cached Thumbnail v1 WebP proxies with at most two concurrent image reads and at most 48
-cached thumbnail textures, evicting offscreen textures as the user scrolls. Offscreen preview requests are
-cancelled and removed from request ownership before newly visible images load.
-Opening an image immediately reuses its thumbnail beneath a centered spinner;
-authoritative state and the larger Data Saver preview load independently without
-claiming an assignment. An uncached selected image requests a thumbnail even if
-its navigation drawer is closed. Larger preview requests take priority over new
-background thumbnails, and stale replies cannot replace the selected image.
-Previous/next image navigation crosses page boundaries within the active filters.
-Canvas interaction permits pan/zoom, without annotation editing. Workflow, status,
-and annotation-type visibility intersect. The compact overlay panel has one
-visibility row per workflow with an annotation count and status tooltip; skeleton
-edges come from each annotation's configured task. The geometry toggles use the
-same type icons as Annotate/Review and share a row with the status dropdown.
-Workflow visibility uses these icon toggles beside workflow names. Return-target
-selection uses full-width workflow-name buttons with contextual accessible names
-and selected states. The shared domain eligibility policy explains disabled
-workflows, approval configuration, incomplete work, active assignments, and
-incomplete review targets. Completed bounding-box and skeleton workflows follow
-the same eligibility rules. Authoritative ground-truth import configures review as
-`None`, so its completed workflows remain ineligible unless approval review is
-explicitly configured; the selector explains that approval review is not enabled.
+Virtualized rows allow two concurrent thumbnail reads and 48 cached textures.
+Offscreen reads are cancelled and removed from request ownership before newly
+visible previews load. Selected images immediately reuse a thumbnail while state
+and Data Saver load independently. An uncached selection requests its thumbnail
+even outside the visible grid. Selected-image previews take priority over new
+background thumbnails. Previous/next crosses loaded-page boundaries. Pan/zoom
+and intersecting workflow/status/type visibility never edit annotations.
 
-Inspector boxes and skeletons use class colors. Box labels sit inside the visible
-corner when space permits; unboxed keypoints have class labels. A visible box in
-the same object group supplies the shared label, and hiding boxes restores labels
-on visible keypoints. Opaque class-colored label backgrounds choose black or white
-text for at least 4.5:1 contrast. Labels use screen-space text, bounded two-line
-layout, full accessible names/tooltips, and the canvas clip/mask. Crowded labels
-move downward where space permits; small boxes may need labels wider than the box.
+Boxes and skeletons use class colors. A visible box supplies its object group's
+label; hiding boxes restores labels on visible keypoints. Labels use screen-space
+text, bounded two-line layout, full accessible names/tooltips, and canvas clipping.
+Opaque class-color backgrounds choose black or white text for at least 4.5:1
+contrast. Labels start inside the visible box corner when possible and move down
+to avoid crowding where space permits; a label can exceed a small box's width.
 
-Reviewer/data-admin return controls are immediately available in the Overlays
-panel or drawer and select workflows independently of overlay visibility.
-Each choice includes its workflow-type icon. Ineligible choices show an adjacent
-info control with the exclusion reason on hover or activation; keyboard and
-assistive-technology users can access the same explanation.
-Discard or success clears the draft while keeping the controls available.
-A nonblank bounded reason is required; failures retain the draft and exact retry
-identity, and success is reported only after the server responds. Refresh reloads
-state and prepares a new request identity while retaining the reason. A pending
-return request or entered reason blocks navigation until it finishes or the user
-explicitly discards the draft. Return-to-review does not implement notifications.
+Return-to-review controls remain available in the Overlays panel or drawer for
+reviewers/data admins. Full-width workflow-name buttons include type icons and
+selected state independently of overlay visibility. The domain's shared
+`return_to_review_block` policy supplies eligibility for boxes and skeletons;
+adjacent info controls expose exclusion reasons to pointer, keyboard, and
+assistive-technology users. Imported workflows default to review `None`, so
+completed imports need explicit approval configuration before return.
 
-## Schema reuse during dataset creation
+A pending request or entered reason guards navigation until completion/discard.
+Failure preserves the exact retry identity; refresh prepares a new identity while
+keeping the reason. Success or discard clears the draft and keeps controls
+available. Notification delivery is not implemented.
 
-Setup owns the “Copy schema from” dropdown, defaulting to None, its selected
-source, preview request identity, and local loading/error state. Options come
-from dataset summaries with DataAdmin access and display names plus IDs.
-Selecting None clears the preview and creates empty classes and workflows.
-Selecting a source loads its current admin configuration through a dedicated
-command without changing the active workspace. Only the latest selection's
-response can populate the preview; session and workspace invalidation clear
-preview ownership. A selected source blocks creation until its preview and
-catalog entry are available. Failures offer reload and never select None
-implicitly. The server rechecks source access and configuration on creation.
+## Import, export, and schema reuse
 
-The preview lists classes, workflows, and ordered keypoints. It explains omitted
-source resources, independent subsequent edits, and matching export selections.
-Tutorial image references and prelabel bindings are omitted; remaining portable
-workflow definitions retain their task/class identities. Creation still opens
-the destination's administration screen.
+Import owns editable drafts, recovery, source registration, planning, polling,
+and upload; storage owns durable lifecycle. The all-zero YOLO pose policy is an
+explicit plan choice, defaults to incomplete, survives recovery, and invalidates
+accepted plans on change. Its width and acknowledgement stay bounded even when
+other mapping fields expand the form.
+
+`admin.export` in `export_flow` owns saved-metadata selection, job history, summary
+acknowledgement, and one pending action. Closed export commands/replies use shared
+auth/workspace/dataset ownership. Invalidation clears state; queue/dispatch failure
+clears pending state locally. Polling occurs at most once per second while visible.
+Explicit actions can supersede polls; stale replies lose their request owner.
+Refresh failure retains stale data and Retry. An uncertain mutation refreshes
+history instead of blindly creating another job.
+
+Reload restores active/Ready captures only. Terminal jobs stay inspectable in
+history; changing selection clears old terminal details. Active/Ready jobs require
+cancellation before another preflight. Start needs unchanged options, saved Admin
+configuration, a Ready job, and explicit summary acknowledgement. Domain validates
+local class mapping; server preflight owns completeness and source consistency.
+Download performs authorization checks and opens the attachment URL without
+buffering bytes in WASM. UI reports requested download, not transfer completion.
+
+Setup schema reuse has a dedicated preview request without workspace switching.
+Only the latest selected source can populate it. None clears the preview; a source
+blocks creation until its catalog entry and preview are available. Failures never
+implicitly select None. Server creation rechecks source permissions and definition
+validity. See [administration](administration.md#create-or-reuse-a-schema).
+
+## Notices and build information
+
+Work owns automatic-workflow notices separately from transient runtime errors.
+An accepted availability change captures old/new identities and presents them
+before the next claim, without requiring acknowledgement. Same-pass presentation
+suppresses duplicate fallback; short layouts reserve inline space and reclaim the
+canvas inset. Loading/prefetch/retry keep the notice. Dismissal, explicit selection,
+auth/dataset changes, or leaving work clear it.
+
+`workflow_reasons.rs` owns image-and-workflow-scoped saved feedback. Assignment
+load fetches it with state/preview under the same ownership gate; failure fails
+that load. Only reasons matching both assignment identities are installed;
+unscoped reasons do not match, and no matching feedback means no notice. Optional
+public GitHub author identity arrives in the same API response without a
+Statistics visit. This transport enrichment changes no persisted event.
+
+Newest messages lead and earlier/replaced feedback stays explicit. The event and
+explanation remain visible, followed by workflow and status. A 24-point avatar
+and username share a row with the initially collapsed Additional info disclosure;
+expanded object identity and UTC time use the full width below it. The shared
+avatar cache and initials fallback avoid repeated downloads; unavailable login
+reads Unknown author. Message identity keeps disclosure state stable across
+redraws, and multiple-message counts appear at the bottom. Long explanations
+scroll; short viewports open full feedback from the event title in a bounded
+non-modal window. Dismissal lasts for the opened context; accepted reload or
+reopening installs a new one, and image/workflow/dataset/view changes clear it.
+Revisiting completed review alone creates no notice.
+
+Return-to-review reasons are not yet included. Object reasons survive navigation
+and browser recovery by annotation identity; reset/discard clears them. Submission
+combines labels, separators, and text under the existing 2000-byte limit without
+truncation, preserving exact retry identity.
+
+`build_information.rs` owns public endpoint-bound identity requests, comparison,
+About, clipboard feedback, and the bottom warning. Requests coalesce and admit
+one completion; endpoint changes invalidate them, while session/workspace changes
+do not. Refresh clears stale server identity. WASM injects its compiled identity,
+clipboard promise, and visible-focus adapter; mutable `release.json` never defines
+the executing browser's identity. Copy succeeds only after the platform confirms
+it; failure opens selectable manual-copy text. Mismatch navigation uses ordinary
+transition guards. No mismatch means no reserved status-panel height.
+
+The bottom action bar remains empty until session, dataset, image, and required
+assignment are loaded. Background availability refresh preserves loaded actions.
+Resize measurement requests a settling repaint only when height changes, avoiding
+input-dependent gaps or repaint loops at unsupported tiny sizes.

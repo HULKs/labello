@@ -1,9 +1,5 @@
 # Parallel issue development
 
-> **Status:** Contributor workflow guide
-> **Owner:** Labello maintainers
-> **Audience:** Implementers, orchestrating agents, and reviewers
-
 Use this guide when the user authorizes implementation of several issues,
 delegation into tracks, or combined testing of dependent PRs. Planning a batch
 does not authorize starting it. Preserve any pause for issue-body review until
@@ -70,7 +66,7 @@ processes, and evidence directories for concurrent drivers. Follow the
 for headless execution and connection isolation. Use the assigned checkout's
 build, and limit concurrent builds to the machine's available CPU and memory.
 
-## Verify each PR and the combined group
+## Verify each pr and the combined group
 
 Each issue retains its focused regression evidence and canonical verification
 against its recorded PR base. The required hosted `Testing` check must pass on

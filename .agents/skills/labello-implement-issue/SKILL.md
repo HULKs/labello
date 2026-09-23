@@ -39,7 +39,7 @@ Treat issue project-status transitions and the delegated task-scoped pull-reques
 - Cover every affected runtime surface. For coordinated API changes, update the client facade and DTOs, API, UI or demo callers, documentation, and focused tests as applicable.
 - Preserve Labello's domain, persistence, authorization, import, redaction, and UI ownership invariants.
 - Add the smallest regression test that would fail for the original defect. Record how the fail-before condition was established; do not rewrite or reset the user's worktree merely to demonstrate it.
-- Update normative current documentation in the same change when behavior or a contract changes. Advance a `Last verified` marker only after checking the complete affected flow.
+- Update current documentation in the same change when behavior or a contract changes, after checking the complete affected flow. Keep document metadata out of Markdown; use Git history.
 - Keep generated and runtime paths out of the change unless the issue explicitly requires them. Maintain an exact task-related publication scope for `$labello-open-draft-pr` and preserve every unrelated worktree change.
 
 ### Product UI changes

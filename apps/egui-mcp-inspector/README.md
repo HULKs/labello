@@ -1,4 +1,4 @@
-# Labello egui MCP Inspector
+# Labello egui MCP inspector
 
 This standalone development app exposes Labello's shared UI through eframe's
 inspection protocol. It is intentionally outside the main Cargo workspace and
@@ -53,13 +53,10 @@ without root, and `dpkg-deb -x <downloaded-deb> <installation-directory>`
 extracts it. Check `ldd <installation-directory>/usr/bin/Xvfb` for missing
 dependencies. Extraction alone does not install its dependencies.
 
-The current development account has the package extracted at
-`~/.local/share/labello-inspection/xvfb`. The following command works with that
-installation or with system-installed Xvfb. Run it from the exact checkout root:
+With Xvfb installed and on PATH, run this from the exact checkout root:
 
 ```sh
 env -u WAYLAND_DISPLAY \
-  PATH="$HOME/.local/share/labello-inspection/xvfb/usr/bin:$PATH" \
   LIBGL_ALWAYS_SOFTWARE=1 EGUI_INSPECTION=127.0.0.1:5721 \
   dbus-run-session -- xvfb-run -a -s '-screen 0 1600x1200x24 -nolisten tcp' \
   cargo run --locked --manifest-path apps/egui-mcp-inspector/Cargo.toml \
@@ -70,21 +67,6 @@ env -u WAYLAND_DISPLAY \
 display capacity; use MCP `resize` to change the app window. Keep the app
 running in its own terminal/process session while sending MCP commands. Capture
 screenshots while the window is rendering; a minimized window can time out.
-
-This account also has `~/.local/bin/labello-inspector-headless`, an untracked
-convenience launcher. From a worktree root, explicitly select that checkout and
-the allocated port:
-
-```sh
-LABELLO_INSPECTOR_ROOT="$PWD" LABELLO_INSPECTION_PORT=5721 \
-  labello-inspector-headless --preset setup
-```
-
-Check the manifest exists under that root before using the shortcut. The
-installed launcher falls back to the main checkout if it cannot find the
-manifest; a screenshot from that fallback does not verify a worktree change.
-On another account or machine, use the full Xvfb command above rather than
-assuming this local launcher exists.
 
 ## Development and verification loop
 
@@ -123,28 +105,6 @@ assuming this local launcher exists.
    display and verify the allocated inspection port is no longer listening.
    Stop only your own processes.
 
-If the session cannot expose newly registered MCP tools, the server can also
-be tested by a client speaking MCP JSON-RPC over its stdio transport. This
-account's local `~/.local/share/labello-inspection/mcp_call.py` does that, taking
-a JSON array of tool calls on stdin. It starts a separate `egui-mcp` process
-per invocation; include `attach` at the start and `disconnect` at the end.
-For example, with the app running on 5721:
-
-```sh
-python3 "$HOME/.local/share/labello-inspection/mcp_call.py" <<'JSON'
-[
-  {"tool":"attach","args":{"host":"127.0.0.1","port":5721}},
-  {"tool":"query_tree","args":{"role":"Button","limit":20}},
-  {"tool":"disconnect"}
-]
-JSON
-```
-
-For parallel runs with this helper, place a copy in each driver's artifact
-directory; it writes `mcp-stderr.log` beside itself. Redirect its stdout to that
-same directory. The helper and its smoke-test artifacts are installation
-conveniences, not repository tools or substitutes for issue regression tests.
-
 ## Parallel agents
 
 Allocate one inspection instance per active driver. A sequential issue track
@@ -171,10 +131,8 @@ named MCP servers for the concurrent drivers before starting their sessions,
 or serialize inspector access. Do not assume inherited MCP tools are isolated.
 Disconnect and reattach to change apps only when you own that bridge.
 
-The local launcher supports concurrent instances through
-`LABELLO_INSPECTION_PORT`; use a different value in each driver's command.
-Keep allocation and process ownership in the orchestration handoff. A port
-conflict is a failed launch, not permission to attach to or stop its occupant.
+Keep allocations and process ownership in the handoff. A port conflict is a
+failed launch, not permission to attach to or stop its occupant.
 
 In live mode the current app initially targets `http://127.0.0.1:8080`. To use
 a dedicated server on another port, select its endpoint through Advanced
@@ -183,17 +141,10 @@ no inspector CLI endpoint flag. Configure each disposable server using the
 [server configuration contract](../../docs/configuration.md), including
 `LABELLO_CONFIG`, `LABELLO_BIND`, and `LABELLO_DATASETS_ROOT` where appropriate.
 
-On 2026-09-05 at `be61e3d`, two Setup instances were exercised concurrently on
-ports 5721 and 5722 with separate Xvfb displays and MCP server processes. One
-opened compact Settings at 390x844 while the other retained Setup at 1288x820.
-PNG dimensions and independent widget trees were checked again after both
-drivers finished. This verifies native process isolation on this host; it does
-not establish subagent-host MCP isolation or parallel live-server behavior.
-
 ## Presets and live mode
 
-The default is the annotation preset. Use `-- --preset <name>` with Cargo or
-`--preset <name>` with the local headless launcher for another frozen state.
+The default is the annotation preset. Use `-- --preset <name>` with Cargo for
+another frozen state.
 
 Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,

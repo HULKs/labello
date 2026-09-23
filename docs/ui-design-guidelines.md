@@ -1,18 +1,10 @@
-# Labello UI And Design Guidelines
+# Labello UI and design guidelines
 
-> **Status:** Normative current reference
-> **Owner:** UI maintainers
-> **Audience:** UI designers, maintainers, and contributors
-> **Last verified:** 2026-07-30 at `4f9c332`
-> **Supersedes:** `plans/ui-beautification.md` and
-> `plans/beautification/` for current UI acceptance criteria
+Use these criteria for shared UI changes. [UI implementation](ui-ownership.md)
+defines state and async boundaries; [annotation and review](annotation.md) explains
+the user workflow.
 
-This is the working standard for UI changes. It distills the original
-[`ui-beautification.md`](plans/ui-beautification.md) report and the completed
-[beautification work](plans/beautification/README.md), which remain as rationale
-and history.
-
-## Product Rules
+## Product rules
 
 - Keep the image and current task central. The canvas stays dark, low-noise, and
   shadow-free; metadata and secondary panels yield space first.
@@ -64,7 +56,6 @@ and history.
   cards and stacked fields on Compact layouts. Keep forms and pages bounded.
 - Truncate or wrap long content deliberately; expose the complete value by
   tooltip or accessibility text.
-
 - Dataset inspector filter menus use compact 32-point choices inside standard
   44-point triggers. Workflow-type icons, class-color markers and status symbols
   support the full accessible choice names; truncated labels retain tooltips.
@@ -72,17 +63,17 @@ and history.
   and scroll only when their contents cannot fit. This density exception applies
   to the inspector's workflow, class and status choices.
 
-## State And Safety
+## State and safety
 
 - Each remote region shows one base state: initial loading, loaded, empty,
   initial failure with Retry, loaded while refreshing, or loaded and stale after
   refresh failure.
-- Keep loaded data visible during refresh. View-specific bars start blank with their
-  layout space reserved. Within the same view and workflow, retain their last
-  loaded contents while the next or previous image loads and disable the
-  retained controls. Loading feedback belongs in the image region. Do not
-  show zero placeholders after failure or present retained contents as newly
-  loaded data. The global top bar stays visible and keeps its layout during loads.
+- Keep loaded data visible during refresh. View-specific bars start blank with
+  their layout space reserved. Within the same view and workflow, retain their
+  last loaded contents during image navigation and disable retained controls.
+  Loading feedback belongs in the image region. Never show zero placeholders
+  after failure or present retained contents as newly loaded data. The global
+  top bar stays visible and keeps its layout during loads.
 - Put validation and failures in the affected field, section, or page. Reserve
   global notices for cross-screen events.
 - Hide account-scoped content while authentication is unresolved. Clear stale
@@ -94,7 +85,7 @@ and history.
 - Roll back loading ownership when work cannot be queued; local failure must not
   leave controls permanently busy.
 
-## Interaction And Accessibility
+## Interaction and accessibility
 
 - Use native `egui::Modal` for blocking decisions. Only the highest-priority
   overlay is active; it blocks background input, and Escape reaches it first.
@@ -104,16 +95,16 @@ and history.
   keyboard events before other controls process them.
 - Use a danger action plus concise confirmation for destructive work. Never use
   double-click as confirmation.
-- Preserve 44-point targets, except for the compact saved-feedback disclosure
-  specified below. Preserve visible focus, tooltips, associated field labels,
-  and complete, contextual AccessKit names.
+- Preserve 44-point targets, except for the inspector menu choices and compact
+  saved-feedback disclosure specified here. Preserve visible focus, tooltips,
+  associated field labels, and complete, contextual AccessKit names.
 - Expose selected, open, disabled, loading, and modal states semantically. Never
   rely on color alone; retain text, stroke, pattern, thickness, handle, or shape
   cues.
 - Match cursors to create, move, resize, pan, and disabled behavior. Keep
   gestures and shortcuts discoverable through controls or concise hints.
 
-### Measurable Accessibility Criteria
+### Measurable accessibility criteria
 
 - Normal text and text rendered into controls must have a contrast ratio of at
   least 4.5:1 against its background. Text at least 18 points, or at least
@@ -150,7 +141,7 @@ screen-reader support until its critical workflows have also been exercised
 with named browser, operating-system, and screen-reader versions and the result
 has been recorded.
 
-## Screen Patterns
+## Screen patterns
 
 - **Login and setup:** keep sign-in focused and hide methods until session
   discovery completes. Provide About without authentication and put endpoint
@@ -196,93 +187,45 @@ has been recorded.
   fixed in screen space.
   Expose keypoint names, states, and marker descriptions on the canvas's
   accessibility node without encoding image coordinates.
-- **Review context:** the Inspector identifies the workflow, class, geometry type,
-  canonical object position and persisted target version. Final checks say
-  "Final check / Full image" and omit object-only fields. Migration distinguishes
-  annotated dispositions, excluded objects, discovered skeletons and confirmation;
-  excluded objects show disposition version without inventing an annotation version.
-  Actual edits show the base persisted version and unsaved input; opening an item
-  alone is not a correction. The second-bar indicator leads with item position or
-  Image overview, followed by workflow, class and geometry type. Its panel icon and
-  selected state reflect Inspector visibility, and activating it toggles the panel.
-  Size the indicator to its text and panel icon, capped by the available width.
-  Long identity text truncates within the indicator while the tooltip and Inspector
-  retain the complete accessible identity. Keep the current position visible when
-  corrections exist. The Inspector starts closed. On mobile, keep the item/Inspector
-  indicator, Refocus, Fit and workflow toggle in one top row. Put Previous image,
-  Previous object, Discard changes and Skip in a visible bottom row beneath the
-  decision and Next object/Overview controls. Use the same names at every width.
-  Skip is not hidden in the navigation menu.
-  Reviewed keypoints retain their normal marker without an additional selection circle.
-  When reviewing an added migration object, Remove item also belongs to this footer
-  row, with an icon fallback when its text does not fit.
-  Annotation and review toolbar/footer buttons, including migration, fall back to icons when their text exceeds the allocated
-  width, retaining accessible names and tooltips. Short empty states scroll to keep
-  retry actions reachable.
-  The primary action evaluates the focused item independently: Approve for an
-  unchanged item, or Submit correction to retain a valid correction locally; either
-  advances to the next item. Space uses this same action
-  through the configurable Submit and next binding; existing Y/N bindings
-  remain supported. Previous item, Next item and Overview retain valid corrections, which
-  satisfy the corrected item's rejection requirement. Unchanged items still require
-  explicit approval. Reset item restores the original annotation or disposition and requires
-  another decision. Discard corrections resets every changed item for review.
-  The overview permits drawing missing annotations and revisiting existing items,
-  including while a valid addition is open. Completing a new skeleton retains it
-  locally so the next click can start another; a one-keypoint skeleton takes one click.
-  Reselecting or dragging an addition does not redirect new placement into an occupied
-  keypoint: empty-space clicks fill unplaced points or start another object after completion.
-  The configured Delete annotation shortcut discards a selected overview addition
-  locally (the whole object, including multi-point skeletons), not other additions
-  or persisted review targets. Busy states, text focus and open overlays block it.
-  Clicking a previously approved or corrected item reopens it with its retained edits.
-  Once every original item has a decision, Approve (also Space) submits approval if no
-  corrections remain; otherwise Submit correction submits a fresh review round. Invalid
-  or unfinished additions block confirmation. Only the overview submits
-  corrections to the server. Failed submissions retain the exact retry request.
-  Short compact decision revisions keep a visible Revising indication in the
-  existing identity line. The full accessible details explain that geometry is
-  unchanged; no revisit notification or redundant caption row consumes canvas
-  space. Missing target context must not show stale target details.
-  Decision revisions distinguish the current effective decision from a staged,
-  uncommitted replacement. Loading, missing/stale targets and lost assignments
-  clear the previous context; a missing image preview is labeled separately while
-  valid authoritative target context remains available. Long values wrap with a
-  complete accessible summary, and compact Inspector drawers scroll.
-  Workspace secondary actions use measured button atoms, including the current
-  font, icons and shortcuts, in the space left after preceding controls and badges.
-  Preserve each workflow's primary controls and secondary order. Show the longest
-  secondary prefix that fits, trying icons before an overflow trigger for the remaining tail; omit
-  the trigger when everything fits. Required controls wrap and the panel reserves
-  their actual height. Previous image and Previous object remain visible beside
-  the other required workflow controls; only secondary commands use overflow.
-  Previous image uses an image/back-arrow icon and returns to the immediately
-  previous eligible assignment. Previous object uses a back arrow within the
-  current image. Annotation retains cyclic selection, review retains valid
-  corrections and stops at the first target, and migration retains its audited
-  revisit and discard guards. Short migration annotation bars remove spare vertical padding so confirmation
-  and the canvas remain visible. Moving a focused action into overflow transfers focus to
-  the trigger without dispatching it; opening the menu returns keyboard access to
-  that action. Long menu labels and shortcuts stack within a scrollable menu.
-  Review bars use that same current target in every layout. Reserve space for the
-  workflow/class identity, full annotation type and canonical phase before optional
-  filename text and secondary controls. Only the identity line may truncate; type
-  and phase wrap at their measured text width and the shell reserves the resulting
-  height. At compact sizes, the summary opens Inspector details by touch or keyboard,
-  a separate Workflow control stays reachable, and canvas controls share the same
-  row. Annotation also keeps canvas and panel controls together in one compact row. Compact availability feedback shares the truncatable identity line; it
-  must not take width from the full type/phase line or add a context row.
-  Short viewports retain identity and phase. During a same-view image load,
-  retain the complete previous bar presentation, including control placement
-  and summary dimensions. Update identity, phase and actions together once the
-  new image is ready. First load and changes of view, workflow, dataset or
-  account show blank reserved bars until ready. Empty and failed loads discard
-  retained presentation and use the normal empty/error state. Never pair old
-  identity with a new phase. The global header remains visible during initial
-  loading and image transitions, with its existing navigation and utilities.
-  Loading alone must not change its layout. The dataset
-  inspector reserves its context row during initial gallery loading and retains
-  its fixed controls across image loads.
+- **Review context:** use the same exact-target projection in every layout.
+  Identify workflow, class, geometry type, position, and persisted target version.
+  Final checks say "Final check / Full image" and omit object-only fields; excluded
+  migration targets use disposition versions. Actual edits show base version and
+  unsaved input. Opening an item alone is not a correction.
+  The second-bar indicator leads with position or Image overview and toggles
+  Inspector, which starts closed. Size it to measured text/icon width; truncate
+  identity with full accessible details, but wrap type and phase. The shell
+  reserves their actual height. Same-view image loads retain the complete
+  previous bar presentation, including control placement and summary dimensions.
+  Identity, phase and actions update together when the next image is ready.
+  First load and changes of view, workflow, dataset or account show blank reserved
+  bars. Empty or failed loads discard retained presentation; preview failure
+  remains separate from valid target context. Never pair old identity with a
+  new phase. The global header keeps its navigation, utilities and layout during
+  loads. The dataset inspector reserves its context row during initial gallery
+  loading and retains fixed controls across image loads.
+  On Compact, keep Inspector, Refocus, Fit, and Workflow in one top row. Keep
+  Previous image, Previous object, Discard changes, and Skip visible below the
+  decision and Next object/Overview controls. Added migration objects also expose
+  Remove item. Icon fallback retains full names/tooltips. Short empty states scroll.
+  Use Approve for unchanged items and Submit correction for valid edits. Space
+  and Y/N follow the same [review flow](annotation.md#review-and-correct).
+  Reset requires another decision, navigation retains valid corrections, and only
+  the overview submits them. Incomplete additions block submission. Failed
+  requests preserve exact retry identity. Reviewed keypoints have no extra
+  selection circle.
+  Revisions keep a visible Revising indication in the identity line and distinguish
+  effective decisions from staged replacements without a redundant notice.
+  Previous image returns to the eligible previous assignment; Previous object
+  stays in the current image, retaining corrections and stopping at the first
+  review target. Migration retains its audited revisit/discard rules.
+  Measure secondary actions with actual fonts, icons, and shortcuts. Show the
+  longest prefix that fits, trying icons before overflow. Required controls wrap
+  and remain visible. Moving a focused action to overflow transfers focus to its
+  trigger without dispatch; menu labels/shortcuts stack and scroll.
+  Compact availability feedback uses the truncatable identity line without
+  displacing type/phase or adding a row. Short viewports retain identity, phase,
+  and useful canvas height; migration bars remove spare padding.
 - **Saved reasons:** show only feedback matching the active image and workflow,
   sharing the persistent, dismissible area with workflow-change notices. Lead
   with the event and explanation at a four-point gap; keep the 44-point dismiss
@@ -360,7 +303,7 @@ has been recorded.
   focus, or semantic changes, record the initial focus, tab sequence, accessible
   name/state, Escape behavior, and restored focus.
 - Run focused UI tests, formatting, and Clippy. Run the WASM check and
-  `trunk build --release` when browser or shared rendering changes.
+  `trunk build --release --locked` when browser or shared rendering changes.
 
 ### Build information and mismatch
 

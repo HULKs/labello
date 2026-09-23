@@ -1,23 +1,20 @@
-# HTTP API Contract
-
-> **Status:** Normative current reference; internal and unversioned
-> **Owner:** API maintainers
-> **Audience:** Client, API, and UI maintainers
-> **Last verified:** 2026-07-30 at `4f9c332`
+# HTTP API contract
 
 This is the current route, access, transport, and error contract. The API is an
 internal contract between the bundled Labello clients and server. It has no URL
 version prefix and does not promise compatibility for independent external
 clients. Coordinate contract changes across `labello-client`, `labello-api`,
-all UI callers, and tests.
+all UI callers, and tests. Route tables follow the router and handler tests;
+update them with route, role, header, limit, or response changes.
 
-## Representation Sources
+## Representation sources
 
 JSON field names and enum wire values are defined by:
 
 - `crates/labello-client/src/dto/` for access, workflow, media, and offline
   request/response DTOs;
-- `crates/labello-client/src/import.rs` for import and migration DTOs; and
+- `crates/labello-client/src/import.rs` for import and migration DTOs;
+- `crates/labello-client/src/export.rs` for export DTOs; and
 - versioned `labello-domain` types for persisted workflow, dataset, snapshot,
   and offline artifacts.
 
@@ -25,7 +22,7 @@ Type names in the route tables refer to those definitions. JSON uses each
 type's Serde contract; callers must not infer field names from Rust identifiers.
 Binary image/preview and snapshot-file responses are identified explicitly.
 
-## Authentication, Authorization, And CSRF
+## Authentication, authorization, and CSRF
 
 The browser authenticates with the HttpOnly session cookie created by local
 development login or GitHub OAuth. `Session` below means a valid cookie.
@@ -41,8 +38,8 @@ Dataset access is role-based:
   by configured owner.
 
 All unsafe methods (`POST`, `PUT`, `PATCH`, and `DELETE`) pass CSRF middleware.
-When a session cookie is present, the request must have an allowed `Origin` and
-exactly one `x-csrf-token` matching the session. `/auth/local-admin` is the
+When a session cookie is present, the request must have exactly one `x-csrf-token` matching the session.
+A supplied `Origin` must match the configured allowlist; native clients may omit it. `/auth/local-admin` is the
 middleware exception, but independently requires an allowed `Origin`. OAuth
 state and its flow cookie are validated at the callback. The flow cookie is
 created and expired at the parent path of the validated public OAuth callback
@@ -54,7 +51,7 @@ CORS allows only configured origins, credentials, the implemented HTTP method
 set, and these non-simple request headers: `content-type`, `x-csrf-token`,
 `idempotency-key`, `upload-offset`, `upload-length`, and `digest`.
 
-## Common Limits And Responses
+## Common limits and responses
 
 The default body limit is 128 MiB. Import control JSON is limited to 1 MiB,
 browser file registration JSON to 8 MiB, and an import chunk to the advertised
@@ -90,7 +87,7 @@ The stable status mapping is:
 Internal failures return `internal server error`; diagnostics remain in
 redacted logs. Clients must display the `x-request-id`, not raw internal state.
 
-## Session And Dataset Routes
+## Session and dataset routes
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
@@ -187,7 +184,115 @@ configuration, and dataset balance settings are not copied. The destination
 keeps normal fresh-dataset identity, defaults, and initial administrator roles.
 The source and destination are independent after creation.
 
-## Assignment And Image Routes
+## Public build information
+
+`GET /build-information` returns only `releaseTag` and `sourceCommit`. Each is
+nullable: absent or invalid compiled metadata is `null`, never the shared Cargo
+package version. Tags contain at most 64 ASCII letters, digits, dots, underscores,
+plus signs or hyphens; commits contain exactly 40 or 64 hexadecimal characters.
+The reserved tag `development` represents missing release metadata and is exposed
+as `null`. The response is under 200 bytes, performs no persistence or
+authentication probe, and remains HTTP 200 when `/deployment/readiness` returns
+503. Existing credentialed CORS rules also apply to this public route.
+
+The client uses a ten-second request timeout, validates the two-field DTO and
+rejects responses over 1024 bytes. The response must not expose readiness,
+configuration, authentication state, paths, or other server details.
+
+## Server presence
+
+Authenticated `GET /presence` returns `ServerPresence` with `Cache-Control:
+no-store`. Each `PresentUser` contains a stable internal `userId`, optional
+`githubLogin` and `githubUserId` from the stored account, and the IDs/names of
+datasets where that user holds an unexpired active annotation or review lease.
+`githubUserId` is optional public avatar metadata; clients must not derive it
+from the internal ID. The header displays GitHub profile photos, with initials
+while photos are missing, loading or unavailable. Details use `@githubLogin`
+when nonempty, otherwise `userId`; display names do not override GitHub handles.
+Older responses without these optional fields retain the same ID detail fallback
+and show initials instead of a photo.
+Migration uses those same assignment kinds. The requesting user is included
+under the same lease rules, even when they are the only active user. Users are
+deduplicated and sorted by internal ID, with datasets sorted by ID. Presentation
+metadata never changes identity or assignment ownership.
+
+This endpoint deliberately exposes active usernames and dataset names across
+server dataset-role boundaries to authenticated users. It grants no dataset
+access and returns no assignment IDs, image identities, geometry or session
+information. Query parameters cannot select a different requesting user.
+Unauthenticated requests fail. An unreadable registered dataset fails the
+request instead of reporting a potentially false empty presence list.
+
+Presence reads never claim, renew or release leases. Closing a browser does not
+release its leases automatically; the existing lease-expiry policy applies.
+
+## Current-user daily activity
+
+`CurrentUserActivity` identifies `datasetId`, authenticated `userId`, the inclusive
+UTC `window.start`, exclusive `window.end`, server `sampledAt`, and two integer
+counts: `annotationTasksSubmitted` and `finalTaskReviews`. The route has no
+client-selected user or time window. It requires a current dataset role and
+returns a fixed-size aggregate, never another user's history. A scan crossing
+midnight retries once for the new day, then returns a retryable error if the
+window changes again. The HTTP client
+uses the existing 20-second statistics timeout and credentialed session.
+
+Annotation activity counts committed normal or guided-migration submissions,
+including completion with no review stage. Review activity counts committed
+final task or migration-confirmation decisions, approved or rejected. Each
+counter deduplicates dataset/image/task/user within that UTC day. Saves, imports,
+skips and object decisions do not count. A committed correction submission
+counts its final rejection, once per user/image/task/day. Historical immediate
+reviewer corrections alone do not count. Reopening,
+later rejection and superseding a decision do not retract historical activity.
+Same-day replacement commits count once; a later-day submission or final-review
+replacement counts on its new commit day. Compound review revisions use the
+event's server commit time, not timestamps of locally staged review records.
+Dataset-wide `DatasetStats` semantics remain unchanged.
+
+## Review configuration and task statistics
+
+Current task `review` configuration contains `workflow`, either `none` or
+`approval`, and `allowReviewerCorrections`. Approval requires one reviewer.
+Historical-only configuration fields, roles, task states and assignment kinds
+cannot be introduced through current mutation endpoints.
+
+`DatasetStats` reports `pendingTasks`, `inProgressTasks`, `awaitingReviewTasks`,
+`needsCorrectionTasks`, and `completedTasks`. Each `perTask` entry uses `pending`,
+`inProgress`, `awaitingReview`, `needsCorrection`, and `completed`, plus its
+existing provenance and migration statistics. Each eligible image/task occupies
+one state count. The task table and summary use this same contract. Audit review
+records and contributor activity remain available through their existing APIs.
+
+### Saved workflow reasons
+
+`GET /datasets/{dataset_id}/images/{image_id}/reasons` requires a session and any
+role in that dataset, matching image-state access. It returns `WorkflowReasonEntry[]`
+projected from one authoritative event-log snapshot. Each entry identifies the
+image, event sequence/ID, actor, timestamp, action, optional workflow and object
+identities, optional text and structured exclusion category. Optional
+`reviewDecision` preserves the recorded decision for review and revised-review
+comments; absent values remain neutral comments rather than inferred rejections.
+The existing reason fields remain at the top level. Each entry additionally has
+an optional `author` with `githubLogin` and `githubUserId`, resolved from current
+server account data for that event's actor. Missing accounts produce `null`;
+local accounts can have null GitHub fields. No account timestamps, display names,
+roles, or unrelated accounts are included. Older responses without `author`
+remain readable. This read-only transport metadata changes no persisted event. `currentRound`,
+`superseded` and `currentExclusion` describe that snapshot's relevance. Historical
+entries remain ordered by source event, with copied exclusion sources and the
+legacy correction's identical review comment deduplicated. Blank text and known
+internal annotation markers are omitted. The route does not claim assignments,
+mutate history, or expose annotation geometry. Missing images return 404; role
+and authentication failures follow the normal image-route rules.
+
+The browser loads this resource under the assignment request's existing stale
+response gate. A failed request fails the image load and remains retryable; it
+does not masquerade as an empty reason history. No persisted event or state shape
+changes. Correction explanations for several objects use explicit object labels
+inside the existing optional submission reason and retain its 2000-byte limit.
+
+## Assignment and image routes
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
@@ -198,6 +303,8 @@ The source and destination are independent after creation.
 | `POST /datasets/{dataset_id}/assignments/complete` | Assigned annotator | `AssignmentActionRequest` → `Assignment` |
 | `POST /datasets/{dataset_id}/assignments/reopen` | Owner of exact prior annotation or eligible review assignment | `AssignmentActionRequest` → `Assignment` |
 | `GET /datasets/{dataset_id}/images/{image_id}` | Any role | No input → `ImageState` |
+| `GET /datasets/{dataset_id}/images/{image_id}/reasons` | Any role | No input → `WorkflowReasonEntry[]`; see [saved reasons](#saved-workflow-reasons) |
+| `POST /datasets/{dataset_id}/images/{image_id}/return-to-review` | Reviewer or data admin | `ReturnToReviewRequest` → `ImageState`; exact sequence, atomic selected workflows |
 | `GET /datasets/{dataset_id}/images/{image_id}/record` | Any role | No input → `ImageRecord` |
 | `GET /datasets/{dataset_id}/images/{image_id}/file` | Any role | No input → original image bytes and stored media type |
 | `GET /datasets/{dataset_id}/images/{image_id}/preview` | Any role | `max` query clamped to 256–4096 → raw RGBA bytes (`application/octet-stream`) plus `x-image-width` and `x-image-height`; bounded legacy fallback |
@@ -264,7 +371,95 @@ remains in `ImageState`, snapshots and event replay. Raw event and admin repair
 commands cannot bypass substantive-correction requirements with `ReviewRecorded`
 rejections.
 
-## Manual Migration Routes
+## Dataset inspection and return to review
+
+All dataset members may list indexed images and read their previews and current
+annotations, including completed images outside their assignment queue. Search,
+workflow, class and workflow-status predicates apply before pagination. With no
+workflow/class/status filter, only the requested page loads annotation state;
+search and ordering use the image index. State-dependent filters evaluate
+rebuildable, process-local per-image summaries before selecting the page.
+A cold summary loads authoritative image state once;
+subsequent queries reuse it until that image changes. Configuration defaults and
+image records come from the current request, not cached workflow definitions.
+A workflow filter identifies configured workflow status, including Pending on
+unannotated images; selecting a workflow alone need not reduce the image count.
+With All workflows, Completed requires every currently configured workflow
+(including disabled workflows) to be Completed, and a dataset without workflows
+matches no completed images. Historical workflow IDs do not affect this check.
+With a specific workflow selected, Completed checks only that workflow. Other
+status filters match any workflow when no workflow is selected. Browsing
+and changing overlay visibility require no assignment and append no events.
+
+`POST /datasets/{dataset_id}/images/{image_id}/return-to-review` requires a
+reviewer or data-admin role and the normal CSRF checks. Its JSON body is
+`ReturnToReviewRequest`: `requestId`, `expectedSequence`, `taskIds` and `reason`.
+Select 1–100 distinct configured workflows and supply a nonblank reason of at
+most 2000 UTF-8 bytes. The server requires an exact image sequence and enabled,
+completed approval workflows without an unexpired assignment. It rejects the
+entire selection if any workflow is ineligible. Active leases are not stolen.
+
+Success returns the replayed `ImageState` with the selected workflows submitted
+for fresh review rounds. Geometry and previous decisions remain unchanged.
+Stale state, active work, ineligible workflows and conflicting request-ID reuse
+return 409. An identical request by the same actor is idempotent across restart
+and later work; it returns current state without appending another event.
+Request identity is scoped to the dataset image. Other roles cannot mutate
+through this route, and ordinary event ingress cannot forge its server event.
+
+## Encoded working previews
+
+Standard v1 resizes to at most 1600 pixels on the longest edge and encodes
+lossless WebP. Data Saver v1 uses at most 1280 pixels and lossy WebP quality 80
+(on libwebp's 0–100 scale). Thumbnail v1 uses a 256-pixel maximum edge and the
+same lossy quality for gallery proxies. No profile upscales. All preserve the existing
+Triangle resize at the decoder's native channel depth followed by RGBA8
+conversion, first-frame behavior, and no EXIF orientation or ICC conversion.
+Standard decoded RGBA, including transparent RGB, is identical to the legacy
+1600 preview. Original record dimensions remain authoritative for geometry.
+
+Both routes authenticate and authorize each request, including cache hits, and
+recheck session, roles, and image index after worker completion. Source content
+is verified against its authoritative BLAKE3 hash before every cache read.
+Responses use `Cache-Control: private, no-store`; encoded dimension and profile
+headers are exposed by credentialed CORS. Encoded responses are at most 16 MiB.
+Limits are configured under [previews](configuration.md#image-preview-limits).
+Oversized source/pixel/decoder requests return 413; full preview admission queues,
+cache ownership conflicts, exhausted cache quota, or stale source identity return
+409; unsupported/unavailable sources and decoding failures return 422;
+unavailable cache/encoder failures return 500.
+Errors never include source paths or decoder text.
+
+`ImageApi::get_encoded_image_preview` returns `EncodedImagePreview`, separate
+from `ImagePreview::rgba`. HTTP clients bound streaming response bytes and
+validate MIME/profile/metadata; native and WASM use the same bounded Rust WebP
+decoder. The UI always requests Data Saver v1 for working-image loads, reloads,
+retries and prefetch. Generation, transfer and decode errors propagate without
+requesting Standard, legacy RGBA or original bytes. The encoded route retains
+its Standard v1 default for API callers that omit the profile. Image assignment,
+annotation geometry and draft state are independent of the representation.
+Existing request/auth/workspace epochs reject stale image replies and clear account-scoped texture/prefetch state.
+
+### Explicit original detail
+
+`ImageApi::get_original_detail` and `GET .../detail` remain explicit API
+capabilities; the working UI does not call them or expose an original-detail
+action. Ordinary original-file download keeps its existing separate contract.
+Detail reads share preview source-byte, pixel, decoder-header/allocation
+and worker limits, secure source opening/hash verification, and final
+session/role/index checks. They return original source bytes without a derived
+cache entry. The client bounds streaming bytes to 64 MiB and decoding to
+32 million original pixels / 256 MiB decoder allocation, checks declared MIME
+and authoritative original dimensions, and applies no EXIF/ICC transform. Larger
+server configuration limits do not raise these browser detail limits.
+
+Every working-image load and prefetch uses the encoded Data Saver v1 route.
+Saved browser quality preferences are ignored; preview failure never chooses
+original detail. Aborting superseded image transfers does not abort assignment
+claims: their replies must still be received so obsolete reservations can be released. Server workers already
+started retain their configured bounds through completion/cleanup.
+
+## Manual migration routes
 
 Every route requires a valid session, exact owned assignment, the role shown,
 and exactly one `idempotency-key` containing 1–200 visible ASCII characters
@@ -339,11 +534,11 @@ it binds the exact current skeleton version. A rejected discovery must receive
 a new version or be removed before submission. Companion boxes retain the
 ordinary guide-task review flow and are never approved by migration review.
 
-## Dataset Import Routes
+## Dataset import routes
 
 All import routes require a bootstrap-administrator session. Job routes also
 require ownership of the import. A missing/disabled import service returns
-409. Mutating routes marked “Idempotent” require exactly one
+409. Mutating routes marked "Idempotent" require exactly one
 `idempotency-key` with the same syntax as migration routes. Reusing a key for a
 different operation or request is a conflict; a completed identical request
 replays its response.
@@ -367,81 +562,7 @@ replays its response.
 | `POST /imports/{import_id}/commit` | Idempotent; reauthorizes every attempt | `CommitImportRequest` → `CommitImportResult` |
 | `POST /imports/{import_id}/cancel` | Idempotent; not committing/succeeded | `CancelImportRequest` → `CancelImportResult` |
 
-## Change Discipline
-
-Route, role, middleware, body-limit, error, DTO, header, or status changes must
-update this document in the same change. The router and focused API tests are
-the route/access regression suite. The open documentation-automation issue
-still tracks generated inventory or an explicit test that detects omissions in
-this table.
-
-## Public build information
-
-`GET /build-information` returns only `releaseTag` and `sourceCommit`. Each is
-nullable: absent or invalid compiled metadata is `null`, never the shared Cargo
-package version. Tags contain at most 64 ASCII letters, digits, dots, underscores,
-plus signs or hyphens; commits contain exactly 40 or 64 hexadecimal characters.
-The reserved tag `development` represents missing release metadata and is exposed
-as `null`. The response is under 200 bytes, performs no persistence or
-authentication probe, and remains HTTP 200 when `/deployment/readiness` returns
-503. Existing credentialed CORS rules also apply to this public route.
-
-The client uses a ten-second request timeout, validates the two-field DTO and
-rejects responses over 1024 bytes. The response must not expose readiness,
-configuration, authentication state, paths, or other server details.
-
-## Encoded Working Previews
-
-Standard v1 resizes to at most 1600 pixels on the longest edge and encodes
-lossless WebP. Data Saver v1 uses at most 1280 pixels and lossy WebP quality 80
-(on libwebp's 0–100 scale). Thumbnail v1 uses a 256-pixel maximum edge and the
-same lossy quality for gallery proxies. No profile upscales. All preserve the existing
-Triangle resize at the decoder's native channel depth followed by RGBA8
-conversion, first-frame behavior, and no EXIF orientation or ICC conversion.
-Standard decoded RGBA, including transparent RGB, is identical to the legacy
-1600 preview. Original record dimensions remain authoritative for geometry.
-
-Both routes authenticate and authorize each request, including cache hits, and
-recheck session, roles, and image index after worker completion. Source content
-is verified against its authoritative BLAKE3 hash before every cache read.
-Responses use `Cache-Control: private, no-store`; encoded dimension and profile
-headers are exposed by credentialed CORS. Encoded responses are at most 16 MiB.
-Limits are configured under [previews](configuration.md#image-preview-limits).
-Oversized source/pixel/decoder requests return 413; full preview admission queues,
-cache ownership conflicts, exhausted cache quota, or stale source identity return 409; unsupported/unavailable sources and
-decoding failures return 422; unavailable cache/encoder failures return 500.
-Errors never include source paths or decoder text.
-
-`ImageApi::get_encoded_image_preview` returns `EncodedImagePreview`, separate
-from `ImagePreview::rgba`. HTTP clients bound streaming response bytes and
-validate MIME/profile/metadata; native and WASM use the same bounded Rust WebP
-decoder. The UI always requests Data Saver v1 for working-image loads, reloads,
-retries and prefetch. Generation, transfer and decode errors propagate without
-requesting Standard, legacy RGBA or original bytes. The encoded route retains
-its Standard v1 default for API callers that omit the profile. Image assignment,
-annotation geometry and draft state are independent of the representation.
-Existing request/auth/workspace epochs reject stale image replies and clear account-scoped texture/prefetch state.
-
-### Explicit original detail
-
-`ImageApi::get_original_detail` and `GET .../detail` remain explicit API
-capabilities; the working UI does not call them or expose an original-detail
-action. Ordinary original-file download keeps its existing separate contract.
-Detail reads share preview source-byte, pixel, decoder-header/allocation
-and worker limits, secure source opening/hash verification, and final
-session/role/index checks. They return original source bytes without a derived
-cache entry. The client bounds streaming bytes to 64 MiB and decoding to
-32 million original pixels / 256 MiB decoder allocation, checks declared MIME
-and authoritative original dimensions, and applies no EXIF/ICC transform. Larger
-server configuration limits do not raise these browser detail limits.
-
-Every working-image load and prefetch uses the encoded Data Saver v1 route.
-Saved browser quality preferences are ignored; preview failure never chooses
-original detail. Aborting superseded image transfers does not abort assignment
-claims: their replies must still be received so obsolete reservations can be released. Server workers already
-started retain their configured bounds through completion/cleanup.
-
-## Dataset Export Routes
+## Dataset export routes
 
 Every route requires a current authenticated dataset **DataAdmin**. POST
 requests retain the session CSRF requirement. Control JSON is limited to 1 MiB.
@@ -473,132 +594,3 @@ operations return 409; limits return 413; incompatible selections and invalid
 source geometry return 422; storage and verification failures return a safe
 500 category. Error messages exclude source paths and geometry. Preflight
 blockers and omissions are recorded in the job summary; see [export](export.md).
-
-
-## Current-user daily activity
-
-`CurrentUserActivity` identifies `datasetId`, authenticated `userId`, the inclusive
-UTC `window.start`, exclusive `window.end`, server `sampledAt`, and two integer
-counts: `annotationTasksSubmitted` and `finalTaskReviews`. The route has no
-client-selected user or time window. It requires a current dataset role and
-returns a fixed-size aggregate, never another user's history. A scan crossing
-midnight retries once for the new day, then returns a retryable error if the
-window changes again. The HTTP client
-uses the existing 20-second statistics timeout and credentialed session.
-
-Annotation activity counts committed normal or guided-migration submissions,
-including completion with no review stage. Review activity counts committed
-final task or migration-confirmation decisions, approved or rejected. Each
-counter deduplicates dataset/image/task/user within that UTC day. Saves, imports,
-skips and object decisions do not count. A committed correction submission
-counts its final rejection, once per user/image/task/day. Historical immediate
-reviewer corrections alone do not count. Reopening,
-later rejection and superseding a decision do not retract historical activity.
-Same-day replacement commits count once; a later-day submission or final-review
-replacement counts on its new commit day. Compound review revisions use the
-event's server commit time, not timestamps of locally staged review records.
-Dataset-wide `DatasetStats` semantics remain unchanged.
-
-## Server presence
-
-Authenticated `GET /presence` returns `ServerPresence` with `Cache-Control:
-no-store`. Each `PresentUser` contains a stable internal `userId`, optional
-`githubLogin` and `githubUserId` from the stored account, and the IDs/names of
-datasets where that user holds an unexpired active annotation or review lease.
-`githubUserId` is optional public avatar metadata; clients must not derive it
-from the internal ID. The header displays GitHub profile photos, with initials
-while photos are missing, loading or unavailable. Details use `@githubLogin`
-when nonempty, otherwise `userId`; display names do not override GitHub handles.
-Older responses without these optional fields retain the same ID detail fallback
-and show initials instead of a photo.
-Migration uses those same assignment kinds. The requesting user is included
-under the same lease rules, even when they are the only active user. Users are
-deduplicated and sorted by internal ID, with datasets sorted by ID. Presentation
-metadata never changes identity or assignment ownership.
-
-This endpoint deliberately exposes active usernames and dataset names across
-server dataset-role boundaries to authenticated users. It grants no dataset
-access and returns no assignment IDs, image identities, geometry or session
-information. Query parameters cannot select a different requesting user.
-Unauthenticated requests fail. An unreadable registered dataset fails the
-request instead of reporting a potentially false empty presence list.
-
-Presence reads never claim, renew or release leases. Closing a browser does not
-release its leases automatically; the existing lease-expiry policy applies.
-
-## Review configuration and task statistics
-
-Current task `review` configuration contains `workflow`, either `none` or
-`approval`, and `allowReviewerCorrections`. Approval requires one reviewer.
-Historical-only configuration fields, roles, task states and assignment kinds
-cannot be introduced through current mutation endpoints.
-
-`DatasetStats` reports `pendingTasks`, `inProgressTasks`, `awaitingReviewTasks`,
-`needsCorrectionTasks`, and `completedTasks`. Each `perTask` entry uses `pending`,
-`inProgress`, `awaitingReview`, `needsCorrection`, and `completed`, plus its
-existing provenance and migration statistics. Each eligible image/task occupies
-one state count. The task table and summary use this same contract. Audit review
-records and contributor activity remain available through their existing APIs.
-
-### Saved workflow reasons
-
-`GET /datasets/{dataset_id}/images/{image_id}/reasons` requires a session and any
-role in that dataset, matching image-state access. It returns `WorkflowReasonEntry[]`
-projected from one authoritative event-log snapshot. Each entry identifies the
-image, event sequence/ID, actor, timestamp, action, optional workflow and object
-identities, optional text and structured exclusion category. Optional
-`reviewDecision` preserves the recorded decision for review and revised-review
-comments; absent values remain neutral comments rather than inferred rejections.
-The existing reason fields remain at the top level. Each entry additionally has
-an optional `author` with `githubLogin` and `githubUserId`, resolved from current
-server account data for that event's actor. Missing accounts produce `null`;
-local accounts can have null GitHub fields. No account timestamps, display names,
-roles, or unrelated accounts are included. Older responses without `author`
-remain readable. This is read-only transport metadata, not a persisted-event change. `currentRound`,
-`superseded` and `currentExclusion` describe that snapshot's relevance. Historical
-entries remain ordered by source event, with copied exclusion sources and the
-legacy correction's identical review comment deduplicated. Blank text and known
-internal annotation markers are omitted. The route does not claim assignments,
-mutate history, or expose annotation geometry. Missing images return 404; role
-and authentication failures follow the normal image-route rules.
-
-The browser loads this resource under the assignment request's existing stale
-response gate. A failed request fails the image load and remains retryable; it
-does not masquerade as an empty reason history. No persisted event or state shape
-changes. Correction explanations for several objects use explicit object labels
-inside the existing optional submission reason and retain its 2000-byte limit.
-
-## Dataset inspection and return to review
-
-All dataset members may list indexed images and read their previews and current
-annotations, including completed images outside their assignment queue. Search,
-workflow, class and workflow-status predicates apply before pagination. With no
-workflow/class/status filter, only the requested page loads annotation state;
-search and ordering use the image index. State-dependent filters evaluate rebuildable, process-local per-image summaries
-before selecting the page. A cold summary loads authoritative image state once;
-subsequent queries reuse it until that image changes. Configuration defaults and
-image records come from the current request, not cached workflow definitions.
-A workflow filter identifies configured workflow status, including Pending on
-unannotated images; selecting a workflow alone need not reduce the image count.
-With All workflows, Completed requires every currently configured workflow
-(including disabled workflows) to be Completed, and a dataset without workflows
-matches no completed images. Historical workflow IDs do not affect this check.
-With a specific workflow selected, Completed checks only that workflow. Other
-status filters match any workflow when no workflow is selected. Browsing
-and changing overlay visibility require no assignment and append no events.
-
-`POST /datasets/{dataset_id}/images/{image_id}/return-to-review` requires a
-reviewer or data-admin role and the normal CSRF checks. Its JSON body is
-`ReturnToReviewRequest`: `requestId`, `expectedSequence`, `taskIds` and `reason`.
-Select 1–100 distinct configured workflows and supply a nonblank reason of at
-most 2000 UTF-8 bytes. The server requires an exact image sequence and enabled,
-completed approval workflows without an unexpired assignment. It rejects the
-entire selection if any workflow is ineligible. Active leases are not stolen.
-
-Success returns the replayed `ImageState` with the selected workflows submitted
-for fresh review rounds. Geometry and previous decisions remain unchanged.
-Stale state, active work, ineligible workflows and conflicting request-ID reuse
-return 409. An identical request by the same actor is idempotent across restart
-and later work; it returns current state without appending another event.
-Request identity is scoped to the dataset image. Other roles cannot mutate
-through this route, and ordinary event ingress cannot forge its server event.

@@ -1,10 +1,5 @@
 # Release and deployment
 
-> **Status:** Normative current reference
-> **Owner:** Release and operations maintainers
-> **Audience:** Maintainers and operators
-> **Last verified:** 2026-08-20 in the issue #63 implementation worktree
-
 Labello publishes stable x86-64 Linux releases through GitHub Actions and
 deploys them from a runner inside the production Debian 12 LXC. Release builds
 and production deployment use different runners. The deployment runner does
@@ -66,9 +61,9 @@ allow unprivileged binding to ports 80 and 443.
 This simple account model has a sharp trust boundary: the deployment runner
 can read the production configuration and data because it is also the service
 account. A restricted organization runner group should therefore allow only
-`HULKs/labello/.github/workflows/deploy.yml@refs/heads/main`. The current
-repository-scoped runner cannot join such a group. Until an organization owner
-re-registers it, its private label, the protected `production` environment,
+`HULKs/labello/.github/workflows/deploy.yml@refs/heads/main`. A
+repository-scoped runner cannot join such a group. Until it is registered at
+organization scope, its private label, the protected `production` environment,
 the `repository_dispatch` trigger, and the `main` ref check provide weaker
 defense. Never allow pull-request CI to select this runner.
 
@@ -312,7 +307,7 @@ Before the first production release:
 
 1. Complete the guest setup and remove `hulk` from `sudo` and `docker`.
 2. Enable immutable releases and create the two protected environments.
-3. Set the three repository variables without exposing their values.
+3. Set the two repository variables without exposing their values.
 4. Confirm the deployment runner cannot accept pull-request CI.
 5. Verify the data mount, ownership, capacity for a full backup, TLS, OAuth,
    and exact browser origin.
@@ -321,8 +316,7 @@ Before the first production release:
    ID, terminal phase, readiness result, and backup verification result.
 8. Perform a restore drill before treating rollback as operationally proven.
 
-The implementation remains `In progress` until exact-head CI and independent
-review pass. A local transaction test does not prove the real guest's mounts,
+A local transaction test does not prove the real guest's mounts,
 systemd user manager, Caddy TLS, GitHub environment rules, or runner-group
 restriction.
 

@@ -1,15 +1,10 @@
-# Verification And Acceptance
-
-> **Status:** Normative current reference
-> **Owner:** Labello maintainers
-> **Audience:** Maintainers, contributors, and reviewers
-> **Last verified:** 2026-08-19 at issue #57 CI parallelization
+# Verification and acceptance
 
 This contract separates implementation evidence, mechanically enforced checks,
 and independent acceptance. Passing commands is necessary evidence; it does not
 replace review of the intended behavior, production path, or risks.
 
-## Canonical Entry Point
+## Canonical entry point
 
 From the repository root, verify a branch and any local changes against its
 comparison base with:
@@ -77,7 +72,8 @@ Every Cargo command that resolves dependencies and the Trunk build use locked
 mode. A stale tracked lockfile is therefore a failure and is never implicitly
 rewritten by verification.
 
-Prerequisites are Rust 1.98.0, Cargo, `rustfmt`, Clippy, the
+Prerequisites are Python 3.10 or newer for documentation checks, Rust 1.98.0,
+Cargo, `rustfmt`, Clippy, the
 `wasm32-unknown-unknown` target, Trunk 0.21.14, and the native libraries required
 by `eframe`. CI declares the applicable prerequisites per job in
 `.github/workflows/ci.yml`, restores job-scoped dependency build artifacts for
@@ -129,13 +125,13 @@ CI/release configuration and images, and current documentation. Optional checks
 on newer compilers do not replace this baseline. The external release image
 must be verified before rollout as described in [deployment](deployment.md).
 
-## Risk Profiles
+## Risk profiles
 
 The script selects profiles conservatively from changed paths. The machine
 baseline is shared; the following checks are additional acceptance evidence.
 If a change crosses profiles, apply all of them.
 
-### UI And Shared Rendering
+### UI and shared rendering
 
 Read [`ui-design-guidelines.md`](ui-design-guidelines.md) and
 [`ui-ownership.md`](ui-ownership.md). Add the smallest `egui_kittest` regression
@@ -153,7 +149,7 @@ It includes headless startup, MCP readiness checks, independent parallel
 instances, and evidence tied to the tested checkout. Headless execution does
 not remove the visual checks or replace the Chromium evidence above.
 
-### Browser And WASM
+### Browser and WASM
 
 Read [`ui-ownership.md`](ui-ownership.md),
 [`ui-design-guidelines.md`](ui-design-guidelines.md), and the browser portions
@@ -163,7 +159,7 @@ credentials, persistence, folder import, responsive layout, input, and failure
 paths. Record browser version, viewport, DPR/zoom, accessibility inspection, and
 unsupported coverage. Do not infer browser behavior from the native inspector.
 
-### Domain, Events, And Schema
+### Domain, events, and schema
 
 Read [`architecture.md`](architecture.md), [`persistence.md`](persistence.md),
 and any affected import or UI ownership contract. Cover validation and invalid
@@ -172,7 +168,7 @@ decoding, schema compatibility, digest or provenance behavior, and negative
 geometry/identifier bounds. A persisted-shape change also requires interrupted
 migration and historical replay evidence across every affected artifact.
 
-### Storage, Migration, Ingestion, And Import
+### Storage, migration, ingestion, and import
 
 Read [`persistence.md`](persistence.md), [`import.md`](import.md), and
 [`operations.md`](operations.md). Test the complete lock/reload/validate/
@@ -182,7 +178,7 @@ duplicate and invalid input, and concurrent or stale-assignment races relevant
 to the change. Import changes must cover parse, plan, build, verification,
 publication, durable job recovery, provenance, and bounded-resource failures.
 
-### API And Security Boundaries
+### API and security boundaries
 
 Read [`api.md`](api.md), [`configuration.md`](configuration.md), and
 [`operations.md`](operations.md). Cover route and role matrices, exact
@@ -193,14 +189,14 @@ credentials, raw URLs or bodies, filenames or source paths, image content,
 annotation geometry, review comments, or idempotency values. Test denied and
 cross-dataset cases, not only the authorized path.
 
-### Documentation Only
+### Documentation only
 
 Run `./scripts/verify.sh docs`. Review the changed content against current code
 and tests, check every changed local link and anchor, run `git diff --check`, and
-inspect the focused diff. Do not advance a normative document's `Last verified`
-marker without auditing its complete affected flow. Documentation-only changes
-do not require the Rust baseline unless they exercise generated contracts or
-examples; documentation parity automation remains outside this profile.
+inspect the focused diff. Check affected behavior against its complete flow.
+Documentation-only changes do not require the Rust baseline unless they exercise
+generated contracts or examples. Run `python3 scripts/docs.py check` for local
+links, anchors, metadata, and wiki publication coverage.
 
 Infrastructure changes never receive the documentation-only optimization. They
 run the baseline, and dependency/workflow/script changes conservatively run the
@@ -249,7 +245,7 @@ Before coordinating multiple issues or testing dependent PRs together, follow
 [parallel development](parallel-development.md) for worktree ownership and
 verification of the combined group. Each PR still needs its own required CI.
 
-## Evidence And Independent Acceptance
+## Evidence and independent acceptance
 
 The pull-request template is the required proof bundle. It records:
 
@@ -320,7 +316,7 @@ the complete applicable transaction, failure, recovery, authorization,
 compatibility, and redaction boundaries. Only after that review and all required
 checks pass may an issue be accepted or closed.
 
-## Repository Enforcement
+## Repository enforcement
 
 The `CI` pull-request workflow exposes descriptive parallel jobs behind the
 required `Testing` status check. Its aggregate job is the stable branch

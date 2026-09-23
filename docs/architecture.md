@@ -1,13 +1,7 @@
 # Architecture
 
-> **Status:** Normative current reference
-> **Owner:** Labello maintainers
-> **Audience:** Maintainers and contributors
-> **Last verified:** 2026-07-30 at `4f9c332`
-
-This document describes the current implementation ownership. Product intent
-belongs in `labello.md`; runtime and operational rules belong in
-[`operations.md`](operations.md).
+Labello separates pure workflow policy, filesystem transactions, HTTP access,
+and UI state. Runtime procedures are in [operations](operations.md).
 
 ## Dependency direction
 
@@ -152,7 +146,7 @@ demonstrated need.
 
 ## Detailed ownership references
 
-- [`structural-refactor-policy-ownership.md`](plans/structural-refactor-policy-ownership.md)
+- [Workflow policy](workflow-policy.md)
 - [`import.md`](import.md)
 - [`ui-ownership.md`](ui-ownership.md)
-- [`structural-refactor-result.md`](history/structural-refactor-result.md)
+- [Event history and compatibility](event-history.md)

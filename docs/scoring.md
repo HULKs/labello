@@ -1,10 +1,5 @@
 # Contribution scoring
 
-> **Status:** Normative current reference
-> **Owner:** Domain and UI maintainers
-> **Audience:** Contributors, operators, maintainers
-> **Last verified:** 2026-09-09, scoring-v1 implementation and regression tests
-
 Scores belong to one dataset and user. Existing contributor activity counts remain
 available and retain their earlier meaning: `labeled` counts submitted image/task
 combinations, whereas the score's daily `labels` counts individual annotation

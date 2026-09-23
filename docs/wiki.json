@@ -1,0 +1,39 @@
+{
+  "repository": "HULKs/labello",
+  "ref": "main",
+  "groups": [
+    {"title": "Use Labello", "pages": [
+      {"source": "docs/README.md", "page": "Home"},
+      {"source": "README.md", "page": "Overview"},
+      {"source": "docs/getting-started.md", "page": "Getting-started"},
+      {"source": "docs/annotation.md", "page": "Annotation-and-review"},
+      {"source": "docs/administration.md", "page": "Dataset-administration"},
+      {"source": "docs/import.md", "page": "Dataset-import"},
+      {"source": "docs/migration.md", "page": "Guided-migration"},
+      {"source": "docs/export.md", "page": "Dataset-export"},
+      {"source": "docs/assignment.md", "page": "Assignment"},
+      {"source": "docs/scoring.md", "page": "Contribution-scoring"},
+      {"source": "docs/limitations.md", "page": "Current-limitations"}
+    ]},
+    {"title": "Operate a server", "pages": [
+      {"source": "docs/configuration.md", "page": "Configuration"},
+      {"source": "docs/deployment.md", "page": "Release-and-deployment"},
+      {"source": "deployment/guest/README.md", "page": "Guest-setup"},
+      {"source": "docs/operations.md", "page": "Operations"},
+      {"source": "docs/persistence.md", "page": "Persistence-and-recovery"},
+      {"source": "docs/event-history.md", "page": "Event-history"}
+    ]},
+    {"title": "Develop Labello", "pages": [
+      {"source": "CONTRIBUTING.md", "page": "Contributing"},
+      {"source": "docs/architecture.md", "page": "Architecture"},
+      {"source": "docs/workflow-policy.md", "page": "Workflow-policy"},
+      {"source": "docs/api.md", "page": "HTTP-API"},
+      {"source": "docs/ui-design-guidelines.md", "page": "UI-design"},
+      {"source": "docs/ui-ownership.md", "page": "UI-implementation"},
+      {"source": "apps/egui-mcp-inspector/README.md", "page": "Native-inspector"},
+      {"source": "docs/verification.md", "page": "Verification"},
+      {"source": "docs/parallel-development.md", "page": "Parallel-development"},
+      {"source": "docs/wiki.md", "page": "Documentation-and-wiki"}
+    ]}
+  ]
+}
