@@ -1,0 +1,106 @@
+{
+  "browser": "153.0.8010.12",
+  "matrix": [
+    {
+      "width": 320,
+      "height": 568,
+      "dpr": 1,
+      "canvasWidth": 320
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "dpr": 1,
+      "canvasWidth": 390
+    },
+    {
+      "width": 600,
+      "height": 800,
+      "dpr": 1,
+      "canvasWidth": 600
+    },
+    {
+      "width": 1288,
+      "height": 820,
+      "dpr": 1,
+      "canvasWidth": 1288
+    },
+    {
+      "width": 1440,
+      "height": 1000,
+      "dpr": 1,
+      "canvasWidth": 1440
+    },
+    {
+      "width": 320,
+      "height": 320,
+      "dpr": 1,
+      "canvasWidth": 320
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "dpr": 2,
+      "canvasWidth": 640
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "dpr": 2,
+      "canvasWidth": 780
+    },
+    {
+      "width": 600,
+      "height": 800,
+      "dpr": 2,
+      "canvasWidth": 1200
+    },
+    {
+      "width": 1288,
+      "height": 820,
+      "dpr": 2,
+      "canvasWidth": 2576
+    },
+    {
+      "width": 1440,
+      "height": 1000,
+      "dpr": 2,
+      "canvasWidth": 2880
+    },
+    {
+      "width": 320,
+      "height": 320,
+      "dpr": 2,
+      "canvasWidth": 640
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "dpr": 3,
+      "canvasWidth": 1170
+    }
+  ],
+  "initial": true,
+  "next": true,
+  "reviewTransitions": true,
+  "keyboard": true,
+  "zoom": 2,
+  "textSettings": {
+    "default": {
+      "levelOfControl": "controlled_by_this_extension",
+      "pixelSize": 24
+    },
+    "minimum": {
+      "levelOfControl": "controlled_by_this_extension",
+      "pixelSize": 20
+    }
+  },
+  "textScalingLimit": "Chromium font defaults do not scale egui canvas text; 36-point text covered by kittest.",
+  "accessibilityRoles": [
+    "RootWebArea",
+    "none",
+    "Canvas",
+    "textbox",
+    "generic"
+  ]
+}
