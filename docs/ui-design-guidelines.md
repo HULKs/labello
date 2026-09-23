@@ -282,8 +282,9 @@ has been recorded.
   grouping gaps, existing text roles and quiet borders. Keep workflow and status
   visible, then a 24-point avatar with the GitHub username immediately to its right.
   Reuse cached avatars and initials fallback; unavailable identity reads Unknown
-  author. Object IDs and UTC timestamps belong in a collapsed Additional info
-  disclosure at the end of each message. The explanation itself never requires
+  author. Align Additional info to the right of that same author row, preserving
+  its 44-point target. When expanded, object IDs and UTC timestamps use the full
+  content width below the row. The explanation itself never requires
   expansion. Show message counts at the bottom. Keep earlier/replaced feedback
   explicit and newest messages first. Wrap long explanations in a bounded scroll
   area; at short heights the event title opens full feedback in a bounded non-modal

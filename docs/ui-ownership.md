@@ -550,8 +550,9 @@ visible below the explanation. A 24-point avatar precedes the GitHub username;
 missing avatars use the Statistics initials fallback, and an unavailable login
 reads Unknown author rather than an internal ID. The shared Statistics avatar
 cache prevents per-frame downloads. Object identity and UTC timestamp appear in
-a keyboard-accessible Additional info disclosure, collapsed initially with stable
-per-message identity across redraws. Multiple-message counts sit at the bottom.
+a keyboard-accessible Additional info disclosure, right-aligned on the author row
+with a 44-point target. It starts collapsed and retains stable per-message identity
+across redraws. Expanded details use the full content width below the entire row. Multiple-message counts sit at the bottom.
 
 The notice retains historical explanations, labels current review rounds and
 active exclusions, and does not treat superseded decisions as current. It shares

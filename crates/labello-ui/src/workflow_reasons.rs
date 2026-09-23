@@ -258,57 +258,92 @@ impl LabelloApp {
                         .author
                         .as_ref()
                         .and_then(|author| author.github_user_id.as_deref());
-                    ui.scope(|ui| {
-                        ui.spacing_mut().interact_size.y = 24.0;
-                        ui.horizontal(|ui| {
-                            let (rect, _) = ui
-                                .allocate_exact_size(egui::Vec2::splat(24.0), egui::Sense::hover());
-                            crate::avatar::paint(ui, github_id, &name, rect);
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&name).small().color(theme::TEXT_MUTED),
-                                )
-                                .truncate(),
-                            )
-                            .on_hover_text(&name);
-                        });
-                    });
-                    ui.scope(|ui| {
-                        ui.spacing_mut().interact_size.y = 44.0;
-                        egui::CollapsingHeader::new(
-                            egui::RichText::new("Additional info")
-                                .small()
-                                .color(theme::TEXT_MUTED),
-                        )
-                        .id_salt("audit-details")
-                        .show(ui, |ui| {
-                            if let Some(object) = reason
-                                .object_group_id
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .or_else(|| reason.annotation_id.as_ref().map(ToString::to_string))
-                            {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(format!("Object {object}"))
-                                            .small()
-                                            .monospace(),
-                                    )
-                                    .wrap()
-                                    .selectable(true),
+                    let mut details =
+                        egui::collapsing_header::CollapsingState::load_with_default_open(
+                            ui.ctx(),
+                            ui.make_persistent_id("audit-details"),
+                            false,
+                        );
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let icon_id = ui.id().with("audit-details-icon");
+                            let button = egui::Button::new(egui::Atoms::new((
+                                egui::Atom::custom(icon_id, egui::Vec2::splat(12.0)),
+                                egui::RichText::new("Additional info").small(),
+                            )))
+                            .frame_when_inactive(false)
+                            .min_size(egui::vec2(0.0, 44.0))
+                            .atom_ui(ui);
+                            let icon_rect = button.rect(icon_id);
+                            let response = button.response;
+                            if let Some(rect) = icon_rect {
+                                egui::collapsing_header::paint_default_icon(
+                                    ui,
+                                    details.openness(ui.ctx()),
+                                    &response.clone().with_new_rect(rect),
                                 );
                             }
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(
-                                        reason.timestamp.format("%Y-%m-%d %H:%M UTC").to_string(),
-                                    )
-                                    .small()
-                                    .color(theme::TEXT_MUTED),
+                            if response.clicked() {
+                                details.toggle(ui);
+                            }
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::CollapsingHeader,
+                                    ui.is_enabled(),
+                                    "Additional info",
                                 )
-                                .wrap(),
+                            });
+                            ui.ctx().accesskit_node_builder(response.id, |node| {
+                                node.set_expanded(details.is_open());
+                            });
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let (rect, _) = ui.allocate_exact_size(
+                                        egui::Vec2::splat(24.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    crate::avatar::paint(ui, github_id, &name, rect);
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&name)
+                                                .small()
+                                                .color(theme::TEXT_MUTED),
+                                        )
+                                        .truncate(),
+                                    )
+                                    .on_hover_text(&name);
+                                },
                             );
                         });
+                    });
+                    details.show_body_unindented(ui, |ui| {
+                        if let Some(object) = reason
+                            .object_group_id
+                            .as_ref()
+                            .map(ToString::to_string)
+                            .or_else(|| reason.annotation_id.as_ref().map(ToString::to_string))
+                        {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!("Object {object}"))
+                                        .small()
+                                        .monospace(),
+                                )
+                                .wrap()
+                                .selectable(true),
+                            );
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    reason.timestamp.format("%Y-%m-%d %H:%M UTC").to_string(),
+                                )
+                                .small()
+                                .color(theme::TEXT_MUTED),
+                            )
+                            .wrap(),
+                        );
                     });
                 },
             );

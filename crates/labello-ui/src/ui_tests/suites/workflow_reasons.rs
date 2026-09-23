@@ -346,6 +346,9 @@ fn workflow_feedback_groups_heading_and_text_and_hides_audit_details() {
         let mut harness = loaded_work_harness(api);
         let mut reason = test_workflow_reason(harness.state(), "Adjust the box.");
         reason.reason.annotation_id = Some(labello_domain::AnnotationId::from("audit-object"));
+        reason.author = Some(labello_client::WorkflowReasonAuthor {
+            github_login: Some("very-long-example-reviewer-for-notices".into()), github_user_id: None,
+        });
         let timestamp = reason.reason.timestamp.format("%Y-%m-%d %H:%M UTC").to_string();
         harness.state_mut().install_reason_notice(vec![reason]);
         harness.set_size(size);
@@ -357,13 +360,22 @@ fn workflow_feedback_groups_heading_and_text_and_hides_audit_details() {
         assert!(harness.query_by_label("Object audit-object").is_none());
         assert!(harness.query_by_label(&timestamp).is_none());
         let details = harness.get_by_label("Additional info");
-        assert!(details.rect().height() >= 44.0);
+        let author = harness.get_by_label("@very-long-example-reviewer-for-notices");
+        let row = details.rect();
+        assert_eq!(details.accesskit_node().data().is_expanded(), Some(false));
+        assert!(row.height() >= 44.0);
+        assert!((author.rect().center().y - row.center().y).abs() < 1.0, "{size:?}: author and disclosure must share one row");
+        assert!(author.rect().right() < row.left(), "{size:?}: disclosure must be right of author");
+        let content_left = title.rect().left();
         details.focus();
         harness.key_press(egui::Key::Enter);
         harness.run_steps(10);
         harness.get_by_label("Object audit-object").scroll_to_me();
         harness.run_steps(4);
-        assert!(harness.query_by_label("Object audit-object").is_some());
+        let object = harness.get_by_label("Object audit-object");
+        assert_eq!(harness.get_by_label("Additional info").accesskit_node().data().is_expanded(), Some(true));
+        assert!(object.rect().top() >= harness.get_by_label("Additional info").rect().bottom(), "{size:?}: details must be below the entire row");
+        assert!((object.rect().left() - content_left).abs() < 1.0, "{size:?}: details must use the full content width");
         assert!(harness.query_by_label(&timestamp).is_some());
         harness.run_steps(4);
         assert!(harness.query_by_label("Object audit-object").is_some());
