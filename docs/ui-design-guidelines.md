@@ -354,13 +354,21 @@ it retains the current workflow identity in the context bar and selector.
 
 ## Current workflow marker
 
-The workflow selector reserves a fixed marker slot on every card and paints a
-small bright dot only for the committed selected workflow. The same control
-renders in the expanded panel and compact/medium drawer. Hover, keyboard focus,
-availability and pending transition candidates do not move the dot. An
-unavailable current workflow retains it. Existing selected fill/border and
-AccessKit selection semantics remain; the marker adds no focus stop or name.
-The automatic workflow-change notice remains independent of this visual cue.
+The workflow selector reserves a fixed 20-point marker slot on every card. An
+available unselected workflow leaves it empty; the committed selected workflow
+has a small bright dot. A reason icon occupies the slot when restricted,
+checking, or unable to check. When selected, the dot moves to the icon's upper
+right. Pending candidates, hover and keyboard focus never acquire the dot.
+
+Use line icons with short tooltips available on disabled cards and equivalent
+AccessKit descriptions on the existing workflow button. Markers add no focus
+stops or accessible names. Keep the selected fill/border and semantic selection.
+Saving precedes image loading, then a pending transition, then availability.
+Retained known restrictions precede checking during refresh. Unknown or failed
+availability alone never disables selection. A static segmented spinner avoids
+continuous animation. Specific server reasons require a supported workflow-wide
+result; mixed restrictions remain generic. Panel and drawer use the same renderer.
+The automatic workflow-change notice remains independent of these markers.
 
 Measured workspace action buttons use the same state-dependent shortcut
 foreground both inline and in wrapped overflow menus. Moving an action into

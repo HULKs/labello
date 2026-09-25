@@ -562,12 +562,14 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
                     (TaskId::from("bounding_box:vehicle"), true),
                 ]),
                 related: vec![labello_client::AssignmentAvailabilityEntry {
+                reasons: Default::default(),
                     kind: AssignmentKind::Review,
                     tasks: BTreeMap::from([
                         (TaskId::from("bounding_box:person"), true),
@@ -843,6 +845,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
             pan_y: 0.0,
         },
         availability: Some(StoredAssignmentAvailability {
+                reasons: Default::default(),
             kind: AssignmentKind::Annotation,
             tasks,
             checked_at: labello_domain::now() - Duration::from_secs(31),
@@ -853,6 +856,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
         preference.clone(),
         WorkspacePreference {
             availability: Some(StoredAssignmentAvailability {
+                reasons: Default::default(),
                 kind: AssignmentKind::Review,
                 checked_at: labello_domain::now(),
                 ..preference.availability.clone().unwrap()
@@ -915,6 +919,7 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -3694,6 +3699,7 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Review,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4084,6 +4090,7 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4293,6 +4300,7 @@ fn workflow_dot_ignores_stale_availability() {
             request: stale,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4485,4 +4493,96 @@ fn ordinary_annotation_opening_does_not_select_or_focus_a_box() {
     let harness = loaded_work_harness(api);
     assert!(harness.state().work.selected_annotation.is_none());
     assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+}
+
+#[test]
+fn workflow_reason_icons_explain_disabled_cards_and_keep_selection_at_all_sizes() {
+    use labello_domain::WorkflowUnavailableReason as R;
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let task = TaskId::from("bounding_box:person");
+    let long = "Person boxes with a deliberately long workflow name for layout coverage";
+    harness.state_mut().work.tasks.iter_mut().find(|t| t.task_id == task).unwrap().name = long.into();
+    for (reason, label) in [
+        (R::BalanceLimit,"Other workflows need to catch up"),
+        (R::ReviewDisabled,"Review is disabled for this workflow"),
+        (R::EmptyDataset,"This dataset has no images"),
+        (R::AnnotationFinished,"No annotation work remaining"),
+        (R::NothingAwaitingReview,"No work awaiting review"),
+        (R::ClaimedByOthers,"Available work is assigned to others"),
+        (R::ReviewRevision,"Work is locked for review revision"),
+        (R::ImportExcluded,"Imported images are excluded from annotation"),
+        (R::ReviewFinalized,"Review is already complete"),
+        (R::Unavailable,"No assignments available"),
+    ] {
+        harness.state_mut().work.availability.tasks.insert(task.clone(), false);
+        harness.state_mut().work.availability.reasons.insert(task.clone(), reason);
+        for (width,height) in [(1440.0,1000.0),(1288.0,820.0),(600.0,800.0),(390.0,844.0),(320.0,568.0),(320.0,320.0)] {
+            harness.set_size(egui::vec2(width,height));
+            harness.state_mut().work.drawer = (width < 1288.0).then_some(Drawer::Workflow);
+            harness.run();
+            let node = harness.get_by_role_and_label(egui::accesskit::Role::Button,long);
+            assert!(node.accesskit_node().is_disabled());
+            assert!(node.accesskit_node().description().unwrap().starts_with(label));
+            let rect = assert_workflow_dot(&harness,long,true);
+            assert!(rect.left() >= 0.0 && rect.right() <= width);
+            assert_workflow_dot(&harness,"Vehicle boxes",false);
+        }
+    }
+}
+
+#[test]
+fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let task = TaskId::from("bounding_box:person");
+    let app = harness.state_mut();
+    app.work.availability.tasks.insert(task.clone(),false);
+    app.work.availability.reasons.insert(task.clone(),labello_domain::WorkflowUnavailableReason::BalanceLimit);
+    app.work.pending_transition = Some(crate::app::PendingTransition::Workflow(TaskId::from("bounding_box:vehicle")));
+    app.loading.image = true;
+    app.loading.saving = true;
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Saving changes");
+    app.loading.saving = false;
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Loading image");
+    app.loading.image = false;
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
+    app.work.pending_transition = None;
+    app.work.availability.loading = true;
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Other workflows need to catch up");
+    app.work.availability.tasks.clear();
+    app.work.availability.resolved = false;
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Checking for available work");
+    assert_eq!(app.displayed_workflow_availability(&task),None);
+    app.work.availability.error = Some("failed".into());
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown. You can still try selecting this workflow");
+    assert_eq!(app.displayed_workflow_availability(&task),None);
+    app.work.availability.loading = false;
+    harness.run();
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button,"Person boxes").accesskit_node().is_disabled());
+}
+
+#[test]
+fn workflow_reasons_restore_with_their_cache_and_reject_stale_responses() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let task = TaskId::from("bounding_box:person");
+    let reason = labello_domain::WorkflowUnavailableReason::BalanceLimit;
+    let app = harness.state_mut();
+    app.work.availability.tasks.insert(task.clone(),false);
+    app.work.availability.reasons.insert(task.clone(),reason);
+    app.cache_current_assignment_availability();
+    app.work.availability.reasons.clear();
+    assert!(app.restore_session_assignment_availability());
+    assert_eq!(app.work.availability.reasons[&task],reason);
+    let mut stale = test_request(harness.state(),99002,Some("demo"));
+    stale.workspace_epoch = stale.workspace_epoch.wrapping_sub(1);
+    harness.state_mut().runtime.tx.send(UiMessage::AssignmentAvailabilityLoaded {
+        checked_assignments:Vec::new(),
+        request:stale,
+        result:Ok(labello_client::AssignmentAvailability {
+            queue:None,
+            kind:AssignmentKind::Annotation,tasks:BTreeMap::from([(task.clone(),false)]),
+            reasons:BTreeMap::from([(task.clone(),labello_domain::WorkflowUnavailableReason::ReviewDisabled)]),related:Vec::new(),
+        }),
+    }).unwrap();
+    harness.run();
+    assert_eq!(harness.state().work.availability.reasons[&task],reason);
 }

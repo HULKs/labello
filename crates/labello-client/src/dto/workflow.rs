@@ -50,6 +50,8 @@ pub struct AssignmentAvailabilityRequest {
 pub struct AssignmentAvailability {
     pub kind: AssignmentKind,
     pub tasks: BTreeMap<TaskId, bool>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reasons: BTreeMap<TaskId, labello_domain::WorkflowUnavailableReason>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related: Vec<AssignmentAvailabilityEntry>,
     #[serde(default)]
@@ -68,6 +70,8 @@ pub struct AssignmentQueueStatus {
 pub struct AssignmentAvailabilityEntry {
     pub kind: AssignmentKind,
     pub tasks: BTreeMap<TaskId, bool>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reasons: BTreeMap<TaskId, labello_domain::WorkflowUnavailableReason>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

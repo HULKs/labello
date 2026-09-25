@@ -18,11 +18,14 @@ impl DatasetRepository {
         kind: AssignmentKind,
     ) -> StorageResult<std::collections::BTreeMap<TaskId, bool>> {
         Ok(self
-            .assignment_availabilities(user_id, kind.clone())
+            .assignment_availability_reasons(user_id, kind.clone())
             .await?
             .into_iter()
             .find_map(|(computed_kind, tasks)| (computed_kind == kind).then_some(tasks))
-            .expect("the required assignment kind must be included"))
+            .expect("the required assignment kind must be included")
+            .into_iter()
+            .map(|(task, reason)| (task, reason.is_none()))
+            .collect())
     }
 
     pub async fn assignment_availabilities(
@@ -30,6 +33,27 @@ impl DatasetRepository {
         user_id: &UserId,
         requested_kind: AssignmentKind,
     ) -> StorageResult<Vec<(AssignmentKind, std::collections::BTreeMap<TaskId, bool>)>> {
+        Ok(self
+            .assignment_availability_reasons(user_id, requested_kind)
+            .await?
+            .into_iter()
+            .map(|(kind, tasks)| {
+                (
+                    kind,
+                    tasks
+                        .into_iter()
+                        .map(|(task, reason)| (task, reason.is_none()))
+                        .collect(),
+                )
+            })
+            .collect())
+    }
+
+    pub async fn assignment_availability_reasons(
+        &self,
+        user_id: &UserId,
+        requested_kind: AssignmentKind,
+    ) -> StorageResult<Vec<(AssignmentKind, TaskAssignmentAvailability)>> {
         let config = self.load_dataset_config().await?;
         require_role(
             &config.role_assignments,
@@ -91,7 +115,7 @@ impl DatasetRepository {
         user_id: &UserId,
         kinds: &[AssignmentKind],
         generation: u64,
-    ) -> Option<Vec<(AssignmentKind, std::collections::BTreeMap<TaskId, bool>)>> {
+    ) -> Option<Vec<(AssignmentKind, TaskAssignmentAvailability)>> {
         let keys = kinds
             .iter()
             .map(|kind| (user_id.clone(), assignment_kind_cache_key(kind).to_string()))
@@ -106,7 +130,7 @@ impl DatasetRepository {
         &self,
         user_id: &UserId,
         kinds: &[AssignmentKind],
-    ) -> StorageResult<Vec<(AssignmentKind, std::collections::BTreeMap<TaskId, bool>)>> {
+    ) -> StorageResult<Vec<(AssignmentKind, TaskAssignmentAvailability)>> {
         let metadata = std::sync::Arc::new(self.load_dataset().await?);
 
         let mut work = Vec::with_capacity(kinds.len());
@@ -114,25 +138,37 @@ impl DatasetRepository {
             let mut availability = std::collections::BTreeMap::new();
             let mut unresolved = std::collections::BTreeSet::new();
             for task in &metadata.tasks {
-                if self.task_accepts_assignment(&metadata, task, kind).await? {
+                let reason = self.task_assignment_block(&metadata, task, kind).await?;
+                if reason.is_none() {
                     unresolved.insert(task.task_id.clone());
                 }
-                availability.insert(task.task_id.clone(), false);
+                availability.insert(
+                    task.task_id.clone(),
+                    Some(reason.unwrap_or(WorkflowUnavailableReason::EmptyDataset)),
+                );
             }
-            work.push((kind.clone(), availability, unresolved));
+            work.push((
+                kind.clone(),
+                availability,
+                unresolved,
+                std::collections::BTreeSet::new(),
+            ));
         }
 
-        if work.iter().all(|(_, _, unresolved)| unresolved.is_empty()) {
+        if work
+            .iter()
+            .all(|(_, _, unresolved, _)| unresolved.is_empty())
+        {
             return Ok(work
                 .into_iter()
-                .map(|(kind, availability, _)| (kind, availability))
+                .map(|(kind, availability, _, _)| (kind, availability))
                 .collect());
         }
 
         let eligible = std::sync::Arc::new(
             work.iter()
-                .filter(|(_, _, unresolved)| !unresolved.is_empty())
-                .map(|(kind, _, unresolved)| (kind.clone(), unresolved.clone()))
+                .filter(|(_, _, unresolved, _)| !unresolved.is_empty())
+                .map(|(kind, _, unresolved, _)| (kind.clone(), unresolved.clone()))
                 .collect::<Vec<_>>(),
         );
         let mut image_ids = metadata.images.keys().cloned();
@@ -153,16 +189,28 @@ impl DatasetRepository {
                 ))
             })??;
             for (kind, task_ids) in available {
-                let (_, availability, unresolved) = work
+                let (_, availability, unresolved, observed) = work
                     .iter_mut()
-                    .find(|(candidate, _, _)| *candidate == kind)
+                    .find(|(candidate, _, _, _)| *candidate == kind)
                     .expect("availability worker must return a requested kind");
-                for task_id in task_ids {
-                    unresolved.remove(&task_id);
-                    availability.insert(task_id, true);
+                for (task_id, reason) in task_ids {
+                    if !unresolved.contains(&task_id) {
+                        continue;
+                    }
+                    if reason.is_none() {
+                        unresolved.remove(&task_id);
+                        availability.insert(task_id, None);
+                    } else if observed.insert(task_id.clone()) {
+                        availability.insert(task_id, reason);
+                    } else if availability[&task_id] != reason {
+                        availability.insert(task_id, Some(WorkflowUnavailableReason::Unavailable));
+                    }
                 }
             }
-            if work.iter().all(|(_, _, unresolved)| unresolved.is_empty()) {
+            if work
+                .iter()
+                .all(|(_, _, unresolved, _)| unresolved.is_empty())
+            {
                 workers.abort_all();
                 break;
             }
@@ -177,7 +225,7 @@ impl DatasetRepository {
         }
         Ok(work
             .into_iter()
-            .map(|(kind, availability, _)| (kind, availability))
+            .map(|(kind, availability, _, _)| (kind, availability))
             .collect())
     }
 
@@ -187,8 +235,9 @@ impl DatasetRepository {
         metadata: std::sync::Arc<DatasetMetadata>,
         eligible: std::sync::Arc<Vec<(AssignmentKind, std::collections::BTreeSet<TaskId>)>>,
         user_id: UserId,
-    ) -> impl Future<Output = StorageResult<Vec<(AssignmentKind, Vec<TaskId>)>>> + Send + 'static
-    {
+    ) -> impl Future<Output = StorageResult<Vec<(AssignmentKind, TaskAssignmentAvailability)>>>
+    + Send
+    + 'static {
         let repository = self.clone();
         async move {
             let lock = repository.image_lock(&image_id);
@@ -197,21 +246,19 @@ impl DatasetRepository {
             let now = labello_domain::now();
             let mut available_by_kind = Vec::with_capacity(eligible.len());
             for (kind, task_ids) in eligible.iter() {
-                let mut available = Vec::new();
+                let mut available = TaskAssignmentAvailability::new();
                 for task in metadata
                     .tasks
                     .iter()
                     .filter(|task| task_ids.contains(&task.task_id))
                 {
                     let status = effective_assignment_status(&state, &task.task_id, kind, now);
-                    if repository
-                        .image_accepts_assignment(
+                    let reason = repository
+                        .image_assignment_block(
                             &image_id, &state, task, &user_id, kind, &status, now,
                         )
-                        .await?
-                    {
-                        available.push(task.task_id.clone());
-                    }
+                        .await?;
+                    available.insert(task.task_id.clone(), reason);
                 }
                 available_by_kind.push((kind.clone(), available));
             }
@@ -642,27 +689,40 @@ impl DatasetRepository {
         Ok(AssignmentClaimOutcome::Unavailable)
     }
 
-    async fn task_accepts_assignment(
-        &self,
-        metadata: &DatasetMetadata,
-        task: &TaskDefinition,
-        kind: &AssignmentKind,
-    ) -> StorageResult<bool> {
-        Ok(Self::task_supports_assignment(task, kind)?
-            && !self
-                .task_is_overrepresented(metadata, &task.task_id, kind)
-                .await?)
-    }
-
     fn task_supports_assignment(
         task: &TaskDefinition,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
+        Ok(Self::task_configuration_block(task, kind)?.is_none())
+    }
+
+    async fn task_assignment_block(
+        &self,
+        metadata: &DatasetMetadata,
+        task: &TaskDefinition,
+        kind: &AssignmentKind,
+    ) -> StorageResult<Option<WorkflowUnavailableReason>> {
+        if let Some(reason) = Self::task_configuration_block(task, kind)? {
+            return Ok(Some(reason));
+        }
+        if self
+            .task_is_overrepresented(metadata, &task.task_id, kind)
+            .await?
+        {
+            return Ok(Some(WorkflowUnavailableReason::BalanceLimit));
+        }
+        Ok(None)
+    }
+
+    fn task_configuration_block(
+        task: &TaskDefinition,
+        kind: &AssignmentKind,
+    ) -> StorageResult<Option<WorkflowUnavailableReason>> {
         if !task.enabled {
-            return Ok(false);
+            return Ok(Some(WorkflowUnavailableReason::Unavailable));
         }
         if *kind == AssignmentKind::LegacyAdjudication {
-            return Ok(false);
+            return Ok(Some(WorkflowUnavailableReason::Unavailable));
         }
         if task.review.workflow == ReviewWorkflow::LegacyIndependentAgreement {
             return Err(StorageError::InvalidAssignment(format!(
@@ -677,9 +737,9 @@ impl DatasetRepository {
             )));
         }
         if *kind == AssignmentKind::Review && task.review.workflow == ReviewWorkflow::None {
-            return Ok(false);
+            return Ok(Some(WorkflowUnavailableReason::ReviewDisabled));
         }
-        Ok(true)
+        Ok(None)
     }
 
     #[allow(
@@ -696,23 +756,63 @@ impl DatasetRepository {
         status: &TaskStatus,
         now: labello_domain::Timestamp,
     ) -> StorageResult<bool> {
+        Ok(self
+            .image_assignment_block(image_id, state, task, user_id, kind, status, now)
+            .await?
+            .is_none())
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "assignment eligibility is a leaf policy check over explicit claim inputs"
+    )]
+    async fn image_assignment_block(
+        &self,
+        image_id: &ImageId,
+        state: &labello_domain::ImageState,
+        task: &TaskDefinition,
+        user_id: &UserId,
+        kind: &AssignmentKind,
+        status: &TaskStatus,
+        now: labello_domain::Timestamp,
+    ) -> StorageResult<Option<WorkflowUnavailableReason>> {
         let task_id = &task.task_id;
         if super::revision::active_review_revision(state, task_id).is_some() {
-            return Ok(false);
+            return Ok(Some(WorkflowUnavailableReason::ReviewRevision));
         }
         if *kind == AssignmentKind::Annotation && !state.assignment_eligible(task_id) {
-            return Ok(false);
+            return Ok(Some(
+                if state.import_coverage.get(task_id)
+                    == Some(&labello_domain::ImportCoverage::Excluded)
+                    && !state.included_import_tasks.contains(task_id)
+                {
+                    WorkflowUnavailableReason::ImportExcluded
+                } else if matches!(status, TaskStatus::Submitted | TaskStatus::Completed) {
+                    WorkflowUnavailableReason::AnnotationFinished
+                } else {
+                    WorkflowUnavailableReason::Unavailable
+                },
+            ));
         }
         if *kind == AssignmentKind::Annotation
             && active_assignment_for_user(&state.assignments, task_id, user_id, kind, now).is_some()
         {
-            return Ok(true);
+            return Ok(None);
         }
         if has_conflicting_assignment(&state.assignments, task_id, user_id, kind, now) {
-            return Ok(false);
+            return Ok(Some(WorkflowUnavailableReason::ClaimedByOthers));
         }
         if !status_matches_kind(status, kind) {
-            return Ok(false);
+            return Ok(Some(match (kind, status) {
+                (AssignmentKind::Review, TaskStatus::Completed) => {
+                    WorkflowUnavailableReason::ReviewFinalized
+                }
+                (
+                    AssignmentKind::Review,
+                    TaskStatus::Pending | TaskStatus::InProgress | TaskStatus::NeedsCorrection,
+                ) => WorkflowUnavailableReason::NothingAwaitingReview,
+                _ => WorkflowUnavailableReason::Unavailable,
+            }));
         }
         if *kind == AssignmentKind::Review {
             let already_final = if task.manual_box_guide_migration.is_some() {
@@ -725,10 +825,10 @@ impl DatasetRepository {
                     || task_approval_count(&reviews, task_id) >= 1
             };
             if already_final {
-                return Ok(false);
+                return Ok(Some(WorkflowUnavailableReason::ReviewFinalized));
             }
         }
-        Ok(true)
+        Ok(None)
     }
 
     async fn task_is_overrepresented(
@@ -919,4 +1019,141 @@ fn expired_assignment_payloads(
             EventPayload::AssignmentUpdated { assignment }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod reason_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn image_reasons_cover_import_exclusion_leases_and_review_revision() {
+        use WorkflowUnavailableReason as R;
+        let (_temp, repo, task_id, users) =
+            super::super::tests::annotation_repo(1, &["a", "b"]).await;
+        let task = repo.load_dataset_config().await.unwrap().tasks.remove(0);
+        let image_id = ImageId::from("img_0");
+        let now = labello_domain::now();
+        let mut state = labello_domain::ImageState::new(image_id.clone());
+        state
+            .import_coverage
+            .insert(task_id.clone(), labello_domain::ImportCoverage::Excluded);
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Annotation,
+                &TaskStatus::Pending,
+                now
+            )
+            .await
+            .unwrap(),
+            Some(R::ImportExcluded)
+        );
+        state.included_import_tasks.insert(task_id.clone());
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Annotation,
+                &TaskStatus::Pending,
+                now
+            )
+            .await
+            .unwrap(),
+            None
+        );
+        let assignment = Assignment {
+            assignment_id: AssignmentId::generate(),
+            image_id: image_id.clone(),
+            task_id: task_id.clone(),
+            assigned_to: users[1].clone(),
+            kind: AssignmentKind::Annotation,
+            status: AssignmentStatus::Active,
+            expires_at: Some(lease_expiration(now)),
+            created_at: now,
+            updated_at: now,
+        };
+        state.assignments.push(assignment.clone());
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Annotation,
+                &TaskStatus::Pending,
+                now
+            )
+            .await
+            .unwrap(),
+            Some(R::ClaimedByOthers)
+        );
+        state.assignments[0].expires_at = Some(now);
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Annotation,
+                &TaskStatus::Pending,
+                now
+            )
+            .await
+            .unwrap(),
+            None
+        );
+        state.assignments[0].expires_at = Some(lease_expiration(now));
+        state.assignments[0].kind = AssignmentKind::Review;
+        state.review_assignment_contexts.insert(
+            assignment.assignment_id.clone(),
+            labello_domain::ReviewAssignmentContext {
+                assignment_id: assignment.assignment_id,
+                source_assignment_id: None,
+                round: labello_domain::ReviewRound {
+                    event_id: labello_domain::EventId::generate(),
+                    event_sequence: 1,
+                    submitted_by: users[0].clone(),
+                },
+                task: task.clone(),
+                target_fingerprint: String::new(),
+                targets: Vec::new(),
+                superseded_review_ids: Vec::new(),
+                decision_revision: true,
+            },
+        );
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Annotation,
+                &TaskStatus::Pending,
+                now
+            )
+            .await
+            .unwrap(),
+            Some(R::ReviewRevision)
+        );
+        state.assignments.clear();
+        assert_eq!(
+            repo.image_assignment_block(
+                &image_id,
+                &state,
+                &task,
+                &users[0],
+                &AssignmentKind::Review,
+                &TaskStatus::Completed,
+                now
+            )
+            .await
+            .unwrap(),
+            Some(R::ReviewFinalized)
+        );
+    }
 }

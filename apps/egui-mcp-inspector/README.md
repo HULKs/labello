@@ -223,3 +223,7 @@ the context and action bars blank; next-image presets retain the preceding
 view's disabled bar presentation. They exercise the shared presentation owner,
 not live networking. Use Chromium with delayed responses for the actual request
 transition.
+
+The `workflow-availability` preset shows all ten server restriction icons,
+including a selected unavailable workflow, without image or annotation content.
+Use it to inspect disabled tooltips, marker alignment, and the workflow drawer.

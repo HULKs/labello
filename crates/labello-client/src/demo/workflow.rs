@@ -40,6 +40,7 @@ impl ImageApi for DemoLabelloApi {
         Box::pin(async move {
             Ok(crate::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: request.kind,
                 tasks: std::collections::BTreeMap::new(),
                 related: Vec::new(),

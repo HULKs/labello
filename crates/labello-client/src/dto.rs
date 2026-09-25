@@ -19,6 +19,27 @@ include!("dto/offline.rs");
 include!("dto/media.rs");
 
 #[cfg(test)]
+mod availability_contract_tests {
+    use super::*;
+    #[test]
+    fn availability_reasons_are_additive_and_unknown_codes_are_generic() {
+        let old: AssignmentAvailability = serde_json::from_value(serde_json::json!({
+            "kind":"annotation", "tasks":{"person":false}
+        }))
+        .unwrap();
+        assert!(old.reasons.is_empty());
+        let new: AssignmentAvailability = serde_json::from_value(serde_json::json!({
+            "kind":"annotation", "tasks":{"person":false}, "reasons":{"person":"future_reason"}
+        }))
+        .unwrap();
+        assert_eq!(
+            new.reasons[&TaskId::from("person")],
+            labello_domain::WorkflowUnavailableReason::Unavailable
+        );
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use labello_domain::{
         AnnotationOrigin, DatasetId, EventPayload, OfflineSyncRequest, RevisionSource,

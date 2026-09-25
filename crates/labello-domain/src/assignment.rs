@@ -3,6 +3,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::{AssignmentId, ImageId, TaskId, Timestamp, UserId};
 
+/// Advisory assignment restrictions. These are derived, never persisted in events.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowUnavailableReason {
+    BalanceLimit,
+    ReviewDisabled,
+    EmptyDataset,
+    AnnotationFinished,
+    NothingAwaitingReview,
+    ClaimedByOthers,
+    ReviewRevision,
+    ImportExcluded,
+    ReviewFinalized,
+    #[serde(other)]
+    Unavailable,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AssignmentKind {

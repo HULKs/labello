@@ -1476,6 +1476,7 @@ impl ImageApi for SpyApi {
             .collect();
         ready(Ok(labello_client::AssignmentAvailability {
             queue: Some(labello_client::AssignmentQueueStatus { size: state.metadata.preload_queue_size, eligible_assignments: None }),
+            reasons: Default::default(),
             kind: request.kind.clone(),
             tasks: tasks.clone(),
             related: [
@@ -1485,6 +1486,7 @@ impl ImageApi for SpyApi {
             .into_iter()
             .filter(|kind| kind != &request.kind)
             .map(|kind| labello_client::AssignmentAvailabilityEntry {
+                reasons: Default::default(),
                 kind,
                 tasks: tasks.clone(),
             })

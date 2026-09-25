@@ -1,7 +1,7 @@
 impl LabelloApp {
     const WORKFLOW_ICON_SIZE: f32 = 28.0;
     const WORKFLOW_PILL_HEIGHT: f32 = 52.0;
-    const WORKFLOW_MARKER_WIDTH: f32 = 12.0;
+    const WORKFLOW_MARKER_WIDTH: f32 = 20.0;
 
     pub(crate) fn workflow_panel_width(&self, ctx: &egui::Context) -> f32 {
         let workflows = self.workflow_choices();
@@ -92,6 +92,7 @@ impl LabelloApp {
             !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
         for workflow in workflows {
             let selected = self.work.selected_task_id.as_ref() == Some(&workflow.task_id);
+            let reason = self.workflow_marker_reason(&workflow.task_id);
             let unavailable =
                 self.displayed_workflow_availability(&workflow.task_id) == Some(false);
             let icon_id = ui.id().with(("workflow-type", &workflow.task_id));
@@ -132,15 +133,10 @@ impl LabelloApp {
             let queue_status = selected
                 .then(|| self.workflow_queue_status())
                 .flatten();
-            let accessibility_description = if unavailable {
-                Some(match queue_status.as_ref() {
-                    Some(queue_status) => {
-                        format!("No assignments available. {queue_status}")
-                    }
-                    None => "No assignments available".to_string(),
-                })
-            } else {
-                queue_status.clone()
+            let accessibility_description = match (reason, queue_status.as_ref()) {
+                (Some(reason), Some(queue)) => Some(format!("{}. {queue}", reason.label())),
+                (Some(reason), None) => Some(reason.label().to_owned()),
+                (None, _) => queue_status.clone(),
             };
             if let Some(description) = accessibility_description {
                 ui.ctx().accesskit_node_builder(response_id, |node| {
@@ -150,10 +146,8 @@ impl LabelloApp {
             if let Some(icon_rect) = choice.rect(icon_id) {
                 workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
             }
-            if selected && let Some(marker_rect) = choice.rect(marker_id) {
-                // Paint outside the disabled child UI so an unavailable current
-                // workflow retains the same visible selection cue.
-                ui.painter().circle_filled(marker_rect.center(), 4.0, theme::TEXT);
+            if let Some(marker_rect) = choice.rect(marker_id) {
+                paint_workflow_marker(ui, marker_rect, selected, reason);
             }
             let mut hover_text = format!(
                 "{} workflow\nPrevious: {} · Next: {}",
@@ -161,8 +155,8 @@ impl LabelloApp {
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectPreviousWorkflow,),
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextWorkflow,)
             );
-            if unavailable {
-                hover_text.push_str("\nNo assignment is currently available for this workflow. Availability is advisory and can be retried below.");
+            if let Some(reason) = reason {
+                hover_text = reason.label().to_owned();
             }
             if let Some(queue_status) = queue_status.as_ref() {
                 hover_text.push('\n');

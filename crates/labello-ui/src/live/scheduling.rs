@@ -16,6 +16,7 @@ impl LabelloApp {
             dataset_id,
             kind,
             self.work.availability.tasks.clone(),
+            self.work.availability.reasons.clone(),
             checked_at,
         );
     }
@@ -25,6 +26,7 @@ impl LabelloApp {
         dataset_id: labello_domain::DatasetId,
         kind: labello_domain::AssignmentKind,
         tasks: std::collections::BTreeMap<labello_domain::TaskId, bool>,
+        reasons: std::collections::BTreeMap<labello_domain::TaskId, labello_domain::WorkflowUnavailableReason>,
         checked_at: labello_domain::Timestamp,
     ) {
         self.work.availability.cache.retain(|cached| {
@@ -37,6 +39,7 @@ impl LabelloApp {
                 dataset_id,
                 kind,
                 tasks,
+                reasons,
                 checked_at,
             });
     }
@@ -130,6 +133,7 @@ impl LabelloApp {
         self.work.availability.dataset_id = Some(dataset_id);
         self.work.availability.kind = Some(kind);
         self.work.availability.tasks = cached.tasks;
+        self.work.availability.reasons = cached.reasons;
         self.work.availability.resolved = true;
         self.work.availability.checked_at = Some(cached.checked_at);
         self.work.availability.loading = false;

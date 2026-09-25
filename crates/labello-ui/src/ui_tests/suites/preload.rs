@@ -76,6 +76,7 @@ fn preload_reconciliation_does_not_discard_items_newer_than_the_checked_snapshot
             request,
             checked_assignments: vec![checked],
             result: Ok(labello_client::AssignmentAvailability {
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(current.task_id.clone(), false)]),
                 related: Vec::new(),
@@ -183,6 +184,7 @@ fn preload_reconciliation_preserves_owned_work_when_no_new_claim_is_available() 
             request,
             checked_assignments: checked.clone(),
             result: Ok(labello_client::AssignmentAvailability {
+                reasons: Default::default(),
                 kind: AssignmentKind::Review,
                 tasks: BTreeMap::from([(
                     app.work.assignment.as_ref().unwrap().task_id.clone(),

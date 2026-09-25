@@ -55,6 +55,8 @@ pub(crate) struct WorkspacePreference {
 pub(crate) struct StoredAssignmentAvailability {
     pub kind: AssignmentKind,
     pub tasks: BTreeMap<TaskId, bool>,
+    #[serde(default)]
+    pub reasons: BTreeMap<TaskId, labello_domain::WorkflowUnavailableReason>,
     pub checked_at: Timestamp,
 }
 
