@@ -10,6 +10,8 @@ mod config;
 #[cfg(target_arch = "wasm32")]
 mod motion;
 #[cfg(target_arch = "wasm32")]
+mod pen_input;
+#[cfg(target_arch = "wasm32")]
 mod raw_import;
 
 #[cfg(target_arch = "wasm32")]
@@ -53,9 +55,11 @@ async fn run() -> Result<(), JsValue> {
     let browser_config = config::load().await?;
     let config = app_config_from_url(&browser_config)?;
     let options = eframe::WebOptions::default();
-    eframe::WebRunner::new()
+    let runner = eframe::WebRunner::new();
+    let input_runner = runner.clone();
+    runner
         .start(
-            canvas,
+            canvas.clone(),
             options,
             Box::new(move |creation_context| {
                 labello_ui::theme::apply(&creation_context.egui_ctx);
@@ -68,7 +72,15 @@ async fn run() -> Result<(), JsValue> {
                 install_presence_visibility_listener(
                     app.presence_visibility_notifier(creation_context.egui_ctx.clone()),
                 );
-                Ok(Box::new(app))
+                Ok(Box::new(
+                    pen_input::BrowserApp::new(
+                        app,
+                        canvas.clone(),
+                        creation_context.egui_ctx.clone(),
+                        &input_runner,
+                    )
+                    .map_err(|_| "could not install browser pen input")?,
+                ))
             }),
         )
         .await?;

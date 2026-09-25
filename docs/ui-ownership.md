@@ -69,6 +69,16 @@ canvas. The workflow reducer retains every persisted annotation ID, including
 deleted versions; Undo/Redo rebases a restored object on its latest version.
 Later keypoint autosaves mark an existing skeleton as a new human-edited revision.
 
+## Browser input
+
+`apps/labello-wasm/src/pen_input.rs` normalizes browser pen Pointer Events before
+eframe's mouse/touch compatibility listeners. Its browser-only app wrapper
+feeds egui pointer events to the unchanged `LabelloApp`, including synchronous
+press/release processing for browser user activation. It owns pen capture,
+cancellation, and duplicate-event suppression. Annotation policy and persistence
+remain in the shared canvas and workflow owners. See the
+[stylus input contract](stylus-input.md) for evidence boundaries.
+
 ## Browser persistence
 
 `persistence.rs` composes record validation, normalized storage identity, retry

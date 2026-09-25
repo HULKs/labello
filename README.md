@@ -98,8 +98,10 @@ Labello is under active development. These boundaries matter when choosing it:
   resolution are unavailable; there is no supported native desktop client.
 - Independent multi-annotator labeling is unavailable. Prelabel controls return
   placeholder geometry; they do not execute a model.
-- Tutorials render text only. Review has no swipe controls, and named stylus
-  devices and screen-reader/browser combinations have no verified support claim.
+- Tutorials render text only. Review has no swipe controls. Pen events have
+  focused Chromium/WebKit coverage, but [iPadOS Safari/Firefox and physical stylus
+  devices](docs/stylus-input.md) still need device validation. Named
+  screen-reader/browser combinations have no verified support claim.
 - Import creates new datasets and accepts only the documented ground-truth
   profiles. It does not merge datasets, import segmentation or predictions, or
   fetch archives or remote sources.

@@ -159,6 +159,11 @@ credentials, persistence, folder import, responsive layout, input, and failure
 paths. Record browser version, viewport, DPR/zoom, accessibility inspection, and
 unsupported coverage. Do not infer browser behavior from the native inspector.
 
+Pen-input changes also run the focused production-client checks in
+[Stylus input](stylus-input.md#automated-browser-procedure). Record CDP-generated
+events separately from scripted DOM events. iPadOS Safari/Firefox support requires
+the named physical-device procedure; desktop WebKit is only adapter evidence.
+
 ### Domain, events, and schema
 
 Read [`architecture.md`](architecture.md), [`persistence.md`](persistence.md),

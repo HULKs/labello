@@ -27,9 +27,11 @@ for the supported workflows.
 - Approval review supports object decisions through buttons and configurable
   shortcuts plus a final full-image check. Swipe-to-approve or reject is not
   implemented.
-- The canvas routes a single pen like a generic pointer, but Labello does not
-  currently claim tested stylus support for a named browser/device combination
-  or guarantee that pen, mouse, and touch interactions do not conflict.
+- The browser normalizes primary pen events and suppresses compatibility-event
+  duplication. [Stylus validation](stylus-input.md) covers Chromium emulation and
+  scripted WebKit input; iPadOS Safari/Firefox, physical Linux tablets, and
+  Android styluses remain unverified. Pressure, tilt tools, erasers, and
+  device-level palm rejection are unsupported.
 - Assignment balance can enforce an absolute completion-count window across
   enabled tasks. It does not separately aggregate and enforce class-level
   balance when multiple tasks share a class.
@@ -51,9 +53,10 @@ for the supported workflows.
 
 ## Operations
 
-- There is no browser end-to-end test suite. `egui_kittest` and the native
-  inspector do not validate WASM networking, cookies, IndexedDB, browser input,
-  or deployed responsive behavior.
+- There is no general browser end-to-end test suite. The focused stylus check
+  exercises production WASM/API input with disposable data. `egui_kittest` and
+  the native inspector do not validate WASM networking, cookies, IndexedDB,
+  browser input, or deployed responsive behavior.
 - Ingest jobs and some derived caches are process-local and do not survive
   restarts as durable jobs.
 - Configured cleanup of retained import jobs is not invoked or scheduled by the
