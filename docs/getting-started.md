@@ -63,9 +63,11 @@ IDs such as `github_123456`. On first login they receive annotator access to
 existing datasets without a role assignment; data admins can change that access.
 Dataset creation still requires inclusion in `bootstrapAdmins`.
 
-The browser prepares two upcoming assignments by default. `queueSize=1` holds
-one upcoming assignment; the supported range is 1 through 2, in addition to
-current work.
+The browser prepares two upcoming assignments by default. Dataset administrators
+can set a target from 1 through 200 in Administration > Automation, in addition
+to current work. The old `queueSize` URL parameter is ignored. See
+[preloading configuration and resource costs](configuration.md#dataset-assignment-balance)
+before choosing a large queue.
 
 ## Troubleshooting
 
