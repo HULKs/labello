@@ -7,6 +7,7 @@
       {"source": "README.md", "page": "Overview"},
       {"source": "docs/getting-started.md", "page": "Getting-started"},
       {"source": "docs/annotation.md", "page": "Annotation-and-review"},
+      {"source": "docs/stylus-input.md", "page": "Stylus-input"},
       {"source": "docs/administration.md", "page": "Dataset-administration"},
       {"source": "docs/import.md", "page": "Dataset-import"},
       {"source": "docs/migration.md", "page": "Guided-migration"},

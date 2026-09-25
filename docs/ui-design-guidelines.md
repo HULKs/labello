@@ -105,6 +105,11 @@ the user workflow.
   cues.
 - Match cursors to create, move, resize, pan, and disabled behavior. Keep
   gestures and shortcuts discoverable through controls or concise hints.
+- Pen-tip annotation must track movement before release and commit each action
+  once, including when the browser also emits compatibility mouse or stylus
+  touch events. Follow the [stylus contract and physical procedure](stylus-input.md)
+  for cancellation, mixed input, and iPadOS Safari/Firefox acceptance. Desktop
+  WebKit and Chromium pen emulation do not certify an iPad or Android device.
 
 ### Measurable accessibility criteria
 

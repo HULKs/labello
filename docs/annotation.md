@@ -42,6 +42,7 @@ Settings are staged until saved and can be restored to defaults.
 | Submit and next | `Space`; in review this acts on the focused item or final overview |
 | Previous image | Left arrow; subject to the previous-assignment eligibility rules |
 | Delete annotation | `Delete`; also discards a selected locally added review object |
+| Pen annotation | Primary-tip drag creates/moves/resizes boxes; tap places keypoints and drag moves them. See the [stylus contract](stylus-input.md) for tested event streams and pending device coverage. |
 
 Review opens objects for direct editing. Use modifier-drag or middle-drag to pan.
 Refocus uses current correction geometry. Workflow actions remain in the bottom
