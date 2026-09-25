@@ -2,13 +2,17 @@ use labello_domain::{
     Actor, AnnotationGeometry, AnnotationId, Assignment, AssignmentId, AssignmentKind,
     AssignmentStatus, CorrectionId, DatasetMetadata, DatasetRole, EventLogEntry, EventPayload,
     ImageId, ReviewDecision, ReviewRecord, ReviewTarget, ReviewWorkflow, TaskDefinition, TaskId,
-    TaskOutcome, TaskState, TaskStatus, UserId, current_task_reviews, has_task_review_by_user,
-    require_role, task_approval_count,
+    TaskOutcome, TaskState, TaskStatus, UserId, WorkflowUnavailableReason, current_task_reviews,
+    has_task_review_by_user, require_role, task_approval_count,
 };
 
 use crate::{DatasetRepository, StorageError, StorageResult};
 #[cfg(test)]
 use labello_domain::RevisionSource;
+
+/// One entry per configured task. None means an assignment can be claimed.
+pub type TaskAssignmentAvailability =
+    std::collections::BTreeMap<TaskId, Option<WorkflowUnavailableReason>>;
 
 mod claim;
 mod inspection;
@@ -797,3 +801,6 @@ fn renew_assignment(assignment: &mut Assignment, now: labello_domain::Timestamp)
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_availability;

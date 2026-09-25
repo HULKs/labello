@@ -53,7 +53,7 @@ pub(crate) async fn assignment_availability(
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
     let mut availabilities = repo
-        .assignment_availabilities(&actor.user_id, request.kind.clone())
+        .assignment_availability_reasons(&actor.user_id, request.kind.clone())
         .await?;
     let requested = availabilities
         .iter()
@@ -65,10 +65,27 @@ pub(crate) async fn assignment_availability(
         .await?;
     Ok(Json(AssignmentAvailability {
         kind: request.kind,
-        tasks,
+        tasks: tasks
+            .iter()
+            .map(|(task, reason)| (task.clone(), reason.is_none()))
+            .collect(),
+        reasons: tasks
+            .into_iter()
+            .filter_map(|(task, reason)| reason.map(|reason| (task, reason)))
+            .collect(),
         related: availabilities
             .into_iter()
-            .map(|(kind, tasks)| AssignmentAvailabilityEntry { kind, tasks })
+            .map(|(kind, tasks)| AssignmentAvailabilityEntry {
+                kind,
+                reasons: tasks
+                    .iter()
+                    .filter_map(|(task, reason)| reason.map(|reason| (task.clone(), reason)))
+                    .collect(),
+                tasks: tasks
+                    .into_iter()
+                    .map(|(task, reason)| (task, reason.is_none()))
+                    .collect(),
+            })
             .collect(),
         queue: Some(labello_client::AssignmentQueueStatus {
             size,

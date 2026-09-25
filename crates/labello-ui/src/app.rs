@@ -204,6 +204,8 @@ pub(crate) struct AssignmentAvailabilityState {
     pub(crate) dataset_id: Option<DatasetId>,
     pub(crate) kind: Option<AssignmentKind>,
     pub(crate) tasks: std::collections::BTreeMap<TaskId, bool>,
+    pub(crate) reasons:
+        std::collections::BTreeMap<TaskId, labello_domain::WorkflowUnavailableReason>,
     pub(crate) resolved: bool,
     pub(crate) checked_at: Option<Timestamp>,
     pub(crate) loading: bool,
@@ -219,6 +221,8 @@ pub(crate) struct CachedAssignmentAvailability {
     pub(crate) dataset_id: DatasetId,
     pub(crate) kind: AssignmentKind,
     pub(crate) tasks: std::collections::BTreeMap<TaskId, bool>,
+    pub(crate) reasons:
+        std::collections::BTreeMap<TaskId, labello_domain::WorkflowUnavailableReason>,
     pub(crate) checked_at: Timestamp,
 }
 

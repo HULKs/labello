@@ -198,6 +198,7 @@ fn assignment_availability_poll_is_scheduled_from_completion() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), true)]),
                 related: Vec::new(),
@@ -254,6 +255,7 @@ fn assignment_availability_mutations_invalidate_current_and_persisted_state() {
             pan_y: 0.0,
         },
         availability: Some(StoredAssignmentAvailability {
+                reasons: Default::default(),
             kind: AssignmentKind::Annotation,
             tasks: app.work.availability.tasks.clone(),
             checked_at: labello_domain::now(),
@@ -503,6 +505,7 @@ fn deliver_assignment_availability(
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks,
                 related: Vec::new(),
@@ -544,6 +547,7 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), false)]),
                 related: Vec::new(),
@@ -571,6 +575,7 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
             request,
             result: Ok(labello_client::AssignmentAvailability {
                 queue: None,
+                reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), false)]),
                 related: Vec::new(),

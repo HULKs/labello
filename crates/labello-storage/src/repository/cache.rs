@@ -8,7 +8,7 @@ pub(crate) type AssignmentAvailabilityCacheKey = (UserId, String);
 struct CachedAssignmentAvailability {
     generation: u64,
     cached_at: Instant,
-    tasks: BTreeMap<TaskId, bool>,
+    tasks: crate::assignment::TaskAssignmentAvailability,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +42,7 @@ impl AssignmentAvailabilityCache {
         &self,
         keys: &[AssignmentAvailabilityCacheKey],
         expected_generation: u64,
-    ) -> Option<Vec<BTreeMap<TaskId, bool>>> {
+    ) -> Option<Vec<crate::assignment::TaskAssignmentAvailability>> {
         let initial_generation = self.generation();
         if initial_generation != expected_generation {
             tracing::debug!(
@@ -96,7 +96,10 @@ impl AssignmentAvailabilityCache {
     pub(crate) async fn store_batch_if_current(
         &self,
         scan_generation: u64,
-        batch: Vec<(AssignmentAvailabilityCacheKey, BTreeMap<TaskId, bool>)>,
+        batch: Vec<(
+            AssignmentAvailabilityCacheKey,
+            crate::assignment::TaskAssignmentAvailability,
+        )>,
     ) -> bool {
         let mut values = self.values.lock().await;
         if self.generation() != scan_generation {
@@ -148,8 +151,11 @@ mod tests {
         (UserId::from("user"), kind.to_string())
     }
 
-    fn tasks(available: bool) -> BTreeMap<TaskId, bool> {
-        BTreeMap::from([(TaskId::from("bounding_box:person"), available)])
+    fn tasks(available: bool) -> crate::assignment::TaskAssignmentAvailability {
+        BTreeMap::from([(
+            TaskId::from("bounding_box:person"),
+            (!available).then_some(labello_domain::WorkflowUnavailableReason::Unavailable),
+        )])
     }
 
     #[tokio::test]

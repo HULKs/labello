@@ -39,6 +39,7 @@ pub enum InspectorPreset {
     ReviewNextImage,
     MigrationNextImage,
     WorkflowReasons,
+    WorkflowAvailability,
     Admin,
     ExportSelection,
     ExportLoading,
@@ -88,7 +89,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 61] = [
+    pub const ALL: [Self; 62] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -104,6 +105,7 @@ impl InspectorPreset {
         Self::ReviewNextImage,
         Self::MigrationNextImage,
         Self::WorkflowReasons,
+        Self::WorkflowAvailability,
         Self::Admin,
         Self::ExportSelection,
         Self::ExportLoading,
@@ -168,6 +170,7 @@ impl InspectorPreset {
             Self::ReviewInitialLoad => "review-initial-load",
             Self::ReviewNextImage => "review-next-image",
             Self::MigrationNextImage => "migration-next-image",
+            Self::WorkflowAvailability => "workflow-availability",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::ExportSelection => "export-selection",
@@ -256,6 +259,46 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::WorkflowAvailability => {
+            use labello_domain::WorkflowUnavailableReason as R;
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.clear_current_image();
+            let template = app.work.tasks[0].clone();
+            app.work.tasks.clear();
+            for (index, (name, reason)) in [
+                ("Balance limit", R::BalanceLimit),
+                ("Review disabled", R::ReviewDisabled),
+                ("Empty dataset", R::EmptyDataset),
+                ("Annotation finished", R::AnnotationFinished),
+                ("Awaiting submissions", R::NothingAwaitingReview),
+                ("Assigned to others", R::ClaimedByOthers),
+                ("Review revision", R::ReviewRevision),
+                ("Excluded imports", R::ImportExcluded),
+                ("Review complete", R::ReviewFinalized),
+                ("Mixed restrictions", R::Unavailable),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let mut task = template.clone();
+                task.task_id = TaskId::from(format!("reason_{index}"));
+                task.name = name.into();
+                app.work
+                    .availability
+                    .tasks
+                    .insert(task.task_id.clone(), false);
+                app.work
+                    .availability
+                    .reasons
+                    .insert(task.task_id.clone(), reason);
+                app.work.tasks.push(task);
+            }
+            app.work.selected_task_id = Some(app.work.tasks[0].task_id.clone());
+            app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+            app.work.availability.kind = Some(AssignmentKind::Annotation);
+            app.work.availability.resolved = true;
+            app
+        }
         InspectorPreset::Presence | InspectorPreset::PresenceFallback => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             let avatar = (preset == InspectorPreset::Presence).then(|| {

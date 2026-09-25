@@ -40,6 +40,7 @@ impl LabelloApp {
                         let migration_active = self.manual_migration_active();
                         if !migration_active {
                             self.work.availability.tasks.clear();
+                            self.work.availability.reasons.clear();
                         }
                         self.work.availability.resolved = false;
                         self.work.availability.checked_at = None;
@@ -70,6 +71,7 @@ impl LabelloApp {
                                     self.config.dataset_id.clone(),
                                     related.kind,
                                     related.tasks,
+                                    related.reasons,
                                     checked_at,
                                 );
                             }
@@ -77,6 +79,7 @@ impl LabelloApp {
                                 Some(self.config.dataset_id.clone());
                             self.work.availability.kind = Some(availability.kind);
                             self.work.availability.tasks = availability.tasks;
+                            self.work.availability.reasons = availability.reasons;
                             self.work.availability.resolved = true;
                             self.work.availability.checked_at = Some(checked_at);
                             self.work.availability.error = None;
@@ -86,6 +89,7 @@ impl LabelloApp {
                         }
                         Ok(_) => {
                             self.work.availability.tasks.clear();
+                            self.work.availability.reasons.clear();
                             self.work.availability.resolved = false;
                             self.work.availability.checked_at = None;
                             self.work.availability.error =
@@ -93,6 +97,7 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.work.availability.tasks.clear();
+                            self.work.availability.reasons.clear();
                             self.work.availability.resolved = false;
                             self.work.availability.checked_at = None;
                             self.work.availability.error = Some(error.to_string());

@@ -389,6 +389,27 @@ remains in `ImageState`, snapshots and event replay. Raw event and admin repair
 commands cannot bypass substantive-correction requirements with `ReviewRecorded`
 rejections.
 
+### Assignment availability reasons
+
+`AssignmentAvailability` and each authorized `related` entry retain their
+`tasks` map of task IDs to booleans. An additive `reasons` map contains a bounded
+reason code for each unavailable task and no entries for available tasks. Older
+responses without this map remain readable; missing or unknown codes display a
+generic unavailable explanation. The codes are `balance_limit`, `review_disabled`,
+`empty_dataset`, `annotation_finished`, `nothing_awaiting_review`,
+`claimed_by_others`, `review_revision`, `import_excluded`, `review_finalized`,
+and `unavailable`.
+
+Task-level configuration and balance restrictions take precedence. Otherwise,
+any eligible image makes the task available. A specific image-level reason is
+reported only when all images have the same first restriction under the claim
+policy; mixed results use `unavailable`. Submitted and completed work needs no
+further annotation. Completed review work uses `review_finalized`; pending,
+in-progress and correction work uses `nothing_awaiting_review`. Availability is
+advisory and does not reserve work. Reasons share the same role checks, bounded
+scan, cache lifetime, and mutation invalidation as the boolean result. No actor,
+image, annotation, or import-source details are exposed by these codes.
+
 ## Dataset inspection and return to review
 
 All dataset members may list indexed images and read their previews and current

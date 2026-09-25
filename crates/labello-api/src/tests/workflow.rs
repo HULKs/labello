@@ -1269,6 +1269,7 @@ async fn assignment_availability_is_batched_authenticated_and_advisory() {
         stale_available["tasks"]["bounding_box:pixel"],
         serde_json::Value::Bool(true)
     );
+    assert!(stale_available["reasons"].is_null());
     let related_kinds = stale_available["related"]
         .as_array()
         .unwrap()
@@ -1300,7 +1301,9 @@ async fn assignment_availability_is_batched_authenticated_and_advisory() {
             .status(),
         StatusCode::OK
     );
+    assert_eq!(reserved["reasons"]["bounding_box:pixel"], "claimed_by_others");
     let released = get_assignment_availability(&app, "admin", "annotation").await;
+    assert!(released["reasons"].is_null());
     assert_eq!(
         released["tasks"]["bounding_box:pixel"],
         serde_json::Value::Bool(true)

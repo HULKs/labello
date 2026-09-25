@@ -3733,7 +3733,7 @@ async fn disabled_imbalance_enforcement_does_not_initialize_projection() {
     assert_eq!(repo.task_completion_cache.scan_count(), 0);
 }
 
-async fn annotation_repo(
+pub(super) async fn annotation_repo(
     image_count: usize,
     user_names: &[&str],
 ) -> (tempfile::TempDir, DatasetRepository, TaskId, Vec<UserId>) {

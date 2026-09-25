@@ -21,7 +21,15 @@ Submission completes workflows without review; approval workflows enter a review
 round. Skipping releases work without approving it. Guided box-to-skeleton work
 has additional [migration](migration.md) steps.
 
-The workflow selector identifies the current workflow and available work. If
+The workflow selector identifies the current workflow and available work. Reason
+icons explain disabled cards through short tooltips and accessible descriptions.
+They distinguish completion balance, disabled review, an empty dataset, finished
+annotation or review, work awaiting submission, competing claims, review revisions,
+and excluded imports. Mixed restrictions use a generic unavailable icon.
+Saving, image loading, and a pending transition temporarily disable all cards
+and take precedence in that order. Checking or failed availability alone leaves
+cards selectable; a known unavailable result remains visible during refresh.
+The current workflow keeps its white dot beside any reason icon. If
 availability causes an automatic switch, a persistent notice names the old and
 new workflow. The [focus bonus](scoring.md#focus-workflow) marks the current
 bonus workflow without changing assignment order.

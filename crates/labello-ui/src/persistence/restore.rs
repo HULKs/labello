@@ -202,6 +202,7 @@ impl crate::app::LabelloApp {
         .then(|| StoredAssignmentAvailability {
             kind,
             tasks: self.work.availability.tasks.clone(),
+            reasons: self.work.availability.reasons.clone(),
             checked_at,
         })
     }
@@ -243,6 +244,7 @@ impl crate::app::LabelloApp {
         self.work.availability.dataset_id = Some(self.config.dataset_id.clone());
         self.work.availability.kind = Some(kind);
         self.work.availability.tasks = cached.tasks;
+        self.work.availability.reasons = cached.reasons;
         self.work.availability.resolved = true;
         self.work.availability.checked_at = Some(cached.checked_at);
         self.work.availability.loading = false;
