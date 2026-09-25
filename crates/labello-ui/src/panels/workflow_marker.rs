@@ -255,7 +255,10 @@ fn paint_workflow_marker(
         }
         Some(M::Unavailable(R::ReviewFinalized)) => {
             shield();
-            check();
+            painter.add(egui::Shape::line(
+                vec![point(5.5, 8.5), point(8.0, 11.0), point(12.5, 6.5)],
+                egui::Stroke::new(2.0, theme::TEXT),
+            ));
         }
         Some(M::Unavailable(R::Unavailable)) => {
             painter.circle_stroke(center, 8.0, stroke);
