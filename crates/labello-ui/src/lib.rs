@@ -16,6 +16,7 @@ mod manual_migration;
 mod missing_objects;
 pub mod panels;
 mod persistence;
+mod prelabel_flow;
 mod presence;
 pub mod queue;
 mod review_context;

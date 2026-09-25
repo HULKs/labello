@@ -1705,6 +1705,7 @@ fn overlay_preset(ctx: &egui::Context, preset: InspectorPreset) -> LabelloApp {
             }
             app.work.current.as_mut().unwrap().prelabels =
                 vec![labello_domain::PrelabelSuggestion {
+                    evidence: None,
                     suggestion_id: "synthetic-overlay-suggestion".into(),
                     config_id: "synthetic-overlay-config".into(),
                     task_id,

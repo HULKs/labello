@@ -29,6 +29,8 @@ Use documentation according to its status:
   compatibility; read it before changing persisted workflow events.
 - `docs/configuration.md`, `docs/import.md`, and `docs/operations.md` define
   server configuration, import behavior, and operational/security rules.
+- Read `docs/prelabels.md` before changing inference, retained hints, reset, or
+  accepted-prediction provenance.
 - Read `docs/export.md` before changing export selection, capture, delivery,
   recovery, or round-trip behavior. It defines the preservation/loss contract.
 - `docs/deployment.md` owns release publication, deployment transactions,
@@ -117,8 +119,9 @@ claim:
   annotation or conflict-resolution workflow.
 - Independent multi-annotator labeling and agreement are not operational.
 - Approval review requires one reviewer and directly completes the task.
-- Prelabel configuration and suggestion UI exist, but model execution returns
-  placeholder geometry; browser-local WebGPU/CPU execution is not implemented.
+- Prelabels support the static Ultralytics YOLO ONNX contract in
+  `docs/prelabels.md`. Keep browser-reported predictions distinct from server
+  execution evidence. Batch generation covers bounding boxes only.
 - Tutorial example-image paths can be configured but are not rendered.
 - Review supports buttons and configurable shortcuts, not swipe decisions.
 - Stylus input follows the generic pointer path but has no formally verified

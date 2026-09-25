@@ -30,8 +30,15 @@ pub enum AnnotationSource {
     rename_all_fields = "camelCase"
 )]
 pub enum AnnotationOrigin {
-    Native { legacy_v2: bool },
-    Imported { imported: ImportedOrigin },
+    Native {
+        legacy_v2: bool,
+    },
+    Imported {
+        imported: ImportedOrigin,
+    },
+    Prelabel {
+        prelabel: Box<crate::AcceptedPrelabel>,
+    },
 }
 
 impl AnnotationOrigin {

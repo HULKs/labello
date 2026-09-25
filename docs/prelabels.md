@@ -1,0 +1,187 @@
+# Model prelabels
+
+Prelabels are editable suggestions. They do not claim work, complete a workflow,
+or enter ground-truth export until an annotator accepts them and completes the
+normal annotation and review workflow.
+
+## Supply a model
+
+The initial contract supports Ultralytics YOLO detection and pose ONNX exports.
+Export one static float32 input with shape `[1, 3, S, S]` and raw output with
+shape `[1, 4 + classes + 3 * keypoints, candidates]`. Detection has no keypoints.
+Use `batch=1`, `dynamic=False`, `half=False`, `nms=False`, and an input size
+between 32 and 1280 divisible by 32. YOLO11 detection and pose exports with
+opset 17 and input size 320 have been exercised. End-to-end NMS exports,
+segmentation, dynamic shapes, external tensor files, and other output layouts
+are unsupported.
+
+For example, in an environment with Ultralytics installed:
+
+```python
+from ultralytics import YOLO
+
+YOLO("yolo11n.pt").export(
+    format="onnx", imgsz=320, batch=1, dynamic=False,
+    half=False, nms=False, opset=17, simplify=False, device="cpu",
+)
+```
+
+Use a pose model such as `yolo11n-pose.pt` for a skeleton workflow. Python is an
+export tool, not a production inference dependency.
+
+The server operator places the ONNX file in a dedicated directory readable by
+the server account and enables the optional server section:
+
+```toml
+[prelabel]
+modelsRoot = "/srv/labello-models"
+timeoutSeconds = 120
+```
+
+There is no model upload endpoint. Dataset administrators select a managed
+basename such as `people.onnx` in **Admin > Automation**. Paths, symlinks, URLs,
+and executable commands are rejected. Existing configurations without a YOLO
+profile remain readable but cannot run until configured. The historical
+server `command` field must be empty.
+
+Set the model ID and version, input size, execution mode, confidence threshold,
+IoU threshold, task associations, and annotator availability. List dataset
+class IDs in model output-index order; `-` ignores an output class. For a COCO
+person detector, map output index zero to the dataset's person class and mark
+the other 79 outputs `-`. Every class in a linked workflow must be mapped.
+For pose, list keypoint names in model order, exactly matching the workflow's
+ordered skeleton specification. Detection models link to box workflows;
+pose models link to skeleton workflows.
+
+## Execution and coordinates
+
+The shared Rust adapter decodes the original image to RGB, fits it into the
+square input with bilinear resizing, centers it with RGB 114 padding, and
+normalizes channels to `[0, 1]` in NCHW order. It chooses the highest-scoring
+model class per candidate and reverses the actual resize and padding to return
+clipped normalized coordinates in the original image. It rejects nonfinite
+outputs, invalid scores, negative dimensions, and unsupported tensor layouts.
+Empty or fully clipped boxes produce no hint.
+
+Pose uses its object box for confidence-ordered IoU suppression, then returns
+the named keypoints. A keypoint score below 0.5 becomes hidden when the workflow
+allows hidden points; otherwise it remains visible for human correction.
+
+Server inference runs on Linux CPU through Rust `ort` with the `ort-tract`
+backend. Each execution gets a fresh child process with a cleared environment,
+bounded binary input/output, a configurable timeout, a 4 GiB address-space
+limit, a 300-second CPU limit, and no core dumps. Dropping the inference future
+kills the child. It executes a fixed server worker, never a configured command.
+The default global inference concurrency is one. Model bytes are reloaded and
+hashed so replacing a model invalidates earlier results.
+
+Browser inference uses self-hosted ONNX Runtime Web in a dedicated worker.
+WebGPU-preferred configurations try WebGPU, then retry on WASM CPU if execution
+fails. CPU-only configurations use WASM directly. Each attempt times out after
+120 seconds; cancelling the request terminates its worker. Shared Rust code
+performs preprocessing and output decoding. Model and image downloads use the
+authenticated API and are checked against the server's BLAKE3 identities.
+Models selected for browser execution are therefore disclosed to authorized
+dataset users. Browser results are explicitly recorded as `browser_reported`;
+the server cannot attest that an untrusted browser ran a particular model.
+
+Model bytes are limited to 256 MiB, original images to 32 MiB, decoded dimensions
+to 16384 per axis, image decoder allocation to 128 MiB, output to eight million
+float32 values, and candidates to 35000. Unsupported models, exhausted workers,
+timeouts, and download failures leave manual annotation available.
+
+## Annotator controls and filtering
+
+The Prelabels selector offers compatible, available configurations and
+**No prelabels**. The initial choice is the first available configuration.
+An explicit selection, including none, persists per account, API origin,
+dataset, and workflow. A removed or unavailable saved selection becomes none.
+Hints load independently of the image and are prefetched for prepared images.
+Changing selection cancels obsolete work and clears queued hints while keeping
+annotation drafts. **Refresh hints** retries a failed request.
+
+Before display, the shared filtering policy combines the current candidate set
+and compares it with current persisted and draft boxes. Existing nondeleted
+boxes win. Remaining hints are ordered by descending confidence with stable
+suggestion-ID ties. A hint is suppressed only when IoU is **greater than** the
+configured threshold against a kept hint or existing box in the same image,
+class, and workflow. The default threshold is **0.5**. Different classes and
+workflows may overlap. Editing or deleting a draft box immediately refilters
+the retained candidates. Changing model or processing configuration invalidates
+the generation identity and requires refreshed hints.
+
+## Dataset generation and removal
+
+In **Admin > Automation > Dataset hints**, check remaining box workflows,
+choose a compatible server model for each ambiguous workflow, then start the
+prepared run. A workflow with one compatible server model is mapped
+automatically. Missing mappings or unavailable files block start. Preflight
+captures missing/Pending, InProgress, and NeedsCorrection image/workflow pairs.
+Disabled, submitted, completed, and import-excluded work is omitted.
+Preflight shows eligible pairs, matching reusable results, and ineligible pairs.
+Start reuses compatible retained results and generates the remaining items.
+If new eligible work appears before start, check remaining workflows again to
+include it. Work added after start belongs to a later run.
+
+Runs continue after the browser disconnects. The UI reports pending, generated,
+empty, skipped, and failed item counts. Each item is revalidated before execution
+and publication; changed or completed work is skipped. Results bind the image
+hash, task/configuration digest, model digest, and reset generations. Interactive
+requests for that exact binding reuse retained results without inference.
+
+Cancellation preserves successful results and pending work. Retry processes
+failed and pending items; it preserves successful results unless a reset removed
+them. A server restart exposes a running job as interrupted on the next dataset
+prelabel access. It requires explicit retry. Configuration/model changes require
+a fresh preflight. There is one active batch per dataset, sharing the global
+worker limit with interactive requests.
+
+Removal can target a workflow, a configuration, their intersection, or the whole
+dataset. Confirm **Remove hints and pause** to remove retained results, cancel
+affected runs, and advance durable generation markers. Repeating a removal is
+idempotent. Affected browser caches and in-flight results cannot authorize a new
+acceptance. Clients check generation status while annotating. Annotation history,
+accepted annotations, user edits, drafts, and model configuration remain intact.
+Unsaved acceptances from an old generation fail on save and require refreshed
+hints. **Resume hints in this scope**, or explicitly starting/retrying a run,
+reenables generation. Ordinary polling cannot resume it.
+
+Private state lives below `.labello-server/prelabels/<dataset-id>/`.
+`control.json` holds the signing secret, durable generations, pause scopes, run
+progress, and result index. Result files are derived hints. Publication writes
+the complete result before durably indexing it; recovery removes orphan results.
+Reset commits invalidation before deleting files. Preserve control state in full
+backups and use the API for removal rather than hand-editing private files.
+
+The default retention is seven days, with 16 runs, 100000 captured work items,
+100000 result files, 8 MiB per result, and 2 GiB of indexed results per dataset.
+Administrative access/preflight prunes expired results and runs; interactive
+requests do not reuse expired results. Limits are configurable in
+`[prelabel.limits]`, documented in the server example. Quota or I/O interruption
+leaves pending work retryable after the operator resolves the limit or storage
+failure. Model storage is operator-managed and outside these result quotas.
+
+## Acceptance and history
+
+The API signs exact prediction evidence. Acceptance verifies dataset, image,
+workflow, configuration/model digests, generation, and signature while holding
+the dataset prelabel guard through the annotation transaction. Under the image
+lock, replay checks confidence, current-box suppression, and duplicate acceptance.
+An exact committed retry remains safe after reset; it creates no second annotation.
+
+Accepted annotations use immutable `prelabel` origin with the original prediction,
+model ID/version/digest, configuration digest, processing settings, confidence,
+execution mode, trust classification, and suggestion identity. The revision is
+human accepted-unchanged or human edited. Later human/reviewer edits preserve
+the original prediction. They follow normal submission, review, completion,
+statistics, and export rules. Unaccepted hints never become ground truth.
+
+Schema version 3 events, states, generated schemas, snapshots, and offline bundles
+retain accepted provenance. Historical version-2 and version-3 annotations remain
+readable; version-2 output rejects new prelabel origins instead of dropping them.
+New prelabel acceptance requires the online evidence endpoint. Historical
+`prelabel_suggestion` revisions remain readable but cannot be newly authored by
+ordinary event or offline synchronization requests.
+
+Dataset-wide pose generation and external prediction-file import are outside
+this feature's scope.

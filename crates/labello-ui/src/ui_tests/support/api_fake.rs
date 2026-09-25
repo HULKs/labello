@@ -2250,9 +2250,10 @@ impl PrelabelApi for SpyApi {
         &'a self,
         _dataset_id: &'a DatasetId,
         request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, Vec<PrelabelSuggestion>> {
+    ) -> ApiFuture<'a, labello_domain::PrelabelResponse> {
         self.state.borrow_mut().counts.prelabel_suggestions += 1;
-        ready(Ok(vec![PrelabelSuggestion {
+        ready(Ok(labello_domain::PrelabelResponse { execution: None, generation: labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false }, from_batch: false, browser_grant: None, suggestions: vec![PrelabelSuggestion {
+            evidence: None,
             suggestion_id: "suggestion-1".to_string(),
             config_id: request.config_id,
             task_id: request.task_id,
@@ -2264,8 +2265,12 @@ impl PrelabelApi for SpyApi {
                 width: 0.25,
                 height: 0.35,
             }),
-        }]))
+        }] }))
     }
+    fn prelabel_generation<'a>(&'a self, _dataset_id: &'a DatasetId, _request: PrelabelSuggestionRequest) -> ApiFuture<'a, labello_domain::PrelabelGeneration> { ready(Ok(labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false })) }
+    fn prelabel_admin_state<'a>(&'a self, _dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { ready(Ok(Default::default())) }
+    fn prelabel_admin_command<'a>(&'a self, _dataset_id: &'a DatasetId, _command: labello_domain::PrelabelAdminCommand) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { ready(Ok(Default::default())) }
+
 }
 
 impl AuthApi for SpyApi {

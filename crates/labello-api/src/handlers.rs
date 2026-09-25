@@ -36,6 +36,7 @@ mod exports;
 mod imports;
 mod ingest;
 mod oauth_routes;
+pub(crate) mod prelabels;
 mod presence;
 mod workflow;
 
@@ -302,7 +303,23 @@ pub fn router(state: ApiState) -> Router {
         )
         .route(
             "/datasets/{dataset_id}/prelabel-suggestions",
-            post(workflow::prelabel_suggestions),
+            post(prelabels::suggestions),
+        )
+        .route(
+            "/datasets/{dataset_id}/prelabel-generation",
+            get(prelabels::generation),
+        )
+        .route(
+            "/datasets/{dataset_id}/prelabel-browser-result",
+            post(prelabels::browser_result),
+        )
+        .route(
+            "/datasets/{dataset_id}/prelabels/{config_id}/model",
+            get(prelabels::model),
+        )
+        .route(
+            "/datasets/{dataset_id}/prelabel-management",
+            get(prelabels::admin_state).post(prelabels::admin_command),
         )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -727,6 +744,12 @@ async fn update_dataset_config(
 ) -> ApiResult<Json<DatasetMetadata>> {
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
+    ensure_dataset_role(
+        &repo.load_dataset_config().await?,
+        &actor,
+        DatasetRole::DataAdmin,
+    )?;
+    let _prelabel_guard = state.lock_prelabel_configuration(&dataset_id).await?;
     let mut metadata = repo.load_dataset_config().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
     validate_config_update(&metadata, &request, &actor)?;
@@ -968,6 +991,12 @@ async fn add_task(
 ) -> ApiResult<Json<TaskDefinition>> {
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
+    ensure_dataset_role(
+        &repo.load_dataset_config().await?,
+        &actor,
+        DatasetRole::DataAdmin,
+    )?;
+    let _prelabel_guard = state.lock_prelabel_configuration(&dataset_id).await?;
     let mut metadata = repo.load_dataset_config().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
     validate_enabled_task(&task)?;
@@ -1001,7 +1030,7 @@ async fn list_prelabel_configs(
     let repo = state.repo(&dataset_id)?;
     let metadata = repo.load_dataset_config().await?;
     ensure_any_dataset_role(&metadata, &actor)?;
-    Ok(Json(metadata.prelabel_configs))
+    Ok(Json(sanitize_dataset(metadata, &actor).prelabel_configs))
 }
 
 async fn add_prelabel_config(
@@ -1012,8 +1041,29 @@ async fn add_prelabel_config(
 ) -> ApiResult<Json<PrelabelConfig>> {
     let actor = actor_from_headers(&state, &headers)?;
     let repo = state.repo(&dataset_id)?;
+    ensure_dataset_role(
+        &repo.load_dataset_config().await?,
+        &actor,
+        DatasetRole::DataAdmin,
+    )?;
+    let _prelabel_guard = state.lock_prelabel_configuration(&dataset_id).await?;
     let mut metadata = repo.load_dataset_config().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
+    config
+        .validate()
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    if config.yolo.as_ref().is_some_and(|spec| {
+        spec.class_ids.iter().flatten().any(|id| {
+            !metadata
+                .label_classes
+                .iter()
+                .any(|class| &class.class_id == id)
+        })
+    }) {
+        return Err(ApiError::BadRequest(
+            "model mapping references an unknown class".into(),
+        ));
+    }
     metadata
         .prelabel_configs
         .retain(|existing| existing.config_id != config.config_id);
@@ -1073,6 +1123,33 @@ fn validate_config_update(
         ));
     }
     validate_annotation_schema(&request.label_classes, &request.tasks)?;
+    let mut prelabel_ids = BTreeSet::new();
+    for config in &request.prelabel_configs {
+        if !prelabel_ids.insert(&config.config_id) {
+            return Err(ApiError::BadRequest(
+                "duplicate prelabel configuration".into(),
+            ));
+        }
+        // Historical scaffold configurations remain readable until explicitly edited.
+        if !metadata.prelabel_configs.contains(config) {
+            config
+                .validate()
+                .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        }
+        if config.yolo.as_ref().is_some_and(|spec| {
+            spec.class_ids.iter().flatten().any(|id| {
+                !request
+                    .label_classes
+                    .iter()
+                    .any(|class| &class.class_id == id)
+            })
+        }) {
+            return Err(ApiError::BadRequest(
+                "model mapping references an unknown class".into(),
+            ));
+        }
+    }
+
     let mut role_users = BTreeSet::new();
     for assignment in &request.role_assignments {
         if assignment.roles.contains(&DatasetRole::LegacyAdjudicator) {

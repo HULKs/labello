@@ -19,5 +19,10 @@ url.workspace = true
 web-time.workspace = true
 urlencoding.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+labello-inference = { path = "../labello-inference" }
+blake3.workspace = true
+web-sys = { workspace = true, features = ["Window", "Location"] }
+
 [dev-dependencies]
 tokio.workspace = true

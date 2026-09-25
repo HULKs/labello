@@ -53,6 +53,8 @@ impl LabelloApp {
             persisted_annotations: BTreeSet::new(),
             modified_annotations: BTreeSet::new(),
             accepted_prelabels: Vec::new(),
+            prelabel_evidence: Default::default(),
+            prelabels: Default::default(),
             selected_prelabel: None,
             selected_annotation: None,
             active_skeleton: None,
@@ -172,6 +174,7 @@ fn demo_image(index: usize) -> QueuedImage {
         media_type: "image/jpeg".to_string(),
     };
     let prelabels = vec![PrelabelSuggestion {
+            evidence: None,
         suggestion_id: format!("pre_demo_{index}"),
         config_id: labello_domain::PrelabelConfigId::from("demo-prelabel"),
         task_id: TaskId::from("bounding_box:person"),

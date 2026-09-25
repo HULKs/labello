@@ -220,6 +220,7 @@ mod tests {
     #[test]
     fn mutation_dtos_emit_current_schema_version() {
         let request = AnnotationBatchRequest {
+            prelabel_acceptances: Default::default(),
             payloads: Vec::new(),
             complete: true,
         };

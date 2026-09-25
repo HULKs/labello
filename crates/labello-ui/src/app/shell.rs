@@ -29,6 +29,7 @@ impl eframe::App for LabelloApp {
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();
         self.refresh_export_if_due(ui.ctx());
+        self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
         self.handle_shortcuts(ui.ctx());
         self.sync_workspace_bars();

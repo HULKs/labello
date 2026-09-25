@@ -1,8 +1,8 @@
 use labello_domain::{
     Assignment, DatasetId, DatasetMetadata, DatasetSnapshot, DatasetStats, EventLogEntry,
     ImageExplorerPage, ImageId, ImageRecord, ImageState, ImportId, KeybindingSet, OfflineBundle,
-    OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, PrelabelSuggestion, ReviewRecord,
-    TaskDefinition, UserAccount, UserId,
+    OfflineSyncRequest, OfflineSyncResult, PrelabelConfig, ReviewRecord, TaskDefinition,
+    UserAccount, UserId,
 };
 use reqwest::{Method, RequestBuilder, Response, header::CONTENT_TYPE};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};

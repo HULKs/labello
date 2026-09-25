@@ -52,6 +52,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn prelabel_list_edit_keeps_separator_between_frames() {
+        use egui_kittest::{Harness, kittest::Queryable as _};
+        let mut harness = Harness::builder().build_ui_state(
+            |ui, names: &mut Vec<String>| {
+                if let Some(text) = prelabel_list_field(ui, "names", "Names", names.join(", ")) {
+                    *names = text
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .map(str::to_owned)
+                        .collect();
+                }
+            },
+            vec!["nose".to_owned()],
+        );
+        harness.get_by_label("Names").click();
+        harness.run();
+        harness.key_press(egui::Key::End);
+        harness.get_by_label("Names").type_text(",");
+        harness.run();
+        harness.get_by_label("Names").type_text(" left_eye");
+        harness.run();
+        assert_eq!(harness.state(), &["nose", "left_eye"]);
+    }
+
+    #[test]
     fn starter_skeleton_is_valid() {
         let skeleton = starter_skeleton_spec();
 

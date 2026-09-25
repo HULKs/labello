@@ -82,6 +82,7 @@ impl UpdateDatasetConfigRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrelabelSuggestionRequest {
+    pub image_id: ImageId,
     pub config_id: PrelabelConfigId,
     pub task_id: TaskId,
 }

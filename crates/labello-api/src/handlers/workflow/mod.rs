@@ -11,13 +11,12 @@ use labello_client::{
     AssignmentRevalidation, ConfirmMigrationRequest, CorrectionRequest,
     DeleteMigrationSkeletonRequest, EditMigrationSkeletonRequest, ExcludeMigrationTargetRequest,
     KeepMigrationTargetRequest, ManualMigrationCommandResult, OfflineBundleRequest,
-    PrelabelSuggestionRequest, ReconcileMigrationCompanionRequest, ReopenMigrationTargetRequest,
-    ReviewMigrationRequest, RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest,
-    StartMigrationPassRequest,
+    ReconcileMigrationCompanionRequest, ReopenMigrationTargetRequest, ReviewMigrationRequest,
+    RevisitMigrationTargetRequest, SaveMigrationSkeletonRequest, StartMigrationPassRequest,
 };
 use labello_domain::{
-    Actor, AnnotationGeometry, AnnotationType, Assignment, AssignmentKind, DatasetId, DatasetRole,
-    EventPayload, ImageId, KeybindingSet, OfflineSyncRequest, PrelabelSuggestion,
+    Actor, Assignment, AssignmentKind, DatasetId, DatasetRole, EventPayload, ImageId,
+    KeybindingSet, OfflineSyncRequest,
 };
 use labello_storage::assignment::AssignmentContext;
 
@@ -619,6 +618,28 @@ pub(crate) async fn apply_annotation_batch(
     let metadata = repo.load_dataset().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::Annotator)?;
     validate_assignment_request(&assignment, &image_id, AssignmentKind::Annotation)?;
+    let _prelabel_guard = if request.prelabel_acceptances.is_empty() {
+        None
+    } else {
+        Some(
+            state
+                .prelabel_service()?
+                .authorize_acceptance(&dataset_id, &repo, &image_id, &request.prelabel_acceptances)
+                .await
+                .map_err(super::prelabels::failure)?,
+        )
+    };
+    let metadata = if _prelabel_guard.is_some() {
+        repo.load_dataset().await?
+    } else {
+        metadata
+    };
+    if request.prelabel_acceptances.len() > request.payloads.len() {
+        return Err(ApiError::BadRequest(
+            "prelabel proof does not match an annotation creation".into(),
+        ));
+    }
+    let mut proofs = request.prelabel_acceptances;
     let mut image_state = repo.load_image_state(&image_id).await?;
     let timestamp = labello_domain::now();
     let mut payloads = Vec::with_capacity(request.payloads.len());
@@ -629,7 +650,40 @@ pub(crate) async fn apply_annotation_batch(
             ));
         }
         validate_annotation_assignment_payload(&image_state, &assignment.task_id, &payload)?;
-        let payload = construct_annotation_mutation(&actor, &image_state, timestamp, payload)?;
+        let mut payload = construct_annotation_mutation(&actor, &image_state, timestamp, payload)?;
+        if let EventPayload::AnnotationVersionCreated {
+            annotation,
+            previous_version: None,
+            ..
+        } = &mut payload
+            && let Some(proof) = proofs.remove(&annotation.annotation_id)
+        {
+            if proof.provenance.task_id != annotation.task_id {
+                return Err(ApiError::BadRequest(
+                    "prelabel proof belongs to another workflow".into(),
+                ));
+            }
+            if image_state
+                .current_annotation(&annotation.annotation_id)
+                .is_none()
+            {
+                annotation.revision_source = labello_domain::RevisionSource::Human {
+                    action: if annotation.geometry == proof.predicted_geometry
+                        && annotation.class_id == proof.provenance.class_id
+                    {
+                        labello_domain::HumanRevisionKind::AcceptedUnchanged
+                    } else {
+                        labello_domain::HumanRevisionKind::Edited
+                    },
+                };
+                annotation.origin = labello_domain::AnnotationOrigin::Prelabel {
+                    prelabel: Box::new(labello_domain::AcceptedPrelabel {
+                        provenance: proof.provenance,
+                        predicted_geometry: proof.predicted_geometry,
+                    }),
+                };
+            }
+        }
         validate_payload(&metadata, &image_id, &payload)?;
         let already_reflected = match &payload {
             EventPayload::AnnotationVersionCreated {
@@ -662,6 +716,11 @@ pub(crate) async fn apply_annotation_batch(
         payloads.push(payload);
     }
     let mutation_count = payloads.len();
+    if !proofs.is_empty() {
+        return Err(ApiError::BadRequest(
+            "prelabel proofs require new annotations".into(),
+        ));
+    }
     let complete = request.complete;
     let image_state = repo
         .apply_annotation_batch(
@@ -1581,71 +1640,4 @@ pub(crate) async fn put_keybindings(
         .map_err(labello_storage::StorageError::from)?;
     repo.save_keybindings(&bindings).await?;
     Ok(Json(bindings))
-}
-
-pub(crate) async fn prelabel_suggestions(
-    State(state): State<ApiState>,
-    Path(dataset_id): Path<DatasetId>,
-    headers: HeaderMap,
-    Json(request): Json<PrelabelSuggestionRequest>,
-) -> ApiResult<Json<Vec<PrelabelSuggestion>>> {
-    let actor = actor_from_headers(&state, &headers)?;
-    let repo = state.repo(&dataset_id)?;
-    let metadata = repo.load_dataset_config().await?;
-    ensure_dataset_role(&metadata, &actor, DatasetRole::Annotator)?;
-    let config = metadata
-        .prelabel_configs
-        .iter()
-        .find(|config| config.config_id == request.config_id)
-        .ok_or_else(|| ApiError::NotFound("prelabel config".to_string()))?;
-    if !config.available_to_annotators {
-        return Err(ApiError::Unauthorized(
-            "prelabel config is not available to annotators".to_string(),
-        ));
-    }
-    let task = metadata
-        .task(&request.task_id)
-        .ok_or_else(|| ApiError::NotFound("task".to_string()))?;
-    let Some(class_id) = task.class_ids.first().cloned() else {
-        return Ok(Json(Vec::new()));
-    };
-    let geometry = match task.annotation_type {
-        AnnotationType::BoundingBox => {
-            AnnotationGeometry::BoundingBox(labello_domain::BoundingBox {
-                x: 0.25,
-                y: 0.25,
-                width: 0.5,
-                height: 0.5,
-            })
-        }
-        AnnotationType::Skeleton => {
-            AnnotationGeometry::Skeleton(labello_domain::SkeletonGeometry {
-                keypoints: task
-                    .skeleton
-                    .as_ref()
-                    .map(|s| &s.keypoints)
-                    .into_iter()
-                    .flatten()
-                    .map(|spec| labello_domain::KeypointAnnotation {
-                        name: spec.name.clone(),
-                        state: labello_domain::KeypointState::Hidden,
-                        point: Some(labello_domain::NormalizedPoint { x: 0.5, y: 0.5 }),
-                    })
-                    .collect(),
-            })
-        }
-    };
-    let suggestion = PrelabelSuggestion {
-        suggestion_id: format!("pre_{}_{}", request.config_id, request.task_id),
-        config_id: request.config_id,
-        task_id: request.task_id,
-        class_id,
-        confidence: 0.9,
-        geometry,
-    };
-    Ok(Json(if suggestion.passes(&config.output_processing) {
-        vec![suggestion]
-    } else {
-        vec![]
-    }))
 }

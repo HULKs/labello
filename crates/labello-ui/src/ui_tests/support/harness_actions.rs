@@ -13,6 +13,13 @@ pub(super) fn loaded_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloAp
     // Work fixtures expose inspector actions explicitly; the application defaults closed.
     harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
+    // Image readiness is independent of inference. Work-editing fixtures need both settled.
+    step_until(&mut harness, 12, |app| {
+        let Some(task) = app.selected_task() else { return true; };
+        let Some(config) = app.prelabel_choice(&task.task_id) else { return true; };
+        let Some(current) = &app.work.current else { return false; };
+        app.work.prelabels.hints.contains_key(&(current.image.image_id.clone(), task.task_id.clone(), config))
+    });
     harness
 }
 

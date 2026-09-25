@@ -1,12 +1,16 @@
 impl StatsApi for DemoLabelloApi {
-    fn server_presence(&self) -> crate::ApiFuture<'_, crate::ServerPresence> { Box::pin(async { Ok(crate::ServerPresence { users: Vec::new() }) }) }
+    fn server_presence(&self) -> crate::ApiFuture<'_, crate::ServerPresence> {
+        Box::pin(async { Ok(crate::ServerPresence { users: Vec::new() }) })
+    }
 
     fn current_user_activity<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,
     ) -> crate::ApiFuture<'a, crate::CurrentUserActivity> {
         Box::pin(async {
-            Err(crate::ClientError::Demo("Daily activity requires an authenticated server session.".into()))
+            Err(crate::ClientError::Demo(
+                "Daily activity requires an authenticated server session.".into(),
+            ))
         })
     }
 
@@ -87,8 +91,50 @@ impl PrelabelApi for DemoLabelloApi {
         &'a self,
         _dataset_id: &'a DatasetId,
         _request: PrelabelSuggestionRequest,
-    ) -> crate::ApiFuture<'a, Vec<PrelabelSuggestion>> {
-        Box::pin(async move { Ok(Vec::new()) })
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelResponse> {
+        Box::pin(async {
+            Ok(labello_domain::PrelabelResponse {
+                execution: None,
+                generation: labello_domain::PrelabelGeneration {
+                    generation: 0,
+                    scope_generation: 0,
+                    paused: false,
+                },
+                suggestions: vec![],
+                from_batch: false,
+                browser_grant: None,
+            })
+        })
+    }
+    fn prelabel_generation<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _request: PrelabelSuggestionRequest,
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelGeneration> {
+        Box::pin(async {
+            Ok(labello_domain::PrelabelGeneration {
+                generation: 0,
+                scope_generation: 0,
+                paused: false,
+            })
+        })
+    }
+    fn prelabel_admin_state<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelAdminState> {
+        Box::pin(async { Ok(Default::default()) })
+    }
+    fn prelabel_admin_command<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _command: labello_domain::PrelabelAdminCommand,
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelAdminState> {
+        Box::pin(async {
+            Err(ClientError::Demo(
+                "Connect to a server to manage prelabels".into(),
+            ))
+        })
     }
 }
 

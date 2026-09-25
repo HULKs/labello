@@ -96,8 +96,11 @@ Labello is under active development. These boundaries matter when choosing it:
 
 - Browser drafts are best-effort recovery. Offline annotation and conflict
   resolution are unavailable; there is no supported native desktop client.
-- Independent multi-annotator labeling is unavailable. Prelabel controls return
-  placeholder geometry; they do not execute a model.
+- Independent multi-annotator labeling is unavailable.
+- [Prelabels](docs/prelabels.md) support the documented static Ultralytics YOLO
+  ONNX contract. Server generation requires Linux and an operator-managed model
+  directory. Dataset-wide generation covers box workflows; external prediction
+  import and dataset-wide pose generation are unavailable.
 - Tutorials render text only. Review has no swipe controls. Pen events have
   focused Chromium/WebKit coverage, but [iPadOS Safari/Firefox and physical stylus
   devices](docs/stylus-input.md) still need device validation. Named

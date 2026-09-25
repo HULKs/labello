@@ -48,6 +48,8 @@ pub(crate) struct WorkspacePreference {
     pub canvas: StoredCanvasTransform,
     #[serde(default)]
     pub availability: Option<StoredAssignmentAvailability>,
+    #[serde(default)]
+    pub prelabel_choices: BTreeMap<String, Option<labello_domain::PrelabelConfigId>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -99,6 +101,8 @@ pub(crate) enum DraftKind {
 pub(crate) struct AnnotationDraft {
     pub annotations: Vec<AnnotationVersion>,
     pub accepted_prelabels: Vec<String>,
+    #[serde(default)]
+    pub prelabel_evidence: BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
     pub selected_annotation: Option<AnnotationId>,
     pub active_skeleton: Option<AnnotationId>,
     pub skeleton_keypoint_index: usize,

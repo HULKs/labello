@@ -21,7 +21,7 @@ system.
 
 The [complete example](../labello.server.example.toml) lists supported server
 fields. Top-level settings and `[developmentAuth]` are required; unknown fields
-are rejected. OAuth and import sections are optional, but require their complete
+are rejected. OAuth, import, and prelabel sections are optional, but require their complete
 settings when present. Individual import, preview, and export limits use their
 documented defaults when omitted. Environment overrides apply after file loading.
 
@@ -455,3 +455,13 @@ Use TLS, secure session cookies, exact browser origins, and external secret
 injection. Disable local admin login. Run one server per datasets root and back
 up that root, including authentication state. Follow [deployment](deployment.md)
 for the supported guest layout and [operations](operations.md) for backup and recovery.
+
+## Prelabel models and limits
+
+Enable `[prelabel]` with an operator-managed `modelsRoot` to support server and
+browser model configurations. Omission disables model delivery, generation, and
+management. `timeoutSeconds` defaults to 120 and accepts 1 through 300.
+`[prelabel.limits]` fields are optional and use the values in the
+[server example](../labello.server.example.toml). Model supply, supported tensor
+shapes, processing, Linux worker limits and retention are defined in
+[Model prelabels](prelabels.md).

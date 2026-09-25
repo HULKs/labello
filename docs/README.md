@@ -12,6 +12,7 @@ any disagreement with the prose.
 | [Annotation and review](annotation.md) | Boxes, skeletons, controls, corrections, navigation, drafts |
 | [Stylus input](stylus-input.md) | Pen controls, browser/device matrix, emulated checks, physical iPad procedure |
 | [Dataset administration](administration.md) | Schema reuse, roles, image ingestion, inspection, statistics, snapshots |
+| [Model prelabels](prelabels.md) | ONNX model supply, inference, selection, batch hints, reset and provenance |
 | [Dataset import](import.md) | Supported YOLO/COCO profiles, source upload, planning, coverage, publication |
 | [Guided migration](migration.md) | Box-to-skeleton work, exclusions, discoveries, companion reconciliation |
 | [Dataset export](export.md) | Selection, completeness, artifacts, preservation and round trips |

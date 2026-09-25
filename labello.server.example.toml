@@ -86,3 +86,16 @@ cacheEntries = 4096
 # maxConcurrentDownloads = 2
 # maxRetainedJobs = 8
 # retentionSeconds = 86_400
+
+# Optional Linux prelabel service; the operator supplies managed ONNX files.
+# [prelabel]
+# modelsRoot = "/srv/labello-models"
+# timeoutSeconds = 120
+# [prelabel.limits]
+# maxConcurrentInferences = 1
+# maxWorkItems = 100_000
+# maxRetainedRuns = 16
+# maxRetainedResults = 100_000
+# maxResultBytes = 8_388_608
+# maxTotalResultBytes = 2_147_483_648
+# retentionSeconds = 604_800

@@ -236,6 +236,7 @@ fn assignment_availability_mutations_invalidate_current_and_persisted_state() {
     app.work.availability.checked_at = Some(labello_domain::now());
     app.work.availability.load_after_resolution = true;
     app.runtime.persistence.preference = Some(WorkspacePreference {
+                    prelabel_choices: Default::default(),
         version: 2,
         dataset_id: app.config.dataset_id.clone(),
         view: StoredView::Annotate,

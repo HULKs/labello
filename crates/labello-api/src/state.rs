@@ -26,6 +26,7 @@ pub struct ApiState {
     import_service: Option<Arc<ImportService>>,
     pub(crate) previews: labello_storage::PreviewCache,
     export_service: Option<Arc<labello_storage::export::ExportService>>,
+    prelabel_service: Option<Arc<labello_storage::prelabel::PrelabelService>>,
     import_root_owners: Arc<BTreeMap<String, BTreeSet<UserId>>>,
     datasets_root_mutation: Arc<AsyncMutex<()>>,
     import_commands: Arc<AsyncMutex<()>>,
@@ -35,6 +36,44 @@ pub struct ApiState {
 }
 
 impl ApiState {
+    pub fn with_prelabel_service(
+        mut self,
+        service: labello_storage::prelabel::PrelabelService,
+    ) -> Self {
+        self.prelabel_service = Some(Arc::new(service));
+        self
+    }
+
+    pub(crate) fn prelabel_service(
+        &self,
+    ) -> crate::error::ApiResult<&labello_storage::prelabel::PrelabelService> {
+        self.prelabel_service.as_deref().ok_or_else(|| {
+            crate::error::ApiError::Unprocessable(
+                "Prelabel execution is not configured on this server".into(),
+            )
+        })
+    }
+
+    pub async fn shutdown_prelabels(&self) {
+        if let Some(service) = &self.prelabel_service {
+            service.shutdown().await;
+        }
+    }
+
+    pub(crate) async fn lock_prelabel_configuration(
+        &self,
+        dataset: &DatasetId,
+    ) -> crate::error::ApiResult<Option<labello_storage::prelabel::AcceptanceGuard>> {
+        match &self.prelabel_service {
+            Some(service) => Ok(Some(
+                service
+                    .configuration_guard(dataset)
+                    .await
+                    .map_err(crate::handlers::prelabels::failure)?,
+            )),
+            None => Ok(None),
+        }
+    }
     pub fn new(datasets_root: impl Into<PathBuf>) -> Self {
         let datasets_root = datasets_root.into();
         Self {
@@ -53,6 +92,7 @@ impl ApiState {
             repositories: Arc::new(Mutex::new(BTreeMap::new())),
             import_service: None,
             export_service: None,
+            prelabel_service: None,
             import_root_owners: Arc::new(BTreeMap::new()),
             datasets_root_mutation: Arc::new(AsyncMutex::new(())),
             import_commands: Arc::new(AsyncMutex::new(())),

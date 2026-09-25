@@ -23,6 +23,7 @@ impl crate::app::LabelloApp {
         self.runtime.persistence.preference_desired_encoded =
             self.runtime.persistence.preference_encoded.clone();
         self.runtime.persistence.preference_retry.reset();
+        self.work.prelabels.choices = preference.as_ref().map(|p| p.prelabel_choices.clone()).unwrap_or_default();
         self.runtime.persistence.preference = preference;
         self.runtime.persistence.restoration_attempted = false;
         self.runtime.persistence.expected_assignment = None;
@@ -38,6 +39,8 @@ impl crate::app::LabelloApp {
     }
 
     pub(crate) fn isolate_browser_workspace(&mut self) {
+        self.cancel_prelabel_load();
+        self.work.prelabels = Default::default();
         self.work.image_transfers.cancel_all();
         self.work.image_transfers = Default::default();
         self.runtime.persistence.identity = None;
@@ -113,6 +116,7 @@ impl crate::app::LabelloApp {
         };
         let preference = WorkspacePreference {
             version: PREFERENCE_VERSION,
+            prelabel_choices: self.work.prelabels.choices.clone(),
             dataset_id: self.config.dataset_id.clone(),
             view: stored_view(self.view),
             task_id: self.work.selected_task_id.clone(),
@@ -384,6 +388,7 @@ impl crate::app::LabelloApp {
                 WorkDraftPayload::Annotation(AnnotationDraft {
                     annotations: self.work.annotations.clone(),
                     accepted_prelabels: self.work.accepted_prelabels.clone(),
+                    prelabel_evidence: self.work.prelabel_evidence.clone(),
                     selected_annotation: self.work.selected_annotation.clone(),
                     active_skeleton: self.work.active_skeleton.clone(),
                     skeleton_keypoint_index: self.work.skeleton_keypoint_index,
@@ -495,6 +500,7 @@ impl crate::app::LabelloApp {
                     WorkDraftPayload::Annotation(draft) => {
                         self.work.annotations = draft.annotations;
                         self.work.accepted_prelabels = draft.accepted_prelabels;
+                        self.work.prelabel_evidence = draft.prelabel_evidence;
                         self.work.selected_annotation = draft.selected_annotation;
                         self.work.active_skeleton = draft.active_skeleton;
                         self.work.skeleton_keypoint_index = draft.skeleton_keypoint_index;

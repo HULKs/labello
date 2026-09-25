@@ -826,6 +826,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
         .map(|task| (task.task_id.clone(), true))
         .collect();
     let preference = WorkspacePreference {
+        prelabel_choices: Default::default(),
         version: 2,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Annotate,
@@ -855,6 +856,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
     for stale in [
         preference.clone(),
         WorkspacePreference {
+        prelabel_choices: Default::default(),
             availability: Some(StoredAssignmentAvailability {
                 reasons: Default::default(),
                 kind: AssignmentKind::Review,
@@ -1506,6 +1508,7 @@ fn explicit_dataset_transition_suppresses_workspace_restoration() {
     app.config.dataset_id = DatasetId::from("new-dataset");
     app.datasets.requested_view = Some(AppView::Admin);
     app.runtime.persistence.preference = Some(WorkspacePreference {
+        prelabel_choices: Default::default(),
         version: 1,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Annotate,
@@ -2000,6 +2003,7 @@ fn restored_adjudication_workspace_is_rejected_with_the_operational_message() {
         total_images: 1,
     }];
     app.runtime.persistence.preference = Some(WorkspacePreference {
+        prelabel_choices: Default::default(),
         version: 2,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Adjudicate,

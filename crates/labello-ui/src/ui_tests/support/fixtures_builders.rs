@@ -326,13 +326,14 @@ pub(super) fn seed_review_annotation(
 
 pub(super) fn prelabel_config(id: &str) -> PrelabelConfig {
     PrelabelConfig {
+        yolo: Some(labello_domain::YoloModelSpec { input_size: 640, class_ids: vec![Some("person".into())], keypoints: vec![] }),
         config_id: PrelabelConfigId::from(id),
         name: "Demo prelabels".to_string(),
         model: ModelSpec {
             model_id: "model".to_string(),
             display_name: "Demo model".to_string(),
             version: Some("1".to_string()),
-            location: "browser".to_string(),
+            location: "model.onnx".to_string(),
         },
         execution: PrelabelExecution::BrowserLocal {
             acceleration: BrowserAcceleration::WasmCpuFallback,

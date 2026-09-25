@@ -24,5 +24,6 @@ impl LabelloApp {
                 edit_imbalance(ui, &mut config.imbalance);
             });
         }
+        self.prelabel_admin_panel(ui);
     }
 }

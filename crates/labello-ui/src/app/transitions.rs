@@ -259,6 +259,7 @@ impl LabelloApp {
         self.work.persisted_annotations.clear();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
+        self.work.prelabel_evidence.clear();
         self.work.selected_prelabel = None;
         self.work.selected_annotation = None;
         if self.runtime.api.is_some() {

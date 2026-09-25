@@ -131,3 +131,10 @@ Closing the browser does not immediately release its leases.
 
 See [current limitations](limitations.md) before relying on offline work,
 prelabels, stylus support, or browser recovery.
+
+## Model suggestions
+
+See [Model prelabels](prelabels.md) for selecting a model or no prelabels,
+loading and fallback states, overlap suppression, and accepting/editing hints.
+Hints load independently of the image. Model failures leave manual annotation
+available; accepted hints follow the same submission and review workflow.

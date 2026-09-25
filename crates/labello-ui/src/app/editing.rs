@@ -317,11 +317,7 @@ impl LabelloApp {
                     AnnotationGeometry::BoundingBox(_) => AnnotationType::BoundingBox,
                     AnnotationGeometry::Skeleton(_) => AnnotationType::Skeleton,
                 },
-                revision_source: RevisionSource::PrelabelSuggestion {
-                    config_id: suggestion.config_id.clone(),
-                    model_id: "browser-local-or-server".to_string(),
-                    confidence: suggestion.confidence,
-                },
+                revision_source: RevisionSource::Human { action: HumanRevisionKind::Authored },
                 geometry: suggestion.geometry.clone(),
                 author_user_id: user_id,
                 created_at: timestamp,
@@ -331,6 +327,7 @@ impl LabelloApp {
         self.work
             .accepted_prelabels
             .push(suggestion.suggestion_id.clone());
+        if let Some(evidence) = &suggestion.evidence { self.work.prelabel_evidence.insert(annotation_id.clone(), evidence.clone()); }
         self.work.selected_annotation = Some(annotation_id);
         self.mark_edited();
     }
@@ -390,10 +387,12 @@ impl LabelloApp {
                 .iter()
                 .map(|value| value.len())
                 .sum::<usize>()
+            + serde_json::to_vec(&self.work.prelabel_evidence).map_or(0, |value| value.len())
             + 256;
         EditSnapshot {
             annotations: self.work.annotations.clone(),
             accepted_prelabels: self.work.accepted_prelabels.clone(),
+            prelabel_evidence: self.work.prelabel_evidence.clone(),
             selected_annotation: self.work.selected_annotation.clone(),
             active_skeleton: self.work.active_skeleton.clone(),
             skeleton_keypoint_index: self.work.skeleton_keypoint_index,
@@ -427,6 +426,7 @@ impl LabelloApp {
             }
         }
         self.work.accepted_prelabels = snapshot.accepted_prelabels;
+        self.work.prelabel_evidence = snapshot.prelabel_evidence;
         self.work.selected_annotation = snapshot.selected_annotation;
         self.work.active_skeleton = snapshot.active_skeleton;
         self.work.skeleton_keypoint_index = snapshot.skeleton_keypoint_index;

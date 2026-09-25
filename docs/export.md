@@ -170,3 +170,11 @@ for both profiles without constructing a model or permitting network access.
 This proves reader compatibility for the tested fixtures, not model training
 quality or compatibility with every future reader version. See the
 [verification recipe](verification.md#export-round-trip-verification).
+
+## Accepted prelabels
+
+Accepted prelabels use a human revision and retain their exact prediction in
+annotation origin. Once normal workflow/review rules establish ground truth,
+that origin does not exclude them. The manifest preserves selected annotation
+origin; ordinary format re-import creates new import provenance rather than
+restoring native prediction history. Unaccepted private hints are never exported.

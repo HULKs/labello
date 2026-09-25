@@ -124,7 +124,12 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `GET /datasets/{dataset_id}/stats/me` | Any role | No user selector → `CurrentUserActivity` for the authenticated account and server UTC day; `Cache-Control: no-store` |
 | `GET /datasets/{dataset_id}/keybindings` | Any role | No input → authenticated user's `KeybindingSet` |
 | `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | `KeybindingSet` → normalized `KeybindingSet` |
-| `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest` → `PrelabelSuggestion[]` |
+| `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest { imageId, taskId, configId }` → `PrelabelResponse` |
+| `GET /datasets/{dataset_id}/prelabel-generation` | Annotator | Image/task/config query → `PrelabelGeneration` |
+| `POST /datasets/{dataset_id}/prelabel-browser-result` | Annotator; enabled browser config | Signed grant and candidates → certified `PrelabelResponse` |
+| `GET /datasets/{dataset_id}/prelabels/{config_id}/model` | Dataset role; available config, or data admin | Managed ONNX bytes; private, no-store |
+| `GET /datasets/{dataset_id}/prelabel-management` | Data admin | No input → `PrelabelAdminState` |
+| `POST /datasets/{dataset_id}/prelabel-management` | Data admin | Preflight/start/cancel/retry/reset/resume command → `PrelabelAdminState` |
 
 `KeybindingSet.bindings` contains the primary chord for every active action.
 `panDragModifier` selects the modifier used with primary-button drag to pan and
@@ -633,3 +638,16 @@ operations return 409; limits return 413; incompatible selections and invalid
 source geometry return 422; storage and verification failures return a safe
 500 category. Error messages exclude source paths and geometry. Preflight
 blockers and omissions are recorded in the job summary; see [export](export.md).
+
+## Prelabel evidence
+
+All unsafe prelabel requests use the normal session/CSRF/origin checks.
+`PrelabelResponse` includes generation, raw validated candidates, execution mode,
+prepared-result status, and an optional signed browser grant. The shared client
+filters candidates against its current annotation draft before display.
+`AnnotationBatchRequest.prelabelAcceptances` maps new annotation IDs to exact
+signed evidence. The server verifies it, constructs immutable prelabel origin,
+and writes a human accepted/edited revision through the existing assignment
+transaction. Raw client provenance cannot substitute for evidence. Historical
+prelabel revision sources remain readable. See [Model prelabels](prelabels.md)
+for binding, reset, trust, resource limits, and failure behavior.
