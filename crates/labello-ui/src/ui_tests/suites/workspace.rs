@@ -1041,7 +1041,7 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2 of 2".to_string())
+        Some("Loaded assignment queue: 2/2".to_string())
     );
     assert!(
         harness.query_by_label("2/2").is_none(),
@@ -1051,7 +1051,7 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
     harness.run_steps(3);
     assert!(
         harness
-            .query_by_label_contains("Loaded assignment queue: 2 of 2")
+            .query_by_label_contains("Loaded assignment queue: 2/2")
             .is_some(),
         "the selected workflow tooltip should expose the assignment queue"
     );
@@ -1074,7 +1074,7 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2 of 2".to_string())
+        Some("Loaded assignment queue: 2/2".to_string())
     );
     let next = harness.state().work.queue.prepared_image_ids()[0].clone();
     let mut refreshed_state = ImageState::new(next.clone());
@@ -1886,6 +1886,7 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
         Some(&skipped)
     );
     assert!(api.exclusions().last().unwrap().contains(&skipped));
+    assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 1/2 (refill failed; retrying)"));
 }
 
 #[test]

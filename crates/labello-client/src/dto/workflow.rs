@@ -12,6 +12,34 @@ pub struct AssignNextRequest {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AssignNextResponse {
+    Assignment(Option<Box<Assignment>>),
+    Unavailable { reason: AssignmentUnavailableReason },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssignmentUnavailableReason {
+    ImbalanceLimit,
+}
+
+impl AssignNextResponse {
+    pub fn into_assignment(self) -> Option<Assignment> {
+        match self {
+            Self::Assignment(assignment) => assignment.map(|assignment| *assignment),
+            Self::Unavailable { .. } => None,
+        }
+    }
+}
+
+impl From<Option<Assignment>> for AssignNextResponse {
+    fn from(assignment: Option<Assignment>) -> Self {
+        Self::Assignment(assignment.map(Box::new))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignmentAvailabilityRequest {
     pub kind: AssignmentKind,
@@ -244,4 +272,19 @@ pub struct WorkflowReasonEntry {
 pub struct WorkflowReasonAuthor {
     pub github_login: Option<String>,
     pub github_user_id: Option<String>,
+}
+
+#[cfg(test)]
+mod assignment_response_tests {
+    use super::*;
+
+    #[test]
+    fn assignment_response_preserves_null_and_reports_expected_imbalance_blocks() {
+        let empty: AssignNextResponse = serde_json::from_str("null").unwrap();
+        assert_eq!(empty, AssignNextResponse::Assignment(None));
+        assert_eq!(serde_json::to_value(empty).unwrap(), serde_json::Value::Null);
+        let blocked: AssignNextResponse = serde_json::from_str(r#"{"reason":"imbalance_limit"}"#).unwrap();
+        assert_eq!(blocked, AssignNextResponse::Unavailable { reason: AssignmentUnavailableReason::ImbalanceLimit });
+        assert!(blocked.into_assignment().is_none());
+    }
 }

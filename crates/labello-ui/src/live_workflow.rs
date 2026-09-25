@@ -127,7 +127,7 @@ impl LabelloApp {
                     )
                     .await
                 {
-                    Ok(assignment) => assignment,
+                    Ok(response) => response.into_assignment(),
                     Err(error) => {
                         return UiMessage::ImageLoaded {
                             request,
@@ -173,7 +173,7 @@ impl LabelloApp {
                 excluded_image_ids,
             } => self.spawn_message(request.clone(), async move {
                 let claimed_at = web_time::Instant::now();
-                let assignment = match api
+                let response = match api
                     .assign_next_image(
                         &dataset_id,
                         AssignNextRequest {
@@ -186,9 +186,10 @@ impl LabelloApp {
                     )
                     .await
                 {
-                    Ok(assignment) => assignment,
+                    Ok(response) => response,
                     Err(error) => {
                         return UiMessage::PrefetchLoaded {
+                            imbalance_limited: false,
                             request,
                             operation_id,
                             assignment: None,
@@ -196,8 +197,15 @@ impl LabelloApp {
                         };
                     }
                 };
-                let Some(assignment) = assignment else {
+                let imbalance_limited = matches!(
+                    response,
+                    labello_client::AssignNextResponse::Unavailable {
+                        reason: labello_client::AssignmentUnavailableReason::ImbalanceLimit,
+                    }
+                );
+                let Some(assignment) = response.into_assignment() else {
                     return UiMessage::PrefetchLoaded {
+                        imbalance_limited,
                         request,
                         operation_id,
                         assignment: None,
@@ -225,6 +233,7 @@ impl LabelloApp {
                 })
                 .map_err(UiRequestError::from);
                 UiMessage::PrefetchLoaded {
+                    imbalance_limited: false,
                     request,
                     operation_id,
                     assignment: Some(assignment),
@@ -704,7 +713,7 @@ impl LabelloApp {
             ctx.request_repaint_after(delay);
         }
         if self.work.queue.retry_due() {
-            self.work.queue.clear_failure();
+            self.work.queue.begin_retry();
             self.request_prefetch();
         }
         if let Some(delay) = self.work.queue.retry_after() {

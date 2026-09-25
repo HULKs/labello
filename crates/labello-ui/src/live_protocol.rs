@@ -325,6 +325,7 @@ pub(crate) enum UiMessage {
         result: Box<Result<LoadedImage, UiRequestError>>,
     },
     PrefetchLoaded {
+        imbalance_limited: bool,
         request: RequestIdentity,
         operation_id: u64,
         assignment: Option<Assignment>,

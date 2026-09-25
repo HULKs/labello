@@ -334,8 +334,11 @@ Availability and direct claims apply the current-count completion-balance
 decision. `AssignNextRequest.prefetch`, default false, adds prospective balance
 admission for upcoming work. It cannot be combined with `assignmentId` reclaim.
 `excludedImageIds` accepts at most 202 distinct validated IDs, covering the
-maximum queue, current image, and one skipped image. Denied prefetch returns
-null before the client fetches image resources.
+maximum queue, current image, and one skipped image. An imbalance-limited
+prefetch returns `{"reason":"imbalance_limit"}` with status 200 before the client
+fetches image resources. Other unavailable work still returns null; a successful
+claim retains the assignment-object response. The reason comes from the claim's
+admission decision, without another balance request.
 
 Availability responses include `queue.size` and `queue.eligibleAssignments`.
 The latter contains the caller's live, eligible reservation IDs for the requested

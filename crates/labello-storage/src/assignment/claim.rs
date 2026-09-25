@@ -417,6 +417,7 @@ impl DatasetRepository {
     ) -> StorageResult<Option<Assignment>> {
         self.assign_image_excluding(user_id, task_id, kind, excluded_image_ids, false)
             .await
+            .map(AssignmentClaimOutcome::into_assignment)
     }
 
     pub async fn assign_preloaded_image_excluding(
@@ -428,16 +429,17 @@ impl DatasetRepository {
     ) -> StorageResult<Option<Assignment>> {
         self.assign_image_excluding(user_id, task_id, kind, excluded_image_ids, true)
             .await
+            .map(AssignmentClaimOutcome::into_assignment)
     }
 
-    async fn assign_image_excluding(
+    pub async fn assign_image_excluding(
         &self,
         user_id: &UserId,
         task_id: &TaskId,
         kind: AssignmentKind,
         excluded_image_ids: &[ImageId],
         prefetch: bool,
-    ) -> StorageResult<Option<Assignment>> {
+    ) -> StorageResult<AssignmentClaimOutcome> {
         let _config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset().await?;
         // All claims participate while balancing is enabled, including foreground
@@ -465,8 +467,18 @@ impl DatasetRepository {
         let task = metadata
             .task(task_id)
             .ok_or_else(|| StorageError::Unauthorized(format!("task {task_id} does not exist")))?;
-        if !self.task_accepts_assignment(&metadata, task, &kind).await? {
-            return Ok(None);
+        if !Self::task_supports_assignment(task, &kind)? {
+            return Ok(AssignmentClaimOutcome::Unavailable);
+        }
+        if self
+            .task_is_overrepresented(&metadata, task_id, &kind)
+            .await?
+        {
+            return Ok(if prefetch {
+                AssignmentClaimOutcome::ImbalanceLimit
+            } else {
+                AssignmentClaimOutcome::Unavailable
+            });
         }
 
         let excluded_image_ids = excluded_image_ids
@@ -496,7 +508,7 @@ impl DatasetRepository {
                     .saturating_add(progress.outstanding(task_id))
                     .saturating_add(usize::from(reusable.is_empty()));
                 if config.blocks_count(projected, minimum) {
-                    return Ok(None);
+                    return Ok(AssignmentClaimOutcome::ImbalanceLimit);
                 }
                 if !reusable.is_empty() && config.blocks_count(projected.saturating_add(1), minimum)
                 {
@@ -510,7 +522,7 @@ impl DatasetRepository {
         }
         let image_ids = metadata.images.keys().cloned().collect::<Vec<_>>();
         if image_ids.is_empty() {
-            return Ok(None);
+            return Ok(AssignmentClaimOutcome::Unavailable);
         }
         let cursor_key = format!(
             "{user_id}\u{1f}{task_id}\u{1f}{}",
@@ -588,7 +600,7 @@ impl DatasetRepository {
                 self.assignment_cursors
                     .lock()
                     .insert(cursor_key.clone(), image_index);
-                return Ok(Some(assignment));
+                return Ok(AssignmentClaimOutcome::Assigned(Box::new(assignment)));
             }
             let assignment = Assignment {
                 assignment_id: AssignmentId::generate(),
@@ -625,14 +637,24 @@ impl DatasetRepository {
             self.assignment_cursors
                 .lock()
                 .insert(cursor_key.clone(), image_index);
-            return Ok(Some(assignment));
+            return Ok(AssignmentClaimOutcome::Assigned(Box::new(assignment)));
         }
-        Ok(None)
+        Ok(AssignmentClaimOutcome::Unavailable)
     }
 
     async fn task_accepts_assignment(
         &self,
         metadata: &DatasetMetadata,
+        task: &TaskDefinition,
+        kind: &AssignmentKind,
+    ) -> StorageResult<bool> {
+        Ok(Self::task_supports_assignment(task, kind)?
+            && !self
+                .task_is_overrepresented(metadata, &task.task_id, kind)
+                .await?)
+    }
+
+    fn task_supports_assignment(
         task: &TaskDefinition,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
@@ -655,16 +677,6 @@ impl DatasetRepository {
             )));
         }
         if *kind == AssignmentKind::Review && task.review.workflow == ReviewWorkflow::None {
-            return Ok(false);
-        }
-        if metadata
-            .imbalance
-            .as_ref()
-            .is_some_and(|config| config.enforce)
-            && self
-                .task_is_overrepresented(metadata, &task.task_id, kind)
-                .await?
-        {
             return Ok(false);
         }
         Ok(true)
@@ -725,7 +737,7 @@ impl DatasetRepository {
         selected_task_id: &TaskId,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
-        let Some(config) = metadata.imbalance.as_ref() else {
+        let Some(config) = metadata.imbalance.as_ref().filter(|config| config.enforce) else {
             return Ok(false);
         };
         let counts = if *kind == AssignmentKind::Annotation {

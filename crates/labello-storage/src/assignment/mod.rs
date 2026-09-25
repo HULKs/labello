@@ -34,6 +34,21 @@ pub struct AssignmentContext<'a> {
     pub kind: AssignmentKind,
 }
 
+pub enum AssignmentClaimOutcome {
+    Assigned(Box<Assignment>),
+    ImbalanceLimit,
+    Unavailable,
+}
+
+impl AssignmentClaimOutcome {
+    pub fn into_assignment(self) -> Option<Assignment> {
+        match self {
+            Self::Assigned(assignment) => Some(*assignment),
+            Self::ImbalanceLimit | Self::Unavailable => None,
+        }
+    }
+}
+
 impl DatasetRepository {
     pub async fn release_assignment(
         &self,

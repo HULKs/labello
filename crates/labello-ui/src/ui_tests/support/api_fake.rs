@@ -1555,7 +1555,7 @@ impl ImageApi for SpyApi {
         &'a self,
         _dataset_id: &'a DatasetId,
         request: AssignNextRequest,
-    ) -> ApiFuture<'a, Option<Assignment>> {
+    ) -> ApiFuture<'a, labello_client::AssignNextResponse> {
         let mut state = self.state.borrow_mut();
         state.counts.assign_next_image += 1;
         state.exclusions.push(request.excluded_image_ids.clone());
@@ -1563,8 +1563,13 @@ impl ImageApi for SpyApi {
             state.reclaim_assignment_ids.push(assignment_id);
         }
         if request.prefetch { state.prefetch_requests += 1; }
-        if state.no_assignment || (request.prefetch && state.block_prefetch) {
-            return ready(Ok(None));
+        if request.prefetch && state.block_prefetch {
+            return ready(Ok(labello_client::AssignNextResponse::Unavailable {
+                reason: labello_client::AssignmentUnavailableReason::ImbalanceLimit,
+            }));
+        }
+        if state.no_assignment {
+            return ready(Ok(None.into()));
         }
         let kind = request.kind.unwrap_or(AssignmentKind::Annotation);
         if let Some(active) = state.active_assignments.iter().find(|active| {
@@ -1577,7 +1582,7 @@ impl ImageApi for SpyApi {
                         && active.kind == kind
                         && !request.excluded_image_ids.contains(&active.image_id)))
         }) {
-            return ready(Ok(Some(active.clone())));
+            return ready(Ok(Some(active.clone()).into()));
         }
         let image_ids = state.metadata.images.keys().cloned().collect::<Vec<_>>();
         let image_id = (0..image_ids.len()).find_map(|offset| {
@@ -1594,7 +1599,7 @@ impl ImageApi for SpyApi {
             .then_some(image_id)
         });
         let Some(image_id) = image_id else {
-            return ready(Ok(None));
+            return ready(Ok(None.into()));
         };
         if kind == AssignmentKind::Annotation {
             state.next_image += 1;
@@ -1620,7 +1625,7 @@ impl ImageApi for SpyApi {
             });
         }
         state.active_assignments.push(assignment.clone());
-        ready(Ok(Some(assignment)))
+        ready(Ok(Some(assignment).into()))
     }
 
     fn revalidate_assignment<'a>(

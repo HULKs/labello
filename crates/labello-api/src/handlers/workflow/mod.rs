@@ -82,7 +82,7 @@ pub(crate) async fn assign_next(
     Path(dataset_id): Path<DatasetId>,
     headers: HeaderMap,
     Json(mut request): Json<AssignNextRequest>,
-) -> ApiResult<Json<Option<labello_domain::Assignment>>> {
+) -> ApiResult<Json<labello_client::AssignNextResponse>> {
     request.task_id.validate_path_segment()?;
     if let Some(assignment_id) = &request.assignment_id {
         assignment_id.validate_path_segment()?;
@@ -124,26 +124,18 @@ pub(crate) async fn assign_next(
             assignment_id = %assignment.assignment_id,
             "assignment reclaimed"
         );
-        return Ok(Json(Some(assignment)));
+        return Ok(Json(Some(assignment).into()));
     }
-    let assignment = if request.prefetch {
-        repo.assign_preloaded_image_excluding(
+    let outcome = repo
+        .assign_image_excluding(
             &actor.user_id,
             &request.task_id,
             kind,
             &request.excluded_image_ids,
+            request.prefetch,
         )
-        .await?
-    } else {
-        repo.assign_next_image_excluding(
-            &actor.user_id,
-            &request.task_id,
-            kind,
-            &request.excluded_image_ids,
-        )
-        .await?
-    };
-    if let Some(assignment) = &assignment {
+        .await?;
+    if let labello_storage::assignment::AssignmentClaimOutcome::Assigned(assignment) = &outcome {
         tracing::debug!(
             event = "assignment.claimed",
             dataset_id = %dataset_id,
@@ -159,7 +151,16 @@ pub(crate) async fn assign_next(
             "no assignment available"
         );
     }
-    Ok(Json(assignment))
+    use labello_storage::assignment::AssignmentClaimOutcome;
+    Ok(Json(match outcome {
+        AssignmentClaimOutcome::Assigned(assignment) => {
+            labello_client::AssignNextResponse::Assignment(Some(assignment))
+        }
+        AssignmentClaimOutcome::Unavailable => None.into(),
+        AssignmentClaimOutcome::ImbalanceLimit => labello_client::AssignNextResponse::Unavailable {
+            reason: labello_client::AssignmentUnavailableReason::ImbalanceLimit,
+        },
+    }))
 }
 
 pub(crate) async fn release_assignment(

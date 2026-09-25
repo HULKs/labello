@@ -182,6 +182,7 @@ impl LabelloApp {
                     }
                 }
                 UiMessage::PrefetchLoaded {
+                    imbalance_limited,
                     request: _,
                     operation_id,
                     assignment,
@@ -227,7 +228,7 @@ impl LabelloApp {
                         Ok(None) => {
                             self.work.one_shot_excluded_image_id = None;
                             let retry_delay = Duration::from_secs(15);
-                            self.work.queue.mark_failed_after(retry_delay);
+                            self.work.queue.wait_for_work(imbalance_limited, retry_delay);
                             ctx.request_repaint_after(retry_delay);
                         }
                         Err(_) => {

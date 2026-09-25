@@ -7,6 +7,7 @@ fn preload_uses_admin_target_and_blocks_image_requests_when_admission_is_denied(
     harness.run_steps(12);
     assert_eq!(harness.state().work.queue.queue_size(), 100);
     assert!(harness.state().work.queue.is_empty());
+    assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 0/100 (imbalance limit)"));
     assert!(api.state.borrow().prefetch_requests > 0);
     assert_eq!(api.counts().get_encoded_image_preview, 1);
     assert!(!harness.state().loading.image);
@@ -215,6 +216,7 @@ fn preload_result_arriving_after_shrink_releases_its_reservation() {
     app.runtime
         .tx
         .send(UiMessage::PrefetchLoaded {
+            imbalance_limited: false,
             request,
             operation_id,
             assignment: Some(late.assignment.clone()),
@@ -225,4 +227,87 @@ fn preload_result_arriving_after_shrink_releases_its_reservation() {
     app.process_messages(&egui::Context::default());
     assert_eq!(app.work.queue.len(), 1);
     assert_eq!(api.counts().release_assignment - releases_before, 1);
+}
+
+#[test]
+fn preload_limit_tooltip_keeps_count_and_clears_when_refilling_resumes() {
+    for review in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = if review {
+            loaded_review_harness(api.clone())
+        } else {
+            loaded_work_harness(api.clone())
+        };
+        step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+        let previews = api.counts().get_encoded_image_preview;
+        api.state.borrow_mut().block_prefetch = true;
+        harness.state_mut().resize_preload_queue(100);
+        harness.state_mut().request_prefetch();
+        step_until(&mut harness, 12, |app| {
+            app.work.queue.wait_reason() == Some(crate::queue::QueueWaitReason::ImbalanceLimit)
+        });
+        assert!(!harness.state().work.queue.failed());
+        assert_eq!(api.counts().get_encoded_image_preview, previews);
+        let expected = "Loaded assignment queue: 2/100 (imbalance limit)";
+        assert_eq!(harness.state().workflow_queue_status().as_deref(), Some(expected));
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        assert_eq!(pill.accesskit_node().description().as_deref(), Some(expected));
+        pill.hover();
+        harness.run_steps(3);
+        assert!(harness.query_by_label_contains(expected).is_some());
+        let task_id = harness.state().work.selected_task_id.clone().unwrap();
+        harness.state_mut().work.availability.tasks.insert(task_id.clone(), false);
+        harness.run_steps(3);
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        assert!(pill.accesskit_node().is_disabled());
+        pill.hover();
+        harness.run_steps(3);
+        assert!(harness.query_by_label_contains(expected).is_some());
+        harness.state_mut().work.availability.tasks.insert(task_id, true);
+        harness.state_mut().work.queue.begin_retry();
+        assert_eq!(harness.state().workflow_queue_status().as_deref(), Some(expected));
+        api.state.borrow_mut().block_prefetch = false;
+        harness.state_mut().work.queue.pop_prepared();
+        harness.state_mut().resize_preload_queue(2);
+        harness.state_mut().request_prefetch();
+        step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+        assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 2/2"));
+    }
+}
+
+#[test]
+fn preload_empty_work_is_not_reported_as_an_imbalance_or_load_failure() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
+    api.set_no_assignment(true);
+    harness.state_mut().resize_preload_queue(100);
+    harness.state_mut().request_prefetch();
+    step_until(&mut harness, 12, |app| {
+        app.work.queue.wait_reason() == Some(crate::queue::QueueWaitReason::NoAvailableWork)
+    });
+    assert!(!harness.state().work.queue.failed());
+    assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 2/100 (no available work)"));
+}
+
+#[test]
+fn preload_limit_tooltip_wraps_inside_compact_workspaces() {
+    for size in [egui::vec2(320.0, 320.0), egui::vec2(390.0, 844.0)] {
+        let api = Rc::new(SpyApi::new());
+        api.state.borrow_mut().block_prefetch = true;
+        api.state.borrow_mut().metadata.preload_queue_size = 200;
+        let mut harness = loaded_work_harness(api);
+        harness.run_steps(8);
+        harness.set_size(size);
+        harness.run_steps(3);
+        click_accesskit_button(&mut harness, "Workflow");
+        harness.run_steps(4);
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        pill.hover();
+        harness.run_steps(3);
+        let tooltip = harness.get_by_label_contains("Loaded assignment queue: 0/200 (imbalance limit)");
+        let rect = tooltip.rect();
+        assert!(rect.left() >= 0.0 && rect.right() <= size.x, "{rect:?} within {size:?}");
+        assert!(rect.top() >= 0.0 && rect.bottom() <= size.y, "{rect:?} within {size:?}");
+    }
 }

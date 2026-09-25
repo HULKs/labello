@@ -2737,7 +2737,7 @@ async fn preload_claims_apply_projected_balance_and_accept_large_exclusion_lists
             .await
             .unwrap()
             .as_ref(),
-        b"null"
+        br#"{"reason":"imbalance_limit"}"#
     );
     let invalid = claim_assignment_with_body(&app, "admin", json!({"taskId": "bounding_box:pixel", "kind": "annotation", "prefetch": true, "assignmentId": current["assignmentId"]})).await;
     assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);

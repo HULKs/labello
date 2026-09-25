@@ -1133,6 +1133,7 @@ fn stale_prefetch_response_cannot_enter_the_queue() {
         .runtime
         .tx
         .send(UiMessage::PrefetchLoaded {
+            imbalance_limited: false,
             request,
             operation_id,
             assignment: Some(loaded.assignment.clone()),
@@ -1170,6 +1171,7 @@ fn fresh_prefetch_response_does_not_trust_the_local_wall_clock() {
         .runtime
         .tx
         .send(UiMessage::PrefetchLoaded {
+            imbalance_limited: false,
             request,
             operation_id,
             assignment: Some(loaded.assignment.clone()),
@@ -1334,6 +1336,7 @@ fn failed_prefetch_keeps_current_and_prepared_reservations() {
                 .runtime
                 .tx
                 .send(UiMessage::PrefetchLoaded {
+                    imbalance_limited: false,
                     request,
                     operation_id,
                     assignment: Some(assignment.clone()),

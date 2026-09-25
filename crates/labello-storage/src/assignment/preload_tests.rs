@@ -471,3 +471,51 @@ async fn preload_reconciliation_removes_disabled_and_invalid_work_without_balanc
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn preload_outcome_distinguishes_balance_from_unavailable_work() {
+    let (_temp, repo, task, _, users) = balanced_repo(2, 0).await;
+    assert!(matches!(
+        repo.assign_image_excluding(&users[0], &task, AssignmentKind::Annotation, &[], true)
+            .await
+            .unwrap(),
+        AssignmentClaimOutcome::ImbalanceLimit
+    ));
+    progress(&repo, 0, &task, &users[0], TaskStatus::Submitted).await;
+    assert!(matches!(
+        repo.assign_image_excluding(&users[0], &task, AssignmentKind::Annotation, &[], true)
+            .await
+            .unwrap(),
+        AssignmentClaimOutcome::ImbalanceLimit
+    ));
+    assert!(matches!(
+        repo.assign_image_excluding(&users[0], &task, AssignmentKind::Annotation, &[], false)
+            .await
+            .unwrap(),
+        AssignmentClaimOutcome::Unavailable
+    ));
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata.tasks[0].enabled = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    assert!(matches!(
+        repo.assign_image_excluding(&users[0], &task, AssignmentKind::Annotation, &[], true)
+            .await
+            .unwrap(),
+        AssignmentClaimOutcome::Unavailable
+    ));
+    metadata.tasks[0].enabled = true;
+    metadata.imbalance.as_mut().unwrap().enforce = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    assert!(matches!(
+        repo.assign_image_excluding(
+            &users[0],
+            &task,
+            AssignmentKind::Annotation,
+            &[ImageId::from("img_0"), ImageId::from("img_1")],
+            true
+        )
+        .await
+        .unwrap(),
+        AssignmentClaimOutcome::Unavailable
+    ));
+}

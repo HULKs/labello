@@ -38,7 +38,7 @@ pub trait ImageApi {
         &'a self,
         dataset_id: &'a DatasetId,
         request: AssignNextRequest,
-    ) -> ApiFuture<'a, Option<Assignment>>;
+    ) -> ApiFuture<'a, crate::AssignNextResponse>;
     fn revalidate_assignment<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,
