@@ -199,7 +199,9 @@ fn paint_workflow_marker(
         }
         Some(M::Unavailable(R::ReviewDisabled)) => {
             shield();
-            line((2.0, 16.0), (16.0, 2.0));
+            let cross_stroke = egui::Stroke::new(2.0, theme::TEXT);
+            painter.line_segment([point(6.5, 6.0), point(11.5, 11.0)], cross_stroke);
+            painter.line_segment([point(11.5, 6.0), point(6.5, 11.0)], cross_stroke);
         }
         Some(M::Unavailable(R::EmptyDataset)) => {
             line((0.0, 6.0), (0.0, 18.0));
