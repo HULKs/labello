@@ -52,6 +52,8 @@ pub struct UpdateDatasetConfigRequest {
     pub tasks: Vec<TaskDefinition>,
     pub role_assignments: Vec<DatasetRoleAssignment>,
     pub imbalance: Option<ImbalanceConfig>,
+    #[serde(default = "labello_domain::default_preload_queue_size")]
+    pub preload_queue_size: usize,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
 
@@ -64,6 +66,7 @@ impl UpdateDatasetConfigRequest {
             tasks: metadata.tasks.clone(),
             role_assignments: metadata.role_assignments.clone(),
             imbalance: metadata.imbalance.clone(),
+            preload_queue_size: metadata.preload_queue_size,
             prelabel_configs: metadata.prelabel_configs.clone(),
         }
     }

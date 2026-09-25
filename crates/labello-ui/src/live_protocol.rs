@@ -385,6 +385,7 @@ pub(crate) enum UiMessage {
     AssignmentAvailabilityLoaded {
         request: RequestIdentity,
         result: Result<AssignmentAvailability, UiRequestError>,
+        checked_assignments: Vec<AssignmentId>,
     },
     KeybindingsSaved {
         request: RequestIdentity,
@@ -593,6 +594,7 @@ pub(crate) enum UiCommand {
         request: RequestIdentity,
         dataset_id: DatasetId,
         kind: AssignmentKind,
+        checked_assignments: Vec<AssignmentId>,
     },
     SaveKeybindings {
         request: RequestIdentity,
@@ -1068,12 +1070,20 @@ pub(crate) struct LoadedAdmin {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LoadedImage {
+    pub prepared_until: Option<web_time::Instant>,
     pub reasons: Vec<labello_client::WorkflowReasonEntry>,
     pub assignment: Assignment,
     pub queued: QueuedImage,
     pub annotations: Vec<labello_domain::AnnotationVersion>,
     pub state: ImageState,
     pub color_image: Option<egui::ColorImage>,
+}
+
+impl LoadedImage {
+    pub(crate) fn prepared_lease_is_valid(&self) -> bool {
+        self.prepared_until
+            .is_none_or(|deadline| web_time::Instant::now() < deadline)
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

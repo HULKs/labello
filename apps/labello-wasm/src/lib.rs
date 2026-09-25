@@ -143,11 +143,9 @@ fn app_config_from_url(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn queue_size(value: Option<&str>) -> usize {
-    value
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(labello_ui::IMAGE_QUEUE_SIZE)
-        .clamp(1, labello_ui::IMAGE_QUEUE_SIZE)
+fn queue_size(_legacy_value: Option<&str>) -> usize {
+    // Dataset administration owns the live queue target.
+    labello_ui::IMAGE_QUEUE_SIZE
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -163,11 +161,11 @@ mod tests {
     use super::queue_size;
 
     #[test]
-    fn queue_size_defaults_and_clamps_to_two_upcoming_assignments() {
+    fn queue_size_ignores_legacy_url_overrides() {
         assert_eq!(queue_size(None), 2);
         assert_eq!(queue_size(Some("invalid")), 2);
-        assert_eq!(queue_size(Some("0")), 1);
-        assert_eq!(queue_size(Some("1")), 1);
+        assert_eq!(queue_size(Some("0")), 2);
+        assert_eq!(queue_size(Some("1")), 2);
         assert_eq!(queue_size(Some("2")), 2);
         assert_eq!(queue_size(Some("99")), 2);
     }

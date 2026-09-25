@@ -40,6 +40,7 @@ impl DatasetRepository {
     pub async fn load_dataset(&self) -> StorageResult<DatasetMetadata> {
         self.ensure_artifact_migration().await?;
         let config: DatasetConfig = read_current_toml(&self.dataset_path()).await?;
+        labello_domain::validate_preload_queue_size(config.preload_queue_size)?;
         let images = self
             .load_images_index()
             .await?
@@ -53,6 +54,7 @@ impl DatasetRepository {
     pub async fn load_dataset_config(&self) -> StorageResult<DatasetMetadata> {
         self.ensure_artifact_migration().await?;
         let config: DatasetConfig = read_current_toml(&self.dataset_path()).await?;
+        labello_domain::validate_preload_queue_size(config.preload_queue_size)?;
         Ok(config.into_metadata(BTreeMap::new()))
     }
 
@@ -198,6 +200,7 @@ pub(super) fn extract_image_count_hint(text: &str) -> Option<usize> {
 }
 
 fn validate_current_review_config(metadata: &DatasetMetadata) -> StorageResult<()> {
+    labello_domain::validate_preload_queue_size(metadata.preload_queue_size)?;
     if metadata.tasks.iter().any(|task| !task.review.is_current())
         || metadata.role_assignments.iter().any(|assignment| {
             assignment

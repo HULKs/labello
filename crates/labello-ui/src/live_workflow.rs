@@ -12,8 +12,8 @@ use labello_domain::{
 
 use crate::{
     app::{
-        AppView, IMAGE_QUEUE_SIZE, LabelloApp, LoadedImage, ReviewPhase, SaveStatus, UiCommand,
-        UiMessage, UiRequestError,
+        AppView, LabelloApp, LoadedImage, ReviewPhase, SaveStatus, UiCommand, UiMessage,
+        UiRequestError,
     },
     queue::QueuedImage,
 };
@@ -118,6 +118,7 @@ impl LabelloApp {
                     .assign_next_image(
                         &dataset_id,
                         AssignNextRequest {
+                            prefetch: false,
                             task_id,
                             kind: Some(kind.clone()),
                             assignment_id: reclaim_assignment_id,
@@ -171,10 +172,12 @@ impl LabelloApp {
                 kind,
                 excluded_image_ids,
             } => self.spawn_message(request.clone(), async move {
+                let claimed_at = web_time::Instant::now();
                 let assignment = match api
                     .assign_next_image(
                         &dataset_id,
                         AssignNextRequest {
+                            prefetch: true,
                             task_id,
                             kind: Some(kind.clone()),
                             assignment_id: None,
@@ -201,6 +204,12 @@ impl LabelloApp {
                         result: Box::new(Ok(None)),
                     };
                 };
+                let prepared_until = assignment.expires_at.map(|expires_at| {
+                    claimed_at
+                        + (expires_at - assignment.updated_at)
+                            .to_std()
+                            .unwrap_or_default()
+                });
                 let result = load_image(
                     api.clone(),
                     dataset_id.clone(),
@@ -210,7 +219,10 @@ impl LabelloApp {
                     transfer.expect("image transfer"),
                 )
                 .await
-                .map(Some)
+                .map(|mut loaded| {
+                    loaded.prepared_until = prepared_until;
+                    Some(loaded)
+                })
                 .map_err(UiRequestError::from);
                 UiMessage::PrefetchLoaded {
                     request,
@@ -547,6 +559,7 @@ impl LabelloApp {
     pub(crate) fn request_prefetch(&mut self) {
         if !matches!(self.view, AppView::Annotate | AppView::Review)
             || self.work.assignment.is_none()
+            || self.work.current.is_none()
             || self.work.queue.is_loading()
             || self.work.queue.len() >= self.work.queue.queue_size()
             || self.runtime.api.is_none()
@@ -577,6 +590,12 @@ impl LabelloApp {
             kind,
             excluded_image_ids,
         });
+    }
+
+    pub(crate) fn resize_preload_queue(&mut self, size: usize) {
+        for assignment in self.work.queue.set_queue_size(size) {
+            self.release_reservation(self.config.dataset_id.clone(), assignment);
+        }
     }
 
     pub(crate) fn revalidate_prepared_review(&mut self, cached: LoadedImage) -> bool {
@@ -610,7 +629,7 @@ impl LabelloApp {
         {
             excluded.push(image_id);
         }
-        excluded.truncate(IMAGE_QUEUE_SIZE + 1);
+        excluded.truncate(labello_domain::MAX_PRELOAD_QUEUE_SIZE + 2);
         excluded
     }
 
@@ -671,6 +690,19 @@ impl LabelloApp {
     }
 
     pub(crate) fn retry_prefetch_if_due(&mut self, ctx: &egui::Context) {
+        let expired = self
+            .work
+            .queue
+            .retain_prepared(|loaded| loaded.prepared_lease_is_valid());
+        if !expired.is_empty() {
+            for assignment in expired {
+                self.release_reservation(self.config.dataset_id.clone(), assignment);
+            }
+            self.request_prefetch();
+        }
+        if let Some(delay) = self.work.queue.next_expiry() {
+            ctx.request_repaint_after(delay);
+        }
         if self.work.queue.retry_due() {
             self.work.queue.clear_failure();
             self.request_prefetch();
@@ -1026,6 +1058,7 @@ async fn load_image_data(
     }
     let annotations = state.active_annotations().cloned().collect();
     Ok(LoadedImage {
+        prepared_until: None,
         reasons,
         assignment,
         queued: QueuedImage { image, prelabels },

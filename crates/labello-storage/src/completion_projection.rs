@@ -4,7 +4,10 @@ use std::{
     time::Instant,
 };
 
-use labello_domain::{ImageId, ImageState, TaskId, TaskStatus};
+use labello_domain::{
+    Assignment, AssignmentId, AssignmentKind, AssignmentStatus, ImageId, ImageState, TaskId,
+    TaskStatus, Timestamp,
+};
 use parking_lot::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -17,6 +20,7 @@ pub(crate) struct ImageCompletion {
     sequence: u64,
     annotation_completed_tasks: BTreeSet<TaskId>,
     completed_tasks: BTreeSet<TaskId>,
+    reservations: Vec<Assignment>,
 }
 
 impl ImageCompletion {
@@ -45,12 +49,32 @@ impl ImageCompletion {
             sequence: state.current_sequence,
             annotation_completed_tasks,
             completed_tasks,
+            reservations: state
+                .assignments
+                .iter()
+                .filter(|assignment| {
+                    assignment.status == AssignmentStatus::Active
+                        && state.included_in_completion_denominator(&assignment.task_id)
+                        && match assignment.kind {
+                            AssignmentKind::Annotation => {
+                                state.assignment_eligible(&assignment.task_id)
+                            }
+                            AssignmentKind::Review => state
+                                .task_states
+                                .get(&assignment.task_id)
+                                .is_some_and(|task| task.status == TaskStatus::Submitted),
+                            AssignmentKind::LegacyAdjudication => false,
+                        }
+                })
+                .cloned()
+                .collect(),
         }
     }
 
     fn has_same_progress(&self, other: &Self) -> bool {
         self.annotation_completed_tasks == other.annotation_completed_tasks
             && self.completed_tasks == other.completed_tasks
+            && self.reservations == other.reservations
     }
 }
 
@@ -60,6 +84,7 @@ struct TaskCompletionProjection {
     per_image: BTreeMap<ImageId, ImageCompletion>,
     per_annotation_task: BTreeMap<TaskId, usize>,
     per_task: BTreeMap<TaskId, usize>,
+    reservations: BTreeMap<AssignmentId, Assignment>,
 }
 
 impl TaskCompletionProjection {
@@ -69,7 +94,11 @@ impl TaskCompletionProjection {
     ) -> Self {
         let mut per_annotation_task = BTreeMap::new();
         let mut per_task = BTreeMap::new();
+        let mut reservations = BTreeMap::new();
         for completion in per_image.values() {
+            for assignment in &completion.reservations {
+                reservations.insert(assignment.assignment_id.clone(), assignment.clone());
+            }
             for task_id in &completion.annotation_completed_tasks {
                 *per_annotation_task.entry(task_id.clone()).or_default() += 1;
             }
@@ -82,6 +111,7 @@ impl TaskCompletionProjection {
             per_image,
             per_annotation_task,
             per_task,
+            reservations,
         }
     }
 
@@ -115,8 +145,50 @@ impl TaskCompletionProjection {
             &current.completed_tasks,
             &observation.completed_tasks,
         )?;
+        for assignment in &current.reservations {
+            self.reservations.remove(&assignment.assignment_id);
+        }
+        for assignment in &observation.reservations {
+            self.reservations
+                .insert(assignment.assignment_id.clone(), assignment.clone());
+        }
         self.per_image.insert(image_id.clone(), observation);
         Ok(())
+    }
+}
+
+pub(crate) struct AssignmentProgress {
+    pub counts: BTreeMap<TaskId, usize>,
+    pub reservations: Vec<Assignment>,
+}
+
+pub(crate) struct CompletionPublication<'a> {
+    cache: &'a TaskCompletionCache,
+    observed: bool,
+}
+
+impl CompletionPublication<'_> {
+    pub(crate) fn observed(mut self) {
+        self.observed = true;
+    }
+}
+
+impl Drop for CompletionPublication<'_> {
+    fn drop(&mut self) {
+        if !self.observed {
+            self.cache.invalidate("interrupted_event_publication");
+        }
+    }
+}
+
+impl AssignmentProgress {
+    pub(crate) fn outstanding(&self, task_id: &TaskId) -> usize {
+        self.reservations
+            .iter()
+            .filter(|assignment| &assignment.task_id == task_id)
+            .map(|assignment| &assignment.image_id)
+            .collect::<BTreeSet<_>>()
+            .len()
     }
 }
 
@@ -174,6 +246,51 @@ pub(crate) struct TaskCompletionCache {
 }
 
 impl TaskCompletionCache {
+    fn assignment_progress(
+        &self,
+        kind: &AssignmentKind,
+        now: Timestamp,
+    ) -> Option<AssignmentProgress> {
+        let mut inner = self.inner.lock();
+        let generation = inner.membership_generation;
+        let projection = inner
+            .projection
+            .as_mut()
+            .filter(|projection| projection.membership_generation == generation)?;
+        projection
+            .reservations
+            .retain(|_, assignment| !crate::assignment::assignment_is_expired(assignment, now));
+        let counts = if *kind == AssignmentKind::Annotation {
+            &projection.per_annotation_task
+        } else {
+            &projection.per_task
+        };
+        let mut reservations = projection
+            .reservations
+            .values()
+            .filter(|assignment| {
+                if assignment.kind != *kind {
+                    return false;
+                }
+                let progress = &projection.per_image[&assignment.image_id];
+                let completed = if *kind == AssignmentKind::Annotation {
+                    &progress.annotation_completed_tasks
+                } else {
+                    &progress.completed_tasks
+                };
+                !completed.contains(&assignment.task_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        reservations.sort_by(|a, b| {
+            (a.created_at, &a.assignment_id).cmp(&(b.created_at, &b.assignment_id))
+        });
+        Some(AssignmentProgress {
+            counts: counts.clone(),
+            reservations,
+        })
+    }
+
     fn counts(&self, include_submitted: bool) -> Option<BTreeMap<TaskId, usize>> {
         let inner = self.inner.lock();
         inner
@@ -402,6 +519,29 @@ impl Drop for CompletionScanGuard<'_> {
 }
 
 impl DatasetRepository {
+    pub(crate) fn completion_publication(&self) -> CompletionPublication<'_> {
+        CompletionPublication {
+            cache: &self.task_completion_cache,
+            observed: false,
+        }
+    }
+
+    pub(crate) async fn assignment_progress(
+        &self,
+        kind: &AssignmentKind,
+    ) -> StorageResult<AssignmentProgress> {
+        loop {
+            if let Some(progress) = self
+                .task_completion_cache
+                .assignment_progress(kind, labello_domain::now())
+            {
+                return Ok(progress);
+            }
+            self.task_progress_counts(*kind == AssignmentKind::Annotation)
+                .await?;
+        }
+    }
+
     pub(crate) async fn task_completion_counts(&self) -> StorageResult<BTreeMap<TaskId, usize>> {
         self.task_progress_counts(false).await
     }
@@ -559,6 +699,46 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn reservation_projection_excludes_import_coverage_and_invalid_task_states() {
+        let mut state = state_with_task("img", "task", 1, TaskStatus::InProgress);
+        let task = TaskId::from("task");
+        let timestamp = now();
+        let assignment = Assignment {
+            assignment_id: AssignmentId::from("assignment"),
+            image_id: state.image_id.clone(),
+            task_id: task.clone(),
+            assigned_to: UserId::from("annotator"),
+            kind: AssignmentKind::Annotation,
+            status: AssignmentStatus::Active,
+            expires_at: None,
+            created_at: timestamp,
+            updated_at: timestamp,
+        };
+        state.assignments.push(assignment.clone());
+        assert_eq!(ImageCompletion::from_state(&state).reservations.len(), 1);
+        state
+            .import_coverage
+            .insert(task.clone(), ImportCoverage::Excluded);
+        assert!(ImageCompletion::from_state(&state).reservations.is_empty());
+        state.included_import_tasks.insert(task.clone());
+        assert_eq!(ImageCompletion::from_state(&state).reservations.len(), 1);
+        state.assignments[0].kind = AssignmentKind::Review;
+        assert!(ImageCompletion::from_state(&state).reservations.is_empty());
+        state.task_states.get_mut(&task).unwrap().status = TaskStatus::Submitted;
+        assert_eq!(ImageCompletion::from_state(&state).reservations.len(), 1);
+        let mut duplicate = assignment.clone();
+        duplicate.assignment_id = AssignmentId::from("duplicate");
+        assert_eq!(
+            AssignmentProgress {
+                counts: BTreeMap::new(),
+                reservations: vec![assignment, duplicate]
+            }
+            .outstanding(&task),
+            1
+        );
+    }
 
     fn state_with_task(
         image_id: &str,
@@ -731,6 +911,7 @@ mod tests {
         assert_eq!(projection.per_task[&TaskId::from("task")], 1);
 
         let equal_sequence_pending = ImageCompletion {
+            reservations: Vec::new(),
             sequence: completed.sequence,
             annotation_completed_tasks: BTreeSet::new(),
             completed_tasks: BTreeSet::new(),

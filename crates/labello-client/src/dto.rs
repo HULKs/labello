@@ -46,6 +46,7 @@ mod tests {
     #[test]
     fn assign_next_request_uses_camel_case_json() {
         let request = AssignNextRequest {
+            prefetch: false,
             task_id: TaskId::from("bounding_box:person"),
             kind: Some(AssignmentKind::Annotation),
             assignment_id: Some(AssignmentId::from("asn_1")),
@@ -58,7 +59,8 @@ mod tests {
                 "taskId": "bounding_box:person",
                 "kind": "annotation",
                 "assignmentId": "asn_1",
-                "excludedImageIds": ["img_1"]
+                "excludedImageIds": ["img_1"],
+                "prefetch": false
             })
         );
     }

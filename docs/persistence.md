@@ -254,6 +254,21 @@ draft persistence formats are unchanged. Signing out or changing endpoint clears
 image references and rejects/cancels obsolete transfers. Derived previews do not
 authorize offline work or restore a server assignment.
 
+## Completion and preload projection
+
+The completion projection also tracks live assignments for prospective preload
+admission. Actual counts remain separate from reservations. Both derive from
+the same replayed image state and are observed together after event publication,
+before state-cache publication. Interrupted or failed event publication invalidates
+the projection; restart rebuilds it from events. Warm balance checks read in-memory
+counts and live reservations without rescanning image states per item. Expiry is filtered
+against server time on every read.
+
+`preloadQueueSize` is a defaultable dataset configuration field in supported
+version-2 and version-3 representations. Missing values mean two; current storage
+reads and writes validate the supported range. Snapshots retain the configured
+value. This change adds no assignment or workflow event fields.
+
 ## Previous-review history index
 
 Each repository and its clones share an in-memory index derived from per-image

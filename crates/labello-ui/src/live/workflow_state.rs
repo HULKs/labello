@@ -293,6 +293,10 @@ impl LabelloApp {
             return false;
         };
         while let Some(loaded) = self.work.queue.pop_prepared() {
+            if !loaded.prepared_lease_is_valid() {
+                self.release_reservation(self.config.dataset_id.clone(), loaded.assignment);
+                continue;
+            }
             if loaded.assignment.kind == kind
                 && loaded.assignment.status == labello_domain::AssignmentStatus::Active
             {

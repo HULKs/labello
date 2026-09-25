@@ -24,7 +24,7 @@ pub struct ImageQueue {
 impl ImageQueue {
     pub fn new(queue_size: usize) -> Self {
         Self {
-            queue_size: queue_size.clamp(1, crate::app::IMAGE_QUEUE_SIZE),
+            queue_size: queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE),
             loading: false,
             failed_at: None,
             retry_delay: Duration::from_secs(1),
@@ -37,14 +37,48 @@ impl ImageQueue {
         self.queue_size
     }
 
-    pub fn set_queue_size(&mut self, queue_size: usize) {
-        self.queue_size = queue_size.clamp(1, crate::app::IMAGE_QUEUE_SIZE);
+    pub fn set_queue_size(&mut self, queue_size: usize) -> Vec<labello_domain::Assignment> {
+        self.queue_size = queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE);
+        let mut released = Vec::new();
         while self.len() > self.queue_size {
-            if self.prepared.pop_back().is_some() {
+            if let Some(loaded) = self.prepared.pop_back() {
+                released.push(loaded.assignment);
                 continue;
             }
             self.items.pop_back();
         }
+        released
+    }
+
+    pub(crate) fn retain_prepared(
+        &mut self,
+        mut keep: impl FnMut(&LoadedImage) -> bool,
+    ) -> Vec<labello_domain::Assignment> {
+        let mut released = Vec::new();
+        self.prepared.retain(|loaded| {
+            if keep(loaded) {
+                true
+            } else {
+                released.push(loaded.assignment.clone());
+                false
+            }
+        });
+        released
+    }
+
+    pub(crate) fn prepared_assignment_ids(&self) -> Vec<labello_domain::AssignmentId> {
+        self.prepared
+            .iter()
+            .map(|loaded| loaded.assignment.assignment_id.clone())
+            .collect()
+    }
+
+    pub(crate) fn next_expiry(&self) -> Option<Duration> {
+        self.prepared
+            .iter()
+            .filter_map(|loaded| loaded.prepared_until)
+            .min()
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
     pub fn is_loading(&self) -> bool {
@@ -171,7 +205,11 @@ mod tests {
         assert!(!queue.push_if_room(queued("c")));
         queue.set_queue_size(1);
         assert_eq!(queue.len(), 1);
-        assert_eq!(ImageQueue::new(99).queue_size(), 2);
+        assert_eq!(ImageQueue::new(99).queue_size(), 99);
+        assert_eq!(
+            ImageQueue::new(usize::MAX).queue_size(),
+            labello_domain::MAX_PRELOAD_QUEUE_SIZE
+        );
     }
 
     #[test]

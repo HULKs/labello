@@ -60,6 +60,9 @@ pub(crate) async fn assignment_availability(
         .position(|(kind, _)| kind == &request.kind)
         .expect("the authorized requested kind must be included");
     let (_, tasks) = availabilities.remove(requested);
+    let (size, eligible_assignments) = repo
+        .preload_queue_policy(&actor.user_id, &request.kind)
+        .await?;
     Ok(Json(AssignmentAvailability {
         kind: request.kind,
         tasks,
@@ -67,6 +70,10 @@ pub(crate) async fn assignment_availability(
             .into_iter()
             .map(|(kind, tasks)| AssignmentAvailabilityEntry { kind, tasks })
             .collect(),
+        queue: Some(labello_client::AssignmentQueueStatus {
+            size,
+            eligible_assignments,
+        }),
     }))
 }
 
@@ -85,9 +92,9 @@ pub(crate) async fn assign_next(
     }
     request.excluded_image_ids.sort();
     request.excluded_image_ids.dedup();
-    if request.excluded_image_ids.len() > 3 {
+    if request.excluded_image_ids.len() > labello_domain::MAX_PRELOAD_QUEUE_SIZE + 2 {
         return Err(ApiError::BadRequest(
-            "at most 3 image IDs may be excluded".to_string(),
+            "too many excluded image IDs".to_string(),
         ));
     }
     let actor = actor_from_headers(&state, &headers)?;
@@ -95,6 +102,11 @@ pub(crate) async fn assign_next(
     let kind = request
         .kind
         .unwrap_or(labello_domain::AssignmentKind::Annotation);
+    if request.prefetch && request.assignment_id.is_some() {
+        return Err(ApiError::BadRequest(
+            "prefetch cannot reclaim an assignment".into(),
+        ));
+    }
     if let Some(assignment_id) = request.assignment_id
         && let Some(assignment) = repo
             .reclaim_assignment(
@@ -114,14 +126,23 @@ pub(crate) async fn assign_next(
         );
         return Ok(Json(Some(assignment)));
     }
-    let assignment = repo
-        .assign_next_image_excluding(
+    let assignment = if request.prefetch {
+        repo.assign_preloaded_image_excluding(
             &actor.user_id,
             &request.task_id,
             kind,
             &request.excluded_image_ids,
         )
-        .await?;
+        .await?
+    } else {
+        repo.assign_next_image_excluding(
+            &actor.user_id,
+            &request.task_id,
+            kind,
+            &request.excluded_image_ids,
+        )
+        .await?
+    };
     if let Some(assignment) = &assignment {
         tracing::debug!(
             event = "assignment.claimed",

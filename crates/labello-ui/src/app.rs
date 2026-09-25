@@ -32,7 +32,7 @@ pub(crate) use crate::live_protocol::{
     UiRequestError,
 };
 
-pub const IMAGE_QUEUE_SIZE: usize = 2;
+pub const IMAGE_QUEUE_SIZE: usize = labello_domain::DEFAULT_PRELOAD_QUEUE_SIZE;
 pub(crate) const ASSIGNMENT_AVAILABILITY_CACHE_TTL: Duration = Duration::from_secs(30);
 
 const MAX_HISTORY_OPERATIONS: usize = 256;

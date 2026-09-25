@@ -194,7 +194,9 @@ impl LabelloApp {
                     self.work.queue.set_loading(false);
                     match *result {
                         Ok(Some(loaded))
-                            if self.assignment_kind().as_ref() == Some(&loaded.assignment.kind)
+                            if loaded.prepared_lease_is_valid()
+                                && self.work.queue.len() < self.work.queue.queue_size()
+                                && self.assignment_kind().as_ref() == Some(&loaded.assignment.kind)
                                 && loaded.assignment.status
                                     == labello_domain::AssignmentStatus::Active
                                 && self.work.assignment.as_ref().is_some_and(|current| {

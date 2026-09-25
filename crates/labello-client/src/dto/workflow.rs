@@ -7,6 +7,8 @@ pub struct AssignNextRequest {
     pub assignment_id: Option<AssignmentId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub excluded_image_ids: Vec<ImageId>,
+    #[serde(default)]
+    pub prefetch: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,6 +24,15 @@ pub struct AssignmentAvailability {
     pub tasks: BTreeMap<TaskId, bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related: Vec<AssignmentAvailabilityEntry>,
+    #[serde(default)]
+    pub queue: Option<AssignmentQueueStatus>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignmentQueueStatus {
+    pub size: usize,
+    pub eligible_assignments: Option<Vec<AssignmentId>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

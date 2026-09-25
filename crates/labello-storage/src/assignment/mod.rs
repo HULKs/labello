@@ -765,7 +765,10 @@ fn lease_expiration(now: labello_domain::Timestamp) -> labello_domain::Timestamp
     now + DEFAULT_ASSIGNMENT_LEASE_DURATION
 }
 
-fn assignment_is_expired(assignment: &Assignment, now: labello_domain::Timestamp) -> bool {
+pub(crate) fn assignment_is_expired(
+    assignment: &Assignment,
+    now: labello_domain::Timestamp,
+) -> bool {
     assignment
         .expires_at
         .unwrap_or_else(|| lease_expiration(assignment.updated_at))

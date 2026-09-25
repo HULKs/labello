@@ -42,6 +42,7 @@ fn assignment_reload_discards_stale_manual_cursor_pass_and_local_draft() {
     let mut app =
         inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
     let loaded = LoadedImage {
+            prepared_until: None,
             reasons: Vec::new(),
         assignment: app.work.assignment.clone().unwrap(),
         queued: app.work.current.clone().unwrap(),
@@ -193,8 +194,10 @@ fn assignment_availability_poll_is_scheduled_from_completion() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), true)]),
                 related: Vec::new(),
@@ -496,8 +499,10 @@ fn deliver_assignment_availability(
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks,
                 related: Vec::new(),
@@ -511,6 +516,7 @@ fn deliver_assignment_availability_error(app: &mut LabelloApp, request: RequestI
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Err("availability failed".to_string().into()),
         })
@@ -534,8 +540,10 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), false)]),
                 related: Vec::new(),
@@ -559,8 +567,10 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([(TaskId::from("bounding_box:person"), false)]),
                 related: Vec::new(),

@@ -167,6 +167,10 @@ administration update route rejects ratio and tagged-policy shapes. Assignment
 statistics include the current annotation and review counts plus the task IDs
 blocked by the enforced window.
 
+`DatasetMetadata.preloadQueueSize` and the administration update field of the
+same name are integers from 1 through 200. Missing values default to two. The
+existing DataAdmin authorization applies; invalid ranges return 400.
+
 ### Creating a dataset from an existing schema
 
 `POST /datasets` accepts optional `schemaSourceDatasetId`. Omitted or null
@@ -326,8 +330,19 @@ The assignment ID, image ID, task ID, actor, kind, current sequence, and live
 state are validated at the transaction boundary. Possessing an ID is not
 authorization.
 
-Availability, direct claims, and prepared queue claims apply the same
-completion-balance decision. The complete count, denominator, disabled-peer,
+Availability and direct claims apply the current-count completion-balance
+decision. `AssignNextRequest.prefetch`, default false, adds prospective balance
+admission for upcoming work. It cannot be combined with `assignmentId` reclaim.
+`excludedImageIds` accepts at most 202 distinct validated IDs, covering the
+maximum queue, current image, and one skipped image. Denied prefetch returns
+null before the client fetches image resources.
+
+Availability responses include `queue.size` and `queue.eligibleAssignments`.
+The latter contains the caller's live, eligible reservation IDs for the requested
+kind, filtered by projected balance when enforcement is enabled. Clients also
+accept null from older or demonstration adapters as an omitted reservation filter.
+It is advisory and never renews leases. Clients must not apply an older response
+to reservations created after that request. The complete count, denominator, disabled-peer,
 zero-count, and exact-boundary contract is maintained in
 [Assignment](assignment.md#completion-balance).
 

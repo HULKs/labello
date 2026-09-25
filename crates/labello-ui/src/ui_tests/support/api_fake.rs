@@ -255,6 +255,8 @@ pub(super) struct SpyState {
     pub(super) preview_profiles: Vec<labello_client::ImagePreviewProfile>,
     pub(super) fail_next_revalidation: bool,
     pub(super) no_assignment: bool,
+    pub(super) block_prefetch: bool,
+    pub(super) prefetch_requests: usize,
     pub(super) availability_overrides: BTreeMap<TaskId, bool>,
     pub(super) fail_next_availability: bool,
     pub(super) active_assignments: Vec<Assignment>,
@@ -383,6 +385,8 @@ impl SpyState {
             preview_profiles: Vec::new(),
             fail_next_revalidation: false,
             no_assignment: false,
+            block_prefetch: false,
+            prefetch_requests: 0,
             availability_overrides: BTreeMap::new(),
             fail_next_availability: false,
             active_assignments: Vec::new(),
@@ -1335,6 +1339,7 @@ impl DatasetApi for SpyApi {
         state.metadata.tasks = request.tasks;
         state.metadata.role_assignments = request.role_assignments;
         state.metadata.imbalance = request.imbalance;
+        state.metadata.preload_queue_size = request.preload_queue_size;
         state.metadata.prelabel_configs = request.prelabel_configs;
         ready(Ok(state.metadata.clone()))
     }
@@ -1470,6 +1475,7 @@ impl ImageApi for SpyApi {
             })
             .collect();
         ready(Ok(labello_client::AssignmentAvailability {
+            queue: Some(labello_client::AssignmentQueueStatus { size: state.metadata.preload_queue_size, eligible_assignments: None }),
             kind: request.kind.clone(),
             tasks: tasks.clone(),
             related: [
@@ -1556,7 +1562,8 @@ impl ImageApi for SpyApi {
         if let Some(assignment_id) = request.assignment_id.clone() {
             state.reclaim_assignment_ids.push(assignment_id);
         }
-        if state.no_assignment {
+        if request.prefetch { state.prefetch_requests += 1; }
+        if state.no_assignment || (request.prefetch && state.block_prefetch) {
             return ready(Ok(None));
         }
         let kind = request.kind.unwrap_or(AssignmentKind::Annotation);

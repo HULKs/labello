@@ -87,7 +87,7 @@ impl LabelloApp {
             active_prefetch_id: None,
             active_operation_id: None,
             one_shot_excluded_image_id: None,
-            next_demo_image_index: config.queue_size.clamp(1, IMAGE_QUEUE_SIZE) + 2,
+            next_demo_image_index: config.queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE) + 2,
             migration: ManualMigrationState::default(),
             availability: AssignmentAvailabilityState::default(),
         };

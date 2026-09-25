@@ -558,8 +558,10 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -888,6 +890,7 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Err("availability failed".to_string().into()),
         })
@@ -908,8 +911,10 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -3684,8 +3689,10 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Review,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4072,8 +4079,10 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4279,8 +4288,10 @@ fn workflow_dot_ignores_stale_availability() {
         .runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request: stale,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),

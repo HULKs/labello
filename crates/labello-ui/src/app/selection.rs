@@ -109,6 +109,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn sync_work_config(&mut self, metadata: DatasetMetadata) {
+        self.resize_preload_queue(metadata.preload_queue_size);
         self.work.classes = metadata.label_classes.clone();
         self.work.tasks = metadata.tasks.clone();
         self.datasets.metadata = Some(metadata);

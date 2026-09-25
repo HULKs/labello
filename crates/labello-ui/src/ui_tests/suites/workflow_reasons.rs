@@ -188,6 +188,7 @@ fn workflow_reasons_stale_assignment_response_cannot_replace_the_open_notice() {
     harness.state_mut().install_reason_notice(vec![reason.clone()]);
     let app = harness.state();
     let mut loaded = crate::live_protocol::LoadedImage {
+        prepared_until: None,
         reasons: vec![reason], assignment: app.work.assignment.clone().unwrap(),
         queued: app.work.current.clone().unwrap(), annotations: app.work.annotations.clone(),
         state: app.work.current_state.clone().unwrap(), color_image: None,

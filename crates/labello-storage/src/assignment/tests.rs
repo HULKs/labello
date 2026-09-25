@@ -4907,3 +4907,6 @@ async fn inspector_multi_workflow_return_recovers_committed_event_after_cache_fa
         .collect();
     assert_eq!(saved_events, events);
 }
+
+#[path = "preload_tests.rs"]
+mod preload;

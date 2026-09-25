@@ -39,6 +39,7 @@ impl ImageApi for DemoLabelloApi {
     ) -> crate::ApiFuture<'a, crate::AssignmentAvailability> {
         Box::pin(async move {
             Ok(crate::AssignmentAvailability {
+                queue: None,
                 kind: request.kind,
                 tasks: std::collections::BTreeMap::new(),
                 related: Vec::new(),
