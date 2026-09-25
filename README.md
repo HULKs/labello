@@ -1,8 +1,8 @@
-# Review-complete checkmark correction
+# Review shield icon corrections
 
 Before: native-before.png, commit fa2ef1e25958696eaf3cc49b9ee8f4939f2036c1.
-After: native-after.png, commit 92b3f20c634cb9e5eb120382e9ae0f3e22b2f3b4.
+After: native-after.png, commit b03134a093133e77d9abe60aa1c26c35b39db7d0.
 
-Both show the shared production workflow selector through the native inspector's synthetic workflow-availability preset, 1440x1000, native scale 1. The Review complete row is second from the bottom. Its checkmark now fits inside the shield with a gap from the outline, using a brighter 2-point stroke. The tooltip and selection behavior are unchanged.
+Native inspector, synthetic workflow-availability preset, 1440x1000, scale 1. Review disabled is the second row, Review complete is second from the bottom. Both now use bright inset symbols with 2-point strokes: an x for disabled and a check for complete. The symbols have space from the shield outline.
 
-Captured after the icon edit with no other source changes. The inspector build passed. At the user's request, verification was interrupted and no new hosted CI was run; this capture proves native appearance, not browser behavior or a new CI result. Earlier browser captures belong to the preceding revision.
+The inspector build passed and the resulting rendering was inspected. Local verification is skipped at the user's request. Hosted CI remains enabled on the final commit; its outcome is recorded in the PR. Earlier browser captures belong to the preceding revision. No browser behavior claims are made for this visual correction.
