@@ -105,6 +105,7 @@ fn replacement_session_request_ignores_the_stale_result() {
             result: Ok(SessionInfo {
                 account: account.clone(),
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "stale-csrf-token".to_string(),
             }),
         })
@@ -124,6 +125,7 @@ fn replacement_session_request_ignores_the_stale_result() {
             result: Ok(SessionInfo {
                 account: account.clone(),
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "active-csrf-token".to_string(),
             }),
         })

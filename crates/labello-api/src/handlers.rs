@@ -386,6 +386,7 @@ async fn local_admin_login(
         ],
         Json(SessionInfo {
             can_create_datasets: state.is_bootstrap_admin(&account.user_id),
+            prelabel_available: state.prelabel_available(),
             account,
             csrf_token: session.csrf,
         }),
@@ -410,6 +411,7 @@ async fn me(State(state): State<ApiState>, headers: HeaderMap) -> ApiResult<impl
         [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
         Json(SessionInfo {
             can_create_datasets: state.is_bootstrap_admin(&account.user_id),
+            prelabel_available: state.prelabel_available(),
             account,
             csrf_token: session.csrf_token,
         }),

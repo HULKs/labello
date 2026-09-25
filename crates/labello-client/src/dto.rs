@@ -65,6 +65,29 @@ mod tests {
     }
 
     #[test]
+    fn session_prelabel_capability_defaults_to_disabled_for_older_servers() {
+        let session = SessionInfo {
+            account: UserAccount {
+                user_id: "admin".into(),
+                display_name: "Admin".into(),
+                github_user_id: None,
+                github_login: None,
+                created_at: labello_domain::now(),
+                updated_at: labello_domain::now(),
+            },
+            can_create_datasets: true,
+            prelabel_available: true,
+            csrf_token: "test-csrf".into(),
+        };
+        let mut wire = serde_json::to_value(&session).unwrap();
+        assert_eq!(wire["prelabelAvailable"], true);
+        wire.as_object_mut().unwrap().remove("prelabelAvailable");
+        let legacy: SessionInfo = serde_json::from_value(wire).unwrap();
+        assert!(!legacy.prelabel_available);
+        assert!(!format!("{session:?}").contains("test-csrf"));
+    }
+
+    #[test]
     fn assign_next_request_uses_camel_case_json() {
         let request = AssignNextRequest {
             prefetch: false,

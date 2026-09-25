@@ -41,6 +41,8 @@ pub enum InspectorPreset {
     WorkflowReasons,
     WorkflowAvailability,
     Admin,
+    PrelabelsDisabled,
+    PrelabelsDisabledAnnotation,
     ExportSelection,
     ExportLoading,
     ExportReady,
@@ -89,7 +91,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 62] = [
+    pub const ALL: [Self; 64] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -107,6 +109,8 @@ impl InspectorPreset {
         Self::WorkflowReasons,
         Self::WorkflowAvailability,
         Self::Admin,
+        Self::PrelabelsDisabled,
+        Self::PrelabelsDisabledAnnotation,
         Self::ExportSelection,
         Self::ExportLoading,
         Self::ExportReady,
@@ -173,6 +177,8 @@ impl InspectorPreset {
             Self::WorkflowAvailability => "workflow-availability",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
+            Self::PrelabelsDisabled => "prelabels-disabled",
+            Self::PrelabelsDisabledAnnotation => "prelabels-disabled-annotation",
             Self::ExportSelection => "export-selection",
             Self::ExportLoading => "export-loading",
             Self::ExportReady => "export-ready",
@@ -440,6 +446,18 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Admin => admin_preset(),
+        InspectorPreset::PrelabelsDisabled => {
+            let mut app = admin_preset();
+            app.auth.prelabel_available = false;
+            app.admin.section = crate::app::AdminSection::Automation;
+            app
+        }
+        InspectorPreset::PrelabelsDisabledAnnotation => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.auth.prelabel_available = false;
+            app.work.inspector_panel_collapsed = false;
+            app
+        }
         InspectorPreset::ExportSelection => export_preset(preset),
         InspectorPreset::ExportLoading => export_preset(preset),
         InspectorPreset::ExportReady => export_preset(preset),

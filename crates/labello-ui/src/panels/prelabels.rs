@@ -1,6 +1,6 @@
 impl LabelloApp {
     pub(crate) fn visible_prelabels(&self) -> Vec<labello_domain::PrelabelSuggestion> {
-        if self.view != AppView::Annotate {
+        if self.view != AppView::Annotate || !self.auth.prelabel_available {
             return Vec::new();
         }
         let Some(current) = &self.work.current else {
@@ -66,6 +66,10 @@ impl LabelloApp {
     fn prelabel_panel(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.heading("Prelabels");
+        if !self.auth.prelabel_available {
+            crate::prelabel_flow::disabled_notice(ui);
+            return;
+        }
         self.prelabel_selector(ui);
         let prelabels = self.visible_prelabels();
         if self.work.selected_prelabel.as_ref().is_none_or(|selected| {

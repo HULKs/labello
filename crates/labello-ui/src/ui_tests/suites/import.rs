@@ -306,6 +306,7 @@ fn endpoint_and_session_identity_changes_clear_import_state() {
                     updated_at: now(),
                 },
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "test-token".to_string(),
             }),
         })

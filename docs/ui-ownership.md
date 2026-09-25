@@ -9,7 +9,7 @@ acceptance, and [architecture](architecture.md) for crate boundaries.
 | Owner | State |
 | --- | --- |
 | `runtime` | API transport, command queue, responses, active requests, repainting, persistence scheduling, presence |
-| `auth` | Sign-in options, session discovery, failures, account-bound recovery |
+| `auth` | Sign-in options, session discovery, server prelabel availability, failures, account-bound recovery |
 | `datasets` | Dataset metadata/users, statistics, leaderboard selection, dataset request identities |
 | `admin` | Filters, snapshots, roles, staged configuration, export |
 | `import` | Wizard, source registration, planning, durable job progress |

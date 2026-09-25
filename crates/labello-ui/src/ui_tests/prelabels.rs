@@ -138,6 +138,7 @@ fn prelabel_admin_removal_requires_confirmation_and_controls_fit_narrow_and_shor
     let api = Rc::new(SpyApi::new());
     let metadata = api.metadata();
     let mut app = base_live_app(api);
+    app.auth.prelabel_available = true;
     app.datasets.admin_baseline = Some(metadata);
     let mut harness = Harness::builder()
         .with_size(egui::vec2(1100.0, 900.0))
@@ -245,6 +246,7 @@ fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
 fn prelabel_admin_start_queues_the_selected_preflight_run() {
     let api = Rc::new(SpyApi::new());
     let mut app = base_live_app(api.clone());
+    app.auth.prelabel_available = true;
     app.datasets.admin_baseline = Some(api.metadata());
     app.admin.prelabels.state = Some(labello_domain::PrelabelAdminState {
         runs: vec![labello_domain::PrelabelRunSummary {
@@ -272,4 +274,117 @@ fn prelabel_admin_start_queues_the_selected_preflight_run() {
     assert!(
         matches!(&harness.state().admin.prelabels.pending, Some((_, PrelabelAction::Admin(Some(labello_domain::PrelabelAdminCommand::Start { run_id })))) if run_id == "prepared-run")
     );
+}
+
+#[test]
+fn disabled_server_hides_annotation_hints_and_never_requests_them() {
+    let api = Rc::new(SpyApi::new());
+    api.state.borrow_mut().prelabel_available = false;
+    let mut harness = loaded_work_harness(api.clone());
+    assert!(!harness.state().auth.prelabel_available);
+    assert!(harness.state().visible_prelabels().is_empty());
+    assert!(
+        harness
+            .query_by_label("Prelabeling is disabled by server configuration.")
+            .is_some()
+    );
+    for label in [
+        "No prelabels",
+        "Refresh hints",
+        "Preparing hints… You can annotate while they load.",
+        "Accept",
+        "Discard",
+    ] {
+        assert!(harness.query_by_label(label).is_none(), "{label}");
+    }
+    let app = harness.state_mut();
+    // Retained candidates must remain hidden even if a previous session loaded them.
+    app.work
+        .current
+        .as_mut()
+        .unwrap()
+        .prelabels
+        .push(labello_domain::PrelabelSuggestion {
+            suggestion_id: "retained".into(),
+            config_id: "demo-prelabel".into(),
+            task_id: app.work.selected_task_id.clone().unwrap(),
+            class_id: "person".into(),
+            confidence: 0.9,
+            geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+                x: 0.1,
+                y: 0.1,
+                width: 0.2,
+                height: 0.2,
+            }),
+            evidence: None,
+        });
+    assert!(app.visible_prelabels().is_empty());
+    app.request_prelabels(PrelabelAction::Load(PrelabelSuggestionRequest {
+        image_id: app.work.current.as_ref().unwrap().image.image_id.clone(),
+        task_id: app.work.selected_task_id.clone().unwrap(),
+        config_id: "demo-prelabel".into(),
+    }));
+    app.request_prelabels(PrelabelAction::Admin(None));
+    assert!(app.work.prelabels.pending.is_none());
+    assert!(app.admin.prelabels.pending.is_none());
+    for _ in 0..8 {
+        harness.step();
+    }
+    let counts = &api.state.borrow().counts;
+    assert_eq!(counts.prelabel_suggestions, 0);
+    assert_eq!(counts.prelabel_generation, 0);
+    assert_eq!(counts.prelabel_admin, 0);
+    assert!(
+        counts.assign_next_image > 0,
+        "manual annotation still loads work"
+    );
+}
+
+#[test]
+fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration() {
+    let api = Rc::new(SpyApi::new());
+    api.state.borrow_mut().prelabel_available = false;
+    let mut harness = loaded_admin_harness(api.clone());
+    let before = harness.state().datasets.admin_config.clone();
+    harness.state_mut().admin.section = AdminSection::Automation;
+    for _ in 0..8 {
+        harness.step();
+    }
+    assert!(
+        harness
+            .query_by_label("Prelabeling is disabled by server configuration.")
+            .is_some()
+    );
+    for label in [
+        "Add browser prelabel config",
+        "Dataset hints",
+        "Check remaining workflows",
+        "Remove hints and pause",
+        "Confirm hint removal",
+    ] {
+        assert!(harness.query_by_label(label).is_none(), "{label}");
+    }
+    assert!(harness.query_by_label("Assignment Balance").is_some());
+    assert_eq!(harness.state().datasets.admin_config, before);
+    assert!(!harness.state().admin_changes_dirty());
+    assert!(harness.state().admin.prelabels.error.is_none());
+    assert_eq!(api.state.borrow().counts.prelabel_admin, 0);
+    harness.set_size(egui::vec2(1300.0, 8000.0));
+    harness.state_mut().admin.section = AdminSection::Schema;
+    harness.step();
+    click_accesskit_button(
+        &mut harness,
+        "Person boxes | bounding_box | Person | Enabled",
+    );
+    assert!(harness.query_by_label("Prelabel sources").is_none());
+    assert!(
+        harness
+            .query_by_label("Prelabeling is disabled by server configuration.")
+            .is_some()
+    );
+    assert_eq!(harness.state().datasets.admin_config, before);
+    // A fresh session obtains the updated capability after the operator enables it.
+    api.state.borrow_mut().prelabel_available = true;
+    harness.state_mut().request_session();
+    step_until(&mut harness, 8, |app| app.auth.prelabel_available);
 }

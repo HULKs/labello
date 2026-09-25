@@ -10,6 +10,8 @@ pub struct AuthOptions {
 pub struct SessionInfo {
     pub account: UserAccount,
     pub can_create_datasets: bool,
+    #[serde(default)]
+    pub prelabel_available: bool,
     pub csrf_token: String,
 }
 
@@ -19,6 +21,7 @@ impl std::fmt::Debug for SessionInfo {
             .debug_struct("SessionInfo")
             .field("account", &self.account)
             .field("can_create_datasets", &self.can_create_datasets)
+            .field("prelabel_available", &self.prelabel_available)
             .field("csrf_token", &"<redacted>")
             .finish()
     }

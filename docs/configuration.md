@@ -460,7 +460,14 @@ for the supported guest layout and [operations](operations.md) for backup and re
 
 Enable `[prelabel]` with an operator-managed `modelsRoot` to support server and
 browser model configurations. Omission disables model delivery, generation, and
-management. `timeoutSeconds` defaults to 120 and accepts 1 through 300.
+management. Add the section to `labello.server.toml` or the file selected by
+`LABELLO_CONFIG`, restart the server, and reload the web app. When omitted,
+Automation, workflow settings, and the annotation inspector show
+"Prelabeling is disabled by server configuration." The UI hides model/hint
+controls and does not request hints or poll hint management. Existing dataset
+model configurations and workflow bindings are preserved.
+
+`timeoutSeconds` defaults to 120 and accepts 1 through 300.
 `[prelabel.limits]` fields are optional and use the values in the
 [server example](../labello.server.example.toml). Model supply, supported tensor
 shapes, processing, Linux worker limits and retention are defined in

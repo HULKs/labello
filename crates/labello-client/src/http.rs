@@ -297,6 +297,7 @@ mod tests {
         let session = SessionInfo {
             account: account.clone(),
             can_create_datasets: true,
+            prelabel_available: true,
             csrf_token: "test-csrf-token".to_string(),
         };
         assert!(!format!("{session:?}").contains("test-csrf-token"));

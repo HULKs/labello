@@ -38,6 +38,12 @@ modelsRoot = "/srv/labello-models"
 timeoutSeconds = 120
 ```
 
+Add this section to `labello.server.toml` or the file selected by `LABELLO_CONFIG`.
+Create the model directory before starting the server. Restart the server and
+reload the web app after changing this configuration. Without the section,
+prelabel controls are replaced by a server-configuration notice and no hint
+requests or management polling run. Existing model settings remain stored.
+
 There is no model upload endpoint. Dataset administrators select a managed
 basename such as `people.onnx` in **Admin > Automation**. Paths, symlinks, URLs,
 and executable commands are rejected. Existing configurations without a YOLO

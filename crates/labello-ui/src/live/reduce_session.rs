@@ -143,6 +143,7 @@ impl LabelloApp {
                                 if recovery.user_id == account.user_id {
                                     self.auth.account = Some(account);
                                     self.auth.can_create_datasets = session.can_create_datasets;
+                                    self.auth.prelabel_available = session.prelabel_available;
                                     self.view = recovery.view;
                                     self.runtime.notice = Some("Session restored. Your draft is unchanged.".to_string());
                                     self.runtime.persistence.restoration_attempted = true;
@@ -163,6 +164,7 @@ impl LabelloApp {
                             );
                             self.auth.account = Some(account);
                             self.auth.can_create_datasets = session.can_create_datasets;
+                            self.auth.prelabel_available = session.prelabel_available;
                             if self.setup.section != SetupSection::About {
                                 self.setup.section = SetupSection::Datasets;
                             }
@@ -173,6 +175,7 @@ impl LabelloApp {
                         Err(error) => {
                             let had_account = self.auth.account.take().is_some();
                             self.auth.can_create_datasets = false;
+                            self.auth.prelabel_available = false;
                             self.datasets.summaries.clear();
                             self.datasets.summaries_error = None;
                             self.view = AppView::Setup;

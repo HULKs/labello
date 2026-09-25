@@ -36,6 +36,10 @@ pub struct ApiState {
 }
 
 impl ApiState {
+    pub(crate) fn prelabel_available(&self) -> bool {
+        self.prelabel_service.is_some()
+    }
+
     pub fn with_prelabel_service(
         mut self,
         service: labello_storage::prelabel::PrelabelService,

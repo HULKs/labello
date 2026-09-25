@@ -9,6 +9,7 @@ impl LabelloApp {
             && self.loading.roles_user.is_none()
             && !self.loading.uploading
             && !self.loading.ingesting;
+        let prelabel_available = self.auth.prelabel_available;
         if let Some(config) = self.datasets.admin_config.as_mut() {
             ui.add_enabled_ui(enabled, |ui| {
                 edit_quick_workflows(ui, config);
@@ -18,6 +19,7 @@ impl LabelloApp {
                     &mut config.tasks,
                     &config.label_classes,
                     &config.prelabel_configs,
+                    prelabel_available,
                 );
             });
         }
@@ -399,6 +401,7 @@ fn edit_tasks(
     tasks: &mut Vec<TaskDefinition>,
     labels: &[LabelClass],
     prelabels: &[PrelabelConfig],
+    prelabel_available: bool,
 ) {
     admin_card(ui, "Labeling Workflows card", |ui| {
         ui.heading("Labeling Workflows");
@@ -440,13 +443,14 @@ fn edit_tasks(
                                     task,
                                     labels,
                                     prelabels,
+                                    prelabel_available,
                                 );
                                 edit_workflow_instructions(&mut columns[1], task);
                             });
                             remove_clicked
                         } else {
                             let remove_clicked =
-                                edit_workflow_basics(ui, index, task, labels, prelabels);
+                                edit_workflow_basics(ui, index, task, labels, prelabels, prelabel_available);
                             edit_workflow_instructions(ui, task);
                             remove_clicked
                         };
@@ -494,6 +498,7 @@ fn edit_workflow_basics(
     task: &mut TaskDefinition,
     labels: &[LabelClass],
     prelabels: &[PrelabelConfig],
+    prelabel_available: bool,
 ) -> bool {
     ui.label(RichText::new("Workflow").color(theme::BLUE).strong());
     let mut task_id = task.task_id.to_string();
@@ -562,26 +567,30 @@ fn edit_workflow_basics(
     {
         edit_skeleton(ui, index, skeleton);
     }
-    ui.label("Prelabel sources");
-    if prelabels.is_empty() {
-        ui.small("No prelabel sources configured.");
-    }
-    for prelabel in prelabels {
-        let mut enabled = task.prelabel_config_ids.contains(&prelabel.config_id);
-        if ui
-            .checkbox(
-                &mut enabled,
-                format!("{} ({})", prelabel.name, prelabel.config_id),
-            )
-            .changed()
-        {
-            if enabled {
-                task.prelabel_config_ids.push(prelabel.config_id.clone());
-            } else {
-                task.prelabel_config_ids
-                    .retain(|config_id| config_id != &prelabel.config_id);
+    if prelabel_available {
+        ui.label("Prelabel sources");
+        if prelabels.is_empty() {
+            ui.small("No prelabel sources configured.");
+        }
+        for prelabel in prelabels {
+            let mut enabled = task.prelabel_config_ids.contains(&prelabel.config_id);
+            if ui
+                .checkbox(
+                    &mut enabled,
+                    format!("{} ({})", prelabel.name, prelabel.config_id),
+                )
+                .changed()
+            {
+                if enabled {
+                    task.prelabel_config_ids.push(prelabel.config_id.clone());
+                } else {
+                    task.prelabel_config_ids
+                        .retain(|config_id| config_id != &prelabel.config_id);
+                }
             }
         }
+    } else {
+        crate::prelabel_flow::disabled_notice(ui);
     }
     edit_review(ui, index, task);
     destructive_button(

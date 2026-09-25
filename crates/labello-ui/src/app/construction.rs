@@ -103,6 +103,7 @@ impl LabelloApp {
             auth: AuthState {
                 account: None,
                 can_create_datasets: false,
+                prelabel_available: true,
                 options: AuthOptions {
                     github_oauth: false,
                     local_admin_login: false,
@@ -137,6 +138,7 @@ impl LabelloApp {
         app.setup.create_dataset_name.clear();
         app.auth.options_checked = false;
         app.auth.checked = false;
+        app.auth.prelabel_available = false;
         app.work.current = None;
         app.work.queue.clear();
         app.rebuild_http_api();

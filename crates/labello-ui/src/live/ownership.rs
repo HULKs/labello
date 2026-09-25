@@ -486,6 +486,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_auth_epoch(&mut self) {
+        self.auth.prelabel_available = false;
         self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;
         self.auth_epoch = self.auth_epoch.wrapping_add(1);

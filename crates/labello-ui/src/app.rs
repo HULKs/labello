@@ -328,6 +328,7 @@ pub(crate) struct SessionRecovery {
 pub(crate) struct AuthState {
     pub account: Option<UserAccount>,
     pub can_create_datasets: bool,
+    pub prelabel_available: bool,
     pub options: AuthOptions,
     pub options_checked: bool,
     pub options_error: Option<String>,

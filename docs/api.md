@@ -641,6 +641,14 @@ blockers and omissions are recorded in the job summary; see [export](export.md).
 
 ## Prelabel evidence
 
+`SessionInfo` from `GET /me` and `POST /auth/local-admin` includes
+`prelabelAvailable`, true only when the server has a configured prelabel service.
+This capability applies to server and browser execution. The UI reads it before
+showing prelabel controls or making hint requests; `false` is a normal disabled
+state. Clients default an absent field to false. Session responses remain
+`no-store`; reload the web app after changing server configuration. Dataset-role
+and CSRF checks still apply to prelabel operations.
+
 All unsafe prelabel requests use the normal session/CSRF/origin checks.
 `PrelabelResponse` includes generation, raw validated candidates, execution mode,
 prepared-result status, and an optional signed browser grant. The shared client

@@ -512,3 +512,70 @@ async fn accepted_prelabel_survives_later_edits_snapshots_offline_statistics_and
     let (file, _, _permit) = export.download(&"ds".into(), &job.job_id).await.unwrap();
     assert!(file.metadata().unwrap().len() > 0);
 }
+
+#[tokio::test]
+async fn sessions_report_prelabel_availability_without_requiring_generation() {
+    for available in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = ApiState::new(temp.path())
+            .with_session_cookie_secure(false)
+            .with_browser_origins(vec!["https://app.example.com".into()])
+            .unwrap()
+            .with_local_admin_login(Some("admin".into()));
+        if available {
+            let models = temp.path().join("models");
+            std::fs::create_dir(&models).unwrap();
+            state = state.with_prelabel_service(
+                PrelabelService::new(
+                    temp.path(),
+                    &models,
+                    PrelabelLimits::default(),
+                    std::sync::Arc::new(Runner),
+                )
+                .await
+                .unwrap(),
+            );
+        }
+        let app = router(state);
+        let login = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/local-admin")
+                    .header(header::ORIGIN, "https://app.example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let cookie = login.headers()[header::SET_COOKIE]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned();
+        assert_eq!(response_json(login).await["prelabelAvailable"], available);
+        let me = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/me")
+                    .header(header::COOKIE, cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(me.status(), StatusCode::OK);
+        assert_eq!(me.headers()[header::CACHE_CONTROL], "no-store");
+        assert_eq!(response_json(me).await["prelabelAvailable"], available);
+        let unauthenticated = app
+            .oneshot(Request::builder().uri("/me").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+    }
+}

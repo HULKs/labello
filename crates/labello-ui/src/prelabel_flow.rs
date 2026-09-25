@@ -52,6 +52,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn prelabel_choice(&self, task: &TaskId) -> Option<PrelabelConfigId> {
+        if !self.auth.prelabel_available {
+            return None;
+        }
         let metadata = self.datasets.metadata.as_ref()?;
         let task = metadata.task(task)?;
         let available = |config: &&PrelabelConfig| {
@@ -83,6 +86,10 @@ impl LabelloApp {
     }
 
     pub(crate) fn refresh_prelabels_if_due(&mut self, ctx: &egui::Context) {
+        if !self.auth.prelabel_available {
+            self.cancel_prelabel_load();
+            return;
+        }
         if self.runtime.api.is_none() {
             return;
         }
@@ -171,7 +178,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_prelabels(&mut self, action: PrelabelAction) {
-        if self.runtime.api.is_none() {
+        if self.runtime.api.is_none() || !self.auth.prelabel_available {
             return;
         }
         let pending = if matches!(action, PrelabelAction::Admin(_)) {
@@ -314,6 +321,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn prelabel_admin_panel(&mut self, ui: &mut egui::Ui) {
+        if !self.auth.prelabel_available {
+            return;
+        }
         ui.separator();
         ui.heading("Dataset hints");
         ui.label("Generate hints for all remaining box workflows. Save model and workflow changes before starting.");
@@ -544,4 +554,8 @@ impl LabelloApp {
             }
         });
     }
+}
+
+pub(crate) fn disabled_notice(ui: &mut egui::Ui) {
+    ui.label("Prelabeling is disabled by server configuration.");
 }
