@@ -33,25 +33,23 @@ impl LabelloApp {
         }
     }
 
-    fn workflow_queue_status(&self) -> Option<String> {
+    pub(crate) fn workflow_queue_status(&self) -> Option<String> {
         (matches!(self.view, AppView::Annotate | AppView::Review)
             && self.work.assignment.is_some())
         .then(|| {
-            if self.work.queue.failed() {
-                "Loaded assignment queue refill failed; retrying".to_string()
-            } else if self.work.queue.is_loading() {
-                format!(
-                    "Loaded assignment queue: {} of {}; loading",
-                    self.work.queue.len(),
-                    self.work.queue.queue_size()
-                )
-            } else {
-                format!(
-                    "Loaded assignment queue: {} of {}",
-                    self.work.queue.len(),
-                    self.work.queue.queue_size()
-                )
-            }
+            let status = format!(
+                "Loaded assignment queue: {}/{}",
+                self.work.queue.len(),
+                self.work.queue.queue_size()
+            );
+            let suffix = match self.work.queue.wait_reason() {
+                Some(crate::queue::QueueWaitReason::ImbalanceLimit) => " (imbalance limit)",
+                Some(crate::queue::QueueWaitReason::NoAvailableWork) => " (no available work)",
+                Some(crate::queue::QueueWaitReason::Failed) => " (refill failed; retrying)",
+                None if self.work.queue.is_loading() => "; loading",
+                None => "",
+            };
+            format!("{status}{suffix}")
         })
     }
 
@@ -163,16 +161,21 @@ impl LabelloApp {
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectPreviousWorkflow,),
                 self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextWorkflow,)
             );
+            if unavailable {
+                hover_text.push_str("\nNo assignment is currently available for this workflow. Availability is advisory and can be retried below.");
+            }
             if let Some(queue_status) = queue_status.as_ref() {
                 hover_text.push('\n');
                 hover_text.push_str(queue_status);
             }
-            let mut response = choice.response.on_hover_text(hover_text);
-            if unavailable {
-                response = response.on_disabled_hover_text(
-                    "No assignment is currently available for this workflow. Availability is advisory and can be retried below.",
-                );
-            }
+            let show_hover = |ui: &mut egui::Ui| {
+                let width = (ui.ctx().content_rect().width() - 2.0 * theme::SPACE_4)
+                    .max(1.0)
+                    .min(ui.spacing().tooltip_width);
+                ui.set_max_width(width);
+                ui.label(&hover_text);
+            };
+            let response = choice.response.on_hover_ui(show_hover).on_disabled_hover_ui(show_hover);
             if response.clicked() && !selected {
                 self.request_transition(PendingTransition::Workflow(workflow.task_id.clone()));
             }

@@ -7,8 +7,9 @@ before creating an assignment.
 Annotation requires annotator authority; review requires reviewer authority.
 Mutations bind the exact image, task, actor, assignment kind, and live lease.
 Claim retries and successful assignment-backed writes renew the 30-minute lease.
-Prepared queues can hold two future assignments in addition to current work; availability
-does not reserve completion-balance capacity.
+Prepared queues default to two future assignments in addition to current work.
+Dataset administrators configure their target size. Availability is advisory;
+prefetch claims account for outstanding assignments before reserving more work.
 
 For controls and the user sequence, see [annotation and review](annotation.md).
 
@@ -155,15 +156,32 @@ blocked. A difference equal to `maxDifference` is allowed. A zero window
 therefore allows tied peers and blocks a task as soon as its count is above the
 least-completed peer. Ratio-based assignment balance is not supported.
 
-The comparison uses current completed-work counts. It does not reserve future
-capacity for active assignments. Concurrent workers can therefore finish work
-after a policy boundary was observed; later availability and claim checks use
-the resulting counts.
+Foreground claims use current completed-work counts. This preserves progress
+at a zero window: tied tasks can still claim one current item. Existing work is
+not rejected solely because balance subsequently changes.
+
+Prefetch additionally projects the selected task's count after completing its
+live outstanding assignments and the candidate. Each image-task pair contributes
+once; already counted work and expired leases contribute no additional count.
+Peer counts include only actual progress, never unfinished peer assignments.
+A projected gap equal to the window is permitted; a larger gap blocks prefetch
+before image data is fetched. For A=12, B=10 and a window of five, one active A
+and one prepared A leave room for one more A. Foreground and prefetch claims
+share a process-local admission guard while balance enforcement is enabled.
+
+Availability refreshes report which of the caller's reservations still fit the
+window, ordered by original claim time and assignment ID. Clients release
+affected prepared entries, preserve current work, and retry when capacity opens.
+Configuration changes and peer corrections can invalidate earlier preparations;
+reconciliation follows the existing refresh interval, normally 30 seconds, and
+local mutations trigger refreshes. This is not a promise that concurrent
+foreground work can never move actual counts outside the window.
 
 ## Runtime consistency
 
-Availability, direct claims, and prepared-queue claims call the same task-level
-balance check. Event publication updates the completion projection and
+Availability and direct claims retain the current-count task-level balance
+check; prepared claims add the prospective check above. Event publication updates
+actual counts and outstanding reservations together in the completion projection and
 invalidates cached availability and statistics. Dataset configuration changes
 invalidate availability and statistics while retaining the count projection,
 because enabling tasks or changing the window does not change historical counts.

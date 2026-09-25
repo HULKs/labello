@@ -24,6 +24,7 @@ impl LabelloApp {
                 request,
                 dataset_id,
                 kind,
+                checked_assignments,
             } => self.spawn_message(request.clone(), async move {
                 let result = api
                     .assignment_availability(
@@ -32,7 +33,7 @@ impl LabelloApp {
                     )
                     .await
                     .map_err(UiRequestError::from);
-                UiMessage::AssignmentAvailabilityLoaded { request, result }
+                UiMessage::AssignmentAvailabilityLoaded { request, result, checked_assignments }
             }),
             UiCommand::SaveKeybindings {
                 request,

@@ -217,6 +217,7 @@ impl LabelloApp {
             request,
             dataset_id,
             kind,
+            checked_assignments: self.work.queue.prepared_assignment_ids(),
         });
     }
 

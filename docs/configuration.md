@@ -391,6 +391,26 @@ image-index and per-image event-log reads, as well as generated metadata.
 
 ## Dataset assignment balance
 
+Dataset administrators also configure `preloadQueueSize` in Administration >
+Automation. It is a top-level integer in `labello.dataset.toml`, defaults to two
+when absent, and accepts 1 through 200 upcoming assignments. The current image
+is additional. The setting applies to both annotation and review; the old
+browser `queueSize` URL parameter is ignored. Live clients reconcile the target
+through their existing availability refresh, normally within 30 seconds.
+Shrinking releases surplus prepared assignments and preserves current work.
+
+Queue depth is a target, not a reservation of memory or balance capacity. Larger
+queues use more browser memory and bandwidth and hold work away from other
+workers. Each prepared assignment has a 30-minute lease; expired entries are
+discarded and released instead of being promoted. Decoded pixels alone can use
+6.25 MiB per square 1280-pixel preview, or 625 MiB for 100 entries, before image
+state and transient allocations. Choose smaller queues on constrained devices.
+The 200-entry ceiling bounds pixels alone to about 1.22 GiB; it is not a
+recommended default. WebAssembly can retain its peak allocated memory for reuse
+after entries are removed. Workspace navigation releases unused reservations
+with at most eight release requests in flight. Closing the tab instead leaves
+server reservations to expire under the normal lease policy.
+
 Assignment balance belongs to each versioned `labello.dataset.toml`, not the
 server configuration above. Data administrators edit it through the
 Administration Automation view or the dataset administration API.

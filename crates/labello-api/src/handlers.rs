@@ -739,6 +739,7 @@ async fn update_dataset_config(
     metadata.tasks = request.tasks;
     metadata.role_assignments = request.role_assignments;
     metadata.imbalance = request.imbalance;
+    metadata.preload_queue_size = request.preload_queue_size;
     metadata.prelabel_configs = request.prelabel_configs;
     metadata.updated_at = labello_domain::now();
     repo.save_dataset(&metadata).await?;
@@ -1055,6 +1056,8 @@ fn validate_config_update(
     request: &UpdateDatasetConfigRequest,
     actor: &Actor,
 ) -> ApiResult<()> {
+    labello_domain::validate_preload_queue_size(request.preload_queue_size)
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     if request.name.trim().is_empty() {
         return Err(ApiError::BadRequest(
             "dataset name cannot be empty".to_string(),

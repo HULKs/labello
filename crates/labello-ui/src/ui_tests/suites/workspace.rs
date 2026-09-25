@@ -558,8 +558,10 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -888,6 +890,7 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Err("availability failed".to_string().into()),
         })
@@ -908,8 +911,10 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -1036,7 +1041,7 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2 of 2".to_string())
+        Some("Loaded assignment queue: 2/2".to_string())
     );
     assert!(
         harness.query_by_label("2/2").is_none(),
@@ -1046,7 +1051,7 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
     harness.run_steps(3);
     assert!(
         harness
-            .query_by_label_contains("Loaded assignment queue: 2 of 2")
+            .query_by_label_contains("Loaded assignment queue: 2/2")
             .is_some(),
         "the selected workflow tooltip should expose the assignment queue"
     );
@@ -1069,7 +1074,7 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2 of 2".to_string())
+        Some("Loaded assignment queue: 2/2".to_string())
     );
     let next = harness.state().work.queue.prepared_image_ids()[0].clone();
     let mut refreshed_state = ImageState::new(next.clone());
@@ -1881,6 +1886,7 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
         Some(&skipped)
     );
     assert!(api.exclusions().last().unwrap().contains(&skipped));
+    assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 1/2 (refill failed; retrying)"));
 }
 
 #[test]
@@ -3684,8 +3690,10 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Review,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4072,8 +4080,10 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
     app.runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),
@@ -4279,8 +4289,10 @@ fn workflow_dot_ignores_stale_availability() {
         .runtime
         .tx
         .send(UiMessage::AssignmentAvailabilityLoaded {
+            checked_assignments: Vec::new(),
             request: stale,
             result: Ok(labello_client::AssignmentAvailability {
+                queue: None,
                 kind: AssignmentKind::Annotation,
                 tasks: BTreeMap::from([
                     (TaskId::from("bounding_box:person"), false),

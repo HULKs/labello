@@ -64,7 +64,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
                 .get_by_role_and_label(egui::accesskit::Role::Button, &workflow_label);
             assert_eq!(
                 selected_workflow.accesskit_node().description(),
-                Some("Loaded assignment queue: 2 of 2".to_string())
+                Some("Loaded assignment queue: 2/2".to_string())
             );
             let workflow_gutter = canvas.left() - workflow_boundary;
             let inspector_gutter = inspector_boundary - canvas.right();

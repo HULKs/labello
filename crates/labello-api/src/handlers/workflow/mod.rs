@@ -60,6 +60,9 @@ pub(crate) async fn assignment_availability(
         .position(|(kind, _)| kind == &request.kind)
         .expect("the authorized requested kind must be included");
     let (_, tasks) = availabilities.remove(requested);
+    let (size, eligible_assignments) = repo
+        .preload_queue_policy(&actor.user_id, &request.kind)
+        .await?;
     Ok(Json(AssignmentAvailability {
         kind: request.kind,
         tasks,
@@ -67,6 +70,10 @@ pub(crate) async fn assignment_availability(
             .into_iter()
             .map(|(kind, tasks)| AssignmentAvailabilityEntry { kind, tasks })
             .collect(),
+        queue: Some(labello_client::AssignmentQueueStatus {
+            size,
+            eligible_assignments,
+        }),
     }))
 }
 
@@ -75,7 +82,7 @@ pub(crate) async fn assign_next(
     Path(dataset_id): Path<DatasetId>,
     headers: HeaderMap,
     Json(mut request): Json<AssignNextRequest>,
-) -> ApiResult<Json<Option<labello_domain::Assignment>>> {
+) -> ApiResult<Json<labello_client::AssignNextResponse>> {
     request.task_id.validate_path_segment()?;
     if let Some(assignment_id) = &request.assignment_id {
         assignment_id.validate_path_segment()?;
@@ -85,9 +92,9 @@ pub(crate) async fn assign_next(
     }
     request.excluded_image_ids.sort();
     request.excluded_image_ids.dedup();
-    if request.excluded_image_ids.len() > 3 {
+    if request.excluded_image_ids.len() > labello_domain::MAX_PRELOAD_QUEUE_SIZE + 2 {
         return Err(ApiError::BadRequest(
-            "at most 3 image IDs may be excluded".to_string(),
+            "too many excluded image IDs".to_string(),
         ));
     }
     let actor = actor_from_headers(&state, &headers)?;
@@ -95,6 +102,11 @@ pub(crate) async fn assign_next(
     let kind = request
         .kind
         .unwrap_or(labello_domain::AssignmentKind::Annotation);
+    if request.prefetch && request.assignment_id.is_some() {
+        return Err(ApiError::BadRequest(
+            "prefetch cannot reclaim an assignment".into(),
+        ));
+    }
     if let Some(assignment_id) = request.assignment_id
         && let Some(assignment) = repo
             .reclaim_assignment(
@@ -112,17 +124,18 @@ pub(crate) async fn assign_next(
             assignment_id = %assignment.assignment_id,
             "assignment reclaimed"
         );
-        return Ok(Json(Some(assignment)));
+        return Ok(Json(Some(assignment).into()));
     }
-    let assignment = repo
-        .assign_next_image_excluding(
+    let outcome = repo
+        .assign_image_excluding(
             &actor.user_id,
             &request.task_id,
             kind,
             &request.excluded_image_ids,
+            request.prefetch,
         )
         .await?;
-    if let Some(assignment) = &assignment {
+    if let labello_storage::assignment::AssignmentClaimOutcome::Assigned(assignment) = &outcome {
         tracing::debug!(
             event = "assignment.claimed",
             dataset_id = %dataset_id,
@@ -138,7 +151,16 @@ pub(crate) async fn assign_next(
             "no assignment available"
         );
     }
-    Ok(Json(assignment))
+    use labello_storage::assignment::AssignmentClaimOutcome;
+    Ok(Json(match outcome {
+        AssignmentClaimOutcome::Assigned(assignment) => {
+            labello_client::AssignNextResponse::Assignment(Some(assignment))
+        }
+        AssignmentClaimOutcome::Unavailable => None.into(),
+        AssignmentClaimOutcome::ImbalanceLimit => labello_client::AssignNextResponse::Unavailable {
+            reason: labello_client::AssignmentUnavailableReason::ImbalanceLimit,
+        },
+    }))
 }
 
 pub(crate) async fn release_assignment(

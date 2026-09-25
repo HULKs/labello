@@ -101,11 +101,13 @@ impl DatasetRepository {
             .review_history_commit(&previous_state, &next_state, previous)
             .await?;
         // 4. Atomically publish events.jsonl, the authoritative state transition.
+        let completion_publication = self.completion_publication();
         self.append_events_atomic(image_id, &events).await?;
         // 5. Observe the authoritative transition synchronously. There must be no
         // cancellation point between durable event publication and this update.
         history_commit.observe();
         self.observe_completion_transition(image_id, previous_completion, &next_state);
+        completion_publication.observed();
         #[cfg(test)]
         self.completion_post_observation_test_hook().await?;
         // 6. Publish state.json only after the event log; it remains rebuildable.

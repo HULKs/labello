@@ -90,3 +90,5 @@ include!("suites/presence.rs");
 include!("suites/workflow_reasons.rs");
 
 include!("suites/loading_bars.rs");
+
+include!("suites/preload.rs");

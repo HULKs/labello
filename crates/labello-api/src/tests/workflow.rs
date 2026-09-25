@@ -1318,7 +1318,7 @@ async fn assign_next_rejects_invalid_ids_and_too_many_exclusions() {
         json!({
             "taskId": "bounding_box:pixel",
             "kind": "annotation",
-            "excludedImageIds": ["img_1", "img_2", "img_3", "img_4"]
+            "excludedImageIds": (0..labello_domain::MAX_PRELOAD_QUEUE_SIZE + 3).map(|i| format!("img_{i}")).collect::<Vec<_>>()
         }),
         json!({
             "taskId": "bounding_box:pixel",
@@ -2644,4 +2644,101 @@ async fn api_deleted_guide_can_only_be_resolved_by_canonical_exclusion() {
             .unwrap(),
         excluded.image_state
     );
+}
+
+#[tokio::test]
+async fn preload_configuration_is_admin_owned_validated_and_advertised() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/datasets/ds/admin")
+                .header("x-test-user-id", "admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(config["preloadQueueSize"], 2);
+    for (actor, size, expected) in [
+        ("admin", 100, StatusCode::OK),
+        ("intruder", 5, StatusCode::UNAUTHORIZED),
+        ("other_annotator", 5, StatusCode::UNAUTHORIZED),
+        ("admin", 0, StatusCode::BAD_REQUEST),
+        (
+            "admin",
+            labello_domain::MAX_PRELOAD_QUEUE_SIZE + 1,
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        config["preloadQueueSize"] = json!(size);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/datasets/ds/admin")
+                    .header("x-test-user-id", actor)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(config.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    let availability = get_assignment_availability(&app, "admin", "annotation").await;
+    assert_eq!(availability["queue"]["size"], 100);
+    assert_eq!(availability["queue"]["eligibleAssignments"], json!([]));
+    let reopened = labello_storage::DatasetRepository::new(temp.path().join("ds"));
+    assert_eq!(
+        reopened
+            .load_dataset_config()
+            .await
+            .unwrap()
+            .preload_queue_size,
+        100
+    );
+}
+
+#[tokio::test]
+async fn preload_claims_apply_projected_balance_and_accept_large_exclusion_lists() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    upload_test_image(&app, "first.png", &png_bytes(2, 2)).await;
+    upload_test_image(&app, "second.png", &png_bytes(3, 2)).await;
+    let repo = state.repo(&labello_domain::DatasetId::from("ds")).unwrap();
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    let mut peer = metadata.tasks[0].clone();
+    peer.task_id = labello_domain::TaskId::from("bounding_box:peer");
+    metadata.tasks.push(peer);
+    metadata.imbalance = Some(labello_domain::ImbalanceConfig {
+        max_difference: 1,
+        enforce: true,
+    });
+    repo.save_dataset(&metadata).await.unwrap();
+    let current = claim_assignment(&app, "admin", "annotation").await;
+    let mut excluded = (0..100).map(|i| format!("unused_{i}")).collect::<Vec<_>>();
+    excluded.push(current["imageId"].as_str().unwrap().to_string());
+    let result = claim_assignment_with_body(&app, "admin", json!({"taskId": "bounding_box:pixel", "kind": "annotation", "prefetch": true, "excludedImageIds": excluded})).await;
+    assert_eq!(result.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(result.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .as_ref(),
+        br#"{"reason":"imbalance_limit"}"#
+    );
+    let invalid = claim_assignment_with_body(&app, "admin", json!({"taskId": "bounding_box:pixel", "kind": "annotation", "prefetch": true, "assignmentId": current["assignmentId"]})).await;
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
 }

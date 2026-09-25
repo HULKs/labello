@@ -415,8 +415,44 @@ impl DatasetRepository {
         kind: AssignmentKind,
         excluded_image_ids: &[ImageId],
     ) -> StorageResult<Option<Assignment>> {
+        self.assign_image_excluding(user_id, task_id, kind, excluded_image_ids, false)
+            .await
+            .map(AssignmentClaimOutcome::into_assignment)
+    }
+
+    pub async fn assign_preloaded_image_excluding(
+        &self,
+        user_id: &UserId,
+        task_id: &TaskId,
+        kind: AssignmentKind,
+        excluded_image_ids: &[ImageId],
+    ) -> StorageResult<Option<Assignment>> {
+        self.assign_image_excluding(user_id, task_id, kind, excluded_image_ids, true)
+            .await
+            .map(AssignmentClaimOutcome::into_assignment)
+    }
+
+    pub async fn assign_image_excluding(
+        &self,
+        user_id: &UserId,
+        task_id: &TaskId,
+        kind: AssignmentKind,
+        excluded_image_ids: &[ImageId],
+        prefetch: bool,
+    ) -> StorageResult<AssignmentClaimOutcome> {
         let _config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset().await?;
+        // All claims participate while balancing is enabled, including foreground
+        // work. The observed reservation is published before this guard is dropped.
+        let _claim_guard = if metadata
+            .imbalance
+            .as_ref()
+            .is_some_and(|config| config.enforce)
+        {
+            Some(self.assignment_claim_lock.lock().await)
+        } else {
+            None
+        };
         let required_role = match kind {
             AssignmentKind::Annotation => DatasetRole::Annotator,
             AssignmentKind::Review => DatasetRole::Reviewer,
@@ -431,8 +467,54 @@ impl DatasetRepository {
         let task = metadata
             .task(task_id)
             .ok_or_else(|| StorageError::Unauthorized(format!("task {task_id} does not exist")))?;
-        if !self.task_accepts_assignment(&metadata, task, &kind).await? {
-            return Ok(None);
+        if !Self::task_supports_assignment(task, &kind)? {
+            return Ok(AssignmentClaimOutcome::Unavailable);
+        }
+        if self
+            .task_is_overrepresented(&metadata, task_id, &kind)
+            .await?
+        {
+            return Ok(if prefetch {
+                AssignmentClaimOutcome::ImbalanceLimit
+            } else {
+                AssignmentClaimOutcome::Unavailable
+            });
+        }
+
+        let excluded_image_ids = excluded_image_ids
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut reusable_images_only = None;
+        if prefetch
+            && let Some(config) = metadata.imbalance.as_ref().filter(|config| config.enforce)
+        {
+            let progress = self.assignment_progress(&kind).await?;
+            if let Some(minimum) = minimum_peer_count(&metadata, task_id, &progress.counts) {
+                let reusable = progress
+                    .reservations
+                    .iter()
+                    .filter(|assignment| {
+                        assignment.assigned_to == *user_id
+                            && assignment.task_id == *task_id
+                            && !excluded_image_ids.contains(&assignment.image_id)
+                    })
+                    .map(|assignment| assignment.image_id.clone())
+                    .collect::<std::collections::BTreeSet<_>>();
+                let projected = progress
+                    .counts
+                    .get(task_id)
+                    .copied()
+                    .unwrap_or_default()
+                    .saturating_add(progress.outstanding(task_id))
+                    .saturating_add(usize::from(reusable.is_empty()));
+                if config.blocks_count(projected, minimum) {
+                    return Ok(AssignmentClaimOutcome::ImbalanceLimit);
+                }
+                if !reusable.is_empty() && config.blocks_count(projected.saturating_add(1), minimum)
+                {
+                    reusable_images_only = Some(reusable);
+                }
+            }
         }
 
         if kind == AssignmentKind::Review {
@@ -440,7 +522,7 @@ impl DatasetRepository {
         }
         let image_ids = metadata.images.keys().cloned().collect::<Vec<_>>();
         if image_ids.is_empty() {
-            return Ok(None);
+            return Ok(AssignmentClaimOutcome::Unavailable);
         }
         let cursor_key = format!(
             "{user_id}\u{1f}{task_id}\u{1f}{}",
@@ -458,6 +540,12 @@ impl DatasetRepository {
             let image_index = (start + offset) % image_ids.len();
             let image_id = &image_ids[image_index];
             if excluded_image_ids.contains(image_id) {
+                continue;
+            }
+            if reusable_images_only
+                .as_ref()
+                .is_some_and(|images| !images.contains(image_id))
+            {
                 continue;
             }
             let lock = self.image_lock(image_id);
@@ -512,7 +600,7 @@ impl DatasetRepository {
                 self.assignment_cursors
                     .lock()
                     .insert(cursor_key.clone(), image_index);
-                return Ok(Some(assignment));
+                return Ok(AssignmentClaimOutcome::Assigned(Box::new(assignment)));
             }
             let assignment = Assignment {
                 assignment_id: AssignmentId::generate(),
@@ -549,14 +637,24 @@ impl DatasetRepository {
             self.assignment_cursors
                 .lock()
                 .insert(cursor_key.clone(), image_index);
-            return Ok(Some(assignment));
+            return Ok(AssignmentClaimOutcome::Assigned(Box::new(assignment)));
         }
-        Ok(None)
+        Ok(AssignmentClaimOutcome::Unavailable)
     }
 
     async fn task_accepts_assignment(
         &self,
         metadata: &DatasetMetadata,
+        task: &TaskDefinition,
+        kind: &AssignmentKind,
+    ) -> StorageResult<bool> {
+        Ok(Self::task_supports_assignment(task, kind)?
+            && !self
+                .task_is_overrepresented(metadata, &task.task_id, kind)
+                .await?)
+    }
+
+    fn task_supports_assignment(
         task: &TaskDefinition,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
@@ -579,16 +677,6 @@ impl DatasetRepository {
             )));
         }
         if *kind == AssignmentKind::Review && task.review.workflow == ReviewWorkflow::None {
-            return Ok(false);
-        }
-        if metadata
-            .imbalance
-            .as_ref()
-            .is_some_and(|config| config.enforce)
-            && self
-                .task_is_overrepresented(metadata, &task.task_id, kind)
-                .await?
-        {
             return Ok(false);
         }
         Ok(true)
@@ -649,7 +737,7 @@ impl DatasetRepository {
         selected_task_id: &TaskId,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
-        let Some(config) = metadata.imbalance.as_ref() else {
+        let Some(config) = metadata.imbalance.as_ref().filter(|config| config.enforce) else {
             return Ok(false);
         };
         let counts = if *kind == AssignmentKind::Annotation {
@@ -667,6 +755,64 @@ impl DatasetRepository {
             .blocked_tasks(&enabled_task_ids, &counts)
             .contains(selected_task_id))
     }
+
+    pub async fn preload_queue_policy(
+        &self,
+        user_id: &UserId,
+        kind: &AssignmentKind,
+    ) -> StorageResult<(usize, Option<Vec<AssignmentId>>)> {
+        let _config_guard = self.review_config_lock.read().await;
+        let metadata = self.load_dataset_config().await?;
+        require_role(
+            &metadata.role_assignments,
+            &metadata.dataset_id,
+            user_id,
+            role_for_kind(kind),
+        )?;
+        let config = metadata.imbalance.as_ref().filter(|config| config.enforce);
+        let progress = self.assignment_progress(kind).await?;
+        let mut per_task =
+            std::collections::BTreeMap::<TaskId, std::collections::BTreeSet<ImageId>>::new();
+        let mut eligible = Vec::new();
+        for assignment in &progress.reservations {
+            if !metadata.task(&assignment.task_id).is_some_and(|task| {
+                task.enabled
+                    && (*kind != AssignmentKind::Review
+                        || task.review.workflow == ReviewWorkflow::Approval)
+            }) {
+                continue;
+            }
+            let images = per_task.entry(assignment.task_id.clone()).or_default();
+            images.insert(assignment.image_id.clone());
+            let projected = progress
+                .counts
+                .get(&assignment.task_id)
+                .copied()
+                .unwrap_or_default()
+                .saturating_add(images.len());
+            let blocked = minimum_peer_count(&metadata, &assignment.task_id, &progress.counts)
+                .is_some_and(|minimum| {
+                    config.is_some_and(|config| config.blocks_count(projected, minimum))
+                });
+            if !blocked && assignment.assigned_to == *user_id {
+                eligible.push(assignment.assignment_id.clone());
+            }
+        }
+        Ok((metadata.preload_queue_size, Some(eligible)))
+    }
+}
+
+fn minimum_peer_count(
+    metadata: &DatasetMetadata,
+    task_id: &TaskId,
+    counts: &std::collections::BTreeMap<TaskId, usize>,
+) -> Option<usize> {
+    metadata
+        .tasks
+        .iter()
+        .filter(|task| task.enabled && task.task_id != *task_id)
+        .map(|task| counts.get(&task.task_id).copied().unwrap_or_default())
+        .min()
 }
 
 fn effective_assignment_status(

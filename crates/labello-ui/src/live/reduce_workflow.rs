@@ -182,6 +182,7 @@ impl LabelloApp {
                     }
                 }
                 UiMessage::PrefetchLoaded {
+                    imbalance_limited,
                     request: _,
                     operation_id,
                     assignment,
@@ -194,7 +195,9 @@ impl LabelloApp {
                     self.work.queue.set_loading(false);
                     match *result {
                         Ok(Some(loaded))
-                            if self.assignment_kind().as_ref() == Some(&loaded.assignment.kind)
+                            if loaded.prepared_lease_is_valid()
+                                && self.work.queue.len() < self.work.queue.queue_size()
+                                && self.assignment_kind().as_ref() == Some(&loaded.assignment.kind)
                                 && loaded.assignment.status
                                     == labello_domain::AssignmentStatus::Active
                                 && self.work.assignment.as_ref().is_some_and(|current| {
@@ -225,7 +228,7 @@ impl LabelloApp {
                         Ok(None) => {
                             self.work.one_shot_excluded_image_id = None;
                             let retry_delay = Duration::from_secs(15);
-                            self.work.queue.mark_failed_after(retry_delay);
+                            self.work.queue.wait_for_work(imbalance_limited, retry_delay);
                             ctx.request_repaint_after(retry_delay);
                         }
                         Err(_) => {

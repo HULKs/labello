@@ -33,7 +33,7 @@ impl LabelloApp {
                         self.request_stats();
                     }
                 }
-                UiMessage::AssignmentAvailabilityLoaded { result, .. } => {
+                UiMessage::AssignmentAvailabilityLoaded { result, checked_assignments, .. } => {
                     self.work.availability.loading = false;
                     self.work.availability.last_attempt = Some(Instant::now());
                     if std::mem::take(&mut self.work.availability.refresh_after_load) {
@@ -54,6 +54,16 @@ impl LabelloApp {
                         Ok(availability)
                             if self.assignment_kind().as_ref() == Some(&availability.kind) =>
                         {
+                            if let Some(queue) = availability.queue {
+                                self.resize_preload_queue(queue.size);
+                                let released = self.work.queue.retain_prepared(|loaded| {
+                                    loaded.prepared_lease_is_valid()
+                                        && (!checked_assignments.contains(&loaded.assignment.assignment_id)
+                                            || queue.eligible_assignments.as_ref().is_none_or(|eligible| eligible.contains(&loaded.assignment.assignment_id)))
+                                });
+                                for assignment in released { self.release_reservation(self.config.dataset_id.clone(), assignment); }
+                                self.request_prefetch();
+                            }
                             let checked_at = labello_domain::now();
                             for related in availability.related {
                                 self.cache_assignment_availability(

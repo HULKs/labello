@@ -151,6 +151,20 @@ claims may share an assignment ID. Current/prepared work and queued commands
 retain their exact reservation. New loads wait for pending releases; stale and
 failed-prefetch cleanup use the original API instance.
 
+The dataset's `preloadQueueSize` owns the annotation/review target. Resizing
+returns surplus reservations to the centralized cleanup owner. Prefetch uses
+the existing claim request with `prefetch: true`; a denied claim loads no image
+data. The claim response distinguishes an imbalance limit from unavailable work.
+The workflow tooltip always retains the loaded/target count and appends
+`(imbalance limit)` for a balance pause. Expected pauses retain background retries
+without appearing as load failures; transport or image-load failures retain their
+failure status. Availability replies carry queue size and optional eligible reservation
+IDs. A reply prunes only reservations captured by that request, so a delayed
+snapshot cannot discard a newer preparation. Current work and its draft are
+independent of queue reconciliation. Prepared lease deadlines use elapsed time
+from claim dispatch rather than the browser's wall clock. Promotion discards
+expired entries, and review retains its existing authoritative revalidation.
+
 ## Statistics and presence
 
 Statistics data and requests belong to `datasets`; visibility and focus belong

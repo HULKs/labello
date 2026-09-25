@@ -8,6 +8,22 @@ use crate::{
     MigrationRecord, PrelabelConfig, SCHEMA_VERSION, TaskDefinition, TaskId, TaskStatus, Timestamp,
 };
 
+pub const DEFAULT_PRELOAD_QUEUE_SIZE: usize = 2;
+pub const MAX_PRELOAD_QUEUE_SIZE: usize = 200;
+
+pub fn default_preload_queue_size() -> usize {
+    DEFAULT_PRELOAD_QUEUE_SIZE
+}
+
+pub fn validate_preload_queue_size(size: usize) -> crate::DomainResult<()> {
+    if !(1..=MAX_PRELOAD_QUEUE_SIZE).contains(&size) {
+        return Err(crate::DomainError::InvalidSchemaArtifact(format!(
+            "preloadQueueSize must be between 1 and {MAX_PRELOAD_QUEUE_SIZE}"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DatasetMetadata {
@@ -24,6 +40,8 @@ pub struct DatasetMetadata {
     pub images: BTreeMap<ImageId, ImageRecord>,
     pub role_assignments: Vec<DatasetRoleAssignment>,
     pub imbalance: Option<ImbalanceConfig>,
+    #[serde(default = "default_preload_queue_size")]
+    pub preload_queue_size: usize,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
 
@@ -43,6 +61,7 @@ impl DatasetMetadata {
             images: BTreeMap::new(),
             role_assignments: Vec::new(),
             imbalance: None,
+            preload_queue_size: DEFAULT_PRELOAD_QUEUE_SIZE,
             prelabel_configs: Vec::new(),
         }
     }
@@ -80,6 +99,8 @@ pub struct DatasetConfig {
     pub tasks: Vec<TaskDefinition>,
     pub role_assignments: Vec<DatasetRoleAssignment>,
     pub imbalance: Option<ImbalanceConfig>,
+    #[serde(default = "default_preload_queue_size")]
+    pub preload_queue_size: usize,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
 
@@ -103,6 +124,7 @@ impl DatasetConfig {
             tasks: metadata.tasks.clone(),
             role_assignments: metadata.role_assignments.clone(),
             imbalance: metadata.imbalance.clone(),
+            preload_queue_size: metadata.preload_queue_size,
             prelabel_configs: metadata.prelabel_configs.clone(),
         }
     }
@@ -126,6 +148,7 @@ impl DatasetConfig {
             images,
             role_assignments: self.role_assignments,
             imbalance: self.imbalance,
+            preload_queue_size: self.preload_queue_size,
             prelabel_configs: self.prelabel_configs,
         }
     }
@@ -347,5 +370,44 @@ mod imbalance_tests {
             }))
             .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod preload_configuration_tests {
+    use super::*;
+
+    #[test]
+    fn absent_queue_setting_defaults_in_current_and_legacy_configuration() {
+        let metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", crate::now());
+        for version in [2, 3] {
+            let mut value = serde_json::to_value(DatasetConfig::from_metadata(&metadata)).unwrap();
+            value["schemaVersion"] = serde_json::json!(version);
+            value.as_object_mut().unwrap().remove("preloadQueueSize");
+            let config: DatasetConfig = serde_json::from_value(value).unwrap();
+            assert_eq!(config.preload_queue_size, DEFAULT_PRELOAD_QUEUE_SIZE);
+            assert_eq!(
+                config.into_metadata(BTreeMap::new()).preload_queue_size,
+                DEFAULT_PRELOAD_QUEUE_SIZE
+            );
+        }
+    }
+
+    #[test]
+    fn queue_configuration_round_trips_and_rejects_out_of_range_sizes() {
+        for size in [1, 2, 100, MAX_PRELOAD_QUEUE_SIZE] {
+            validate_preload_queue_size(size).unwrap();
+            let mut metadata = DatasetMetadata::new(DatasetId::from("ds"), "Dataset", crate::now());
+            metadata.preload_queue_size = size;
+            let json = serde_json::to_string(&DatasetConfig::from_metadata(&metadata)).unwrap();
+            let config: DatasetConfig = serde_json::from_str(&json).unwrap();
+            assert_eq!(
+                config.into_metadata(BTreeMap::new()).preload_queue_size,
+                size
+            );
+        }
+        for size in [0, MAX_PRELOAD_QUEUE_SIZE + 1, usize::MAX] {
+            assert!(validate_preload_queue_size(size).is_err());
+        }
     }
 }

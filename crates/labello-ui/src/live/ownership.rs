@@ -84,6 +84,10 @@ impl LabelloApp {
             if retained {
                 continue;
             }
+            if self.runtime.reservation_cleanup.releases.len() >= 8 {
+                self.runtime.reservation_cleanup.unused.push(pending);
+                continue;
+            }
             let operation_id = self.next_operation();
             let request = self.operation_identity(operation_id, pending.dataset_id.clone());
             self.runtime.active_requests.insert(operation_id);

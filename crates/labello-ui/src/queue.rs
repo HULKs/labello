@@ -11,12 +11,20 @@ pub struct QueuedImage {
     pub prelabels: Vec<PrelabelSuggestion>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum QueueWaitReason {
+    Failed,
+    NoAvailableWork,
+    ImbalanceLimit,
+}
+
 #[derive(Clone, Debug)]
 pub struct ImageQueue {
     queue_size: usize,
     loading: bool,
-    failed_at: Option<Instant>,
+    retry_started_at: Option<Instant>,
     retry_delay: Duration,
+    wait_reason: Option<QueueWaitReason>,
     items: VecDeque<QueuedImage>,
     prepared: VecDeque<LoadedImage>,
 }
@@ -24,10 +32,11 @@ pub struct ImageQueue {
 impl ImageQueue {
     pub fn new(queue_size: usize) -> Self {
         Self {
-            queue_size: queue_size.clamp(1, crate::app::IMAGE_QUEUE_SIZE),
+            queue_size: queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE),
             loading: false,
-            failed_at: None,
+            retry_started_at: None,
             retry_delay: Duration::from_secs(1),
+            wait_reason: None,
             items: VecDeque::new(),
             prepared: VecDeque::new(),
         }
@@ -37,14 +46,48 @@ impl ImageQueue {
         self.queue_size
     }
 
-    pub fn set_queue_size(&mut self, queue_size: usize) {
-        self.queue_size = queue_size.clamp(1, crate::app::IMAGE_QUEUE_SIZE);
+    pub fn set_queue_size(&mut self, queue_size: usize) -> Vec<labello_domain::Assignment> {
+        self.queue_size = queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE);
+        let mut released = Vec::new();
         while self.len() > self.queue_size {
-            if self.prepared.pop_back().is_some() {
+            if let Some(loaded) = self.prepared.pop_back() {
+                released.push(loaded.assignment);
                 continue;
             }
             self.items.pop_back();
         }
+        released
+    }
+
+    pub(crate) fn retain_prepared(
+        &mut self,
+        mut keep: impl FnMut(&LoadedImage) -> bool,
+    ) -> Vec<labello_domain::Assignment> {
+        let mut released = Vec::new();
+        self.prepared.retain(|loaded| {
+            if keep(loaded) {
+                true
+            } else {
+                released.push(loaded.assignment.clone());
+                false
+            }
+        });
+        released
+    }
+
+    pub(crate) fn prepared_assignment_ids(&self) -> Vec<labello_domain::AssignmentId> {
+        self.prepared
+            .iter()
+            .map(|loaded| loaded.assignment.assignment_id.clone())
+            .collect()
+    }
+
+    pub(crate) fn next_expiry(&self) -> Option<Duration> {
+        self.prepared
+            .iter()
+            .filter_map(|loaded| loaded.prepared_until)
+            .min()
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
     pub fn is_loading(&self) -> bool {
@@ -60,27 +103,53 @@ impl ImageQueue {
     }
 
     pub(crate) fn mark_failed_after(&mut self, delay: Duration) {
-        self.failed_at = Some(Instant::now());
+        self.wait_for(QueueWaitReason::Failed, delay);
+    }
+
+    pub(crate) fn wait_for_work(&mut self, imbalance_limited: bool, delay: Duration) {
+        self.wait_for(
+            if imbalance_limited {
+                QueueWaitReason::ImbalanceLimit
+            } else {
+                QueueWaitReason::NoAvailableWork
+            },
+            delay,
+        );
+    }
+
+    fn wait_for(&mut self, reason: QueueWaitReason, delay: Duration) {
+        self.wait_reason = Some(reason);
+        self.retry_started_at = Some(Instant::now());
         self.retry_delay = delay;
     }
 
     pub(crate) fn clear_failure(&mut self) {
-        self.failed_at = None;
+        self.wait_reason = None;
+        self.retry_started_at = None;
         self.retry_delay = Duration::from_secs(1);
     }
 
     pub(crate) fn retry_due(&self) -> bool {
-        self.failed_at
+        self.retry_started_at
             .is_some_and(|failed| failed.elapsed() >= self.retry_delay)
     }
 
     pub(crate) fn retry_after(&self) -> Option<Duration> {
-        self.failed_at
+        self.retry_started_at
             .map(|failed| self.retry_delay.saturating_sub(failed.elapsed()))
     }
 
+    pub(crate) fn wait_reason(&self) -> Option<QueueWaitReason> {
+        self.wait_reason
+    }
+
+    pub(crate) fn begin_retry(&mut self) {
+        self.retry_started_at = None;
+    }
+
+    #[cfg(test)]
     pub(crate) fn failed(&self) -> bool {
-        self.failed_at.is_some()
+        self.wait_reason == Some(QueueWaitReason::Failed)
     }
 
     pub fn len(&self) -> usize {
@@ -152,7 +221,8 @@ impl ImageQueue {
     pub fn clear(&mut self) {
         self.items.clear();
         self.prepared.clear();
-        self.failed_at = None;
+        self.wait_reason = None;
+        self.retry_started_at = None;
         self.retry_delay = Duration::from_secs(1);
     }
 }
@@ -171,7 +241,11 @@ mod tests {
         assert!(!queue.push_if_room(queued("c")));
         queue.set_queue_size(1);
         assert_eq!(queue.len(), 1);
-        assert_eq!(ImageQueue::new(99).queue_size(), 2);
+        assert_eq!(ImageQueue::new(99).queue_size(), 99);
+        assert_eq!(
+            ImageQueue::new(usize::MAX).queue_size(),
+            labello_domain::MAX_PRELOAD_QUEUE_SIZE
+        );
     }
 
     #[test]
@@ -182,7 +256,7 @@ mod tests {
         assert!(!queue.retry_due());
         assert!(queue.retry_after().is_some());
 
-        queue.failed_at = Some(Instant::now() - Duration::from_secs(1));
+        queue.retry_started_at = Some(Instant::now() - Duration::from_secs(1));
         assert!(queue.retry_due());
         queue.clear_failure();
         assert!(!queue.failed());
@@ -191,7 +265,8 @@ mod tests {
     #[test]
     fn empty_refills_can_use_a_longer_retry_delay() {
         let mut queue = ImageQueue::new(2);
-        queue.mark_failed_after(Duration::from_secs(15));
+        queue.wait_for_work(false, Duration::from_secs(15));
+        assert!(!queue.failed());
         assert!(!queue.retry_due());
         assert!(
             queue
@@ -199,7 +274,7 @@ mod tests {
                 .is_some_and(|delay| delay > Duration::from_secs(14))
         );
 
-        queue.failed_at = Some(Instant::now() - Duration::from_secs(15));
+        queue.retry_started_at = Some(Instant::now() - Duration::from_secs(15));
         assert!(queue.retry_due());
     }
 

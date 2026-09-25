@@ -255,6 +255,8 @@ pub(super) struct SpyState {
     pub(super) preview_profiles: Vec<labello_client::ImagePreviewProfile>,
     pub(super) fail_next_revalidation: bool,
     pub(super) no_assignment: bool,
+    pub(super) block_prefetch: bool,
+    pub(super) prefetch_requests: usize,
     pub(super) availability_overrides: BTreeMap<TaskId, bool>,
     pub(super) fail_next_availability: bool,
     pub(super) active_assignments: Vec<Assignment>,
@@ -383,6 +385,8 @@ impl SpyState {
             preview_profiles: Vec::new(),
             fail_next_revalidation: false,
             no_assignment: false,
+            block_prefetch: false,
+            prefetch_requests: 0,
             availability_overrides: BTreeMap::new(),
             fail_next_availability: false,
             active_assignments: Vec::new(),
@@ -1335,6 +1339,7 @@ impl DatasetApi for SpyApi {
         state.metadata.tasks = request.tasks;
         state.metadata.role_assignments = request.role_assignments;
         state.metadata.imbalance = request.imbalance;
+        state.metadata.preload_queue_size = request.preload_queue_size;
         state.metadata.prelabel_configs = request.prelabel_configs;
         ready(Ok(state.metadata.clone()))
     }
@@ -1470,6 +1475,7 @@ impl ImageApi for SpyApi {
             })
             .collect();
         ready(Ok(labello_client::AssignmentAvailability {
+            queue: Some(labello_client::AssignmentQueueStatus { size: state.metadata.preload_queue_size, eligible_assignments: None }),
             kind: request.kind.clone(),
             tasks: tasks.clone(),
             related: [
@@ -1549,15 +1555,21 @@ impl ImageApi for SpyApi {
         &'a self,
         _dataset_id: &'a DatasetId,
         request: AssignNextRequest,
-    ) -> ApiFuture<'a, Option<Assignment>> {
+    ) -> ApiFuture<'a, labello_client::AssignNextResponse> {
         let mut state = self.state.borrow_mut();
         state.counts.assign_next_image += 1;
         state.exclusions.push(request.excluded_image_ids.clone());
         if let Some(assignment_id) = request.assignment_id.clone() {
             state.reclaim_assignment_ids.push(assignment_id);
         }
+        if request.prefetch { state.prefetch_requests += 1; }
+        if request.prefetch && state.block_prefetch {
+            return ready(Ok(labello_client::AssignNextResponse::Unavailable {
+                reason: labello_client::AssignmentUnavailableReason::ImbalanceLimit,
+            }));
+        }
         if state.no_assignment {
-            return ready(Ok(None));
+            return ready(Ok(None.into()));
         }
         let kind = request.kind.unwrap_or(AssignmentKind::Annotation);
         if let Some(active) = state.active_assignments.iter().find(|active| {
@@ -1570,7 +1582,7 @@ impl ImageApi for SpyApi {
                         && active.kind == kind
                         && !request.excluded_image_ids.contains(&active.image_id)))
         }) {
-            return ready(Ok(Some(active.clone())));
+            return ready(Ok(Some(active.clone()).into()));
         }
         let image_ids = state.metadata.images.keys().cloned().collect::<Vec<_>>();
         let image_id = (0..image_ids.len()).find_map(|offset| {
@@ -1587,7 +1599,7 @@ impl ImageApi for SpyApi {
             .then_some(image_id)
         });
         let Some(image_id) = image_id else {
-            return ready(Ok(None));
+            return ready(Ok(None.into()));
         };
         if kind == AssignmentKind::Annotation {
             state.next_image += 1;
@@ -1613,7 +1625,7 @@ impl ImageApi for SpyApi {
             });
         }
         state.active_assignments.push(assignment.clone());
-        ready(Ok(Some(assignment)))
+        ready(Ok(Some(assignment).into()))
     }
 
     fn revalidate_assignment<'a>(
