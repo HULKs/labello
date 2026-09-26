@@ -301,7 +301,7 @@ impl LabelloApp {
         if layout != LayoutMode::Wide && self.view == AppView::Review {
             if Self::short_viewport(viewport) { 98.0 } else { 114.0 }
         } else if layout == LayoutMode::Compact && self.bar_migration_active() {
-            if Self::short_viewport(viewport) { 46.0 } else { 114.0 }
+            if Self::short_viewport(viewport) { 46.0 } else { 68.0 }
         } else {
             68.0
         }
