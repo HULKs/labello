@@ -152,6 +152,7 @@ impl LabelloApp {
         {
             return;
         }
+        if self.advance_companion_guide() { return; }
         if self.confirm_prelabel_object() { return; }
         if let Some(issue) = self.submission_issue() {
             self.runtime.error = Some(issue);

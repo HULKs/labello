@@ -158,7 +158,10 @@ exact source keypoints in Annotate. The projection retains the box ID for
 selection but never enters annotation state or save payloads. Drawing revises
 that box through the normal edit/history/save path. Existing reviewed or edited
 boxes remain boxes, and missing historical sources fall back to ordinary editing.
-Submission checks require every available pending guide to be drawn or deleted.
+The annotation primary action advances through pending companion guides, saving
+the current box without completing the assignment and focusing the next guide.
+Only after all guides are drawn or deleted does it submit the image. Explicit
+whole-assignment transition submission still requires every guide to be resolved.
 Keypoint-guide focus permits a small canvas margin at image edges so corner
 markers remain visible; it does not change annotation coordinates. Workspace
 preferences are not overwritten while dataset/assignment loading or restoration

@@ -80,6 +80,7 @@ impl LabelloApp {
         let primary = self.bar_annotation_primary();
         let pending = !matches!(primary, PrelabelPrimaryAction::Submit);
         let (primary_label, primary_help) = match primary {
+            PrelabelPrimaryAction::Guide => ("Next guide", "Save this box and focus the next source keypoint guide. The final box submits the image."),
             PrelabelPrimaryAction::Confirm => ("Confirm & next", "Confirm this object's edited geometry and focus the next object."),
             PrelabelPrimaryAction::Focus => ("Next object", "Focus the next model object that needs confirmation."),
             PrelabelPrimaryAction::Submit => ("Submit & next", "Save, complete this assignment, and claim another."),

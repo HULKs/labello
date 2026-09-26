@@ -91,10 +91,10 @@ fn companion_guide_drawing_revises_existing_box_and_preserves_source_on_save_ret
             harness
                 .state()
                 .runtime
-                .error
+                .notice
                 .as_ref()
                 .unwrap()
-                .contains("each keypoint guide")
+                .contains("this guide")
         );
         harness.state_mut().runtime.error = None;
         harness.run();
@@ -405,12 +405,25 @@ fn companion_box_submit_button_completes_assignment_before_and_after_save() {
     for save_first in [false, true] {
         let (api, id) = source_guide_api();
         let mut harness = loaded_work_harness(api.clone());
-        let assignment_id = harness.state().work.assignment.as_ref().unwrap().assignment_id.clone();
+        let assignment_id = harness
+            .state()
+            .work
+            .assignment
+            .as_ref()
+            .unwrap()
+            .assignment_id
+            .clone();
         let canvas = harness.get_by_label("Annotation canvas").rect();
-        drag_at(&mut harness, canvas.center(), canvas.center() + canvas.size() * 0.4);
+        drag_at(
+            &mut harness,
+            canvas.center(),
+            canvas.center() + canvas.size() * 0.4,
+        );
         if save_first {
             harness.state_mut().request_save(false);
-            step_until(&mut harness, 10, |app| app.work.save_status == SaveStatus::Saved);
+            step_until(&mut harness, 10, |app| {
+                app.work.save_status == SaveStatus::Saved
+            });
         }
         harness.run();
         harness.get_by_label("Submit & next").click();
@@ -422,10 +435,128 @@ fn companion_box_submit_button_completes_assignment_before_and_after_save() {
         assert_eq!(api.counts().complete_assignment, 1);
         assert!(harness.state().runtime.error.is_none());
         assert!(harness.state().work.pending_transition.is_none());
-        assert_ne!(harness.state().work.assignment.as_ref().map(|a| &a.assignment_id), Some(&assignment_id));
+        assert_ne!(
+            harness
+                .state()
+                .work
+                .assignment
+                .as_ref()
+                .map(|a| &a.assignment_id),
+            Some(&assignment_id)
+        );
         let spy = api.state.borrow();
-        let state = spy.states.values().find(|state| state.annotations.contains_key(&id)).unwrap();
+        let state = spy
+            .states
+            .values()
+            .find(|state| state.annotations.contains_key(&id))
+            .unwrap();
         assert_eq!(state.current_annotation(&id).unwrap().version, 2);
         assert_eq!(state.annotations[&"source".into()].len(), 1);
     }
+}
+
+#[test]
+fn next_guide_saves_and_refocuses_without_submitting_until_last_box() {
+    let (api, first_id) = source_guide_api();
+    let second_id = labello_domain::AnnotationId::from("second-box");
+    {
+        let mut spy = api.state.borrow_mut();
+        let state = spy.states.values_mut().next().unwrap();
+        let mut source = state.current_annotation(&"source".into()).unwrap().clone();
+        source.annotation_id = "second-source".into();
+        if let AnnotationGeometry::Skeleton(skeleton) = &mut source.geometry {
+            skeleton.keypoints[0].point = Some(NormalizedPoint { x: 0.8, y: 0.8 });
+        }
+        let mut bbox = state.current_annotation(&first_id).unwrap().clone();
+        bbox.annotation_id = second_id.clone();
+        bbox.revision_source = RevisionSource::MigrationSkeleton {
+            annotation_id: source.annotation_id.clone(),
+            version: 1,
+        };
+        let mut link = state.migration_companions[&"source".into()].clone();
+        link.skeleton_annotation_id = source.annotation_id.clone();
+        link.box_annotation_id = second_id.clone();
+        state
+            .migration_companions
+            .insert(source.annotation_id.clone(), link);
+        state
+            .annotations
+            .insert(source.annotation_id.clone(), vec![source]);
+        state.annotations.insert(second_id.clone(), vec![bbox]);
+    }
+    let mut harness = loaded_work_harness(api.clone());
+    harness.state_mut().work.selected_annotation = Some(first_id.clone());
+    harness.run();
+    let assignment_id = harness
+        .state()
+        .work
+        .assignment
+        .as_ref()
+        .unwrap()
+        .assignment_id
+        .clone();
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    drag_at(
+        &mut harness,
+        canvas.center(),
+        canvas.center() + canvas.size() * 0.4,
+    );
+    for _ in 0..30 {
+        harness.state_mut().work.canvas.zoom_in();
+    }
+    harness.run();
+    assert_eq!(harness.state().work.canvas.current_zoom(), 48.0);
+    harness.get_by_label("Next guide").click();
+    step_until(&mut harness, 20, |app| {
+        app.work.selected_annotation.as_ref() == Some(&second_id)
+            && app.work.save_status == SaveStatus::Saved
+    });
+    harness.run();
+    assert_eq!(api.counts().complete_assignment, 0);
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .assignment
+            .as_ref()
+            .unwrap()
+            .assignment_id,
+        assignment_id
+    );
+    assert!(harness.state().runtime.error.is_none());
+    assert!(harness.state().work.canvas.current_zoom() < 48.0);
+    assert_eq!(
+        api.state
+            .borrow()
+            .states
+            .values()
+            .next()
+            .unwrap()
+            .current_annotation(&first_id)
+            .unwrap()
+            .version,
+        2
+    );
+    // An undrawn current guide stays selected without attempting global submission.
+    harness.get_by_label("Next guide").click();
+    harness.run();
+    assert_eq!(api.counts().complete_assignment, 0);
+    assert_eq!(
+        harness.state().work.selected_annotation.as_ref(),
+        Some(&second_id)
+    );
+    assert!(harness.state().runtime.error.is_none());
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    drag_at(
+        &mut harness,
+        canvas.center(),
+        canvas.center() + canvas.size() * 0.4,
+    );
+    harness.get_by_label("Submit & next").click();
+    step_until(&mut harness, 20, |app| {
+        api.counts().complete_assignment == 1
+            && app.work.pending_transition.is_none()
+            && app.work.assignment.as_ref().map(|a| &a.assignment_id) != Some(&assignment_id)
+    });
+    assert!(harness.state().runtime.error.is_none());
 }

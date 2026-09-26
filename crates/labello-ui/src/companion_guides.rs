@@ -50,6 +50,37 @@ impl LabelloApp {
             )
     }
 
+    pub(crate) fn advance_companion_guide(&mut self) -> bool {
+        let selected_pending = self.work.annotations.iter().any(|annotation| {
+            Some(&annotation.annotation_id) == self.work.selected_annotation.as_ref()
+                && self.companion_needs_box(annotation)
+        });
+        if selected_pending {
+            self.runtime.notice =
+                Some("Draw a bounding box for this guide before continuing.".into());
+            return true;
+        }
+        let next = self
+            .work
+            .annotations
+            .iter()
+            .find(|annotation| self.companion_needs_box(annotation))
+            .map(|annotation| annotation.annotation_id.clone());
+        let Some(next) = next else {
+            return false;
+        };
+        self.work.selected_annotation = Some(next);
+        self.runtime.error = None;
+        self.runtime.notice = None;
+        if matches!(
+            self.work.save_status,
+            crate::app::SaveStatus::Dirty | crate::app::SaveStatus::Retry
+        ) {
+            self.request_save(false);
+        }
+        true
+    }
+
     pub(crate) fn companion_guide(&self, annotation: &AnnotationVersion) -> AnnotationVersion {
         if self.companion_needs_box(annotation)
             && let Some(source) = self.companion_source(annotation)
