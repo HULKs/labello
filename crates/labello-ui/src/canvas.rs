@@ -11,8 +11,8 @@ use labello_domain::{
 
 use crate::theme;
 
-const MIN_ZOOM: f32 = 1.0;
-const MAX_ZOOM: f32 = 12.0;
+pub(crate) const MIN_ZOOM: f32 = 1.0;
+pub(crate) const MAX_ZOOM: f32 = 48.0;
 const ZOOM_STEP: f32 = 1.25;
 const MIN_BOX_SIZE: f32 = 0.001;
 const HANDLE_HIT_RADIUS: f32 = 12.0;
@@ -147,6 +147,7 @@ pub struct CanvasState {
     primary_pan: bool,
     last_canvas_click: Option<(f64, Pos2)>,
     review_target: ReviewViewTarget,
+    keypoint_guide_focus: bool,
     pending_review_view: Option<Option<Rect>>,
 }
 
@@ -166,6 +167,7 @@ impl Default for CanvasState {
             primary_pan: false,
             last_canvas_click: None,
             review_target: ReviewViewTarget::Disabled,
+            keypoint_guide_focus: false,
             pending_review_view: None,
         }
     }
@@ -266,6 +268,7 @@ impl CanvasState {
         self.cancel_drag();
         self.pan_mode = false;
         self.primary_pan = false;
+        self.pending_review_view = None;
         self.zoom = transform.zoom;
         self.pan = vec2(transform.pan_x, transform.pan_y);
     }
@@ -303,6 +306,7 @@ impl CanvasState {
     /// Focus a review object once when it becomes active, or fit the full image
     /// when object-by-object review is complete.
     pub fn set_review_focus(&mut self, annotation: Option<&AnnotationVersion>) {
+        self.keypoint_guide_focus = false;
         let target = annotation.map_or(ReviewViewTarget::FullImage, |annotation| {
             ReviewViewTarget::Annotation(annotation.annotation_id.clone(), annotation.version)
         });
@@ -321,6 +325,8 @@ impl CanvasState {
         };
         let target = ReviewViewTarget::EditingAnnotation(annotation.annotation_id.clone());
         if self.review_target != target {
+            self.keypoint_guide_focus =
+                matches!(annotation.geometry, AnnotationGeometry::Skeleton(_));
             self.review_target = target;
             self.pending_review_view = Some(annotation_focus_rect(annotation));
         }
@@ -341,6 +347,7 @@ impl CanvasState {
 
     /// Stop tracking review targets without changing the current view.
     pub fn clear_review_focus(&mut self) {
+        self.keypoint_guide_focus = false;
         self.review_target = ReviewViewTarget::Disabled;
         self.pending_review_view = None;
     }
@@ -350,6 +357,15 @@ impl CanvasState {
         self.current_zoom()
     }
 
+    fn pan_margin(&self) -> f32 {
+        if self.keypoint_guide_focus {
+            // A guide on an image edge must remain visible inside the rounded canvas.
+            VIEWPORT_CORNER_RADIUS as f32 + HANDLE_HIT_RADIUS
+        } else {
+            0.0
+        }
+    }
+
     fn clamp_to_viewport(&mut self, viewport: Rect, fitted_image: Rect) {
         self.zoom = finite_or(self.zoom, MIN_ZOOM).clamp(MIN_ZOOM, MAX_ZOOM);
         if self.zoom == MIN_ZOOM {
@@ -357,7 +373,13 @@ impl CanvasState {
             self.pan_mode = false;
             self.primary_pan = false;
         }
-        self.pan = clamp_pan(viewport, fitted_image, self.zoom, self.pan);
+        self.pan = clamp_pan(
+            viewport,
+            fitted_image,
+            self.zoom,
+            self.pan,
+            self.pan_margin(),
+        );
     }
 
     fn apply_pending_review_view(&mut self, viewport: Rect, fitted_image: Rect) {
@@ -1302,7 +1324,7 @@ mod tests {
             pos2(0.5, 0.5)
         );
         assert_eq!(
-            clamp_pan(degenerate, fitted, f32::NAN, Vec2::splat(f32::NAN)),
+            clamp_pan(degenerate, fitted, f32::NAN, Vec2::splat(f32::NAN), 0.0),
             Vec2::ZERO
         );
 
@@ -1467,11 +1489,11 @@ mod tests {
         let fitted = fitted_image_rect(viewport, [800, 200]);
         assert_eq!(fitted.size(), vec2(400.0, 100.0));
         assert_eq!(
-            clamp_pan(viewport, fitted, 2.0, vec2(999.0, -999.0)),
+            clamp_pan(viewport, fitted, 2.0, vec2(999.0, -999.0), 0.0),
             vec2(200.0, -50.0)
         );
         assert_eq!(
-            clamp_pan(viewport, fitted, 4.0, vec2(-999.0, 999.0)),
+            clamp_pan(viewport, fitted, 4.0, vec2(-999.0, 999.0), 0.0),
             vec2(-600.0, 150.0)
         );
     }
@@ -1508,7 +1530,7 @@ mod tests {
         assert!((before.x - after.x).abs() < 0.000_01);
         assert!((before.y - after.y).abs() < 0.000_01);
         assert_eq!(
-            clamp_pan(viewport, fitted, 2.0, vec2(999.0, -999.0)),
+            clamp_pan(viewport, fitted, 2.0, vec2(999.0, -999.0), 0.0),
             vec2(200.0, -100.0)
         );
 
@@ -1610,6 +1632,38 @@ mod tests {
         state.pan += vec2(5.0, 0.0);
         state.apply_pending_review_view(viewport, fitted);
         assert_eq!(state.pan.x, 5.0);
+    }
+
+    #[test]
+    fn keypoint_guide_focus_keeps_image_corner_markers_visible() {
+        for image_size in [[640, 480], [480, 640], [8000, 1000]] {
+            for size in [vec2(1000.0, 700.0), vec2(280.0, 300.0)] {
+                let viewport = Rect::from_min_size(Pos2::ZERO, size);
+                let fitted = fitted_image_rect(viewport, image_size);
+                for (x, y) in [(0.0, 0.0), (1.0, 1.0), (1.0, 0.0)] {
+                    let source = test_annotation(AnnotationGeometry::Skeleton(
+                        labello_domain::SkeletonGeometry {
+                            keypoints: vec![labello_domain::KeypointAnnotation {
+                                name: "center".into(),
+                                state: KeypointState::Visible,
+                                point: Some(NormalizedPoint { x, y }),
+                            }],
+                        },
+                    ));
+                    let mut state = CanvasState::default();
+                    state.set_annotation_edit_focus(Some(&source));
+                    state.apply_pending_review_view(viewport, fitted);
+                    let transformed = transformed_image_rect(fitted, state.zoom, state.pan);
+                    let point = normalized_to_screen(transformed, pos2(x, y));
+                    assert!(
+                        viewport
+                            .shrink(VIEWPORT_CORNER_RADIUS as f32)
+                            .contains(point),
+                        "source guide must remain clear of the rounded mask at image edges"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

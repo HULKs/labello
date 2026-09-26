@@ -223,6 +223,9 @@ impl LabelloApp {
         if !self.visible_prelabels().is_empty() {
             return Some("Confirm or delete the remaining model objects before submitting.".into());
         }
+        if self.work.annotations.iter().any(|annotation| self.companion_needs_box(annotation)) {
+            return Some("Draw a bounding box for each keypoint guide before submitting.".into());
+        }
         let task = self.selected_task()?;
         let spec = task.skeleton.as_ref()?;
         if self.work.active_skeleton.is_some() {

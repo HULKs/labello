@@ -224,8 +224,8 @@ impl LabelloApp {
                 })
                 .unwrap_or(0);
         }
-        self.apply_assignment_preferences();
         self.work.canvas.clear_review_focus();
+        self.apply_assignment_preferences();
         if self.view == AppView::Annotate && self.work.selected_annotation.is_none() {
             self.work.selected_annotation = self.work.annotations.iter().find(|annotation| {
                 self.annotation_matches_selected_workflow(annotation)

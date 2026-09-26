@@ -108,6 +108,9 @@ impl crate::app::LabelloApp {
             || self.datasets.metadata.is_none()
             || self.view == crate::app::AppView::Setup
             || !self.can_open_view(self.view)
+            || self.loading.dataset
+            || self.loading.image
+            || self.runtime.persistence.expected_assignment.is_some()
         {
             return;
         }
@@ -283,6 +286,10 @@ impl crate::app::LabelloApp {
                 .iter()
                 .any(|annotation| &annotation.annotation_id == annotation_id && !annotation.deleted)
         });
+        if self.view == crate::app::AppView::Annotate {
+            let target = self.refocus_annotation();
+            self.work.canvas.set_annotation_edit_focus(target.as_ref());
+        }
         self.work.canvas.restore_transform(preference.canvas);
         self.work.drawer = match preference.drawer.as_deref() {
             Some("workflow") => Some(crate::app::Drawer::Workflow),

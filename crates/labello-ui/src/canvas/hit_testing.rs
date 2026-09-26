@@ -34,14 +34,6 @@ fn annotation_bbox(id: &AnnotationId, annotations: &[AnnotationVersion]) -> Opti
     })
 }
 
-fn annotation_at(
-    pos: Pos2,
-    image_rect: Rect,
-    annotations: &[AnnotationVersion],
-) -> Option<&AnnotationVersion> {
-    annotation_at_selectable(pos, image_rect, annotations, None)
-}
-
 fn annotation_at_selectable<'a>(
     pos: Pos2,
     image_rect: Rect,

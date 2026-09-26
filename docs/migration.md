@@ -42,6 +42,15 @@ minimum on tiny images. Bounds shift inward at image edges. This sizing applies
 to newly derived or regenerated boxes; existing and independently edited boxes
 retain their geometry.
 
+In Annotate, an untouched, unreviewed generated box appears as the exact source
+keypoints that triggered its creation. Select the object and draw its bounding
+box; the keypoints remain read-only, and saving revises the existing companion
+rather than adding a second box. Multiple positioned points remain visible with
+their visibility states. Each pending guide must be drawn or its companion deleted
+before submitting through the UI. Independently edited or reviewed boxes retain
+their normal box presentation. If historical source geometry is unavailable, the
+existing box remains available for ordinary editing.
+
 The guide task enters Needs correction and follows ordinary annotation/review
 rules. Its previous decisions remain in history. Discovery does not extend the
 frozen imported target count or assign an imported object group to the new pair.
