@@ -598,6 +598,83 @@ fn prelabel_actions_support_keyboard_confirmation_and_delete() {
 }
 
 #[test]
+fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
+    for (overview, submit_on_return) in [(false, false), (true, false), (true, true)] {
+        let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+        let original = harness.state().work.assignment.clone().unwrap();
+        if overview {
+            harness.state_mut().work.canvas.fit_view();
+            harness.step();
+        }
+        click(&mut harness, "Delete");
+        harness.step();
+        assert!(harness.state().visible_prelabels().is_empty());
+        harness.state_mut().undo();
+        assert_eq!(harness.state().visible_prelabels().len(), 1);
+        harness.state_mut().redo();
+        assert!(harness.state().visible_prelabels().is_empty());
+        click(&mut harness, "Submit & next");
+        step_until(&mut harness, 24, |app| {
+            app.work
+                .assignment
+                .as_ref()
+                .is_some_and(|assignment| assignment.image_id != original.image_id)
+                && !app.visible_prelabels().is_empty()
+        });
+        // The fake uses the same suggestion ID on each image. Decisions must be scoped.
+        assert!(!harness.state().visible_prelabels().is_empty());
+        if submit_on_return {
+            let app = harness.state_mut();
+            app.work.current.as_mut().unwrap().prelabels[0].suggestion_id =
+                "different-image".into();
+            app.sync_prelabel_review();
+            app.advance_prelabel_object();
+            app.delete_selected();
+        }
+        click(&mut harness, "Previous image");
+        if submit_on_return {
+            assert!(harness.state().work.pending_transition.is_some());
+            harness.state_mut().submit_pending_transition();
+        }
+        step_until(&mut harness, 24, |app| {
+            app.work
+                .assignment
+                .as_ref()
+                .is_some_and(|assignment| assignment.image_id == original.image_id)
+                && app
+                    .work
+                    .current
+                    .as_ref()
+                    .is_some_and(|current| !current.prelabels.is_empty())
+                && !app.loading.image
+        });
+        harness.run_steps(3);
+        assert_ne!(
+            harness
+                .state()
+                .work
+                .assignment
+                .as_ref()
+                .unwrap()
+                .assignment_id,
+            original.assignment_id
+        );
+        assert!(
+            harness.state().visible_prelabels().is_empty(),
+            "overview={overview}"
+        );
+        assert!(harness.state().pending_prelabel_objects().is_empty());
+        assert!(harness.state().work.annotations.is_empty());
+
+        // Reset/configuration changes produce a new signed suggestion identity.
+        harness.state_mut().work.current.as_mut().unwrap().prelabels[0].suggestion_id =
+            "new-generation".into();
+        harness.state_mut().sync_prelabel_review();
+        assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
+    }
+}
+
+#[test]
 fn prelabels_open_as_selected_objects_without_accepting_them() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     harness.run_steps(3);
@@ -837,10 +914,7 @@ fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
     assert_eq!(harness.state().pending_prelabel_objects().len(), pending);
 }
 
-#[test]
-fn edited_model_object_keeps_original_signed_prediction_for_confirmation() {
-    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
-    let app = harness.state_mut();
+fn attach_prelabel_evidence(app: &mut LabelloApp) -> Box<labello_domain::PrelabelEvidence> {
     let hint = app.work.current.as_ref().unwrap().prelabels[0].clone();
     let proof = Box::new(labello_domain::PrelabelEvidence {
         provenance: labello_domain::PrelabelProvenance {
@@ -870,6 +944,42 @@ fn edited_model_object_keeps_original_signed_prediction_for_confirmation() {
     });
     app.work.current.as_mut().unwrap().prelabels[0].evidence = Some(proof.clone());
     app.sync_prelabel_review();
+    proof
+}
+
+#[test]
+fn deleted_committed_prelabels_do_not_return_as_pending_hints() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    let proof = attach_prelabel_evidence(app);
+    let mut annotation = app.selected_prelabel_object().unwrap().annotation.clone();
+    annotation.origin = labello_domain::AnnotationOrigin::Prelabel {
+        prelabel: Box::new(labello_domain::AcceptedPrelabel {
+            provenance: proof.provenance.clone(),
+            predicted_geometry: proof.predicted_geometry.clone(),
+        }),
+    };
+    annotation.deleted = true;
+    let mut state = app.work.current_state.clone().unwrap();
+    state
+        .annotations
+        .insert(annotation.annotation_id.clone(), vec![annotation]);
+    app.apply_state(state);
+    app.work.accepted_prelabels.clear();
+    app.work.prelabel_review = Default::default();
+    app.sync_prelabel_review();
+    assert!(app.work.annotations.is_empty());
+    assert!(app.visible_prelabels().is_empty());
+    assert!(app.pending_prelabel_objects().is_empty());
+    app.work.current.as_mut().unwrap().prelabels[0].suggestion_id = "new-generation".into();
+    assert_eq!(app.visible_prelabels().len(), 1);
+}
+
+#[test]
+fn edited_model_object_keeps_original_signed_prediction_for_confirmation() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    let proof = attach_prelabel_evidence(app);
     let id = app.work.selected_annotation.clone().unwrap();
     let edited = BoundingBox {
         x: 0.2,

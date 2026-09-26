@@ -19,6 +19,14 @@ pub(crate) struct PrelabelObject {
     pub annotation: AnnotationVersion,
 }
 
+/// Submitted local decisions follow the previous image across a new assignment lease.
+pub(crate) struct PreviousPrelabelDecisions {
+    pub dataset_id: labello_domain::DatasetId,
+    pub image_id: labello_domain::ImageId,
+    pub task_id: labello_domain::TaskId,
+    pub suggestion_ids: Vec<String>,
+}
+
 #[derive(Clone, Copy, Default)]
 pub(crate) enum PrelabelPrimaryAction {
     Confirm,

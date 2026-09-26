@@ -237,6 +237,13 @@ assignment-scoped browser draft recovery. They remain separate from annotations
 until confirmed. Turning prelabels off hides pending objects without accepting
 them; selecting the same model again retains matching local edits. Refreshed
 signed evidence is required before a retained pending object can be confirmed.
+After submission, **Previous image** retains the confirmed/deleted prediction IDs
+for that image and workflow, even though reopening creates a new assignment.
+These local decisions last with the previous-image history in the current session;
+they are not dataset-wide hint removal. Discarding unsaved work discards its local
+decisions. Newly generated prediction IDs remain eligible. Once a prediction has
+been saved as an annotation, its persisted provenance prevents the same prediction
+from appearing again as a pending object, including after deleting that annotation.
 
 Before display, the shared filtering policy combines the current candidate set
 and compares it with current persisted and draft boxes. Existing nondeleted

@@ -44,6 +44,16 @@ impl LabelloApp {
                 confidence_threshold: 0.0,
                 suppress_overlaps_iou: None,
             });
+        // Accepted prediction identities remain consumed even after their annotation
+        // is moved away from the prediction or deleted. IoU alone cannot express that.
+        let committed: std::collections::BTreeSet<_> = self.work.current_state.iter()
+            .flat_map(|state| state.annotations.values())
+            .filter_map(|versions| versions.last())
+            .filter_map(|annotation| match &annotation.origin {
+                labello_domain::AnnotationOrigin::Prelabel { prelabel } =>
+                    Some(prelabel.provenance.suggestion_id.as_str()),
+                _ => None,
+            }).collect();
         let hints: Vec<_> = current
             .prelabels
             .iter()
@@ -52,6 +62,7 @@ impl LabelloApp {
                     .work
                     .accepted_prelabels
                     .contains(&suggestion.suggestion_id)
+                    && !committed.contains(suggestion.suggestion_id.as_str())
                     && suggestion.task_id == task.task_id
                     && choice.as_ref().is_none_or(|id| &suggestion.config_id == id)
             })

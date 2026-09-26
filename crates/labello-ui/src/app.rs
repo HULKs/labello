@@ -420,6 +420,8 @@ pub struct WorkState {
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
     pub(crate) previous_assignment: Option<Assignment>,
+    pub(crate) previous_prelabel_decisions:
+        Option<crate::prelabel_review::PreviousPrelabelDecisions>,
     pub(crate) current: Option<QueuedImage>,
     pub(crate) current_state: Option<ImageState>,
     pub(crate) current_texture: Option<TextureHandle>,

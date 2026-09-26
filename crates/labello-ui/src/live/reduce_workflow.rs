@@ -150,6 +150,11 @@ impl LabelloApp {
                     self.work.pending_transition = None;
                     match *result {
                         Ok(loaded) => {
+                            let decisions = self.work.previous_prelabel_decisions.take().filter(|decisions|
+                                decisions.dataset_id == self.config.dataset_id
+                                    && decisions.image_id == loaded.assignment.image_id
+                                    && decisions.task_id == loaded.assignment.task_id
+                                    && loaded.assignment.kind == labello_domain::AssignmentKind::Annotation);
                             let displaced = self.work.assignment.clone();
                             self.begin_workspace_epoch();
                             self.clear_current_image();
@@ -163,6 +168,10 @@ impl LabelloApp {
                             self.runtime.notice =
                                 Some("Returned to previous assignment".to_string());
                             self.apply_loaded_image(ctx, loaded);
+                            if let Some(decisions) = decisions {
+                                self.work.accepted_prelabels = decisions.suggestion_ids;
+                                self.work.prelabel_review.changed = !self.work.accepted_prelabels.is_empty();
+                            }
                             self.request_assignment_availability();
                         }
                         Err(error) => {

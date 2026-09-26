@@ -681,6 +681,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn clear_previous_assignment(&mut self) {
+        self.work.previous_prelabel_decisions = None;
         let Some(previous) = self.work.previous_assignment.take() else {
             return;
         };
@@ -696,7 +697,25 @@ impl LabelloApp {
     }
 
     pub(crate) fn remember_previous_assignment(&mut self, assignment: Assignment) {
+        // Saving the current image on the way back must not replace the return target.
+        if matches!(
+            self.work.pending_transition,
+            Some(crate::app::PendingTransition::PreviousAssignment(_))
+        ) {
+            return;
+        }
         self.clear_previous_assignment();
+        if assignment.kind == labello_domain::AssignmentKind::Annotation
+            && !matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry)
+        {
+            self.work.previous_prelabel_decisions =
+                Some(crate::prelabel_review::PreviousPrelabelDecisions {
+                    dataset_id: self.config.dataset_id.clone(),
+                    image_id: assignment.image_id.clone(),
+                    task_id: assignment.task_id.clone(),
+                    suggestion_ids: self.work.accepted_prelabels.clone(),
+                });
+        }
         self.work.previous_assignment = Some(assignment);
     }
 
