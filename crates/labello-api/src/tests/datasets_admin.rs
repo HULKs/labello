@@ -690,8 +690,27 @@ async fn schema_copy_preserves_definitions_and_isolates_dataset_data() {
     let copied = copied_repo.load_dataset().await.unwrap();
     assert_eq!(copied.label_classes, source.label_classes);
     let mut expected_tasks = source.tasks.clone();
-    for task in &mut expected_tasks { task.instructions.example_images.clear(); task.prelabel_config_ids.clear(); }
+    for task in &mut expected_tasks {
+        task.instructions.example_images.clear();
+        task.prelabel_config_ids.clear();
+        task.manual_box_guide_migration = None;
+    }
     assert_eq!(copied.tasks, expected_tasks);
+    for (profile, task_id) in [
+        (labello_domain::ExportProfile::UltralyticsYoloDetectV1, "bounding_box:pixel"),
+        (labello_domain::ExportProfile::UltralyticsYoloPoseV1, "pose:pixel"),
+    ] {
+        let options = labello_domain::ExportOptions {
+            profile,
+            classes: BTreeSet::from([labello_domain::ExportClassSelection {
+                task_id: task_id.into(), class_id: "pixel".into(),
+            }]),
+            fallback_split: labello_domain::ExportSplit::Train,
+            splits: labello_domain::ExportSplit::all(),
+            split_choices: BTreeMap::new(),
+        };
+        assert_eq!(options.class_mapping(&copied).unwrap(), options.class_mapping(&source).unwrap());
+    }
     assert_eq!(copied.image_roots, ["images"]);
     assert!(copied.images.is_empty());
     assert!(copied.migration_history.is_empty());
@@ -784,4 +803,82 @@ async fn completed_inspector_filter_requires_every_current_workflow_before_pagin
         .header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
     let page: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(page["totalItems"], 0);
+}
+
+#[tokio::test]
+async fn copied_migration_schema_allows_fresh_skeleton_annotation_and_review() {
+    for workflow in [ReviewWorkflow::None, ReviewWorkflow::Approval] {
+        let fixture = api_migration_fixture().await;
+        let mut source = fixture.repository.load_dataset().await.unwrap();
+        source.tasks.iter_mut().find(|task| task.task_id == fixture.task_id).unwrap().review.workflow = workflow.clone();
+        fixture.repository.save_dataset(&source).await.unwrap();
+        let source_events = fixture.repository.load_events(&fixture.image_id).await.unwrap();
+        let response = create_with_schema(&fixture.app, "copied", Some("ds"), "admin").await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let png = png_bytes(5, 5);
+        let image_id = ImageId::from_blake3_hex(blake3::hash(&png).to_hex().as_ref());
+        let upload = fixture.app.clone().oneshot(Request::builder()
+            .method("POST")
+            .uri("/datasets/copied/uploads?root=uploads/test&ingest=true")
+            .header("x-test-user-id", "admin")
+            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={TEST_BOUNDARY}"))
+            .body(Body::from(multipart_body("fresh.png", &png))).unwrap()).await.unwrap();
+        assert_eq!(upload.status(), StatusCode::OK);
+        let (status, assignment) = import_json_request(&fixture.app, "POST",
+            "/datasets/copied/images/next", "admin", None,
+            json!({"taskId": fixture.task_id, "kind": "annotation", "excludedImageIds": []})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(assignment["imageId"], image_id.as_str());
+        let query = format!("assignmentId={}&imageId={image_id}&taskId={}&kind=annotation",
+            assignment["assignmentId"].as_str().unwrap(), urlencoding::encode(fixture.task_id.as_str()));
+        let timestamp = now();
+        let (status, submitted) = import_json_request(&fixture.app, "POST",
+            &format!("/datasets/copied/images/{image_id}/annotation-batch?{query}"), "admin", None,
+            json!({"complete": true, "payloads": [{
+                "kind": "annotation_version_created",
+                "annotation": {
+                    "annotationId": "fresh-pose", "version": 1,
+                    "taskId": fixture.task_id, "classId": "person", "type": "skeleton",
+                    "source": {"source": "human"},
+                    "geometry": {"type": "skeleton", "geometry": {"keypoints": [
+                        {"name": "nose", "state": "visible", "point": {"x": 0.5, "y": 0.5}}
+                    ]}},
+                    "authorUserId": "admin", "createdAt": timestamp, "updatedAt": timestamp, "deleted": false
+                }, "previous_version": null, "reason": null
+            }]})).await;
+        assert_eq!(status, StatusCode::OK, "ordinary skeleton submission failed: {submitted}");
+        let expected_status = if workflow == ReviewWorkflow::Approval { "submitted" } else { "completed" };
+        assert_eq!(submitted["taskStates"][fixture.task_id.as_str()]["status"], expected_status);
+        let mut final_state = submitted;
+        if workflow == ReviewWorkflow::Approval {
+            let (status, review) = import_json_request(&fixture.app, "POST",
+                "/datasets/copied/images/next", "admin", None,
+                json!({"taskId": fixture.task_id, "kind": "review", "excludedImageIds": []})).await;
+            assert_eq!(status, StatusCode::OK);
+            let query = format!("assignmentId={}&imageId={image_id}&taskId={}&kind=review",
+                review["assignmentId"].as_str().unwrap(), urlencoding::encode(fixture.task_id.as_str()));
+            for (id, target) in [
+                ("object-review", json!({"targetType": "annotation_version", "annotation_id": "fresh-pose", "version": 1})),
+                ("task-review", json!({"targetType": "task", "task_id": fixture.task_id})),
+            ] {
+                let (status, body) = import_json_request(&fixture.app, "POST",
+                    &format!("/datasets/copied/images/{image_id}/reviews?{query}"), "admin", None,
+                    json!({"reviewId": id, "target": target, "reviewerUserId": "admin",
+                        "decision": "approved", "timestamp": now(), "comment": null})).await;
+                assert_eq!(status, StatusCode::OK, "ordinary review failed: {body}");
+            }
+            let (status, body) = import_json_request(&fixture.app, "GET",
+                &format!("/datasets/copied/images/{image_id}"), "admin", None, json!(null)).await;
+            assert_eq!(status, StatusCode::OK);
+            final_state = body;
+        }
+        let final_state: ImageState = serde_json::from_value(final_state).unwrap();
+        assert_eq!(final_state.task_states[&fixture.task_id].status, TaskStatus::Completed);
+        assert_eq!(final_state.active_annotations().count(), 1);
+        assert!(final_state.migration_target_sets.is_empty());
+        assert!(final_state.migration_confirmations.is_empty());
+        assert_eq!(fixture.repository.load_dataset().await.unwrap(), source);
+        assert_eq!(fixture.repository.load_events(&fixture.image_id).await.unwrap(), source_events);
+    }
 }
