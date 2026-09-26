@@ -187,8 +187,10 @@ the destination. Missing, unauthorized, or invalid sources fail creation;
 they never fall back to an empty schema.
 
 The copy preserves class and task IDs, names, class relationships, workflow
-settings, instructions text, skeleton definitions, and migration guide links.
-Tutorial example-image references and prelabel bindings are cleared. Images,
+settings, instructions text, and skeleton definitions. Manual box-guide migration
+configuration is cleared so copied skeleton tasks support ordinary annotation
+and their configured review flow without imported guide boxes or target sets.
+Tutorial example-image references and prelabel bindings are also cleared. Images,
 annotation/workflow history, source roles, ingestion paths, prelabel model
 configuration, and dataset balance settings are not copied. The destination
 keeps normal fresh-dataset identity, defaults, and initial administrator roles.

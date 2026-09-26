@@ -74,6 +74,8 @@ impl DatasetMetadata {
             // These resources belong to the source dataset, not the annotation schema.
             task.instructions.example_images.clear();
             task.prelabel_config_ids.clear();
+            // Migration targets and provenance are not copied into the fresh dataset.
+            task.manual_box_guide_migration = None;
         }
     }
 
