@@ -122,3 +122,10 @@ pub struct SetDatasetRolesRequest {
     pub user_id: UserId,
     pub roles: Vec<DatasetRole>,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrelabelItemRequest {
+    pub image_id: ImageId,
+    pub task_id: TaskId,
+}

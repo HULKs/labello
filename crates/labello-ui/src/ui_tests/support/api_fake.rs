@@ -243,6 +243,7 @@ pub(super) struct CallCounts {
 }
 
 pub(super) struct SpyState {
+    pub(super) retained_prelabels: BTreeMap<(ImageId, TaskId), labello_domain::RetainedPrelabels>,
     pub(super) prelabel_available: bool,
     pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
     pub(super) fail_next_reasons: bool,
@@ -374,6 +375,7 @@ impl SpyState {
             },
         ];
         Self {
+            retained_prelabels: BTreeMap::new(),
             prelabel_available: true,
             metadata,
             states,
@@ -2274,6 +2276,13 @@ impl PrelabelApi for SpyApi {
                 height: 0.35,
             }),
         }] }))
+    }
+    fn retained_prelabels<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        request: labello_client::PrelabelItemRequest,
+    ) -> ApiFuture<'a, Option<labello_domain::RetainedPrelabels>> {
+        ready(Ok(self.state.borrow().retained_prelabels.get(&(request.image_id, request.task_id)).cloned()))
     }
     fn prelabel_generation<'a>(&'a self, _dataset_id: &'a DatasetId, _request: PrelabelSuggestionRequest) -> ApiFuture<'a, labello_domain::PrelabelGeneration> { self.state.borrow_mut().counts.prelabel_generation += 1; ready(Ok(labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false })) }
     fn prelabel_admin_state<'a>(&'a self, _dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { self.state.borrow_mut().counts.prelabel_admin += 1; ready(Ok(Default::default())) }

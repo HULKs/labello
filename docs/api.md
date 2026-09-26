@@ -126,6 +126,7 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | `KeybindingSet` → normalized `KeybindingSet` |
 | `POST /datasets/{dataset_id}/prelabel-model-check` | Data admin | Unsaved `{ location }` managed filename → `PrelabelModelInspection`; control JSON limited to 4 KiB; no inference image, configuration save, or hint mutation |
 | `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest { imageId, taskId, configId }` → `PrelabelResponse` |
+| `GET /datasets/{dataset_id}/prelabel-retained` | Annotator | `PrelabelItemRequest { imageId, taskId }` → first compatible nonempty `RetainedPrelabels { configId, response }` in configuration order, or null; validates current bindings, expiry and reset state; never executes a model; private, no-store |
 | `GET /datasets/{dataset_id}/prelabel-generation` | Annotator | Image/task/config query → `PrelabelGeneration` |
 | `POST /datasets/{dataset_id}/prelabel-browser-result` | Annotator; enabled browser config | Signed grant and candidates → certified `PrelabelResponse` |
 | `GET /datasets/{dataset_id}/prelabels/{config_id}/model` | Dataset role; available config, or data admin | Managed ONNX bytes; private, no-store |

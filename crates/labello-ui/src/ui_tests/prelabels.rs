@@ -1003,3 +1003,116 @@ fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
     assert_eq!(skeleton.keypoints[0].point, Some(edited));
     assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
 }
+
+#[test]
+fn retained_prelabels_select_an_item_default_without_generating_or_persisting_a_choice() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    let image = harness
+        .state()
+        .work
+        .current
+        .as_ref()
+        .unwrap()
+        .image
+        .image_id
+        .clone();
+    let task = harness.state().selected_task().unwrap().task_id.clone();
+    let hint = labello_domain::PrelabelSuggestion {
+        suggestion_id: "retained".into(),
+        config_id: "demo-prelabel".into(),
+        task_id: task.clone(),
+        class_id: "person".into(),
+        confidence: 0.9,
+        geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+            x: 0.1,
+            y: 0.1,
+            width: 0.2,
+            height: 0.2,
+        }),
+        evidence: None,
+    };
+    api.state.borrow_mut().retained_prelabels.insert(
+        (image.clone(), task.clone()),
+        labello_domain::RetainedPrelabels {
+            config_id: "demo-prelabel".into(),
+            response: PrelabelResponse {
+                generation: PrelabelGeneration {
+                    generation: 0,
+                    scope_generation: 0,
+                    paused: false,
+                },
+                suggestions: vec![hint],
+                execution: Some(labello_domain::PrelabelExecutionKind::ServerCpu),
+                from_batch: true,
+                browser_grant: None,
+            },
+        },
+    );
+    harness.state_mut().cancel_prelabel_load();
+    harness.state_mut().work.prelabels.automatic = None;
+    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
+    assert_eq!(
+        harness.state().prelabel_choice(&task),
+        Some("demo-prelabel".into())
+    );
+    assert!(harness.state().work.prelabels.choices.is_empty());
+    assert_eq!(
+        api.counts().prelabel_suggestions,
+        0,
+        "discovery must not start inference, including queued items"
+    );
+    assert!(harness.query_by_label("Using dataset hints").is_some());
+    let current = harness.state_mut().work.current.as_mut().unwrap();
+    current.image.image_id = "another-image".into();
+    assert_eq!(
+        harness.state().prelabel_choice(&task),
+        None,
+        "automatic defaults are item scoped"
+    );
+    harness
+        .state_mut()
+        .work
+        .current
+        .as_mut()
+        .unwrap()
+        .image
+        .image_id = image;
+    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
+    harness.state_mut().work.prelabels.automatic = None;
+    for _ in 0..8 {
+        harness.step();
+    }
+    assert_eq!(harness.state().prelabel_choice(&task), None);
+    assert!(harness.state().visible_prelabels().is_empty());
+    assert_eq!(api.counts().prelabel_suggestions, 0);
+}
+
+#[test]
+fn late_retained_prelabels_cannot_override_an_explicit_choice() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    app.cancel_prelabel_load();
+    let image = app.work.current.as_ref().unwrap().image.image_id.clone();
+    let task = app.selected_task().unwrap().task_id.clone();
+    app.request_prelabels(PrelabelAction::Retained(
+        labello_client::PrelabelItemRequest {
+            image_id: image,
+            task_id: task.clone(),
+        },
+    ));
+    let request = app.runtime.commands.back().unwrap().request().clone();
+    app.work.prelabels.choices.insert(
+        format!("{}/{task}", app.config.dataset_id),
+        Some("demo-prelabel".into()),
+    );
+    app.runtime
+        .tx
+        .send(UiMessage::PrelabelFinished {
+            request,
+            result: Box::new(Ok(PrelabelReply::Retained(None))),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
+}

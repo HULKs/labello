@@ -193,13 +193,22 @@ timeouts, and download failures leave manual annotation available.
 ## Annotator controls and filtering
 
 The Prelabels selector offers compatible, available configurations and
-**No prelabels**. Without a saved choice, the initial selection is **No prelabels**;
-annotators explicitly choose a model while working before hints are requested.
-An explicit selection, including none, persists per account, API origin,
-dataset, and workflow and is restored when returning. Adding or linking a model
-does not enable hints for a workflow with no saved choice.
-A removed or unavailable saved selection becomes none.
-Hints load independently of the image and are prefetched for prepared images.
+**No prelabels**. Without a saved choice, the app checks the current image/workflow
+for retained dataset hints. It selects the first compatible, annotator-available
+configuration in dataset configuration order with valid, nonempty results. With no
+such results it stays on **No prelabels**. This read-only lookup never runs a model.
+It checks again every three seconds while no retained hints are available, so a
+batch finishing for an open item can supply its default. Empty, expired, reset,
+paused, changed-model/configuration and incompatible results do not enable hints.
+
+The automatic default belongs only to the current image/workflow and is not saved.
+An explicit selection, including **No prelabels**, takes precedence and persists
+per account, API origin, dataset and workflow. A removed or unavailable saved model
+becomes none. Adding a model alone does not enable inference. To generate hints
+interactively, explicitly select a model, even if it is already the automatic choice.
+
+Hints load independently of the image. Explicit model selections also prefetch
+hints for prepared images; automatic defaults only fetch retained current-item hints.
 Changing selection cancels obsolete work and clears queued hints while keeping
 annotation drafts. The **Refresh hints** icon beside the model selector retries
 a failed request. Model objects enter the current image's object sequence

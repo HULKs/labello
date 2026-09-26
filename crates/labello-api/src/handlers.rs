@@ -306,6 +306,10 @@ pub fn router(state: ApiState) -> Router {
             post(prelabels::suggestions),
         )
         .route(
+            "/datasets/{dataset_id}/prelabel-retained",
+            get(prelabels::retained),
+        )
+        .route(
             "/datasets/{dataset_id}/prelabel-generation",
             get(prelabels::generation),
         )

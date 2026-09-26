@@ -1097,3 +1097,121 @@ async fn interactive_worker_owner_uses_authenticated_user_and_dataset() {
         ]
     );
 }
+
+#[tokio::test]
+async fn retained_prelabels_only_discover_current_nonempty_batch_results_without_inference() {
+    for empty in [false, true] {
+        let f = Fixture::new(Runner {
+            empty,
+            ..Default::default()
+        })
+        .await;
+        let image_id = ImageId::from("fresh");
+        let task_id = TaskId::from("boxes");
+        let find = || {
+            f.service
+                .retained_suggestions(&f.dataset, &f.repo, &image_id, &task_id)
+        };
+        assert!(find().await.unwrap().is_none());
+        assert_eq!(f.runner.calls.load(Ordering::SeqCst), 0);
+        let state = f
+            .command(PrelabelAdminCommand::Preflight {
+                mappings: BTreeMap::new(),
+            })
+            .await;
+        f.command(PrelabelAdminCommand::Start {
+            run_id: state.runs[0].run_id.clone(),
+        })
+        .await;
+        f.finish().await;
+        let calls = f.runner.calls.load(Ordering::SeqCst);
+        let retained = find().await.unwrap();
+        assert_eq!(retained.is_some(), !empty);
+        if let Some(retained) = retained {
+            assert_eq!(retained.config_id, PrelabelConfigId::from("model"));
+            assert!(retained.response.from_batch);
+            assert!(!retained.response.suggestions.is_empty());
+        }
+        assert_eq!(f.runner.calls.load(Ordering::SeqCst), calls);
+        // Replacing model content invalidates discovery even without a saved pinned digest.
+        let config = f.repo.load_dataset_config().await.unwrap().prelabel_configs[0].clone();
+        std::fs::write(
+            f.temp.path().join("models").join(&config.model.location),
+            b"replacement",
+        )
+        .unwrap();
+        assert!(find().await.unwrap().is_none());
+        f.command(PrelabelAdminCommand::Reset {
+            scope: Default::default(),
+        })
+        .await;
+        assert!(find().await.unwrap().is_none());
+        assert_eq!(f.runner.calls.load(Ordering::SeqCst), calls);
+    }
+}
+
+#[tokio::test]
+async fn retained_prelabels_choose_configuration_order_and_skip_expired_or_unavailable_results() {
+    let f = Fixture::new(Runner::default()).await;
+    let mut metadata = f.repo.load_dataset_config().await.unwrap();
+    let mut second = metadata.prelabel_configs[0].clone();
+    second.config_id = "second".into();
+    metadata.prelabel_configs.push(second);
+    metadata.tasks[0].prelabel_config_ids.push("second".into());
+    f.repo.save_dataset(&metadata).await.unwrap();
+    for config in ["second", "model"] {
+        let state = f
+            .command(PrelabelAdminCommand::Preflight {
+                mappings: BTreeMap::from([("boxes".into(), config.into())]),
+            })
+            .await;
+        let run = state
+            .runs
+            .iter()
+            .find(|run| run.phase == PrelabelRunPhase::Ready)
+            .unwrap();
+        f.command(PrelabelAdminCommand::Start {
+            run_id: run.run_id.clone(),
+        })
+        .await;
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while f
+                .service
+                .admin_state(&f.dataset)
+                .await
+                .unwrap()
+                .runs
+                .iter()
+                .any(|run| run.phase == PrelabelRunPhase::Running)
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+    let image = ImageId::from("fresh");
+    let task = TaskId::from("boxes");
+    let find = || {
+        f.service
+            .retained_suggestions(&f.dataset, &f.repo, &image, &task)
+    };
+    assert_eq!(
+        find().await.unwrap().unwrap().config_id,
+        PrelabelConfigId::from("model")
+    );
+    // An unavailable first configuration must not hide valid hints from the next one.
+    metadata.prelabel_configs[0].available_to_annotators = false;
+    f.repo.save_dataset(&metadata).await.unwrap();
+    assert_eq!(
+        find().await.unwrap().unwrap().config_id,
+        PrelabelConfigId::from("second")
+    );
+    let mut control = f.service.lock(&f.dataset).await.unwrap();
+    for result in control.results.values_mut() {
+        result.created_at =
+            now() - std::time::Duration::from_secs(f.service.inner.limits.retention_seconds + 1);
+    }
+    drop(control);
+    assert!(find().await.unwrap().is_none());
+}

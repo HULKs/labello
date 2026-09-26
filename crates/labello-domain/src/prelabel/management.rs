@@ -34,6 +34,13 @@ pub struct PrelabelResponse {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetainedPrelabels {
+    pub config_id: PrelabelConfigId,
+    pub response: PrelabelResponse,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BrowserPrelabelGrant {
     pub dataset_id: DatasetId,

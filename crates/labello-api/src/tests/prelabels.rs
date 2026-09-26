@@ -782,3 +782,42 @@ async fn sessions_report_prelabel_availability_without_requiring_generation() {
         assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
     }
 }
+
+#[tokio::test]
+async fn retained_prelabels_are_read_only_annotator_scoped_and_validate_the_item() {
+    let f = Fixture::new().await;
+    let route = "/datasets/ds/prelabel-retained?imageId=img&taskId=boxes";
+    for user in ["reviewer_2", "outsider"] {
+        assert_eq!(
+            f.request("GET", route, user, Value::Null).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    // No model execution or browser grant is needed when there is no retained result.
+    let query = json!({"imageId": f.image(), "taskId": "bounding_box:pixel"});
+    let route = format!(
+        "/datasets/ds/prelabel-retained?imageId={}&taskId={}",
+        query["imageId"].as_str().unwrap(),
+        query["taskId"].as_str().unwrap()
+    );
+    let response = f
+        .request("GET", &route, "other_annotator", Value::Null)
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[header::CACHE_CONTROL],
+        "private, no-store"
+    );
+    assert!(response_json(response).await.is_null());
+    assert_eq!(
+        f.request(
+            "GET",
+            "/datasets/ds/prelabel-retained?imageId=missing&taskId=boxes",
+            "admin",
+            Value::Null
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+}

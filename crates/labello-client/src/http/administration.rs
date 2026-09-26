@@ -206,6 +206,17 @@ impl PrelabelApi for HttpLabelloApi {
         })
     }
 
+    fn retained_prelabels<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        request: crate::PrelabelItemRequest,
+    ) -> crate::ApiFuture<'a, Option<labello_domain::RetainedPrelabels>> {
+        Box::pin(async move {
+            Self::json(self.request(Method::GET, &format!("/datasets/{dataset_id}/prelabel-retained"))?
+                .query(&request).send().await?).await
+        })
+    }
+
     fn prelabel_generation<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

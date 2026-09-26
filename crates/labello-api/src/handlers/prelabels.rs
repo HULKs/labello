@@ -71,6 +71,33 @@ pub(super) async fn suggestions(
     ))
 }
 
+pub(super) async fn retained(
+    State(state): State<ApiState>,
+    Path(dataset_id): Path<DatasetId>,
+    headers: HeaderMap,
+    Query(request): Query<labello_client::PrelabelItemRequest>,
+) -> ApiResult<impl IntoResponse> {
+    request.image_id.validate_path_segment()?;
+    request.task_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    ensure_dataset_role(
+        &repo.load_dataset_config().await?,
+        &actor,
+        DatasetRole::Annotator,
+    )?;
+    Ok((
+        [(header::CACHE_CONTROL, "private, no-store")],
+        Json(
+            state
+                .prelabel_service()?
+                .retained_suggestions(&dataset_id, &repo, &request.image_id, &request.task_id)
+                .await
+                .map_err(failure)?,
+        ),
+    ))
+}
+
 pub(super) async fn generation(
     State(state): State<ApiState>,
     Path(dataset_id): Path<DatasetId>,

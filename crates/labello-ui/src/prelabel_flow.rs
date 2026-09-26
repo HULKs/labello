@@ -10,6 +10,7 @@ use web_time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub(crate) enum PrelabelAction {
+    Retained(labello_client::PrelabelItemRequest),
     Load(labello_client::PrelabelSuggestionRequest),
     Check(labello_client::PrelabelSuggestionRequest),
     Admin(Option<PrelabelAdminCommand>),
@@ -20,6 +21,7 @@ pub(crate) enum PrelabelAction {
 }
 #[derive(Debug)]
 pub(crate) enum PrelabelReply {
+    Retained(Option<Box<RetainedPrelabels>>),
     Hints(Box<PrelabelResponse>),
     Generation(PrelabelGeneration),
     Admin(PrelabelAdminState),
@@ -28,11 +30,19 @@ pub(crate) enum PrelabelReply {
 type HintKey = (ImageId, TaskId, PrelabelConfigId);
 #[derive(Default)]
 pub(crate) struct PrelabelWorkState {
+    pub automatic: Option<AutomaticPrelabels>,
     pub choices: BTreeMap<String, Option<PrelabelConfigId>>,
     pub pending: Option<(u64, PrelabelAction)>,
     pub hints: BTreeMap<HintKey, HintStatus>,
     pub abort: Option<futures::future::AbortHandle>,
 }
+pub(crate) struct AutomaticPrelabels {
+    pub image: ImageId,
+    pub task: TaskId,
+    pub config: Option<PrelabelConfigId>,
+    pub checked_at: Instant,
+}
+
 pub(crate) struct HintStatus {
     pub generation: Option<PrelabelGeneration>,
     pub error: Option<String>,
@@ -90,7 +100,23 @@ impl LabelloApp {
                 })
                 .cloned();
         }
-        None
+        let automatic = self.work.prelabels.automatic.as_ref()?;
+        if self.work.current.as_ref()?.image.image_id != automatic.image
+            || task.task_id != automatic.task
+        {
+            return None;
+        }
+        automatic
+            .config
+            .as_ref()
+            .filter(|id| {
+                metadata
+                    .prelabel_configs
+                    .iter()
+                    .filter(available)
+                    .any(|config| &config.config_id == *id)
+            })
+            .cloned()
     }
 
     pub(crate) fn refresh_prelabels_if_due(&mut self, ctx: &egui::Context) {
@@ -120,6 +146,92 @@ impl LabelloApp {
         let Some(task) = self.selected_task().map(|task| task.task_id.clone()) else {
             return;
         };
+        if !self
+            .work
+            .prelabels
+            .choices
+            .contains_key(&self.prelabel_choice_key(&task))
+        {
+            let Some(image) = self
+                .work
+                .current
+                .as_ref()
+                .map(|current| current.image.image_id.clone())
+            else {
+                self.cancel_prelabel_load();
+                return;
+            };
+            self.work
+                .prelabels
+                .hints
+                .retain(|(cached_image, cached_task, _), _| {
+                    cached_image == &image && cached_task == &task
+                });
+            if self
+                .work
+                .prelabels
+                .pending
+                .as_ref()
+                .is_some_and(|(_, action)| match action {
+                    PrelabelAction::Retained(query) => {
+                        query.image_id != image || query.task_id != task
+                    }
+                    PrelabelAction::Check(query) => {
+                        query.image_id != image || query.task_id != task
+                    }
+                    _ => true,
+                })
+            {
+                self.cancel_prelabel_load();
+            }
+            if let Some(config) = self.prelabel_choice(&task)
+                && let Some(status) =
+                    self.work
+                        .prelabels
+                        .hints
+                        .get(&(image.clone(), task.clone(), config.clone()))
+            {
+                if status.checked_at.elapsed() >= Duration::from_secs(2)
+                    && self.work.prelabels.pending.is_none()
+                {
+                    self.request_prelabels(PrelabelAction::Check(
+                        labello_client::PrelabelSuggestionRequest {
+                            image_id: image,
+                            task_id: task,
+                            config_id: config,
+                        },
+                    ));
+                }
+                ctx.request_repaint_after(Duration::from_secs(2));
+                return;
+            }
+            let due = self
+                .work
+                .prelabels
+                .automatic
+                .as_ref()
+                .is_none_or(|automatic| {
+                    automatic.image != image
+                        || automatic.task != task
+                        || automatic.checked_at.elapsed() >= Duration::from_secs(3)
+                });
+            if due && self.work.prelabels.pending.is_none() {
+                self.request_prelabels(PrelabelAction::Retained(
+                    labello_client::PrelabelItemRequest {
+                        image_id: image,
+                        task_id: task,
+                    },
+                ));
+            }
+            ctx.request_repaint_after(Duration::from_secs(3));
+            return;
+        }
+        if matches!(
+            self.work.prelabels.pending,
+            Some((_, PrelabelAction::Retained(_)))
+        ) {
+            self.cancel_prelabel_load();
+        }
         let Some(config) = self.prelabel_choice(&task) else {
             return;
         };
@@ -272,6 +384,7 @@ impl LabelloApp {
         }
         let mut choice = self.prelabel_choice(&task.task_id);
         let before = choice.clone();
+        let mut choice_clicked = false;
         let refresh = ui
             .horizontal(|ui| {
                 let model_width =
@@ -290,13 +403,17 @@ impl LabelloApp {
                             )
                             .width(model_width)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut choice, None, "No prelabels");
+                                choice_clicked |= ui
+                                    .selectable_value(&mut choice, None, "No prelabels")
+                                    .clicked();
                                 for config in &configs {
-                                    ui.selectable_value(
-                                        &mut choice,
-                                        Some(config.config_id.clone()),
-                                        &config.name,
-                                    );
+                                    choice_clicked |= ui
+                                        .selectable_value(
+                                            &mut choice,
+                                            Some(config.config_id.clone()),
+                                            &config.name,
+                                        )
+                                        .clicked();
                                 }
                             });
                     },
@@ -330,7 +447,7 @@ impl LabelloApp {
                     .flatten()
             })
             .inner;
-        if before != choice {
+        if before != choice || choice_clicked {
             self.cancel_prelabel_load();
             self.work
                 .prelabels
@@ -345,6 +462,9 @@ impl LabelloApp {
         }
         if let Some(key) = refresh {
             self.work.prelabels.hints.remove(&key);
+            if let Some(automatic) = &mut self.work.prelabels.automatic {
+                automatic.checked_at = Instant::now() - Duration::from_secs(3);
+            }
         }
         if let Some(config) = choice
             && let Some(current) = &self.work.current

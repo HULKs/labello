@@ -23,6 +23,98 @@ impl PrelabelService {
         })
     }
 
+    /// Finds existing nonempty results in configuration order; never invokes inference.
+    pub async fn retained_suggestions(
+        &self,
+        dataset: &DatasetId,
+        repo: &DatasetRepository,
+        image_id: &ImageId,
+        task_id: &TaskId,
+    ) -> Result<Option<RetainedPrelabels>> {
+        let metadata = repo
+            .load_dataset()
+            .await
+            .map_err(|_| PrelabelFailure::Storage)?;
+        let task = metadata.task(task_id).ok_or(PrelabelFailure::Invalid)?;
+        let record = metadata
+            .images
+            .get(image_id)
+            .ok_or(PrelabelFailure::Invalid)?;
+        let state = repo
+            .load_image_state(image_id)
+            .await
+            .map_err(|_| PrelabelFailure::Storage)?;
+        if !prelabel_task_eligible(task, &state) {
+            return Ok(None);
+        }
+        let control = self.lock(dataset).await?;
+        for config in &metadata.prelabel_configs {
+            if !config.available_to_annotators || config.validate_for_task(task).is_err() {
+                continue;
+            }
+            let generation = Self::generation(&control, task_id, &config.config_id);
+            if generation.paused
+                || !control.results.values().any(|cached| {
+                    cached.task_id == *task_id
+                        && cached.config_id == config.config_id
+                        && !cached.empty
+                        && cached.created_at
+                            + std::time::Duration::from_secs(self.inner.limits.retention_seconds)
+                            > now()
+                })
+            {
+                continue;
+            }
+            let Ok(model) = self.model(config).await else {
+                continue;
+            };
+            let item = WorkItem {
+                image_id: image_id.clone(),
+                image_hash: record.blake3.clone(),
+                task_id: task_id.clone(),
+                config_id: config.config_id.clone(),
+                config_digest: digest(&(task, config))?,
+                model_digest: blake3::hash(&model).to_hex().to_string(),
+                generation,
+                outcome: PrelabelItemOutcome::Pending,
+            };
+            if let Some(response) = self.retained_response(dataset, &control, &item).await?
+                && !response.suggestions.is_empty()
+            {
+                return Ok(Some(RetainedPrelabels {
+                    config_id: config.config_id.clone(),
+                    response,
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn retained_response(
+        &self,
+        dataset: &DatasetId,
+        control: &Control,
+        item: &WorkItem,
+    ) -> Result<Option<PrelabelResponse>> {
+        let key = result_key(item)?;
+        let Some(cached) = control.results.get(&key).filter(|cached| {
+            cached.created_at + std::time::Duration::from_secs(self.inner.limits.retention_seconds)
+                > now()
+        }) else {
+            return Ok(None);
+        };
+        let suggestions = read_json(&self.directory(dataset)?.join(format!("result-{key}.json")))
+            .await
+            .map_err(|_| PrelabelFailure::Storage)?;
+        Ok(Some(PrelabelResponse {
+            execution: Some(cached.execution.clone()),
+            generation: item.generation.clone(),
+            suggestions,
+            from_batch: true,
+            browser_grant: None,
+        }))
+    }
+
     pub async fn suggestions(
         &self,
         dataset: &DatasetId,
@@ -79,23 +171,8 @@ impl PrelabelService {
             generation: generation.clone(),
             outcome: PrelabelItemOutcome::Pending,
         };
-        let key = result_key(&item)?;
-        if let Some(cached) = control.results.get(&key)
-            && cached.created_at
-                + std::time::Duration::from_secs(self.inner.limits.retention_seconds)
-                > now()
-        {
-            let suggestions =
-                read_json(&self.directory(dataset)?.join(format!("result-{key}.json")))
-                    .await
-                    .map_err(|_| PrelabelFailure::Storage)?;
-            return Ok(PrelabelResponse {
-                execution: Some(cached.execution.clone()),
-                generation,
-                suggestions,
-                from_batch: true,
-                browser_grant: None,
-            });
+        if let Some(response) = self.retained_response(dataset, &control, &item).await? {
+            return Ok(response);
         }
         if matches!(config.execution, PrelabelExecution::BrowserLocal { .. }) {
             let mut grant = BrowserPrelabelGrant {

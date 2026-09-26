@@ -14,7 +14,7 @@ impl LabelloApp {
         };
         use crate::prelabel_flow::{PrelabelAction, PrelabelReply};
         let (abort, registration) = futures::future::AbortHandle::new_pair();
-        if matches!(action, PrelabelAction::Load(_) | PrelabelAction::Check(_)) {
+        if matches!(action, PrelabelAction::Load(_) | PrelabelAction::Check(_) | PrelabelAction::Retained(_)) {
             self.work.prelabels.abort = Some(abort);
         }
         self.spawn_message(request.clone(), async move {
@@ -23,6 +23,8 @@ impl LabelloApp {
                     PrelabelAction::InspectModel { location, .. } => api
                         .inspect_prelabel_model(&dataset_id, labello_client::PrelabelModelCheckRequest { location })
                         .await.map(PrelabelReply::Model),
+                    PrelabelAction::Retained(query) => api.retained_prelabels(&dataset_id, query).await
+                        .map(|retained| PrelabelReply::Retained(retained.map(Box::new))),
                     PrelabelAction::Load(query) => api
                         .prelabel_suggestions(&dataset_id, query)
                         .await
@@ -134,6 +136,37 @@ impl LabelloApp {
         }
         let (_, action) = self.work.prelabels.pending.take().unwrap();
         self.work.prelabels.abort = None;
+        if let PrelabelAction::Retained(query) = action {
+            if self.work.current.as_ref().is_none_or(|current| current.image.image_id != query.image_id)
+                || self.selected_task().is_none_or(|task| task.task_id != query.task_id)
+                || self.work.prelabels.choices.contains_key(&format!("{}/{}", self.config.dataset_id, query.task_id)) {
+                return None;
+            }
+            let retained = match result {
+                Ok(PrelabelReply::Retained(retained)) => retained.filter(|retained|
+                    !retained.response.suggestions.is_empty() && !retained.response.generation.paused
+                    && self.datasets.metadata.as_ref().is_some_and(|metadata|
+                        metadata.task(&query.task_id).is_some_and(|task|
+                            metadata.prelabel_configs.iter().any(|config| config.config_id == retained.config_id
+                                && config.available_to_annotators && config.validate_for_task(task).is_ok())))),
+                _ => None,
+            };
+            self.work.prelabels.automatic = Some(crate::prelabel_flow::AutomaticPrelabels {
+                image: query.image_id.clone(), task: query.task_id.clone(),
+                config: retained.as_ref().map(|retained| retained.config_id.clone()), checked_at: Instant::now(),
+            });
+            self.work.prelabels.hints.retain(|(image, task, _), _| image != &query.image_id || task != &query.task_id);
+            if let Some(current) = &mut self.work.current {
+                current.prelabels = retained.as_ref().map(|retained| retained.response.suggestions.clone()).unwrap_or_default();
+            }
+            if let Some(retained) = retained {
+                self.work.prelabels.hints.insert((query.image_id, query.task_id, retained.config_id), HintStatus {
+                    execution: retained.response.execution, generation: Some(retained.response.generation),
+                    error: None, from_batch: true, checked_at: Instant::now(),
+                });
+            }
+            return None;
+        }
         let (PrelabelAction::Load(query) | PrelabelAction::Check(query)) = action else {
             return None;
         };
@@ -180,7 +213,9 @@ impl LabelloApp {
                     }
                     self.work.queue.clear_prelabels();
                     self.work.prelabels.hints.clear();
-                    if generation.paused {
+                    if !self.work.prelabels.choices.contains_key(&format!("{}/{}", self.config.dataset_id, query.task_id)) {
+                        self.work.prelabels.automatic = None;
+                    } else if generation.paused {
                         self.work.prelabels.hints.insert(
                             key,
                             HintStatus {

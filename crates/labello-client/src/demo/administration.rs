@@ -114,6 +114,14 @@ impl PrelabelApi for DemoLabelloApi {
             })
         })
     }
+    fn retained_prelabels<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _request: crate::PrelabelItemRequest,
+    ) -> crate::ApiFuture<'a, Option<labello_domain::RetainedPrelabels>> {
+        Box::pin(async { Ok(None) })
+    }
+
     fn prelabel_generation<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

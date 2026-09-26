@@ -41,7 +41,7 @@ dataset, import, and pending ownership before new requests start.
 | `panels/workspace_overflow.rs` | Action measurement, visible prefix, overflow focus and command identity |
 | `panels/task_selector.rs` | Task selection; `workflow_marker.rs` owns reason icons and the committed-workflow marker |
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
-| `prelabel_flow.rs`, `live/prelabels.rs` | Model choice, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
+| `prelabel_flow.rs`, `live/prelabels.rs` | Explicit model choice, item-scoped retained-hint defaults, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
 | `prelabel_review.rs` | Pending editable model objects, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
 | `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
