@@ -170,7 +170,11 @@ does not enable hints for a workflow with no saved choice.
 A removed or unavailable saved selection becomes none.
 Hints load independently of the image and are prefetched for prepared images.
 Changing selection cancels obsolete work and clears queued hints while keeping
-annotation drafts. **Refresh hints** retries a failed request.
+annotation drafts. The **Refresh hints** icon beside the model selector retries
+a failed request. Each suggestion shows its class ID and right-aligned confidence,
+with equally sized **Approve** and **Discard** buttons below. Long class IDs
+truncate with an ellipsis; hover reveals the full ID. **Approve** adds the
+suggestion to the annotation draft for the normal save and review workflow.
 
 Before display, the shared filtering policy combines the current candidate set
 and compares it with current persisted and draft boxes. Existing nondeleted

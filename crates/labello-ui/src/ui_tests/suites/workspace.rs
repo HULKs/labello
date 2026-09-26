@@ -151,7 +151,7 @@ fn workers_select_class_specific_workflows() {
             .map(|task| task.task_id.clone()),
         Some(TaskId::from("bounding_box:vehicle"))
     );
-    assert!(harness.query_by_label("Accept").is_none());
+    assert!(harness.query_by_label("Approve").is_none());
 
     let canvas = harness.get_by_label("Annotation canvas");
     let rect = canvas.rect();
@@ -1284,7 +1284,7 @@ fn save_keeps_the_same_assignment_active() {
     let mut harness = loaded_prelabel_work_harness(api.clone());
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
     let claims_before = api.counts().assign_next_image;
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     let assignment_id = harness
         .state()
         .work.assignment
@@ -1313,7 +1313,7 @@ fn annotation_edits_debounce_once_and_undo_redo_remain_available() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api.clone());
 
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
     assert_eq!(api.counts().append_event, 0);
     if harness.query_by_label_contains("Undo").is_none() {
@@ -1365,7 +1365,7 @@ fn persisted_undo_redo_keeps_the_tombstoned_identity_across_save_retry() {
     for (retry, redo_during_save) in [(false, false), (true, false), (false, true), (true, true)] {
         let api = Rc::new(SpyApi::new());
         let mut harness = loaded_prelabel_work_harness(api.clone());
-        click(&mut harness, "Accept");
+        click(&mut harness, "Approve");
         let original = harness.state().work.annotations[0].clone();
         harness.state_mut().autosave();
         step_until(&mut harness, 20, |app| {
@@ -1446,7 +1446,7 @@ fn persisted_undo_redo_keeps_the_tombstoned_identity_across_save_retry() {
 fn autosave_waits_for_an_active_canvas_drag() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api.clone());
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     let start = harness.get_by_label("Annotation canvas").rect().center();
     harness.drag_at(start);
     harness.step();
@@ -1464,7 +1464,7 @@ fn autosave_waits_for_an_active_canvas_drag() {
 fn edits_made_during_save_remain_dirty_when_the_saved_generation_finishes() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api.clone());
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     harness.state_mut().request_save(false);
     harness.state_mut().create_bbox(BoundingBox {
         x: 0.55,
@@ -1483,7 +1483,7 @@ fn edits_made_during_save_remain_dirty_when_the_saved_generation_finishes() {
 fn a_full_command_queue_cannot_strand_save_loading() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api);
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     while harness.state().runtime.commands.len() < 64 {
         let request_id = 10_000 + harness.state().runtime.commands.len() as u64;
         let request = test_request(harness.state(), request_id, None);
@@ -1901,7 +1901,7 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
 fn dirty_skip_requires_an_explicit_discard_or_submit_choice() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api.clone());
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
 
     click(&mut harness, "Skip");
@@ -1948,7 +1948,7 @@ fn dirty_skip_can_submit_and_switch_with_a_pointer_click() {
         .unwrap()
         .image_id
         .clone();
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
 
     click(&mut harness, "Skip");
     click(&mut harness, "Submit and switch");
@@ -2161,7 +2161,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.state().work.current.is_some());
     assert_eq!(harness.state().work.queue.queue_size(), IMAGE_QUEUE_SIZE);
     assert!(harness.query_by_label("Assignment").is_none());
-    assert!(harness.query_by_label("Approve").is_none());
+    assert!(harness.query_by_label("Approve").is_some());
     assert!(harness.query_by_label("Accept all annotations").is_none());
 
     harness.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Questionmark);
@@ -2172,7 +2172,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
             .is_some()
     );
 
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     harness.step();
     assert_eq!(harness.state().work.annotations.len(), 1);
     assert_eq!(
@@ -2231,7 +2231,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.query_by_label("Tutorial").is_none());
     assert!(harness.query_by_label("Approve").is_some());
     assert!(harness.query_by_label("Reject").is_none());
-    assert!(harness.query_by_label("Accept").is_none());
+    assert!(harness.query_by_label("Refresh hints").is_none());
     harness.key_press(egui::Key::Y);
     harness.step();
     step_until(&mut harness, 10, |app| !app.loading.saving);
@@ -2267,7 +2267,7 @@ fn dirty_workflow_changes_save_before_loading_the_new_assignment() {
         .image_id
         .clone();
 
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
     click(&mut harness, "Vehicle boxes");
     assert!(
@@ -2769,7 +2769,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
         harness.step();
         let canvas = harness.get_by_label("Annotation canvas").rect();
         let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous image");
-        assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Accept").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
+        assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Approve").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
         assert!(previous.rect().top() >= canvas.bottom() && previous.rect().bottom() <= height,
             "Previous must remain in the footer at {width}x{height}: {:?}", previous.rect());
         assert!(!previous.accesskit_node().is_disabled());
@@ -3296,7 +3296,7 @@ fn review_and_save_responses_propagate_renewed_assignments_without_refetching_st
 
     let save_api = Rc::new(SpyApi::new());
     let mut work = loaded_prelabel_work_harness(save_api);
-    click(&mut work, "Accept");
+    click(&mut work, "Approve");
     let original_save_expiry = work.state().work.assignment.as_ref().unwrap().expires_at;
     work.state_mut().request_save(false);
     step_until(&mut work, 8, |app| !app.loading.saving);
@@ -3803,7 +3803,7 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
 fn saved_annotation_work_still_requires_navigation_confirmation() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api);
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     harness.state_mut().request_save(false);
     step_until(&mut harness, 12, |app| !app.loading.saving);
     assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
@@ -3846,7 +3846,7 @@ fn automatic_release_rejects_stale_completions_and_blocks_background_input() {
     assert_eq!(harness.state().view, AppView::Annotate);
     assert!(harness.state().loading.saving);
     assert!(harness.query_by_label("Switch active assignment?").is_none());
-    assert!(harness.get_by_label("Accept").accesskit_node().is_disabled());
+    assert!(harness.get_by_label("Approve").accesskit_node().is_disabled());
     harness.key_press(egui::Key::Escape);
     harness.step();
     assert!(harness.state().work.pending_transition.is_some());
@@ -4174,7 +4174,7 @@ fn assert_workflow_dot(harness: &Harness<LabelloApp>, name: &str, selected: bool
 #[test]
 fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
-    click(&mut harness, "Accept");
+    click(&mut harness, "Approve");
     harness.run();
     let before = assert_workflow_dot(&harness, "Person boxes", true);
     harness

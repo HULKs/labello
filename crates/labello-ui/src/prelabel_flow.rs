@@ -272,21 +272,64 @@ impl LabelloApp {
         }
         let mut choice = self.prelabel_choice(&task.task_id);
         let before = choice.clone();
-        egui::ComboBox::from_id_salt("prelabel_model")
-            .truncate()
-            .selected_text(
-                choice
-                    .as_ref()
-                    .and_then(|id| configs.iter().find(|c| &c.config_id == id))
-                    .map_or("No prelabels", |c| c.name.as_str()),
-            )
-            .width(ui.available_width().max(80.0))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut choice, None, "No prelabels");
-                for config in &configs {
-                    ui.selectable_value(&mut choice, Some(config.config_id.clone()), &config.name);
-                }
-            });
+        let refresh = ui
+            .horizontal(|ui| {
+                let model_width =
+                    (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(0.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(model_width, 44.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        egui::ComboBox::from_id_salt("prelabel_model")
+                            .truncate()
+                            .selected_text(
+                                choice
+                                    .as_ref()
+                                    .and_then(|id| configs.iter().find(|c| &c.config_id == id))
+                                    .map_or("No prelabels", |c| c.name.as_str()),
+                            )
+                            .width(model_width)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut choice, None, "No prelabels");
+                                for config in &configs {
+                                    ui.selectable_value(
+                                        &mut choice,
+                                        Some(config.config_id.clone()),
+                                        &config.name,
+                                    );
+                                }
+                            });
+                    },
+                );
+                let key = self.work.current.as_ref().and_then(|current| {
+                    Some((
+                        current.image.image_id.clone(),
+                        task.task_id.clone(),
+                        choice.clone()?,
+                    ))
+                });
+                let refresh = ui.add_enabled(
+                    before == choice
+                        && self.work.prelabels.pending.is_none()
+                        && key
+                            .as_ref()
+                            .is_some_and(|key| self.work.prelabels.hints.contains_key(key)),
+                    egui::Button::new("↻").min_size(egui::vec2(44.0, 44.0)),
+                );
+                refresh.widget_info(|| {
+                    egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button,
+                        refresh.enabled(),
+                        "Refresh hints",
+                    )
+                });
+                refresh
+                    .on_hover_text("Refresh hints")
+                    .clicked()
+                    .then_some(key)
+                    .flatten()
+            })
+            .inner;
         if before != choice {
             self.cancel_prelabel_load();
             self.work
@@ -299,6 +342,9 @@ impl LabelloApp {
             }
             self.work.queue.clear_prelabels();
             self.persist_workspace_preference();
+        }
+        if let Some(key) = refresh {
+            self.work.prelabels.hints.remove(&key);
         }
         if let Some(config) = choice
             && let Some(current) = &self.work.current
@@ -348,15 +394,6 @@ impl LabelloApp {
                         });
                     }
                     _ => {}
-                }
-                if ui
-                    .add_enabled(
-                        self.work.prelabels.pending.is_none(),
-                        egui::Button::new("Refresh hints"),
-                    )
-                    .clicked()
-                {
-                    self.work.prelabels.hints.remove(&key);
                 }
             } else {
                 ui.label("Preparing hints… You can annotate while they load.");

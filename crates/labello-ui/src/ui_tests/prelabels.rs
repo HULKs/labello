@@ -373,7 +373,7 @@ fn disabled_server_hides_annotation_hints_and_never_requests_them() {
         "No prelabels",
         "Refresh hints",
         "Preparing hints… You can annotate while they load.",
-        "Accept",
+        "Approve",
         "Discard",
     ] {
         assert!(harness.query_by_label(label).is_none(), "{label}");
@@ -468,4 +468,165 @@ fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration()
     api.state.borrow_mut().prelabel_available = true;
     harness.state_mut().request_session();
     step_until(&mut harness, 8, |app| app.auth.prelabel_available);
+}
+
+#[test]
+fn prelabel_cards_keep_long_classes_and_actions_inside_the_inspector() {
+    let mut loaded = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let mut app = std::mem::replace(loaded.state_mut(), base_live_app(Rc::new(SpyApi::new())));
+    app.cancel_prelabel_load();
+    // Isolate rendering from background work while exercising the production panel.
+    app.runtime.api = None;
+    let class_id =
+        "a_very_long_dataset_class_id_that_must_not_push_confidence_or_actions_outside_the_card";
+    let task_id = app.selected_task().unwrap().task_id.clone();
+    app.work
+        .tasks
+        .iter_mut()
+        .find(|task| task.task_id == task_id)
+        .unwrap()
+        .class_ids = vec![class_id.into()];
+    let hint = &mut app.work.current.as_mut().unwrap().prelabels[0];
+    hint.class_id = class_id.into();
+    hint.confidence = 0.87;
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(300.0, 1000.0))
+        .build_ui_state(|ui, app: &mut LabelloApp| app.right_panel(ui, false), app);
+    for width in [260.0, 280.0, 320.0, 390.0] {
+        harness.set_size(egui::vec2(width, 1000.0));
+        harness.run_steps(3);
+        let class = harness.get_by_label(class_id).rect();
+        let confidence = harness.get_by_label("87%").rect();
+        let approve = harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Approve")
+            .rect();
+        let discard = harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Discard")
+            .rect();
+        assert!(class.right() < confidence.left());
+        assert!((class.center().y - confidence.center().y).abs() < 1.0);
+        assert!((confidence.right() - discard.right()).abs() < 1.0);
+        assert!((approve.width() - discard.width()).abs() < 1.0);
+        assert!((approve.top() - discard.top()).abs() < 1.0);
+        assert!(approve.top() >= class.bottom());
+        assert!(approve.top() - class.bottom() <= 12.0);
+        assert!(discard.bottom() - class.top() <= 100.0);
+        assert!(approve.height() >= 44.0 && discard.height() >= 44.0);
+        assert!(discard.right() <= width);
+        fn truncated(shape: &egui::Shape, text: &str) -> bool {
+            match shape {
+                egui::Shape::Text(shape) => shape.galley.job.text == text && shape.galley.elided,
+                egui::Shape::Vec(shapes) => shapes.iter().any(|shape| truncated(shape, text)),
+                _ => false,
+            }
+        }
+        assert!(
+            harness
+                .output()
+                .shapes
+                .iter()
+                .any(|shape| truncated(&shape.shape, class_id))
+        );
+    }
+    harness.state_mut().loading.saving = true;
+    harness.step();
+    for label in ["Approve", "Discard"] {
+        assert!(harness.get_by_label(label).accesskit_node().is_disabled());
+    }
+}
+
+#[test]
+fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let refresh = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Refresh hints");
+    assert!(refresh.accesskit_node().is_disabled());
+    let selector = harness
+        .query_all_by_role(egui::accesskit::Role::ComboBox)
+        .find(|node| node.accesskit_node().value().as_deref() == Some("No prelabels"))
+        .unwrap();
+    assert!((refresh.rect().center().y - selector.rect().center().y).abs() < 1.0);
+    assert!(refresh.rect().left() > selector.rect().right());
+    assert!(refresh.rect().width() >= 44.0 && refresh.rect().height() >= 44.0);
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
+    step_until(&mut harness, 20, |app| {
+        !app.visible_prelabels().is_empty() && app.work.prelabels.pending.is_none()
+    });
+    let mut app = std::mem::replace(harness.state_mut(), base_live_app(Rc::new(SpyApi::new())));
+    let key = app.work.prelabels.hints.keys().next().unwrap().clone();
+    app.work.prelabels.hints.get_mut(&key).unwrap().error = Some("Inference failed".into());
+    app.datasets.metadata.as_mut().unwrap().prelabel_configs[0].name =
+        "A very long model name that must leave room for the refresh icon".into();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(320.0, 1000.0))
+        .build_ui_state(|ui, app: &mut LabelloApp| app.right_panel(ui, false), app);
+    harness.run_steps(3);
+    for width in [260.0, 280.0, 320.0] {
+        harness.set_size(egui::vec2(width, 1000.0));
+        harness.run_steps(3);
+        let refresh = harness.get_by_label("Refresh hints").rect();
+        let selector = harness
+            .query_all_by_role(egui::accesskit::Role::ComboBox)
+            .find(|node| {
+                node.accesskit_node()
+                    .value()
+                    .is_some_and(|value| value.starts_with("A very long model"))
+            })
+            .unwrap()
+            .rect();
+        assert!(refresh.right() <= width);
+        assert!(selector.right() < refresh.left());
+        assert!((selector.center().y - refresh.center().y).abs() < 1.0);
+    }
+    assert!(
+        !harness
+            .get_by_label("Refresh hints")
+            .accesskit_node()
+            .is_disabled()
+    );
+    harness
+        .state_mut()
+        .request_prelabels(PrelabelAction::Check(PrelabelSuggestionRequest {
+            image_id: key.0.clone(),
+            task_id: key.1.clone(),
+            config_id: key.2.clone(),
+        }));
+    harness.step();
+    assert!(
+        harness
+            .get_by_label("Refresh hints")
+            .accesskit_node()
+            .is_disabled()
+    );
+    harness.state_mut().cancel_prelabel_load();
+    harness.step();
+    harness.get_by_label("Refresh hints").focus();
+    harness.step();
+    harness.key_press(egui::Key::Enter);
+    harness.step();
+    assert!(!harness.state().work.prelabels.hints.contains_key(&key));
+    harness.step();
+    assert!(
+        harness
+            .get_by_label("Refresh hints")
+            .accesskit_node()
+            .is_disabled()
+    );
+}
+
+#[test]
+fn prelabel_actions_support_keyboard_approval_and_discard() {
+    for approve in [true, false] {
+        let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+        harness.get_by_label("Approve").focus();
+        harness.step();
+        if !approve {
+            harness.key_press(egui::Key::Tab);
+            harness.step();
+            assert!(harness.get_by_label("Discard").is_focused());
+        }
+        harness.key_press(egui::Key::Enter);
+        harness.step();
+        assert!(harness.state().visible_prelabels().is_empty());
+        assert_eq!(harness.state().work.annotations.len(), usize::from(approve));
+    }
 }

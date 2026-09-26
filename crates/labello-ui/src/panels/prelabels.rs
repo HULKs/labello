@@ -124,27 +124,44 @@ impl LabelloApp {
             let selected = self.work.selected_prelabel.as_ref() == Some(&suggestion.suggestion_id);
             let frame = theme::prelabel_card_frame(selected);
             frame.show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .selectable_label(selected, suggestion.class_id.to_string())
-                        .clicked()
-                    {
-                        self.work.selected_prelabel = Some(suggestion.suggestion_id.clone());
-                    }
-                    theme::badge(
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        theme::badge(
+                            ui,
+                            &format!("{:.0}%", suggestion.confidence * 100.0),
+                            theme::Intent::Accent,
+                        );
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            if ui
+                                .add(
+                                    egui::Button::selectable(
+                                        selected,
+                                        RichText::new(suggestion.class_id.to_string()).monospace(),
+                                    )
+                                    .truncate(),
+                                )
+                                .on_hover_text(suggestion.class_id.to_string())
+                                .clicked()
+                            {
+                                self.work.selected_prelabel =
+                                    Some(suggestion.suggestion_id.clone());
+                            }
+                        });
+                    });
+                });
+                ui.horizontal(|ui| {
+                    let width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                    let size = egui::vec2(width, 44.0);
+                    if theme::primary_button(
                         ui,
-                        &format!("{:.0}%", suggestion.confidence * 100.0),
-                        theme::Intent::Accent,
-                    );
-                    if theme::primary_button(ui, !self.loading.saving, egui::Button::new("Accept"))
-                        .on_hover_text(format!(
-                            "Shortcut: {}",
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::AcceptPrelabel,
-                            )
-                        ))
-                        .clicked()
+                        !self.loading.saving,
+                        egui::Button::new("Approve").min_size(size),
+                    )
+                    .on_hover_text(format!(
+                        "Shortcut: {}",
+                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::AcceptPrelabel,)
+                    ))
+                    .clicked()
                     {
                         self.accept_prelabel(suggestion);
                         self.work.selected_prelabel = self
@@ -152,15 +169,16 @@ impl LabelloApp {
                             .first()
                             .map(|suggestion| suggestion.suggestion_id.clone());
                     }
-                    if theme::danger_button(ui, !self.loading.saving, egui::Button::new("Discard"))
-                        .on_hover_text(format!(
-                            "Shortcut: {}",
-                            self.shortcut_text(
-                                ui.ctx(),
-                                labello_domain::UserAction::DiscardPrelabel,
-                            )
-                        ))
-                        .clicked()
+                    if theme::danger_button(
+                        ui,
+                        !self.loading.saving,
+                        egui::Button::new("Discard").min_size(size),
+                    )
+                    .on_hover_text(format!(
+                        "Shortcut: {}",
+                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::DiscardPrelabel,)
+                    ))
+                    .clicked()
                     {
                         self.discard_prelabel(suggestion.suggestion_id.clone());
                     }
