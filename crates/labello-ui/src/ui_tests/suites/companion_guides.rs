@@ -572,3 +572,49 @@ fn next_guide_saves_and_refocuses_without_submitting_until_last_box() {
     });
     assert!(harness.state().runtime.error.is_none());
 }
+
+#[test]
+fn last_companion_guide_stays_submittable_after_save_and_reload() {
+    for delete in [false, true] {
+        let (api, id) = source_guide_api();
+        let mut harness = loaded_work_harness(api.clone());
+        if delete {
+            harness.state_mut().delete_selected();
+        } else {
+            let canvas = harness.get_by_label("Annotation canvas").rect();
+            drag_at(
+                &mut harness,
+                canvas.center() - canvas.size() * 0.2,
+                canvas.center() + canvas.size() * 0.2,
+            );
+        }
+        harness.state_mut().request_save(false);
+        step_until(&mut harness, 20, |app| {
+            app.work.save_status == SaveStatus::Saved
+        });
+        harness.state_mut().retry_assignment_load();
+        step_until(&mut harness, 20, |app| !app.loading.image);
+        harness.run();
+        assert!(
+            !harness
+                .state()
+                .work
+                .annotations
+                .iter()
+                .any(|a| harness.state().companion_needs_box(a))
+        );
+        assert!(harness.query_by_label("Next guide").is_none());
+        harness.get_by_label("Submit & next").click();
+        step_until(&mut harness, 20, |app| {
+            api.counts().complete_assignment == 1 && app.work.pending_transition.is_none()
+        });
+        assert!(harness.state().runtime.error.is_none());
+        let spy = api.state.borrow();
+        let state = spy
+            .states
+            .values()
+            .find(|state| state.annotations.contains_key(&id))
+            .unwrap();
+        assert_eq!(state.current_annotation(&id).unwrap().deleted, delete);
+    }
+}
