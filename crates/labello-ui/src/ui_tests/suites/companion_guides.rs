@@ -414,7 +414,11 @@ fn companion_box_submit_button_completes_assignment_before_and_after_save() {
         }
         harness.run();
         harness.get_by_label("Submit & next").click();
-        step_until(&mut harness, 20, |_| api.counts().complete_assignment == 1);
+        step_until(&mut harness, 20, |app| {
+            api.counts().complete_assignment == 1
+                && app.work.pending_transition.is_none()
+                && app.work.assignment.as_ref().map(|a| &a.assignment_id) != Some(&assignment_id)
+        });
         assert_eq!(api.counts().complete_assignment, 1);
         assert!(harness.state().runtime.error.is_none());
         assert!(harness.state().work.pending_transition.is_none());
