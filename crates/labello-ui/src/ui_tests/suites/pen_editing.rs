@@ -23,7 +23,7 @@ fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation
         for placing in [false, true] {
             if placing {
                 let canvas = harness.get_by_label("Annotation canvas").rect();
-                click_at(&mut harness, canvas.left_top() + canvas.size() * 0.1);
+                click_at(&mut harness, canvas.center());
                 harness.run_steps(4);
                 assert!(harness.state().work.migration.draft.is_some());
             }
