@@ -52,6 +52,14 @@ Settings are staged until saved and can be restored to defaults.
 | Delete annotation | `Delete`; also discards a selected locally added review object |
 | Pen annotation | Primary-tip drag creates/moves/resizes boxes; tap places keypoints and drag moves them. See the [stylus contract](stylus-input.md) for tested event streams and pending device coverage. |
 
+Canvas zoom ranges from fit-to-view to 48 times that scale, including restored
+workspace views. Zoom magnifies the working preview; it does not fetch additional
+image detail.
+
+Migration-created box work uses [source keypoints as read-only guides](migration.md#add-a-missing-object)
+until the box is drawn. Select guides on the canvas, in Inspector, or with the
+configured previous/next object shortcuts. Drawing updates the selected companion.
+
 Review opens objects for direct editing. Use modifier-drag or middle-drag to pan.
 Refocus uses current correction geometry. Workflow actions remain in the bottom
 bar; on smaller screens, Workflow and Inspector open as drawers. Shortcuts are

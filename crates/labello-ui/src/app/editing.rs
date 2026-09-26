@@ -9,6 +9,13 @@ impl LabelloApp {
     }
 
     pub(crate) fn create_bbox(&mut self, bbox: BoundingBox) {
+        if let Some(annotation_id) = self.work.annotations.iter().find(|annotation| {
+            Some(&annotation.annotation_id) == self.work.selected_annotation.as_ref()
+                && self.companion_needs_box(annotation)
+        }).map(|annotation| annotation.annotation_id.clone()) {
+            self.edit_bbox(crate::canvas::BoundingBoxEdit { annotation_id, bounding_box: bbox });
+            return;
+        }
         let Some(task) = self.selected_task() else {
             return;
         };
@@ -63,7 +70,7 @@ impl LabelloApp {
         else {
             return;
         };
-        if *current == edit.bounding_box {
+        if *current == edit.bounding_box && !self.companion_needs_box(&self.work.annotations[index]) {
             return;
         }
         let user_id = self.config.user_id.clone();

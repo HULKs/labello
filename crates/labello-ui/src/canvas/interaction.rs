@@ -289,7 +289,11 @@ fn handle_annotation_pointer(
             && interaction.allow_create
             && bounding_box_tool
             && image_rect.contains(pointer)
-            && annotation_at(pointer, image_rect, annotations).is_none()
+            && annotation_at_selectable(pointer, image_rect, annotations, selectable_annotations)
+                .is_none_or(|annotation| {
+                    selected_annotation == Some(&annotation.annotation_id)
+                        && matches!(annotation.geometry, AnnotationGeometry::Skeleton(_))
+                })
         {
             state.drag = Some(DragOperation::Create {
                 start: normalized_pointer,

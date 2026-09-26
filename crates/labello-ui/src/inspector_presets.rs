@@ -1198,6 +1198,24 @@ fn migration_companion_annotation_preset(ctx: &egui::Context) -> LabelloApp {
     state
         .annotations
         .insert(annotation.annotation_id.clone(), vec![annotation.clone()]);
+    let mut source = annotation.clone();
+    source.annotation_id = "discovered-skeleton".into();
+    source.task_id = "skeleton:person".into();
+    source.annotation_type = AnnotationType::Skeleton;
+    source.revision_source = labello_domain::RevisionSource::Human {
+        action: labello_domain::HumanRevisionKind::Authored,
+    };
+    source.geometry = AnnotationGeometry::Skeleton(labello_domain::SkeletonGeometry {
+        keypoints: vec![labello_domain::KeypointAnnotation {
+            name: "center".into(),
+            state: labello_domain::KeypointState::Visible,
+            point: Some(labello_domain::NormalizedPoint { x: 0.775, y: 0.775 }),
+        }],
+    });
+    state
+        .annotations
+        .insert(source.annotation_id.clone(), vec![source]);
+    app.work.selected_annotation = Some(annotation.annotation_id.clone());
     app
 }
 
