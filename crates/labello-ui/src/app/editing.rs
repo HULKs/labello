@@ -491,6 +491,21 @@ impl LabelloApp {
     pub(crate) fn recompute_modified_annotations(&mut self) {
         let persisted_annotations = self.work.persisted_annotations.clone();
         let current_state = self.work.current_state.clone();
+        for annotation in &mut self.work.annotations {
+            if persisted_annotations.contains(&annotation.annotation_id)
+                && let Some(persisted) = current_state
+                    .as_ref()
+                    .and_then(|state| state.current_annotation(&annotation.annotation_id))
+            {
+                // Saves can establish provenance after this draft or history snapshot
+                // was created. Retain edits, but always use the server's identity.
+                annotation.origin = persisted.origin.clone();
+                annotation.object_group_id = persisted.object_group_id.clone();
+                annotation.created_at = persisted.created_at;
+                annotation.task_id = persisted.task_id.clone();
+                annotation.annotation_type = persisted.annotation_type.clone();
+            }
+        }
         self.work.modified_annotations = self
             .work
             .annotations

@@ -1272,6 +1272,9 @@ fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() 
         let api = Rc::new(SpyApi::new());
         let mut harness = loaded_prelabel_work_harness(api.clone());
         add_second_prelabel(harness.state_mut());
+        attach_prelabel_evidence(harness.state_mut());
+        let first = harness.state().work.selected_annotation.clone().unwrap();
+        let assignment = harness.state().work.assignment.clone().unwrap();
         harness.run_steps(3);
         click_accesskit_button(&mut harness, "Confirm & next");
         assert_eq!(harness.state().work.annotations.len(), 1);
@@ -1343,11 +1346,18 @@ fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() 
         step_until(&mut harness, 12, |app| !app.loading.saving);
         assert_eq!(harness.state().work.annotations.len(), 2);
         assert!(harness.state().pending_prelabel_objects().is_empty());
+        harness.state_mut().undo();
+        harness.state_mut().redo();
+        harness.state_mut().work.last_edit_at = None;
         harness.state_mut().autosave();
         step_until(&mut harness, 12, |app| !app.loading.saving);
         let state = harness.state().work.current_state.as_ref().unwrap();
         assert_eq!(state.active_annotations().count(), 2);
         assert!(state.current_annotation(&second).is_some());
+        assert!(matches!(
+            state.current_annotation(&first).unwrap().origin,
+            AnnotationOrigin::Prelabel { .. }
+        ));
         assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
         assert_eq!(api.counts().complete_assignment, 0);
         assert_eq!(
@@ -1357,5 +1367,68 @@ fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() 
                 .count(),
             2
         );
+        harness.state_mut().submit_and_advance();
+        step_until(&mut harness, 20, |app| {
+            app.work
+                .assignment
+                .as_ref()
+                .is_some_and(|current| current.assignment_id != assignment.assignment_id)
+        });
+        assert_eq!(api.counts().complete_assignment, 1);
+        assert!(harness.state().runtime.error.is_none());
     }
+}
+
+#[test]
+fn recovered_prelabel_edits_use_persisted_provenance_for_final_submit() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    attach_prelabel_evidence(harness.state_mut());
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    harness.state_mut().confirm_prelabel_object();
+    harness.state_mut().autosave();
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let saved = harness.state().work.annotations[0].clone();
+    assert!(matches!(saved.origin, AnnotationOrigin::Prelabel { .. }));
+    let edited = BoundingBox {
+        x: 0.2,
+        y: 0.25,
+        width: 0.3,
+        height: 0.35,
+    };
+    harness.state_mut().edit_bbox(BoundingBoxEdit {
+        annotation_id: id.clone(),
+        bounding_box: edited,
+    });
+    // Reproduce a draft written by the old save-reply path with stale identity.
+    harness.state_mut().work.annotations[0].origin = AnnotationOrigin::native();
+    harness.state_mut().work.annotations[0].object_group_id = Some("stale-group".into());
+    harness.state_mut().work.last_edit_at = None;
+    harness.state_mut().queue_current_drafts();
+    harness.run_steps(10);
+    harness.state_mut().work.annotations.clear();
+    harness.state_mut().runtime.notice = None;
+    harness.state_mut().request_work_draft_load();
+    step_until(&mut harness, 12, |app| {
+        app.runtime.notice.as_deref() == Some("Recovered the validated browser draft.")
+    });
+    let recovered = &harness.state().work.annotations[0];
+    assert_eq!(recovered.origin, saved.origin);
+    assert_eq!(recovered.object_group_id, saved.object_group_id);
+    assert_eq!(recovered.geometry, AnnotationGeometry::BoundingBox(edited));
+    harness.state_mut().submit_and_advance();
+    step_until(&mut harness, 20, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|current| current.assignment_id != assignment.assignment_id)
+    });
+    assert_eq!(api.counts().complete_assignment, 1);
+    assert!(harness.state().runtime.error.is_none());
+    assert!(api.events().iter().any(|payload| matches!(payload,
+        EventPayload::AnnotationVersionCreated { annotation, previous_version: Some(1), .. }
+        if annotation.annotation_id == id && annotation.origin == saved.origin
+            && annotation.geometry == AnnotationGeometry::BoundingBox(edited)
+    )));
 }

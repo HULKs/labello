@@ -76,7 +76,11 @@ guide navigation remain available while saving;
 transaction guards still prevent overlapping save, submit, or release requests.
 A workflow change stages the normal confirmation and waits for the save before
 committing a transition. Save replies preserve newer local edits through the edit
-generation check. Routine saves use periodic statistics refresh; completion
+generation check. Annotation reconciliation copies immutable origin, object group,
+creation time, workflow, and annotation type from persisted state before comparing
+drafts and rebasing versions. This also applies to Undo/Redo and browser recovery,
+so a snapshot taken before prelabel acceptance cannot replace server provenance.
+Routine saves use periodic statistics refresh; completion
 requests an immediate refresh.
 
 ## Browser input

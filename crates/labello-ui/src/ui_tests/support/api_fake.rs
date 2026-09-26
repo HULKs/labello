@@ -1976,7 +1976,23 @@ impl AnnotationApi for SpyApi {
         if complete {
             state.counts.complete_assignment += 1;
         }
-        for payload in request.payloads {
+        for mut payload in request.payloads {
+            if let EventPayload::AnnotationVersionCreated { annotation, .. } = &mut payload {
+                if let Some(current) = state.states.get(&assignment.image_id)
+                    .and_then(|image| image.current_annotation(&annotation.annotation_id))
+                {
+                    if annotation.origin != current.origin || annotation.object_group_id != current.object_group_id {
+                        return ready(Err(ClientError::Demo("annotation origin and objectGroupId are immutable".into())));
+                    }
+                } else if let Some(proof) = request.prelabel_acceptances.get(&annotation.annotation_id) {
+                    annotation.origin = labello_domain::AnnotationOrigin::Prelabel {
+                        prelabel: Box::new(labello_domain::AcceptedPrelabel {
+                            provenance: proof.provenance.clone(),
+                            predicted_geometry: proof.predicted_geometry.clone(),
+                        }),
+                    };
+                }
+            }
             state.counts.append_event += 1;
             state.events.push(payload.clone());
             let image_state = state

@@ -230,6 +230,8 @@ Unconfirmed objects block submission while their model is selected. Save, includ
 autosave, sends only confirmed or manually drawn annotations. Editing and confirming
 further objects remains available while a background save is in flight. Its reply
 preserves newer local decisions, and final submission waits for that save to finish.
+Save replies, Undo/Redo, and recovered drafts retain the server's immutable
+accepted-prelabel origin and object group while preserving local geometry edits.
 In compact layouts,
 Save is available under **More actions** and through its configured shortcut.
 The former prelabel acceptance/deletion shortcuts remain compatible aliases for
