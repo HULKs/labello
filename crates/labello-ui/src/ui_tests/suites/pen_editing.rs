@@ -300,7 +300,7 @@ fn background_keypoint_save_keeps_controls_live_and_preserves_newer_edits() {
         step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
         let workflow = harness.state().selected_workflow().unwrap();
         let label = workflow.label();
-        let workflow_rect = harness.get_by_label(&label).rect();
+        let workflow_rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect();
         let center = harness.get_by_label("Annotation canvas").rect().center();
         click_at(&mut harness, center);
         let assignment = harness.state().work.assignment.clone().unwrap();
@@ -314,7 +314,7 @@ fn background_keypoint_save_keeps_controls_live_and_preserves_newer_edits() {
         harness.run_steps(2);
         assert!(harness.state().loading.saving);
         assert!(!harness.state().saving_blocks_interaction());
-        let card = harness.get_by_label(&label);
+        let card = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
         assert!(!card.accesskit_node().is_disabled());
         assert_eq!(card.rect(), workflow_rect);
         assert_eq!(harness.state().workflow_marker_reason(&workflow.task_id), None);
