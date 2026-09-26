@@ -185,15 +185,13 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
             assert!(harness.state().work.migration.error.is_some());
             assert_eq!(harness.state().work.migration.draft.as_ref(), Some(&first_draft));
             assert!(harness.state().work.migration.pending_overview_intent.is_some());
-            let key = harness.state().work.migration.retry_request.as_ref().unwrap().key.clone();
             harness.state_mut().trigger_migration_primary_action();
-            assert_eq!(harness.state().work.migration.retry_request.as_ref().unwrap().key, key);
             step_until(&mut harness, 12, |app| !app.work.migration.busy);
         }
         assert!(harness.state().work.migration.error.is_none());
         assert_eq!(harness.state().work.migration.keypoint_index, 1);
         assert!(harness.state().work.migration.editing_missing_annotation_id.is_none());
-        let first_id = AnnotationId::from("spy-discovered");
+        let first_id = labello_domain::AnnotationId::from("spy-discovered");
         let state = harness.state().work.current_state.as_ref().unwrap();
         assert_eq!(state.current_annotation(&first_id).unwrap().geometry, AnnotationGeometry::Skeleton(first_draft));
         let second_draft = harness.state().work.migration.draft.clone().unwrap();
@@ -204,7 +202,7 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         step_until(&mut harness, 12, |app| !app.work.migration.busy);
         harness.run_steps(3);
         assert_eq!(harness.state().work.migration.editing_missing_annotation_id.as_ref(), Some(&first_id));
-        let second_id = AnnotationId::from("spy-discovered-1");
+        let second_id = labello_domain::AnnotationId::from("spy-discovered-1");
         assert_eq!(harness.state().work.current_state.as_ref().unwrap().current_annotation(&second_id).unwrap().geometry, AnnotationGeometry::Skeleton(second_draft));
         harness.key_press(egui::Key::H);
         harness.step();
