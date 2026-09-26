@@ -1,4 +1,8 @@
 impl LabelloApp {
+    pub(crate) fn review_secondary_action_count(&self) -> usize {
+        3 + usize::from(self.bar_has_previous_image()) + usize::from(self.bar_review_removable())
+    }
+
     fn review_bottom_actions(&mut self, ui: &mut egui::Ui) {
         let ready = self.work.assignment.is_some()
             && !self.loading.saving && !self.loading.image && !self.work.migration.busy
@@ -6,8 +10,7 @@ impl LabelloApp {
         let compact = LayoutMode::for_width(ui.ctx().content_rect().width()) != LayoutMode::Wide;
         let secondary = |app: &mut Self, ui: &mut egui::Ui| {
             let removable = app.bar_review_removable();
-            let count = (if app.bar_has_previous_image() { 4.0 } else { 3.0 })
-                + if removable { 1.0 } else { 0.0 };
+            let count = app.review_secondary_action_count() as f32;
             let width = compact.then(|| ((ui.available_width() - (count - 1.0) * ui.spacing().item_spacing.x) / count).floor().max(44.0));
             app.review_object_navigation(ui, width);
             app.previous_review_action(ui, width);

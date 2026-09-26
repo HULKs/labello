@@ -297,9 +297,14 @@ impl LabelloApp {
         58.0
     }
 
-    pub(crate) fn workspace_actions_height(&self, layout: LayoutMode, viewport: egui::Vec2) -> f32 {
+    pub(crate) fn workspace_actions_height(&self, ctx: &egui::Context, layout: LayoutMode, viewport: egui::Vec2) -> f32 {
         if layout != LayoutMode::Wide && self.view == AppView::Review {
-            if Self::short_viewport(viewport) { 98.0 } else { 114.0 }
+            let spacing = ctx.style().spacing.item_spacing;
+            let inner_width = (viewport.x - theme::top_bar_frame().total_margin().sum().x).max(44.0);
+            let per_row = ((inner_width + spacing.x) / (44.0 + spacing.x)).floor().max(1.0);
+            let secondary_rows = (self.review_secondary_action_count() as f32 / per_row).ceil();
+            let base_height = if Self::short_viewport(viewport) { 98.0 } else { 114.0 };
+            base_height + (secondary_rows - 1.0) * (44.0 + spacing.y)
         } else if layout == LayoutMode::Compact && self.bar_migration_active() {
             if Self::short_viewport(viewport) { 46.0 } else { 68.0 }
         } else {

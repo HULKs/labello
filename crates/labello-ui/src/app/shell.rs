@@ -57,7 +57,7 @@ impl eframe::App for LabelloApp {
             .show(ui, |ui| self.app_bar(ui, layout));
         self.sync_workspace_bars();
         let compact_action_height = self.work_view()
-        .then(|| self.workspace_actions_height(layout, viewport));
+        .then(|| self.workspace_actions_height(ui.ctx(), layout, viewport));
         if self.work_view() {
             egui::Panel::top("workspace_context")
                 .min_size(self.workspace_context_height(ui.ctx(), layout, viewport))
