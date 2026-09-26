@@ -188,6 +188,11 @@ not enlarged when rendered, hit-tested, or edited at deep zoom. Workspace
 preferences are not overwritten while dataset/assignment loading or restoration
 is pending, so a restored deep view survives asynchronous browser startup.
 
+Automatic annotation focus is limited to pending/accepted model objects and
+migration companions. Manually drawn boxes keep the current zoom and pan even
+after prelabel review has started; Refocus remains explicit for any selected
+annotation.
+
 Bounding-box assignments without a restored selection select their first visible
 migration companion. Focus occurs once per activation of an annotation identity,
 not each version, autosave, or manual pan/zoom. Selecting another object and

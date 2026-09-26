@@ -332,7 +332,10 @@ impl CanvasState {
     /// Keep the editing view stable across geometry changes and saved versions.
     pub(crate) fn set_annotation_edit_focus(&mut self, annotation: Option<&AnnotationVersion>) {
         let Some(annotation) = annotation else {
-            self.clear_review_focus();
+            // Leaving automatic object focus preserves an explicit Refocus request.
+            if matches!(self.review_target, ReviewViewTarget::EditingAnnotation(_)) {
+                self.clear_review_focus();
+            }
             return;
         };
         let target = ReviewViewTarget::EditingAnnotation(annotation.annotation_id.clone());

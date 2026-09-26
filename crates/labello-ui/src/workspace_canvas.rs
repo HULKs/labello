@@ -128,17 +128,22 @@ impl LabelloApp {
                         review_annotation
                     });
             } else if self.view == AppView::Annotate {
-                let companion = selected_annotation.as_ref().and_then(|id| {
+                let focus = selected_annotation.as_ref().and_then(|id| {
                     annotations.iter().find(|annotation| {
                         &annotation.annotation_id == id
-                            && (self.work.prelabel_review.started
+                            && (self.selected_prelabel_object().is_some()
+                                || self.work.prelabel_evidence.contains_key(id)
                                 || self.work.annotations.iter().any(|original| {
                                     original.annotation_id == annotation.annotation_id
-                                        && self.is_migration_companion_box(original)
+                                        && (self.is_migration_companion_box(original)
+                                            || matches!(
+                                                original.origin,
+                                                labello_domain::AnnotationOrigin::Prelabel { .. }
+                                            ))
                                 }))
                     })
                 });
-                self.work.canvas.set_annotation_edit_focus(companion);
+                self.work.canvas.set_annotation_edit_focus(focus);
             } else {
                 self.work.canvas.clear_review_focus();
             }

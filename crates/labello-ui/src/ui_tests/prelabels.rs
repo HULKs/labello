@@ -1432,3 +1432,52 @@ fn recovered_prelabel_edits_use_persisted_provenance_for_final_submit() {
             && annotation.geometry == AnnotationGeometry::BoundingBox(edited)
     )));
 }
+
+#[test]
+fn manual_boxes_keep_the_view_with_and_without_prelabels() {
+    for with_prelabels in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = if with_prelabels {
+            loaded_prelabel_work_harness(api)
+        } else {
+            loaded_work_harness(api)
+        };
+        if with_prelabels {
+            harness.run_steps(3);
+            assert!(harness.state().work.canvas.current_zoom() > 1.0);
+            harness.state_mut().confirm_prelabel_object();
+        }
+        harness.run_steps(3);
+        for zoom in [1.0, 2.0] {
+            harness.state_mut().work.canvas.restore_transform(
+                crate::persistence::StoredCanvasTransform {
+                    zoom,
+                    pan_x: if zoom > 1.0 { 17.0 } else { 0.0 },
+                    pan_y: if zoom > 1.0 { -11.0 } else { 0.0 },
+                },
+            );
+            harness.run_steps(2);
+            let before = harness.state().work.canvas.stored_transform();
+            harness.state_mut().create_bbox(BoundingBox {
+                x: 0.7,
+                y: 0.65,
+                width: 0.12,
+                height: 0.15,
+            });
+            let selected = harness.state().work.selected_annotation.clone();
+            harness.run_steps(3);
+            assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            assert_eq!(harness.state().work.selected_annotation, selected);
+            harness.state_mut().autosave();
+            step_until(&mut harness, 12, |app| !app.loading.saving);
+            harness.state_mut().undo();
+            harness.state_mut().redo();
+            harness.run_steps(3);
+            assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            assert_eq!(harness.state().work.selected_annotation, selected);
+            harness.key_press(egui::Key::R);
+            harness.run_steps(3);
+            assert_ne!(harness.state().work.canvas.stored_transform(), before);
+        }
+    }
+}

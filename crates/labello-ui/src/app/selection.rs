@@ -158,7 +158,6 @@ impl LabelloApp {
             return self.annotation_objects().into_iter().find(|annotation| {
                 self.work.selected_annotation.as_ref() == Some(&annotation.annotation_id)
                     && self.annotation_matches_selected_workflow(annotation)
-                    && (self.is_migration_companion_box(annotation) || self.work.prelabel_review.started)
             }).map(|annotation| self.companion_guide(&annotation));
         }
         if self.view != AppView::Review {
