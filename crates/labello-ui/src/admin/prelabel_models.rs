@@ -149,7 +149,12 @@ fn edit_model_profile(
                         Some(output.tensor.name.clone()),
                         model_tensor_label(&output.tensor),
                     )
-                    .on_hover_text(output.problem.as_deref().unwrap_or("Supported YOLO output"));
+                    .on_hover_text(
+                        output
+                            .problem
+                            .as_deref()
+                            .unwrap_or("Supported detection or pose output"),
+                    );
                 });
             }
         })
@@ -159,7 +164,10 @@ fn edit_model_profile(
         invalidate_model_profile(config);
     }
     if compatible.is_empty() {
-        ui.colored_label(theme::DANGER, "No supported YOLO output was found.");
+        ui.colored_label(
+            theme::DANGER,
+            "No supported detection or pose output was found.",
+        );
         for output in &inspection.outputs {
             if let Some(problem) = &output.problem {
                 ui.label(format!("{}: {problem}", output.tensor.name));

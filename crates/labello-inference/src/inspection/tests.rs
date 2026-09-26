@@ -111,16 +111,115 @@ fn metadata_and_output_disagreements_and_unsupported_layouts_are_explained() {
         Some("class metadata disagrees with output dimensions")
     );
     model.metadata_props.clear();
-    assert!(
-        inspect(&model.encode_to_vec())
-            .unwrap()
-            .outputs
-            .iter()
-            .all(|o| o.profile.is_none())
-    );
     assert!(inspect(b"not onnx").is_err());
     model.graph.as_mut().unwrap().initializer[0].data_location = Some(1);
     assert!(inspect(&model.encode_to_vec()).is_err());
+}
+
+#[test]
+fn detection_metadata_is_optional_and_class_names_accept_the_classes_alias() {
+    for class_names in [None, Some("names"), Some("classes")] {
+        let mut model = model();
+        model.metadata_props = class_names
+            .map(|key| pb::StringStringEntryProto {
+                key: key.into(),
+                value: r#"{"0": "person", "1": "ball"}"#.into(),
+            })
+            .into_iter()
+            .collect();
+        let inspected = inspect(&model.encode_to_vec()).unwrap();
+        assert_eq!(inspected.problem, None);
+        assert_eq!(inspected.outputs[0].profile, None);
+        let profile = inspected.outputs[1].profile.as_ref().unwrap();
+        assert_eq!((profile.class_count, profile.keypoint_count), (2, 0));
+        assert_eq!(
+            profile.class_names,
+            if class_names.is_some() {
+                vec!["person", "ball"]
+            } else {
+                vec![]
+            }
+        );
+    }
+}
+
+#[test]
+fn class_aliases_must_be_valid_consistent_and_match_output_channels() {
+    for (classes, expected_problem) in [
+        (r#"{"0": "person", "1": "ball"}"#, None),
+        (
+            r#"{"0": "ball", "1": "person"}"#,
+            Some("names and classes metadata disagree"),
+        ),
+        (
+            r#"{"1": "ball"}"#,
+            Some("invalid model class-name metadata"),
+        ),
+    ] {
+        let mut model = model();
+        model.metadata_props.push(pb::StringStringEntryProto {
+            key: "classes".into(),
+            value: classes.into(),
+        });
+        let inspected = inspect(&model.encode_to_vec()).unwrap();
+        assert_eq!(inspected.outputs[1].problem.as_deref(), expected_problem);
+    }
+    let mut model = model();
+    model.metadata_props = vec![pb::StringStringEntryProto {
+        key: "classes".into(),
+        value: r#"{"0": "person"}"#.into(),
+    }];
+    assert_eq!(
+        inspect(&model.encode_to_vec()).unwrap().outputs[1]
+            .problem
+            .as_deref(),
+        Some("class metadata disagrees with output dimensions")
+    );
+}
+
+#[test]
+fn optional_metadata_does_not_relax_static_shapes_or_explicit_task_validation() {
+    let mut symbolic = model();
+    symbolic.metadata_props.clear();
+    let output = &mut symbolic.graph.as_mut().unwrap().output[1];
+    let Some(pb::type_proto::Value::TensorType(tensor)) =
+        output.r#type.as_mut().unwrap().value.as_mut()
+    else {
+        panic!("tensor fixture");
+    };
+    tensor.shape.as_mut().unwrap().dim[2].value = Some(
+        pb::tensor_shape_proto::dimension::Value::DimParam("candidates".into()),
+    );
+    assert_eq!(
+        inspect(&symbolic.encode_to_vec()).unwrap().outputs[1]
+            .problem
+            .as_deref(),
+        Some("output must have static shape [1, channels, candidates]")
+    );
+    for task in ["segment", "classify", "unknown", "pose"] {
+        let mut model = model();
+        model.metadata_props[0].value = task.into();
+        assert!(
+            inspect(&model.encode_to_vec()).unwrap().outputs[1]
+                .profile
+                .is_none()
+        );
+    }
+    for (task, shape) in [(None, "[17, 2]"), (Some("detect"), "[17, 3]")] {
+        let mut model = model();
+        model
+            .metadata_props
+            .retain(|p| p.key != "task" || task.is_some());
+        model.metadata_props.push(pb::StringStringEntryProto {
+            key: "kpt_shape".into(),
+            value: shape.into(),
+        });
+        assert!(
+            inspect(&model.encode_to_vec()).unwrap().outputs[1]
+                .profile
+                .is_none()
+        );
+    }
 }
 
 #[test]
@@ -136,6 +235,12 @@ fn pose_count_subtracts_keypoint_channels_and_checks_declared_classes() {
     graph.output[1] = value("predictions", &[1, 56, 1]);
     graph.initializer[1].dims = vec![1, 56, 1];
     graph.initializer[1].float_data = vec![0.0; 56];
+    let inspected = inspect(&model.encode_to_vec()).unwrap();
+    let profile = inspected.outputs[1].profile.as_ref().unwrap();
+    assert_eq!((profile.class_count, profile.keypoint_count), (1, 17));
+    model
+        .metadata_props
+        .retain(|property| property.key != "task");
     let inspected = inspect(&model.encode_to_vec()).unwrap();
     let profile = inspected.outputs[1].profile.as_ref().unwrap();
     assert_eq!((profile.class_count, profile.keypoint_count), (1, 17));

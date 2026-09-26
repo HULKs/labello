@@ -97,8 +97,9 @@ Labello is under active development. These boundaries matter when choosing it:
 - Browser drafts are best-effort recovery. Offline annotation and conflict
   resolution are unavailable; there is no supported native desktop client.
 - Independent multi-annotator labeling is unavailable.
-- [Prelabels](docs/prelabels.md) support the documented static Ultralytics YOLO
-  ONNX contract, with model inspection, named outputs and explicit class mappings.
+- [Prelabels](docs/prelabels.md) support the documented static detection/pose ONNX
+  tensor contract, including compatible exports without Ultralytics metadata,
+  with model inspection, named outputs and explicit class mappings.
   Server inference tries CUDA/WebGPU when native providers are installed, with CPU
   fallback. Server generation requires Linux and an operator-managed model
   directory. Dataset-wide generation covers box workflows; external prediction

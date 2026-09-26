@@ -53,28 +53,14 @@ pub fn inspect(model: &[u8]) -> Result<PrelabelModelInspection, String> {
             return Err("invalid model metadata".into());
         }
     }
-    let keypoints = match metadata.get("task").copied() {
-        Some("detect") if !metadata.contains_key("kpt_shape") => Ok(0),
-        Some("pose") => metadata
-            .get("kpt_shape")
-            .and_then(|value| serde_json::from_str::<Vec<u32>>(value).ok())
-            .filter(|shape| matches!(shape.as_slice(), [count, 3] if (1..=256).contains(count)))
-            .map(|shape| shape[0])
-            .ok_or("pose metadata must declare [keypoints, 3]"),
-        _ => Err("export an Ultralytics detection or pose model with task metadata"),
-    };
-    let class_names = metadata
-        .get("names")
-        .map(|value| names::parse(value))
-        .transpose();
+    let keypoints = keypoint_count(&metadata);
+    let class_names = class_names(&metadata);
     let mut outputs = Vec::new();
     for value in &graph.output {
         let tensor = tensor(value)?;
         let profile = (|| {
             let keypoint_count = *keypoints.as_ref().map_err(|error| *error)?;
-            let names = class_names
-                .as_ref()
-                .map_err(|_| "invalid model class-name metadata")?;
+            let names = class_names.as_ref().map_err(|error| *error)?;
             if tensor.data_type != "float32" {
                 return Err("output must use float32");
             }
@@ -88,7 +74,7 @@ pub fn inspect(model: &[u8]) -> Result<PrelabelModelInspection, String> {
                 || !(1..=MAX_CANDIDATES as i64).contains(candidates)
                 || channels * candidates > 8_000_000
             {
-                return Err("unsupported raw YOLO output; export with nms=false");
+                return Err("unsupported raw detection or pose output; export without NMS");
             }
             if names
                 .as_ref()
@@ -125,6 +111,38 @@ pub fn inspect(model: &[u8]) -> Result<PrelabelModelInspection, String> {
         outputs,
         problem,
     })
+}
+
+fn keypoint_count(metadata: &BTreeMap<&str, &str>) -> Result<u32, &'static str> {
+    let shape = metadata.get("kpt_shape");
+    match metadata.get("task").copied() {
+        None | Some("detect") if shape.is_none() => Ok(0),
+        None | Some("pose") => shape
+            .and_then(|value| serde_json::from_str::<Vec<u32>>(value).ok())
+            .filter(|shape| matches!(shape.as_slice(), [count, 3] if (1..=256).contains(count)))
+            .map(|shape| shape[0])
+            .ok_or("pose metadata must declare [keypoints, 3]"),
+        Some("detect") => Err("detection metadata must not declare keypoints"),
+        Some(_) => Err("unsupported model task; expected detection or pose"),
+    }
+}
+
+fn class_names(metadata: &BTreeMap<&str, &str>) -> Result<Option<Vec<String>>, &'static str> {
+    let parse = |key| {
+        metadata
+            .get(key)
+            .map(|value| names::parse(value))
+            .transpose()
+            .map_err(|_| "invalid model class-name metadata")
+    };
+    let names = parse("names")?;
+    let classes = parse("classes")?;
+    if let (Some(names), Some(classes)) = (&names, &classes)
+        && names != classes
+    {
+        return Err("names and classes metadata disagree");
+    }
+    Ok(names.or(classes))
 }
 
 fn tensor(value: &pb::ValueInfoProto) -> Result<PrelabelTensor, String> {

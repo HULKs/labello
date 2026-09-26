@@ -6,7 +6,8 @@ normal annotation and review workflow.
 
 ## Supply a model
 
-The initial contract supports Ultralytics YOLO detection and pose ONNX exports.
+The tensor contract supports Ultralytics YOLO detection and pose ONNX exports,
+plus other exports with the same preprocessing and output semantics below.
 Export one static float32 input with shape `[1, 3, S, S]` and raw output with
 shape `[1, 4 + classes + 3 * keypoints, candidates]`. Detection has no keypoints.
 Use `batch=1`, `dynamic=False`, `half=False`, `nms=False`, and an input size
@@ -54,10 +55,22 @@ Enter the model filename and select **Check model**. The server checks the
 managed file before a configuration or class mapping has been saved. Inspection
 runs in a bounded worker without an image and reports the static input dimensions,
 output tensor names, data types and shapes, class count, and available class names.
-It reads Ultralytics task/class metadata and cross-checks output dimensions;
-pose inspection also requires `kpt_shape = [keypoints, 3]`. Missing task metadata,
-inconsistent class counts, and unsupported layouts produce an explanation rather
-than a guessed mapping. Class names are optional; numeric output IDs are authoritative.
+Task metadata is optional. Without `task` or `kpt_shape`, inspection treats the
+output as detection: four box-coordinate channels followed by class scores.
+`kpt_shape = [keypoints, 3]` identifies pose and remains required for pose outputs;
+an explicit `task` must be `detect` or `pose` and agree with the keypoint metadata.
+Class names are optional and may use either `names` or `classes`, as a dictionary
+of contiguous IDs starting at zero. If both keys are present, their mappings must
+agree. Class metadata is cross-checked against output dimensions; malformed or
+inconsistent metadata and unsupported layouts produce an explanation. Numeric
+output IDs remain authoritative.
+
+Input and output dimensions must still be declared statically in the ONNX graph.
+Symbolic dimensions are rejected even when a particular inference would resolve
+them to fixed values. For example, a seven-class detector with 300 candidates
+must declare `[1, 11, 300]`. The exporter must also ensure the documented image
+preprocessing, box-coordinate units and score semantics; shape inspection alone
+cannot establish these meanings.
 
 Select the **Output tensor** from the discovered outputs. A sole compatible output
 is selected automatically; unsupported outputs are shown with their reason. The
