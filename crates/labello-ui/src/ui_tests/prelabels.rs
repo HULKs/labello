@@ -1116,3 +1116,26 @@ fn late_retained_prelabels_cannot_override_an_explicit_choice() {
     app.process_messages(&egui::Context::default());
     assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
 }
+
+#[test]
+fn retained_prelabel_defaults_do_not_cross_workspace_or_account_epochs() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    let task = app.selected_task().unwrap().task_id.clone();
+    for auth in [false, true] {
+        app.work.prelabels.automatic = Some(crate::prelabel_flow::AutomaticPrelabels {
+            image: app.work.current.as_ref().unwrap().image.image_id.clone(),
+            task: task.clone(),
+            config: Some("demo-prelabel".into()),
+            checked_at: Instant::now(),
+        });
+        assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
+        if auth {
+            app.begin_auth_epoch();
+        } else {
+            app.begin_workspace_epoch();
+        }
+        assert!(app.work.prelabels.automatic.is_none());
+        assert_eq!(app.prelabel_choice(&task), None);
+    }
+}

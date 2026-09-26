@@ -466,6 +466,7 @@ impl LabelloApp {
         self.admin.prelabels = Default::default();
         self.cancel_prelabel_load();
         self.work.prelabels.hints.clear();
+        self.work.prelabels.automatic = None;
         self.loading.image = false;
         self.loading.saving = false;
         self.loading.ingesting = false;

@@ -114,6 +114,7 @@ impl LabelloApp {
                     ) {
                         self.cancel_prelabel_load();
                         self.work.prelabels.hints.clear();
+                        self.work.prelabels.automatic = None;
                         if let Some(current) = &mut self.work.current {
                             current.prelabels.clear();
                         }
