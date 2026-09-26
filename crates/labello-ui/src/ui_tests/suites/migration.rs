@@ -1264,13 +1264,11 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             app
         });
     wide_full_image.step();
-    for label in ["Confirm all guides & finish"] {
-        let action = wide_full_image.get_by_label_contains(label).rect();
-        assert!(
-            action.right() <= 1318.0 && action.bottom() <= 900.0,
-            "{label} must remain fully visible at the narrowest wide desktop size: {action:?}"
-        );
-    }
+    let action = wide_full_image.get_by_label_contains("Confirm all guides & finish").rect();
+    assert!(
+        action.right() <= 1318.0 && action.bottom() <= 900.0,
+        "confirmation must remain fully visible at the narrowest wide desktop size: {action:?}"
+    );
 }
 
 #[cfg(feature = "inspector-presets")]
