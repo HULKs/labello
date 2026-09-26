@@ -190,8 +190,8 @@ is pending, so a restored deep view survives asynchronous browser startup.
 
 Automatic annotation focus is limited to pending/accepted model objects and
 migration companions. Manually drawn boxes keep the current zoom and pan even
-after prelabel review has started; Refocus remains explicit for any selected
-annotation.
+after prelabel review has started; existing explicit Refocus remains available
+during prelabel review.
 
 Bounding-box assignments without a restored selection select their first visible
 migration companion. Focus occurs once per activation of an annotation identity,

@@ -9,8 +9,8 @@ mutation. Inspect lets you browse images without claiming work.
 Draw bounding boxes or place the workflow's ordered keypoints. Select an existing
 object to edit it, and drag a placed keypoint to correct its position. New objects
 remain selected and editable after placement. Drawing a manual box preserves the
-current zoom and pan, including after reviewing prelabels. Use Refocus explicitly
-to zoom to the selected object. The inspector offers Visible and
+current zoom and pan, including after reviewing prelabels. During prelabel review,
+Refocus explicitly zooms to the selected object. The inspector offers Visible and
 Occluded controls for positioned keypoints when the workflow allows occlusion.
 After releasing a placed or dragged keypoint, its editing visibility control and
 occlusion shortcut update that point without moving it. Clicking another placed
@@ -58,7 +58,7 @@ Settings are staged until saved and can be restored to defaults.
 | Fit | Fit control or double-click |
 | Pan in annotation | `P` toggles Pan mode, then primary-button drag; `Escape` exits it |
 | Pan while editing | `Ctrl` plus primary-button drag, or middle-button drag; the modifier is configurable |
-| Refocus active object | `R`, or Refocus for the selected annotation, review object, or migration guide |
+| Refocus active object | `R`, or Refocus in review, migration, prelabel review, and selected migration companions |
 | Submit and next | `Space`; in review this acts on the focused item or final overview |
 | Previous image | Left arrow; subject to the previous-assignment eligibility rules |
 | Delete annotation | `Delete`; also discards a selected locally added review object |

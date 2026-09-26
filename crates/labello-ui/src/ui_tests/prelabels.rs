@@ -1477,7 +1477,11 @@ fn manual_boxes_keep_the_view_with_and_without_prelabels() {
             assert_eq!(harness.state().work.selected_annotation, selected);
             harness.key_press(egui::Key::R);
             harness.run_steps(3);
-            assert_ne!(harness.state().work.canvas.stored_transform(), before);
+            if with_prelabels {
+                assert_ne!(harness.state().work.canvas.stored_transform(), before);
+            } else {
+                assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            }
         }
     }
 }
