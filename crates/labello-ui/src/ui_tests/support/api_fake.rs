@@ -246,7 +246,7 @@ pub(super) struct SpyState {
     pub(super) retained_prelabels: BTreeMap<(ImageId, TaskId), labello_domain::RetainedPrelabels>,
     pub(super) prelabel_available: bool,
     pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
-    pub(super) fail_next_reasons: bool,
+    pub(super) fail_reasons_for: Option<ImageId>,
     pub(super) metadata: DatasetMetadata,
     pub(super) states: BTreeMap<ImageId, ImageState>,
     pub(super) counts: CallCounts,
@@ -380,7 +380,7 @@ impl SpyState {
             metadata,
             states,
             workflow_reasons: BTreeMap::new(),
-            fail_next_reasons: false,
+            fail_reasons_for: None,
             counts: CallCounts::default(),
             assignment_actions: Vec::new(),
             next_image: 0,
@@ -1442,7 +1442,8 @@ impl ImageApi for SpyApi {
     fn get_image_reasons<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId)
         -> labello_client::ApiFuture<'a, Vec<labello_client::WorkflowReasonEntry>> {
         let mut state = self.state.borrow_mut();
-        if std::mem::take(&mut state.fail_next_reasons) {
+        if state.fail_reasons_for.as_ref() == Some(image_id) {
+            state.fail_reasons_for = None;
             return ready(Err(ClientError::Demo("reason history unavailable".into())));
         }
         ready(Ok(state.workflow_reasons.get(image_id).cloned().unwrap_or_default()))

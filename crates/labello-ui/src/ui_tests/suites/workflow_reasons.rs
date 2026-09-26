@@ -111,7 +111,7 @@ fn workflow_reasons_load_with_annotation_and_review_retry_without_becoming_empty
         let mut harness = if review { loaded_review_harness(api.clone()) } else { loaded_work_harness(api.clone()) };
         let reason = test_workflow_reason(harness.state(), "Synthetic reason loaded through the assignment owner");
         api.state.borrow_mut().workflow_reasons.insert(reason.reason.image_id.clone(), vec![reason.clone()]);
-        api.state.borrow_mut().fail_next_reasons = true;
+        api.state.borrow_mut().fail_reasons_for = Some(reason.reason.image_id.clone());
         harness.state_mut().retry_assignment_load();
         step_until(&mut harness, 16, |app| !app.loading.image);
         assert!(harness.state().runtime.error.as_ref().unwrap().contains("reason history unavailable"));
