@@ -212,7 +212,7 @@ impl LabelloApp {
                     if release.clicked() {
                         self.release_pending_transition();
                     }
-                    let cancel = theme::quiet_button(ui, !self.loading.saving && !self.loading.image, egui::Button::new("Cancel"));
+                    let cancel = theme::quiet_button(ui, !self.saving_blocks_interaction() && !self.loading.image, egui::Button::new("Cancel"));
                     if cancel.clicked() {
                         self.cancel_pending_transition();
                     }

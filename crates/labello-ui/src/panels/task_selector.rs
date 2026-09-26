@@ -89,7 +89,7 @@ impl LabelloApp {
             );
         }
         let ready =
-            !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
+            !self.saving_blocks_interaction() && !self.loading.image && self.work.pending_transition.is_none();
         for workflow in workflows {
             let selected = self.work.selected_task_id.as_ref() == Some(&workflow.task_id);
             let reason = self.workflow_marker_reason(&workflow.task_id);

@@ -40,7 +40,7 @@ impl LabelloApp {
                     secondary(self, ui);
                     self.review_next_object_action(ui, None);
                 });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::BOTTOM), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     self.review_decision_buttons(ui, false, false);
                 });
             });
@@ -82,7 +82,8 @@ impl LabelloApp {
     fn annotation_bottom_actions(&mut self, ui: &mut egui::Ui) {
         use labello_domain::UserAction;
         let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
+            && !self.saving_blocks_interaction() && !self.loading.image && self.work.pending_transition.is_none();
+        let can_commit = ready && !self.loading.saving;
         let dirty = matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
         let previous = self.bar_has_previous_image();
         use crate::prelabel_review::PrelabelPrimaryAction;
@@ -105,11 +106,11 @@ impl LabelloApp {
         ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
+                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, can_commit && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
                 (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
-                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
+                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, can_commit && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
                 (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model object advances to the next one."),
-                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, ready, theme::Intent::Neutral, "Release this assignment and claim another."),
+                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, can_commit, theme::Intent::Neutral, "Release this assignment and claim another."),
             ] {
                 if action == UserAction::PreviousImage && !previous || action == UserAction::SaveAnnotations && save_in_menu { continue; }
                 ui.push_id(action, |ui| {
@@ -125,12 +126,12 @@ impl LabelloApp {
             self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
         ];
         if save_in_menu {
-            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", ready && dirty, "Save confirmed annotations and keep this assignment active."));
+            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", can_commit && dirty, "Save confirmed annotations and keep this assignment active."));
         }
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if workspace_toolbar_button(ui, ready, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
+            if workspace_toolbar_button(ui, can_commit, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
                 .on_hover_text(format!("{primary_help} ({})", self.shortcut_text(ui.ctx(), UserAction::NextImage))).clicked() {
                 self.trigger_user_action(UserAction::NextImage);
             }

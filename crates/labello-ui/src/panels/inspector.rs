@@ -196,7 +196,7 @@ impl LabelloApp {
                     ui.ctx(),
                     labello_domain::UserAction::ToggleKeypointHidden,
                 );
-                ui.add_enabled_ui(!self.loading.saving, |ui| {
+                ui.add_enabled_ui(!self.saving_blocks_interaction(), |ui| {
                     if spec.allow_hidden {
                         keypoint_placement_mode(
                             ui,
@@ -237,7 +237,7 @@ impl LabelloApp {
             && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
             && let Some(AnnotationGeometry::Skeleton(skeleton)) = self.annotation_objects().into_iter().find(|annotation| annotation.annotation_id == id).map(|annotation| annotation.geometry)
         {
-            ui.add_enabled_ui(!self.loading.saving && !self.loading.image && self.work.pending_transition.is_none(), |ui| {
+            ui.add_enabled_ui(!self.saving_blocks_interaction() && !self.loading.image && self.work.pending_transition.is_none(), |ui| {
                 if let Some((index, state)) = placed_keypoint_visibility(ui, &skeleton) {
                     self.set_annotation_keypoint_visibility(id, index, state);
                 }

@@ -40,6 +40,20 @@ fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation
                     (_, false, false) => "Confirm all guides & finish",
                 };
                 let primary = harness.get_by_label(label).rect();
+                if size.x == 1440.0 {
+                    fn painted_text(shape: &egui::epaint::Shape, label: &str) -> Option<egui::Rect> {
+                        match shape {
+                            egui::epaint::Shape::Text(text) if text.galley.job.text == label =>
+                                Some(text.galley.rect.translate(text.pos.to_vec2())),
+                            egui::epaint::Shape::Vec(shapes) => shapes.iter().find_map(|shape| painted_text(shape, label)),
+                            _ => None,
+                        }
+                    }
+                    let text = harness.output().shapes.iter()
+                        .find_map(|shape| painted_text(&shape.shape, label)).expect("primary label is painted");
+                    assert!((primary.center().y - text.center().y).abs() <= 1.0,
+                        "{label}: button={primary:?} text={text:?}");
+                }
                 for secondary in ["Skip", "Previous object", "Discard object changes", "Undo last keypoint", "More"] {
                     if let Some(node) = harness.query_by_label(secondary) {
                         assert!(primary.left() >= node.rect().right(),
@@ -264,4 +278,115 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         assert!(matches!(harness.state().work.migration.cursor, Some(labello_domain::MigrationCursor::FullImage)));
         assert_eq!(harness.state().work.assignment.as_ref().unwrap().status, labello_domain::AssignmentStatus::Active);
     }
+}
+
+
+#[test]
+fn background_keypoint_save_keeps_controls_live_and_preserves_newer_edits() {
+    for fail_save in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        {
+            let mut state = api.state.borrow_mut();
+            let task = &mut state.metadata.tasks[0];
+            task.annotation_type = AnnotationType::Skeleton;
+            task.prelabel_config_ids.clear();
+            task.skeleton = Some(SkeletonSpec {
+                keypoints: vec![KeypointSpec { name: "head".into(), required: true },
+                    KeypointSpec { name: "tail".into(), required: true }],
+                edges: vec![], allow_hidden: true, allow_absent: false,
+            });
+        }
+        let mut harness = loaded_work_harness(api.clone());
+        step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
+        let workflow = harness.state().selected_workflow().unwrap();
+        let label = workflow.label();
+        let workflow_rect = harness.get_by_label(&label).rect();
+        let center = harness.get_by_label("Annotation canvas").rect().center();
+        click_at(&mut harness, center);
+        let assignment = harness.state().work.assignment.clone().unwrap();
+        let id = harness.state().work.selected_annotation.clone().unwrap();
+        let stats_before = api.counts().dataset_stats;
+        harness.state_mut().work.last_edit_at = Some(Instant::now() - Duration::from_secs(1));
+        harness.state_mut().autosave_if_due();
+        let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+        assert!(matches!(command, UiCommand::SaveAnnotations { submit: false, .. }));
+        let operation = harness.state().work.active_operation_id;
+        harness.run_steps(2);
+        assert!(harness.state().loading.saving);
+        assert!(!harness.state().saving_blocks_interaction());
+        let card = harness.get_by_label(&label);
+        assert!(!card.accesskit_node().is_disabled());
+        assert_eq!(card.rect(), workflow_rect);
+        assert_eq!(harness.state().workflow_marker_reason(&workflow.task_id), None);
+        assert!(!harness.get_by_label("Set head as occluded").accesskit_node().is_disabled());
+        assert!(!harness.get_by_label("Delete").accesskit_node().is_disabled());
+        assert!(harness.get_by_label("Submit & next").accesskit_node().is_disabled());
+        click_accesskit_button(&mut harness, "Set head as occluded");
+        click_at(&mut harness, center + egui::vec2(60.0, 40.0));
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let edited = harness.state().work.annotations[0].geometry.clone();
+        let AnnotationGeometry::Skeleton(skeleton) = &edited else { panic!("expected skeleton") };
+        assert!(skeleton.keypoints.iter().all(|point| point.state == KeypointState::Hidden && point.point.is_some()));
+        harness.state_mut().trigger_user_action(labello_domain::UserAction::UndoEdit);
+        assert_ne!(harness.state().work.annotations[0].geometry, edited);
+        harness.state_mut().trigger_user_action(labello_domain::UserAction::RedoEdit);
+        assert_eq!(harness.state().work.annotations[0].geometry, edited);
+        harness.state_mut().autosave();
+        assert_eq!(harness.state().work.active_operation_id, operation);
+        assert!(!harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::SaveAnnotations { .. })));
+        harness.state_mut().work.last_edit_at = None;
+        if fail_save { api.fail_next_batch(); }
+        harness.state_mut().start_workflow_command(api.clone(), command);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert_eq!(harness.state().work.annotations[0].geometry, edited);
+        assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&id));
+        assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
+        assert!(harness.state().work.background_save_operation_id.is_none());
+        assert_eq!(api.counts().dataset_stats, stats_before);
+        harness.state_mut().autosave();
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        let saved = harness.state().work.current_state.as_ref().unwrap().current_annotation(&id).unwrap();
+        assert_eq!(saved.geometry, edited);
+        assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment.assignment_id);
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert_eq!(api.counts().dataset_stats, stats_before);
+    }
+}
+
+#[test]
+fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
+    let current = harness.state().selected_workflow().unwrap();
+    let destination = harness.state().workflow_choices().into_iter()
+        .find(|workflow| workflow.task_id != current.task_id).unwrap();
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    drag_at(&mut harness, canvas.center(), canvas.center() + egui::vec2(60.0, 40.0));
+    harness.state_mut().autosave();
+    let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+    assert!(matches!(command, UiCommand::SaveAnnotations { submit: false, .. }));
+    let operation = harness.state().work.active_operation_id;
+    harness.step();
+    click_accesskit_button(&mut harness, &destination.label());
+    assert_eq!(harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+    assert!(harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
+    assert!(!harness.get_by_label("Cancel").accesskit_node().is_disabled());
+    click_accesskit_button(&mut harness, "Cancel");
+    assert!(harness.state().work.pending_transition.is_none());
+    assert_eq!(harness.state().work.active_operation_id, operation);
+    click_accesskit_button(&mut harness, &destination.label());
+    harness.state_mut().release_pending_transition();
+    assert_eq!(harness.state().work.active_operation_id, operation);
+    assert_eq!(harness.state().work.selected_task_id.as_ref(), Some(&current.task_id));
+    harness.state_mut().start_workflow_command(api, command);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert!(!harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
+    assert_eq!(harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+    click_accesskit_button(&mut harness, "Submit and switch");
+    step_until(&mut harness, 20, |app| app.work.selected_task_id.as_ref() == Some(&destination.task_id) && !app.loading.saving);
 }

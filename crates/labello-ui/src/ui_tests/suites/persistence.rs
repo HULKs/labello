@@ -1802,6 +1802,7 @@ fn stale_assignment_operations_do_not_clear_the_active_loading_owner() {
     let assignment = harness.state().work.assignment.clone().unwrap();
     let state = harness.state().work.current_state.clone().unwrap();
     harness.state_mut().work.active_operation_id = Some(77);
+    harness.state_mut().work.background_save_operation_id = Some(77);
     harness.state_mut().loading.saving = true;
     harness.state_mut().runtime.active_requests.insert(77);
     harness
@@ -1820,6 +1821,7 @@ fn stale_assignment_operations_do_not_clear_the_active_loading_owner() {
     harness.step();
     assert!(harness.state().loading.saving);
     assert_eq!(harness.state().work.active_operation_id, Some(77));
+    assert!(!harness.state().saving_blocks_interaction());
 
     harness
         .state()
@@ -1837,6 +1839,7 @@ fn stale_assignment_operations_do_not_clear_the_active_loading_owner() {
     harness.step();
     assert!(!harness.state().loading.saving);
     assert_eq!(harness.state().work.active_operation_id, None);
+    assert_eq!(harness.state().work.background_save_operation_id, None);
 }
 
 #[test]

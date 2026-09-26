@@ -4,7 +4,7 @@ impl LabelloApp {
             self.runtime.error = Some("Finish the request or discard the return draft before leaving Inspect.".into());
             return;
         }
-        if self.loading.saving || self.loading.image || self.work.migration.busy
+        if self.saving_blocks_interaction() || self.loading.image || self.work.migration.busy
             || self.work.pending_transition.is_some() || self.transition_is_current(&transition) {
             return;
         }
@@ -140,7 +140,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn cancel_pending_transition(&mut self) {
-        if !self.loading.saving && !self.loading.image {
+        if !self.saving_blocks_interaction() && !self.loading.image {
             self.work.pending_transition = None;
         }
     }

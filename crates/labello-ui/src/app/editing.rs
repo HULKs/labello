@@ -116,7 +116,7 @@ impl LabelloApp {
     pub(crate) fn keypoint_visibility_editable(&self) -> bool {
         matches!(self.view, AppView::Annotate | AppView::Review)
             && (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving && !self.loading.image && !self.work.migration.busy
+            && !self.saving_blocks_interaction() && !self.loading.image && !self.work.migration.busy
             && self.work.pending_transition.is_none()
             && self.work.review_corrections.submission.is_none()
             && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
@@ -140,7 +140,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn set_annotation_keypoint_visibility(&mut self, annotation_id: AnnotationId, index: usize, state: KeypointState) {
-        if self.view != AppView::Annotate || self.loading.saving || self.loading.image
+        if self.view != AppView::Annotate || self.saving_blocks_interaction() || self.loading.image
             || self.work.pending_transition.is_some()
             || !matches!(state, KeypointState::Visible | KeypointState::Hidden)
             || !self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)

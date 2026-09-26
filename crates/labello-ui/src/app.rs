@@ -466,6 +466,7 @@ pub struct WorkState {
     pub(crate) active_load_id: Option<u64>,
     pub(crate) active_prefetch_id: Option<u64>,
     pub(crate) active_operation_id: Option<u64>,
+    pub(crate) background_save_operation_id: Option<u64>,
     pub(crate) one_shot_excluded_image_id: Option<ImageId>,
     pub(crate) next_demo_image_index: usize,
     pub(crate) migration: ManualMigrationState,

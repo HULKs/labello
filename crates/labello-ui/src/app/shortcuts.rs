@@ -220,7 +220,7 @@ impl LabelloApp {
             }
         }
         let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving
+            && !self.saving_blocks_interaction()
             && !self.loading.image
             && self.work.pending_transition.is_none()
             && !self.work.canvas.is_dragging();
@@ -402,7 +402,7 @@ impl LabelloApp {
             }
             return;
         }
-        if self.loading.saving || self.loading.image {
+        if self.saving_blocks_interaction() || self.loading.image {
             return;
         }
         if self.work.canvas.pan_mode() && ctx.input(|input| input.key_pressed(egui::Key::Escape)) {

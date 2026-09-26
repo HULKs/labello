@@ -1420,7 +1420,7 @@ impl LabelloApp {
                 ));
             },
         );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::BOTTOM), |ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if let Some(group_id) = bar.inspected_group_id.clone() {
                 if workspace_toolbar_button(
                     ui,

@@ -70,6 +70,13 @@ states through AccessKit without image coordinates. Gesture tests stay with the
 canvas. The workflow reducer retains every persisted annotation ID, including
 deleted versions; Undo/Redo rebases a restored object on its latest version.
 Later keypoint autosaves mark an existing skeleton as a new human-edited revision.
+Non-submitting annotation saves retain an operation-scoped background marker.
+Workflow selection and local annotation edits remain available while saving;
+transaction guards still prevent overlapping save, submit, or release requests.
+A workflow change stages the normal confirmation and waits for the save before
+committing a transition. Save replies preserve newer local edits through the edit
+generation check. Routine saves use periodic statistics refresh; completion
+requests an immediate refresh.
 
 ## Browser input
 
