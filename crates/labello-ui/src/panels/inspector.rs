@@ -202,7 +202,7 @@ impl LabelloApp {
                             ui,
                             &name,
                             &mut self.work.next_keypoint_hidden,
-                            &hidden_shortcut,
+                            if editing_keypoint { "" } else { &hidden_shortcut },
                         );
                     }
                     ui.horizontal(|ui| {

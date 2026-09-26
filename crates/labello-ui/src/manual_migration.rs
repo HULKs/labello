@@ -764,8 +764,11 @@ impl LabelloApp {
                 })
                 .unwrap_or_default();
             if allow_hidden {
-                let hidden_shortcut =
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::ToggleKeypointHidden);
+                let hidden_shortcut = if self.editing_keypoint().is_some() {
+                    String::new()
+                } else {
+                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::ToggleKeypointHidden)
+                };
                 keypoint_placement_mode(
                     ui,
                     &name,
@@ -1123,8 +1126,11 @@ impl LabelloApp {
                 })
                 .unwrap_or_default();
             if allow_hidden {
-                let hidden_shortcut =
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::ToggleKeypointHidden);
+                let hidden_shortcut = if self.editing_keypoint().is_some() {
+                    String::new()
+                } else {
+                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::ToggleKeypointHidden)
+                };
                 keypoint_placement_mode(
                     ui,
                     &name,

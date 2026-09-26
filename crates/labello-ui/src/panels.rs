@@ -143,6 +143,8 @@ fn keypoint_visibility_mode(
         )
         .on_hover_text(if editing {
             format!("Mark this keypoint as occluded. Toggle visibility with {shortcut}.")
+        } else if shortcut.is_empty() {
+            "Click the estimated keypoint position.".to_owned()
         } else {
             format!("Click the estimated keypoint position. Toggle placement with {shortcut}.")
         });
@@ -158,6 +160,8 @@ fn keypoint_visibility_mode(
             .accesskit_node_builder(occluded_response.id, |node| {
                 node.set_description(if editing {
                     format!("Mark this keypoint as occluded. Toggle visibility with {shortcut}.")
+                } else if shortcut.is_empty() {
+                    "Click the estimated keypoint position.".to_owned()
                 } else {
                     format!(
                         "Click the estimated keypoint position. Toggle placement with {shortcut}."
