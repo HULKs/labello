@@ -82,6 +82,7 @@ impl LabelloApp {
                     .frame(theme::side_frame())
                     .show(ui, |ui| {
                         egui::ScrollArea::vertical()
+                            .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                             .id_salt("inspection-overlays-scroll")
                             .show(ui, |ui| self.inspection_sidebar(ui));
                     });
@@ -300,11 +301,13 @@ impl LabelloApp {
             close = button.clicked();
             if right {
                 egui::ScrollArea::vertical()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .id_salt("inspection-drawer-scroll")
                     .max_height((height - 54.0).max(60.0))
                     .show(ui, |ui| self.inspection_sidebar(ui));
             } else {
                 egui::ScrollArea::vertical()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .id_salt("inspection-images-drawer-scroll")
                     .max_height((height - 54.0).max(60.0))
                     .show(ui, |ui| {

@@ -215,6 +215,7 @@ pub(crate) fn show_canvas_with_task_edges(
     let available = ui.available_size().max(vec2(1.0, 1.0));
     let (viewport, _) = ui.allocate_exact_size(available, Sense::hover());
     let interaction_rect = viewport;
+    crate::pointer_input::set_canvas_rect(ui.ctx(), interaction_rect, ui.layer_id());
     if !editable {
         state.cancel_drag();
     }

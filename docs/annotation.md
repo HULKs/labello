@@ -7,7 +7,10 @@ mutation. Inspect lets you browse images without claiming work.
 ## Annotate
 
 Draw bounding boxes or place the workflow's ordered keypoints. Select an existing
-object to edit it, and drag a placed keypoint to correct its position. Skeleton
+object to edit it, and drag a placed keypoint to correct its position. New objects
+remain selected and editable after placement. The inspector offers Visible and
+Occluded controls for positioned keypoints when the workflow allows occlusion.
+Submit & next stays at the bottom right, including compact layouts. Skeleton
 keypoints have three outcomes:
 
 | Outcome | Meaning | Canvas marker |

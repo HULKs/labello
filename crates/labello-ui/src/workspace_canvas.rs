@@ -75,7 +75,8 @@ impl LabelloApp {
                 interaction.allow_create = matches!(
                     draft.edited_geometry,
                     labello_domain::AnnotationGeometry::Skeleton(_)
-                );
+                ) || (self.review_overview()
+                    && draft.expected_version == 0);
                 interaction.editable = !self.loading.saving
                     && !self.loading.image
                     && self.work.pending_transition.is_none();
@@ -183,7 +184,7 @@ impl LabelloApp {
                             draft.edited_geometry =
                                 labello_domain::AnnotationGeometry::BoundingBox(bbox);
                         }
-                        self.retain_review_editor();
+                        self.stage_review_addition_keep_editor();
                     }
                     Some(CanvasAction::PlaceKeypoint(point)) => {
                         self.begin_new_review_object(None);
@@ -210,6 +211,16 @@ impl LabelloApp {
                     }
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
                     Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                    Some(CanvasAction::CreateBoundingBox(bbox)) if overview_editable => {
+                        if self.retain_review_editor() {
+                            self.begin_new_review_object(None);
+                            if let Some(draft) = self.work.correction_draft.as_mut() {
+                                draft.edited_geometry =
+                                    labello_domain::AnnotationGeometry::BoundingBox(bbox);
+                            }
+                            self.stage_review_addition_keep_editor();
+                        }
+                    }
                     Some(CanvasAction::CreateBoundingBox(_)) | None => {}
                 }
             }
@@ -225,6 +236,7 @@ impl LabelloApp {
                 .then(|| self.work.availability.error.clone())
                 .flatten();
             egui::ScrollArea::vertical()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("workspace-empty-state")
                 .show(ui, |ui| {
                     ui.add_space(((ui.available_height() - 160.0) * 0.5).max(0.0));

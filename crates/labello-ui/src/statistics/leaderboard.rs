@@ -848,6 +848,7 @@ fn activity_chart(
             let first = start.max(NaiveDate::from_ymd_opt(year, 1, 1).unwrap());
             let last = today.min(NaiveDate::from_ymd_opt(year, 12, 31).unwrap());
             egui::ScrollArea::horizontal()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt(("activity-calendar", year))
                 .show(ui, |ui| {
                     let offset = first.weekday().num_days_from_monday() as usize;
@@ -947,12 +948,14 @@ fn activity_chart(
             .height(220.0)
             .show_ui(ui, |ui| {
                 let count = (today - start).num_days() as usize + 1;
-                egui::ScrollArea::vertical().show_rows(ui, 44.0, count, |ui, range| {
-                    for offset in range {
-                        let date = today - Days::new(offset as u64);
-                        ui.selectable_value(selected_day, date, date.to_string());
-                    }
-                });
+                egui::ScrollArea::vertical()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+                    .show_rows(ui, 44.0, count, |ui, range| {
+                        for offset in range {
+                            let date = today - Days::new(offset as u64);
+                            ui.selectable_value(selected_day, date, date.to_string());
+                        }
+                    });
             })
             .response
             .widget_info(|| {

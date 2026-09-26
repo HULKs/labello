@@ -68,17 +68,19 @@ include!("panels/prelabels.rs");
 
 fn centered_scroll(ui: &mut egui::Ui, max_width: f32, add_contents: impl FnOnce(&mut egui::Ui)) {
     let available_width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        let width = available_width.min(max_width);
-        let inset = ((available_width - width) * 0.5).max(0.0);
-        ui.horizontal(|ui| {
-            ui.add_space(inset);
-            ui.vertical(|ui| {
-                ui.set_width(width);
-                add_contents(ui);
+    egui::ScrollArea::vertical()
+        .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+        .show(ui, |ui| {
+            let width = available_width.min(max_width);
+            let inset = ((available_width - width) * 0.5).max(0.0);
+            ui.horizontal(|ui| {
+                ui.add_space(inset);
+                ui.vertical(|ui| {
+                    ui.set_width(width);
+                    add_contents(ui);
+                });
             });
         });
-    });
 }
 
 pub(crate) fn keypoint_placement_mode(
@@ -462,4 +464,53 @@ fn keypoint_state_label(state: &KeypointState) -> &'static str {
         KeypointState::Hidden => "occluded",
         KeypointState::Absent => "not present",
     }
+}
+
+pub(crate) fn placed_keypoint_visibility(
+    ui: &mut egui::Ui,
+    skeleton: &labello_domain::SkeletonGeometry,
+) -> Option<(usize, labello_domain::KeypointState)> {
+    use labello_domain::KeypointState;
+    if skeleton
+        .keypoints
+        .iter()
+        .any(|keypoint| keypoint.point.is_some())
+    {
+        ui.separator();
+        ui.label(egui::RichText::new("Placed keypoints").strong());
+    }
+    let mut change = None;
+    for (index, keypoint) in skeleton
+        .keypoints
+        .iter()
+        .enumerate()
+        .filter(|(_, keypoint)| keypoint.point.is_some())
+    {
+        ui.push_id(("placed-keypoint", index), |ui| {
+            ui.label(&keypoint.name);
+            ui.horizontal(|ui| {
+                for (state, label) in [
+                    (KeypointState::Visible, "Visible"),
+                    (KeypointState::Hidden, "Occluded"),
+                ] {
+                    let response = ui.add(
+                        egui::Button::selectable(keypoint.state == state, label)
+                            .min_size(egui::vec2(44.0, 44.0)),
+                    );
+                    response.widget_info(|| {
+                        egui::WidgetInfo::selected(
+                            egui::WidgetType::Button,
+                            ui.is_enabled(),
+                            keypoint.state == state,
+                            format!("{} {label}", keypoint.name),
+                        )
+                    });
+                    if response.clicked() {
+                        change = Some((index, state));
+                    }
+                }
+            });
+        });
+    }
+    change
 }
