@@ -326,6 +326,7 @@ impl LabelloApp {
             => {
                 if self.work.active_operation_id == Some(*operation_id) {
                     self.work.active_operation_id = None;
+                    self.work.background_save_operation_id = None;
                     self.loading.saving = false;
                     self.work.pending_transition = None;
                     if matches!(command, UiCommand::SaveAnnotations { .. }) {
@@ -485,6 +486,7 @@ impl LabelloApp {
         self.work.active_load_id = None;
         self.work.active_prefetch_id = None;
         self.work.active_operation_id = None;
+        self.work.background_save_operation_id = None;
         self.work.queue.set_loading(false);
         self.release_prepared_assignments();
         self.work.one_shot_excluded_image_id = None;

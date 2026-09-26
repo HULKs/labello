@@ -271,6 +271,7 @@ impl LabelloApp {
                         return None;
                     }
                     self.work.active_operation_id = None;
+                    self.work.background_save_operation_id = None;
                     self.loading.saving = false;
                     match *result {
                         Ok(state) => {
@@ -295,8 +296,8 @@ impl LabelloApp {
                                 self.rebase_work_draft_after_save(edit_generation);
                             }
                             self.runtime.error = None;
-                            self.request_stats();
                             if completed {
+                                self.request_stats();
                                 if let Some(mut assignment) =
                                     self.work.assignment.clone().filter(|assignment| {
                                         assignment.kind

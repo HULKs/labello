@@ -92,17 +92,74 @@ impl LabelloApp {
         self.mark_edited();
     }
 
+    pub(crate) fn editing_keypoint(&self) -> Option<(crate::canvas::KeypointSelection, KeypointAnnotation)> {
+        let selection = self.work.canvas.selected_keypoint()?.clone();
+        let geometry = if self.view == AppView::Review {
+            if !self.work.canvas.is_dragging() { return None; }
+            let draft = self.work.correction_draft.as_ref()?;
+            if draft.annotation_id != selection.annotation_id { return None; }
+            draft.edited_geometry.clone()
+        } else if self.manual_migration_active() {
+            if self.editable_migration_draft_annotation_id().as_ref() != Some(&selection.annotation_id)
+                || self.work.migration.inspected_group_id.is_some() { return None; }
+            AnnotationGeometry::Skeleton(self.work.migration.draft.clone()?)
+        } else {
+            if self.work.selected_annotation.as_ref() != Some(&selection.annotation_id) { return None; }
+            self.annotation_objects().into_iter().find(|annotation| annotation.annotation_id == selection.annotation_id)?.geometry
+        };
+        let AnnotationGeometry::Skeleton(skeleton) = geometry else { return None; };
+        let keypoint = skeleton.keypoints.get(selection.keypoint_index)?.clone();
+        keypoint.point?;
+        Some((selection, keypoint))
+    }
+
+    pub(crate) fn keypoint_visibility_editable(&self) -> bool {
+        matches!(self.view, AppView::Annotate | AppView::Review)
+            && (self.work.assignment.is_some() || self.runtime.api.is_none())
+            && !self.saving_blocks_interaction() && !self.loading.image && !self.work.migration.busy
+            && self.work.pending_transition.is_none()
+            && self.work.review_corrections.submission.is_none()
+            && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+    }
+
+    pub(crate) fn set_editing_keypoint_visibility(&mut self, state: KeypointState) {
+        if !self.keypoint_visibility_editable() { return; }
+        let Some((selection, _)) = self.editing_keypoint() else { return; };
+        if self.view == AppView::Review {
+            self.select_correction_keypoint(selection.keypoint_index);
+            self.set_correction_keypoint_state(state);
+        } else if self.manual_migration_active() {
+            self.set_migration_keypoint_visibility(selection.keypoint_index, state);
+        } else {
+            self.set_annotation_keypoint_visibility(selection.annotation_id, selection.keypoint_index, state);
+        }
+    }
+
     pub(crate) fn edit_keypoint(&mut self, edit: crate::canvas::KeypointEdit) {
-        if let Some(item) = self.work.prelabel_review.objects.iter().find(|item| item.annotation.annotation_id == edit.annotation_id) {
+        self.update_annotation_keypoint(edit.annotation_id, edit.keypoint_index, Some(edit.point), None);
+    }
+
+    pub(crate) fn set_annotation_keypoint_visibility(&mut self, annotation_id: AnnotationId, index: usize, state: KeypointState) {
+        if self.view != AppView::Annotate || self.saving_blocks_interaction() || self.loading.image
+            || self.work.pending_transition.is_some()
+            || !matches!(state, KeypointState::Visible | KeypointState::Hidden)
+            || !self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+        { return; }
+        self.update_annotation_keypoint(annotation_id, index, None, Some(state));
+    }
+
+    fn update_annotation_keypoint(&mut self, annotation_id: AnnotationId, keypoint_index: usize, point: Option<NormalizedPoint>, state: Option<KeypointState>) {
+        if let Some(item) = self.work.prelabel_review.objects.iter().find(|item| item.annotation.annotation_id == annotation_id) {
             let mut geometry = item.annotation.geometry.clone();
             if let AnnotationGeometry::Skeleton(skeleton) = &mut geometry
-                && let Some(point) = skeleton.keypoints.get_mut(edit.keypoint_index) {
-                point.point = Some(edit.point);
-                self.edit_prelabel_geometry(&edit.annotation_id, geometry);
+                && let Some(keypoint) = skeleton.keypoints.get_mut(keypoint_index) {
+                if point.is_none() && keypoint.point.is_none() { return; }
+                if let Some(point) = point { keypoint.point = Some(point); }
+                if let Some(state) = state { keypoint.state = state; }
+                self.edit_prelabel_geometry(&annotation_id, geometry);
             }
             return;
         }
-        let annotation_id = edit.annotation_id;
         let persisted = self.work.persisted_annotations.contains(&annotation_id);
         let persisted_version = self
             .work
@@ -118,10 +175,10 @@ impl LabelloApp {
         let AnnotationGeometry::Skeleton(skeleton) = &self.work.annotations[index].geometry else {
             return;
         };
-        let Some(keypoint) = skeleton.keypoints.get(edit.keypoint_index) else {
+        let Some(keypoint) = skeleton.keypoints.get(keypoint_index) else {
             return;
         };
-        if keypoint.point == Some(edit.point) {
+        if keypoint.point.is_none() || (point.is_none_or(|point| keypoint.point == Some(point)) && state.as_ref().is_none_or(|state| &keypoint.state == state)) {
             return;
         }
 
@@ -131,10 +188,11 @@ impl LabelloApp {
         let AnnotationGeometry::Skeleton(skeleton) = &mut annotation.geometry else {
             return;
         };
-        let Some(keypoint) = skeleton.keypoints.get_mut(edit.keypoint_index) else {
+        let Some(keypoint) = skeleton.keypoints.get_mut(keypoint_index) else {
             return;
         };
-        keypoint.point = Some(edit.point);
+        if let Some(point) = point { keypoint.point = Some(point); }
+        if let Some(state) = state { keypoint.state = state; }
         annotation.updated_at = labello_domain::now();
         if persisted {
             annotation.version = persisted_version.unwrap_or(annotation.version) + 1;
@@ -200,6 +258,10 @@ impl LabelloApp {
                 }
                 self.work.skeleton_keypoint_index = keypoint_index + 1;
                 self.work.next_keypoint_hidden = false;
+                self.work.canvas.select_keypoint(Some(crate::canvas::KeypointSelection {
+                    annotation_id: annotation.annotation_id.clone(),
+                    keypoint_index,
+                }));
                 if completed {
                     self.work.active_skeleton = None;
                     self.work.skeleton_keypoint_index = 0;
@@ -257,6 +319,10 @@ impl LabelloApp {
                 deleted: false,
             });
         self.work.selected_annotation = Some(annotation_id.clone());
+        self.work.canvas.select_keypoint(Some(crate::canvas::KeypointSelection {
+            annotation_id: annotation_id.clone(),
+            keypoint_index: 0,
+        }));
         if keypoint_count > 1 {
             self.work.active_skeleton = Some(annotation_id);
             self.work.skeleton_keypoint_index = 1;
@@ -425,6 +491,21 @@ impl LabelloApp {
     pub(crate) fn recompute_modified_annotations(&mut self) {
         let persisted_annotations = self.work.persisted_annotations.clone();
         let current_state = self.work.current_state.clone();
+        for annotation in &mut self.work.annotations {
+            if persisted_annotations.contains(&annotation.annotation_id)
+                && let Some(persisted) = current_state
+                    .as_ref()
+                    .and_then(|state| state.current_annotation(&annotation.annotation_id))
+            {
+                // Saves can establish provenance after this draft or history snapshot
+                // was created. Retain edits, but always use the server's identity.
+                annotation.origin = persisted.origin.clone();
+                annotation.object_group_id = persisted.object_group_id.clone();
+                annotation.created_at = persisted.created_at;
+                annotation.task_id = persisted.task_id.clone();
+                annotation.annotation_type = persisted.annotation_type.clone();
+            }
+        }
         self.work.modified_annotations = self
             .work
             .annotations

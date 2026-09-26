@@ -294,38 +294,8 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
-    let add_action = harness.get_by_label("Add missing object").rect();
-    harness.key_press(egui::Key::M);
-    harness.step();
-    assert!(harness.state().work.migration.adding_missing_object);
-    let cancel_action = harness.get_by_label("Cancel adding object").rect();
-    assert!(
-        (add_action.left() - cancel_action.left()).abs() <= 1.0
-            && (add_action.top() - cancel_action.top()).abs() <= 1.0,
-        "add={add_action:?} cancel={cancel_action:?}"
-    );
-    click_accesskit_button(&mut harness, "Cancel adding object");
-    harness.step();
-    assert!(!harness.state().work.migration.adding_missing_object);
-    assert!(harness.query_by_label("Add missing object").is_some());
-
-    harness.key_press(egui::Key::M);
-    harness.step();
-    assert!(harness.state().work.migration.adding_missing_object);
-    harness.key_press(egui::Key::M);
-    harness.step();
-    assert!(!harness.state().work.migration.adding_missing_object);
-    assert!(harness.query_by_label("Add missing object").is_some());
-    harness.key_press(egui::Key::M);
-    harness.step();
-    assert!(harness.state().work.migration.adding_missing_object);
-    assert!(
-        harness
-            .query_by_label_contains("Save missing object")
-            .unwrap()
-            .accesskit_node()
-            .is_disabled()
-    );
+    assert!(harness.query_by_label("Add missing object").is_none());
+    assert!(harness.query_by_label_contains("Edit added").is_none());
 
     let canvas = harness.get_by_label("Annotation canvas").rect();
     click_at(&mut harness, canvas.center());
@@ -385,8 +355,9 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     );
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
-    assert!(harness.query_by_label("Edit added").is_some());
-    click_accesskit_button(&mut harness, "Edit added");
+    assert!(harness.query_by_label("Edit added").is_none());
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
     harness.step();
     assert!(harness.state().work.migration.adding_missing_object);
     assert_eq!(
@@ -438,9 +409,10 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     assert!(
         harness
             .query_by_label_contains("Add missing object")
-            .is_some()
+            .is_none()
     );
-    click_accesskit_button(&mut harness, "Edit added object 1");
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
     harness.step();
     assert!(harness.query_by_label("Remove added object").is_some());
     click_accesskit_button(&mut harness, "Remove added object");
@@ -463,7 +435,7 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     assert!(
         harness
             .query_by_label_contains("Add missing object")
-            .is_some()
+            .is_none()
     );
 }
 
@@ -497,7 +469,8 @@ fn missing_object_uses_its_own_zero_position_explanation() {
     harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
 
-    click_accesskit_button(&mut harness, "Add missing object");
+    harness.key_press(egui::Key::M);
+    harness.step();
     let not_present = harness
         .query_all_by_label_contains("Mark center as not present")
         .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
@@ -1275,7 +1248,7 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
     assert!(
         full_image
             .query_by_label_contains("Add missing object")
-            .is_some()
+            .is_none()
     );
     assert!(full_image.query_by_label("Workflow").is_some());
     assert!(full_image.query_by_label("Inspector").is_some());
@@ -1291,13 +1264,11 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             app
         });
     wide_full_image.step();
-    for label in ["Add missing object", "Confirm all guides & finish"] {
-        let action = wide_full_image.get_by_label_contains(label).rect();
-        assert!(
-            action.right() <= 1318.0 && action.bottom() <= 900.0,
-            "{label} must remain fully visible at the narrowest wide desktop size: {action:?}"
-        );
-    }
+    let action = wide_full_image.get_by_label_contains("Confirm all guides & finish").rect();
+    assert!(
+        action.right() <= 1318.0 && action.bottom() <= 900.0,
+        "confirmation must remain fully visible at the narrowest wide desktop size: {action:?}"
+    );
 }
 
 #[cfg(feature = "inspector-presets")]
@@ -1770,7 +1741,8 @@ fn migration_review_confirmation_is_visible_and_uses_space_on_mobile() {
             let workflow = harness.get_by_label("Workflow").rect();
             let inspector = harness.get_by_label_contains("Review details: Workflow:").rect();
             let context = harness.get_by_label("Workspace context bar").rect();
-            assert!(confirm.left() <= 16.0 && confirm.right() >= width - 70.0);
+            assert!(confirm.left() <= 70.0 && confirm.right() >= width - 16.0);
+            assert!(harness.ctx.content_rect().bottom() - confirm.bottom() < 30.0);
             assert!(workflow.top() >= context.top() && workflow.bottom() <= context.bottom());
             assert!(inspector.top() >= context.top() && inspector.bottom() <= context.bottom());
         };

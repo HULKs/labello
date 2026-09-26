@@ -105,7 +105,9 @@ Labello is under active development. These boundaries matter when choosing it:
   directory. Dataset-wide generation covers box workflows; external prediction
   import and dataset-wide pose generation are unavailable.
 - Tutorials render text only. Review has no swipe controls. Pen events have
-  focused Chromium/WebKit coverage, but [iPadOS Safari/Firefox and physical stylus
+  focused Chromium/WebKit coverage. After pen detection, fingers navigate without
+  annotating; two-finger navigation can overlap pen editing. Browser detection
+  begins at the first pen event, not hardware connection. However, [iPadOS Safari/Firefox and physical stylus
   devices](docs/stylus-input.md) still need device validation. Named
   screen-reader/browser combinations have no verified support claim.
 - Import creates new datasets and accepts only the documented ground-truth

@@ -7,7 +7,16 @@ mutation. Inspect lets you browse images without claiming work.
 ## Annotate
 
 Draw bounding boxes or place the workflow's ordered keypoints. Select an existing
-object to edit it, and drag a placed keypoint to correct its position. Skeleton
+object to edit it, and drag a placed keypoint to correct its position. New objects
+remain selected and editable after placement. Drawing a manual box preserves the
+current zoom and pan, including after reviewing prelabels. During prelabel review,
+Refocus explicitly zooms to the selected object. The inspector offers Visible and
+Occluded controls for positioned keypoints when the workflow allows occlusion.
+After releasing a placed or dragged keypoint, its editing visibility control and
+occlusion shortcut update that point without moving it. Clicking another placed
+point selects it for these controls. While a skeleton is incomplete, the separate
+placement controls still configure the next point.
+Submit & next stays at the bottom right, including compact layouts. Skeleton
 keypoints have three outcomes:
 
 | Outcome | Meaning | Canvas marker |
@@ -26,8 +35,11 @@ icons explain disabled cards through short tooltips and accessible descriptions.
 They distinguish completion balance, disabled review, an empty dataset, finished
 annotation or review, work awaiting submission, competing claims, review revisions,
 and excluded imports. Mixed restrictions use a generic unavailable icon.
-Saving, image loading, and a pending transition temporarily disable all cards
-and take precedence in that order. Checking or failed availability alone leaves
+Submission, image loading, and a pending transition temporarily disable all cards
+and take precedence in that order. Background annotation saves keep workflow cards
+and keypoint controls stable and usable; the save indicator reports their progress.
+Switching workflows during autosave opens the usual confirmation, and submission
+or release waits until the current save finishes. Checking or failed availability alone leaves
 cards selectable; a known unavailable result remains visible during refresh.
 The current workflow keeps its white dot beside any reason icon. If
 availability causes an automatic switch, a persistent notice names the old and
@@ -46,7 +58,7 @@ Settings are staged until saved and can be restored to defaults.
 | Fit | Fit control or double-click |
 | Pan in annotation | `P` toggles Pan mode, then primary-button drag; `Escape` exits it |
 | Pan while editing | `Ctrl` plus primary-button drag, or middle-button drag; the modifier is configurable |
-| Refocus active object | `R`, or Refocus in review, migration, and selected migration companions |
+| Refocus active object | `R`, or Refocus in review, migration, prelabel review, and selected migration companions |
 | Submit and next | `Space`; in review this acts on the focused item or final overview |
 | Previous image | Left arrow; subject to the previous-assignment eligibility rules |
 | Delete annotation | `Delete`; also discards a selected locally added review object |

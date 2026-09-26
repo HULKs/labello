@@ -90,7 +90,8 @@ impl LabelloApp {
                 interaction.allow_create = matches!(
                     draft.edited_geometry,
                     labello_domain::AnnotationGeometry::Skeleton(_)
-                );
+                ) || (self.review_overview()
+                    && draft.expected_version == 0);
                 interaction.editable = !self.loading.saving
                     && !self.loading.image
                     && self.work.pending_transition.is_none();
@@ -127,17 +128,22 @@ impl LabelloApp {
                         review_annotation
                     });
             } else if self.view == AppView::Annotate {
-                let companion = selected_annotation.as_ref().and_then(|id| {
+                let focus = selected_annotation.as_ref().and_then(|id| {
                     annotations.iter().find(|annotation| {
                         &annotation.annotation_id == id
-                            && (self.work.prelabel_review.started
+                            && (self.selected_prelabel_object().is_some()
+                                || self.work.prelabel_evidence.contains_key(id)
                                 || self.work.annotations.iter().any(|original| {
                                     original.annotation_id == annotation.annotation_id
-                                        && self.is_migration_companion_box(original)
+                                        && (self.is_migration_companion_box(original)
+                                            || matches!(
+                                                original.origin,
+                                                labello_domain::AnnotationOrigin::Prelabel { .. }
+                                            ))
                                 }))
                     })
                 });
-                self.work.canvas.set_annotation_edit_focus(companion);
+                self.work.canvas.set_annotation_edit_focus(focus);
             } else {
                 self.work.canvas.clear_review_focus();
             }
@@ -208,7 +214,7 @@ impl LabelloApp {
                             draft.edited_geometry =
                                 labello_domain::AnnotationGeometry::BoundingBox(bbox);
                         }
-                        self.retain_review_editor();
+                        self.stage_review_addition_keep_editor();
                     }
                     Some(CanvasAction::PlaceKeypoint(point)) => {
                         self.begin_new_review_object(None);
@@ -235,6 +241,16 @@ impl LabelloApp {
                     }
                     Some(CanvasAction::EditKeypoint(edit)) => self.edit_correction_keypoint(edit),
                     Some(CanvasAction::Select(id)) => self.select_review_annotation(&id),
+                    Some(CanvasAction::CreateBoundingBox(bbox)) if overview_editable => {
+                        if self.retain_review_editor() {
+                            self.begin_new_review_object(None);
+                            if let Some(draft) = self.work.correction_draft.as_mut() {
+                                draft.edited_geometry =
+                                    labello_domain::AnnotationGeometry::BoundingBox(bbox);
+                            }
+                            self.stage_review_addition_keep_editor();
+                        }
+                    }
                     Some(CanvasAction::CreateBoundingBox(_)) | None => {}
                 }
             }
@@ -250,6 +266,7 @@ impl LabelloApp {
                 .then(|| self.work.availability.error.clone())
                 .flatten();
             egui::ScrollArea::vertical()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("workspace-empty-state")
                 .show(ui, |ui| {
                     ui.add_space(((ui.available_height() - 160.0) * 0.5).max(0.0));

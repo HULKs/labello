@@ -179,7 +179,9 @@ impl LabelloApp {
                 .get(self.work.skeleton_keypoint_index)
                 .map(|keypoint| keypoint.name.clone())
         });
-        if let Some(name) = next_keypoint {
+        let editing_keypoint = self.editing_keypoint_visibility_control(ui);
+        if (!editing_keypoint || self.work.active_skeleton.is_some())
+            && let Some(name) = next_keypoint {
             theme::compact_metric(
                 ui,
                 if self.work.active_skeleton.is_some() {
@@ -194,13 +196,13 @@ impl LabelloApp {
                     ui.ctx(),
                     labello_domain::UserAction::ToggleKeypointHidden,
                 );
-                ui.add_enabled_ui(!self.loading.saving, |ui| {
+                ui.add_enabled_ui(!self.saving_blocks_interaction(), |ui| {
                     if spec.allow_hidden {
                         keypoint_placement_mode(
                             ui,
                             &name,
                             &mut self.work.next_keypoint_hidden,
-                            &hidden_shortcut,
+                            if editing_keypoint { "" } else { &hidden_shortcut },
                         );
                     }
                     ui.horizontal(|ui| {
@@ -231,6 +233,18 @@ impl LabelloApp {
                 });
             }
         }
+        if let Some(id) = self.work.selected_annotation.clone()
+            && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+            && let Some(AnnotationGeometry::Skeleton(skeleton)) = self.annotation_objects().into_iter().find(|annotation| annotation.annotation_id == id).map(|annotation| annotation.geometry)
+        {
+            ui.add_enabled_ui(!self.saving_blocks_interaction() && !self.loading.image && self.work.pending_transition.is_none(), |ui| {
+                if let Some((index, state)) = placed_keypoint_visibility(ui, &skeleton) {
+                    self.set_annotation_keypoint_visibility(id, index, state);
+                }
+            });
+        }
+
+
     }
 
     fn review_context_section(&self, ui: &mut egui::Ui) -> bool {

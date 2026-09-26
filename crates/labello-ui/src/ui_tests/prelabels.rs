@@ -900,6 +900,12 @@ fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
                 height,
             );
         }
+        let primary = harness.get_by_label("Confirm & next").rect();
+        assert!(primary.left() >= harness.get_by_label("Skip").rect().right());
+        if let Some(more) = harness.query_by_label("More actions") {
+            assert!(primary.left() >= more.rect().right());
+        }
+        assert!(width - primary.right() < 30.0);
         assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
     }
     harness.state_mut().loading.saving = true;
@@ -1101,17 +1107,27 @@ fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
     let id = app.work.selected_annotation.clone().unwrap();
     let edited = NormalizedPoint { x: 0.6, y: 0.4 };
     app.edit_keypoint(crate::canvas::KeypointEdit {
-        annotation_id: id,
+        annotation_id: id.clone(),
         keypoint_index: 0,
         point: edited,
     });
+    app.set_annotation_keypoint_visibility(id.clone(), 0, KeypointState::Hidden);
+    app.undo();
+    let AnnotationGeometry::Skeleton(skeleton) =
+        &app.selected_prelabel_object().unwrap().annotation.geometry
+    else {
+        panic!("pose object");
+    };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    assert_eq!(skeleton.keypoints[0].point, Some(edited));
+    app.redo();
     assert!(app.work.annotations.is_empty());
     assert!(app.confirm_prelabel_object());
     let AnnotationGeometry::Skeleton(skeleton) = &app.work.annotations[0].geometry else {
         panic!("pose object");
     };
     assert_eq!(skeleton.keypoints[0].point, Some(edited));
-    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
 }
 
 #[test]
@@ -1247,5 +1263,225 @@ fn retained_prelabel_defaults_do_not_cross_workspace_or_account_epochs() {
         }
         assert!(app.work.prelabels.automatic.is_none());
         assert_eq!(app.prelabel_choice(&task), None);
+    }
+}
+
+#[test]
+fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() {
+    for use_shortcut in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_prelabel_work_harness(api.clone());
+        add_second_prelabel(harness.state_mut());
+        attach_prelabel_evidence(harness.state_mut());
+        let first = harness.state().work.selected_annotation.clone().unwrap();
+        let assignment = harness.state().work.assignment.clone().unwrap();
+        harness.run_steps(3);
+        click_accesskit_button(&mut harness, "Confirm & next");
+        assert_eq!(harness.state().work.annotations.len(), 1);
+        let second = harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .annotation_id
+            .clone();
+        harness.state_mut().autosave();
+        let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+        assert!(matches!(
+            command,
+            UiCommand::SaveAnnotations { submit: false, .. }
+        ));
+        let operation = harness.state().work.active_operation_id;
+        harness.run_steps(2);
+        assert!(harness.state().loading.saving);
+        assert!(
+            !harness
+                .get_by_label("Confirm & next")
+                .accesskit_node()
+                .is_disabled()
+        );
+        if use_shortcut {
+            harness.key_press(egui::Key::Space);
+            harness.run_steps(2);
+        } else {
+            click_accesskit_button(&mut harness, "Confirm & next");
+        }
+        harness.run_steps(2);
+        assert!(harness.state().pending_prelabel_objects().is_empty());
+        assert_eq!(harness.state().work.annotations.len(), 2);
+        assert!(
+            harness
+                .state()
+                .work
+                .annotations
+                .iter()
+                .any(|annotation| annotation.annotation_id == second)
+        );
+        assert_eq!(harness.state().work.active_operation_id, operation);
+        assert!(
+            harness
+                .get_by_label("Submit & next")
+                .accesskit_node()
+                .is_disabled()
+        );
+        harness.key_press(egui::Key::Space);
+        harness.step();
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert!(harness.state().work.pending_transition.is_none());
+        assert!(
+            !harness
+                .state()
+                .runtime
+                .commands
+                .iter()
+                .any(|command| matches!(command, UiCommand::SaveAnnotations { .. }))
+        );
+        harness.state_mut().work.last_edit_at = None;
+        if use_shortcut {
+            api.fail_next_batch();
+        }
+        harness
+            .state_mut()
+            .start_workflow_command(api.clone(), command);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert_eq!(harness.state().work.annotations.len(), 2);
+        assert!(harness.state().pending_prelabel_objects().is_empty());
+        harness.state_mut().undo();
+        harness.state_mut().redo();
+        harness.state_mut().work.last_edit_at = None;
+        harness.state_mut().autosave();
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        let state = harness.state().work.current_state.as_ref().unwrap();
+        assert_eq!(state.active_annotations().count(), 2);
+        assert!(state.current_annotation(&second).is_some());
+        assert!(matches!(
+            state.current_annotation(&first).unwrap().origin,
+            AnnotationOrigin::Prelabel { .. }
+        ));
+        assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert_eq!(
+            api.events()
+                .iter()
+                .filter(|event| matches!(event, EventPayload::AnnotationVersionCreated { .. }))
+                .count(),
+            2
+        );
+        harness.state_mut().submit_and_advance();
+        step_until(&mut harness, 20, |app| {
+            app.work
+                .assignment
+                .as_ref()
+                .is_some_and(|current| current.assignment_id != assignment.assignment_id)
+        });
+        assert_eq!(api.counts().complete_assignment, 1);
+        assert!(harness.state().runtime.error.is_none());
+    }
+}
+
+#[test]
+fn recovered_prelabel_edits_use_persisted_provenance_for_final_submit() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    attach_prelabel_evidence(harness.state_mut());
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    harness.state_mut().confirm_prelabel_object();
+    harness.state_mut().autosave();
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let saved = harness.state().work.annotations[0].clone();
+    assert!(matches!(saved.origin, AnnotationOrigin::Prelabel { .. }));
+    let edited = BoundingBox {
+        x: 0.2,
+        y: 0.25,
+        width: 0.3,
+        height: 0.35,
+    };
+    harness.state_mut().edit_bbox(BoundingBoxEdit {
+        annotation_id: id.clone(),
+        bounding_box: edited,
+    });
+    // Reproduce a draft written by the old save-reply path with stale identity.
+    harness.state_mut().work.annotations[0].origin = AnnotationOrigin::native();
+    harness.state_mut().work.annotations[0].object_group_id = Some("stale-group".into());
+    harness.state_mut().work.last_edit_at = None;
+    harness.state_mut().queue_current_drafts();
+    harness.run_steps(10);
+    harness.state_mut().work.annotations.clear();
+    harness.state_mut().runtime.notice = None;
+    harness.state_mut().request_work_draft_load();
+    step_until(&mut harness, 12, |app| {
+        app.runtime.notice.as_deref() == Some("Recovered the validated browser draft.")
+    });
+    let recovered = &harness.state().work.annotations[0];
+    assert_eq!(recovered.origin, saved.origin);
+    assert_eq!(recovered.object_group_id, saved.object_group_id);
+    assert_eq!(recovered.geometry, AnnotationGeometry::BoundingBox(edited));
+    harness.state_mut().submit_and_advance();
+    step_until(&mut harness, 20, |app| {
+        app.work
+            .assignment
+            .as_ref()
+            .is_some_and(|current| current.assignment_id != assignment.assignment_id)
+    });
+    assert_eq!(api.counts().complete_assignment, 1);
+    assert!(harness.state().runtime.error.is_none());
+    assert!(api.events().iter().any(|payload| matches!(payload,
+        EventPayload::AnnotationVersionCreated { annotation, previous_version: Some(1), .. }
+        if annotation.annotation_id == id && annotation.origin == saved.origin
+            && annotation.geometry == AnnotationGeometry::BoundingBox(edited)
+    )));
+}
+
+#[test]
+fn manual_boxes_keep_the_view_with_and_without_prelabels() {
+    for with_prelabels in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = if with_prelabels {
+            loaded_prelabel_work_harness(api)
+        } else {
+            loaded_work_harness(api)
+        };
+        if with_prelabels {
+            harness.run_steps(3);
+            assert!(harness.state().work.canvas.current_zoom() > 1.0);
+            harness.state_mut().confirm_prelabel_object();
+        }
+        harness.run_steps(3);
+        for zoom in [1.0, 2.0] {
+            harness.state_mut().work.canvas.restore_transform(
+                crate::persistence::StoredCanvasTransform {
+                    zoom,
+                    pan_x: if zoom > 1.0 { 17.0 } else { 0.0 },
+                    pan_y: if zoom > 1.0 { -11.0 } else { 0.0 },
+                },
+            );
+            harness.run_steps(2);
+            let before = harness.state().work.canvas.stored_transform();
+            harness.state_mut().create_bbox(BoundingBox {
+                x: 0.7,
+                y: 0.65,
+                width: 0.12,
+                height: 0.15,
+            });
+            let selected = harness.state().work.selected_annotation.clone();
+            harness.run_steps(3);
+            assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            assert_eq!(harness.state().work.selected_annotation, selected);
+            harness.state_mut().autosave();
+            step_until(&mut harness, 12, |app| !app.loading.saving);
+            harness.state_mut().undo();
+            harness.state_mut().redo();
+            harness.run_steps(3);
+            assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            assert_eq!(harness.state().work.selected_annotation, selected);
+            harness.key_press(egui::Key::R);
+            harness.run_steps(3);
+            if with_prelabels {
+                assert_ne!(harness.state().work.canvas.stored_transform(), before);
+            } else {
+                assert_eq!(harness.state().work.canvas.stored_transform(), before);
+            }
+        }
     }
 }

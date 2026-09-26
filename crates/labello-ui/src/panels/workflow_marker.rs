@@ -39,7 +39,7 @@ impl LabelloApp {
         task_id: &labello_domain::TaskId,
     ) -> Option<WorkflowMarkerReason> {
         use WorkflowMarkerReason as M;
-        if self.loading.saving {
+        if self.saving_blocks_interaction() {
             return Some(M::Saving);
         }
         if self.loading.image {

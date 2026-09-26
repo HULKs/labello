@@ -95,3 +95,4 @@ include!("suites/loading_bars.rs");
 include!("suites/preload.rs");
 
 include!("suites/companion_guides.rs");
+include!("suites/pen_editing.rs");

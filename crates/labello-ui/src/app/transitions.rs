@@ -4,7 +4,7 @@ impl LabelloApp {
             self.runtime.error = Some("Finish the request or discard the return draft before leaving Inspect.".into());
             return;
         }
-        if self.loading.saving || self.loading.image || self.work.migration.busy
+        if self.saving_blocks_interaction() || self.loading.image || self.work.migration.busy
             || self.work.pending_transition.is_some() || self.transition_is_current(&transition) {
             return;
         }
@@ -140,20 +140,21 @@ impl LabelloApp {
     }
 
     pub(crate) fn cancel_pending_transition(&mut self) {
-        if !self.loading.saving && !self.loading.image {
+        if !self.saving_blocks_interaction() && !self.loading.image {
             self.work.pending_transition = None;
         }
     }
 
     pub(crate) fn submit_and_advance(&mut self) {
         if self.view != AppView::Annotate
-            || self.loading.saving
+            || self.saving_blocks_interaction()
             || (self.work.assignment.is_none() && self.runtime.api.is_some())
         {
             return;
         }
         if self.advance_companion_guide() { return; }
         if self.confirm_prelabel_object() { return; }
+        if self.loading.saving { return; }
         if let Some(issue) = self.submission_issue() {
             self.runtime.error = Some(issue);
             return;

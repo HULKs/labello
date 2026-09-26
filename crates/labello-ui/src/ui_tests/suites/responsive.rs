@@ -782,7 +782,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
 
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
-        harness.step();
+        harness.run_steps(4);
         assert_review_bar_paints(&harness, "Item 1 / 1");
         assert_control_inside(&harness, "Fit", egui::accesskit::Role::Button, width, height);
         let context = harness.get_by_label("Workspace context bar").rect();
@@ -797,12 +797,20 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
         let layout = LayoutMode::for_width(width);
         let confirm = "Approve";
         assert_control_inside(&harness, confirm, egui::accesskit::Role::Button, width, height);
+        let primary = harness.get_by_label(confirm).rect();
+        assert!(width - primary.right() < 30.0 && height - primary.bottom() < 30.0,
+            "primary must stay bottom-right at {width}x{height}: {primary:?}");
+        let next = harness.get_by_label("Overview").rect();
+        assert!(primary.left() >= next.right(), "primary={primary:?} next={next:?}");
+        let skip = harness.get_by_label("Skip").rect();
+        assert!(primary.left() >= skip.right() || primary.top() >= skip.bottom(),
+            "primary must follow secondary actions: primary={primary:?} skip={skip:?}");
         if layout != LayoutMode::Wide {
             let confirm_rect = harness
                 .get_by_role_and_label(egui::accesskit::Role::Button, confirm)
                 .rect();
             assert!(
-                confirm_rect.left() <= 16.0 && confirm_rect.right() >= width - 70.0,
+                confirm_rect.left() <= 70.0 && confirm_rect.right() >= width - 16.0,
                 "confirmation must fill the row beside object navigation at {width}x{height}: {confirm_rect:?}",
             );
             for label in ["Workflow", "Inspector"] {

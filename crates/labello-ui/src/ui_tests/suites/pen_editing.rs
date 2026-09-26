@@ -1,0 +1,392 @@
+#[test]
+fn submit_next_is_the_rightmost_bottom_action_at_supported_widths() {
+    for size in [egui::vec2(1440.0, 900.0), egui::vec2(768.0, 1024.0), egui::vec2(390.0, 844.0), egui::vec2(844.0, 390.0)] {
+        let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+        harness.set_size(size);
+        harness.run_steps(4);
+        let submit = harness.get_by_label("Submit & next").rect();
+        let skip = harness.get_by_label("Skip").rect();
+        assert!(submit.left() >= skip.right(), "{size:?}: submit {submit:?}, skip {skip:?}");
+        if let Some(more) = harness.query_by_label("More actions") { assert!(submit.left() >= more.rect().right()); }
+        assert!(size.x - submit.right() < 30.0 && size.y - submit.bottom() < 30.0, "{size:?}: {submit:?}");
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0))
+            .build_eframe(|ctx| inspector_presets::build(preset, &ctx.egui_ctx));
+        harness.run_steps(4);
+        for placing in [false, true] {
+            if placing {
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                click_at(&mut harness, canvas.center());
+                harness.run_steps(4);
+                assert!(harness.state().work.migration.draft.is_some());
+            }
+            for size in [egui::vec2(1440.0, 900.0), egui::vec2(768.0, 1024.0), egui::vec2(390.0, 844.0), egui::vec2(320.0, 568.0), egui::vec2(844.0, 390.0)] {
+                harness.set_size(size);
+                harness.run_steps(4);
+                let compact = LayoutMode::for_width(size.x) == LayoutMode::Compact;
+                let label = match (preset, placing, compact) {
+                    (InspectorPreset::MigrationObject, _, true) => "Save & next",
+                    (InspectorPreset::MigrationObject, _, false) => "Save skeleton & advance",
+                    (_, true, true) => "Save object",
+                    (_, true, false) => "Save missing object",
+                    (_, false, true) => "Confirm & finish",
+                    (_, false, false) => "Confirm all guides & finish",
+                };
+                let primary = harness.get_by_label(label).rect();
+                if size.x == 1440.0 {
+                    fn painted_text(shape: &egui::epaint::Shape, label: &str) -> Option<egui::Rect> {
+                        match shape {
+                            egui::epaint::Shape::Text(text) if text.galley.job.text == label =>
+                                Some(text.galley.rect.translate(text.pos.to_vec2())),
+                            egui::epaint::Shape::Vec(shapes) => shapes.iter().find_map(|shape| painted_text(shape, label)),
+                            _ => None,
+                        }
+                    }
+                    let text = harness.output().shapes.iter()
+                        .find_map(|shape| painted_text(&shape.shape, label)).expect("primary label is painted");
+                    assert!((primary.center().y - text.center().y).abs() <= 1.0,
+                        "{label}: button={primary:?} text={text:?}");
+                }
+                for secondary in ["Skip", "Previous object", "Discard object changes", "Undo last keypoint", "More"] {
+                    if let Some(node) = harness.query_by_label(secondary) {
+                        assert!(primary.left() >= node.rect().right(),
+                            "{preset:?} {size:?} {label}={primary:?} {secondary}={:?}", node.rect());
+                    }
+                }
+                assert!(size.x - primary.right() < 30.0 && size.y - primary.bottom() < 30.0,
+                    "{preset:?} {size:?} {label}={primary:?}");
+                assert!(primary.right() <= size.x && primary.bottom() <= size.y);
+                assert!(primary.top() >= harness.get_by_label("Annotation canvas").rect().bottom());
+            }
+        }
+    }
+}
+
+#[test]
+fn placed_annotation_keypoints_can_change_visibility_and_undo_without_reentering_editing() {
+    let api = Rc::new(SpyApi::new());
+    {
+        let mut state = api.state.borrow_mut();
+        let task = &mut state.metadata.tasks[0];
+        task.annotation_type = AnnotationType::Skeleton;
+        task.prelabel_config_ids.clear();
+        task.skeleton = Some(SkeletonSpec {
+            keypoints: vec![KeypointSpec { name: "center".into(), required: true }],
+            edges: vec![], allow_hidden: true, allow_absent: false,
+        });
+    }
+    let mut harness = loaded_work_harness(api.clone());
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
+    harness.run_steps(3);
+    assert!(harness.state().work.active_skeleton.is_none());
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    click_accesskit_button(&mut harness, "center Occluded");
+    let geometry = harness.state().work.annotations[0].geometry.clone();
+    let AnnotationGeometry::Skeleton(skeleton) = &geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+    assert!(skeleton.keypoints[0].point.is_some());
+    assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&id));
+    harness.state_mut().undo();
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    harness.state_mut().redo();
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert_eq!(harness.state().work.annotations[0].geometry, geometry);
+    let image_id = &harness.state().work.current.as_ref().unwrap().image.image_id;
+    assert_eq!(api.image_state(image_id).current_annotation(&id).unwrap().geometry, geometry);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_blank_canvas_starts_missing_pose_and_completed_points_stay_editable() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+    app.work.inspector_panel_collapsed = true;
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+    let rect = harness.get_by_label("Annotation canvas").rect();
+    let start = rect.center();
+    click_at(&mut harness, start);
+    assert!(harness.state().work.migration.adding_missing_object);
+    assert_eq!(harness.state().work.migration.keypoint_index, 1);
+    let count = harness.state().work.migration.draft.as_ref().unwrap().keypoints.len();
+    for index in 1..count { click_at(&mut harness, start + egui::vec2(0.0, index as f32 * 25.0)); }
+    assert_eq!(harness.state().work.migration.keypoint_index, count);
+    let before = harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].point;
+    drag_at(&mut harness, start, start - egui::vec2(30.0, 0.0));
+    assert_ne!(harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].point, before);
+    harness.key_press(egui::Key::H);
+    harness.step();
+    assert_eq!(harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].state, KeypointState::Hidden);
+    assert!(harness.state().work.migration.draft_dirty);
+}
+
+#[test]
+fn review_new_box_keeps_editor_for_immediate_move_and_resize() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.1, y: 0.1, width: 0.1, height: 0.1 }), true);
+    let mut harness = loaded_review_harness(api);
+    harness.state_mut().request_review(labello_domain::ReviewDecision::Approved);
+    step_until(&mut harness, 12, |app| app.review_overview() && !app.loading.saving);
+    harness.run_steps(3);
+    let rect = harness.get_by_label("Annotation canvas").rect();
+    let start = rect.center();
+    let end = start + egui::vec2(90.0, 70.0);
+    drag_at(&mut harness, start, end);
+    let draft = harness.state().work.correction_draft.clone().expect("new box remains editable");
+    assert_eq!(draft.expected_version, 0);
+    drag_at(&mut harness, start + egui::vec2(45.0, 35.0), start + egui::vec2(65.0, 45.0));
+    let moved = harness.state().work.correction_draft.as_ref().unwrap().edited_geometry.clone();
+    assert_ne!(moved, draft.edited_geometry);
+    drag_at(&mut harness, end + egui::vec2(20.0, 10.0), end + egui::vec2(40.0, 30.0));
+    assert_ne!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, moved);
+}
+
+#[test]
+fn released_keypoint_visibility_toggle_edits_the_point_and_preserves_next_placement() {
+    let api = Rc::new(SpyApi::new());
+    {
+        let mut state = api.state.borrow_mut();
+        let task = &mut state.metadata.tasks[0];
+        task.annotation_type = AnnotationType::Skeleton;
+        task.prelabel_config_ids.clear();
+        task.skeleton = Some(SkeletonSpec {
+            keypoints: vec![
+                KeypointSpec { name: "head".into(), required: true },
+                KeypointSpec { name: "tail".into(), required: true },
+            ],
+            edges: vec![], allow_hidden: true, allow_absent: false,
+        });
+    }
+    let mut harness = loaded_work_harness(api.clone());
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
+    harness.run_steps(3);
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    let AnnotationGeometry::Skeleton(before) = harness.state().work.annotations[0].geometry.clone() else { panic!() };
+    assert!(!harness.state().work.canvas.is_dragging());
+    click_accesskit_button(&mut harness, "Set head as occluded");
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+    assert_eq!(skeleton.keypoints[0].point, before.keypoints[0].point);
+    assert!(skeleton.keypoints[1].point.is_none());
+    assert!(!harness.state().work.next_keypoint_hidden);
+    harness.state_mut().undo();
+    assert_eq!(harness.state().work.annotations[0].geometry, AnnotationGeometry::Skeleton(before));
+    harness.state_mut().redo();
+    click_accesskit_button(&mut harness, "Place tail as occluded");
+    assert!(harness.state().work.next_keypoint_hidden);
+    click_at(&mut harness, center + egui::vec2(70.0, 40.0));
+    harness.run_steps(3);
+    assert!(harness.state().work.active_skeleton.is_none());
+    click_accesskit_button(&mut harness, "Set tail as visible");
+    harness.key_press(egui::Key::H);
+    harness.step();
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+    assert_eq!(skeleton.keypoints[1].state, KeypointState::Hidden);
+    assert!(!harness.state().work.next_keypoint_hidden);
+    click_at(&mut harness, center);
+    harness.run_steps(3);
+    click_accesskit_button(&mut harness, "Set head as visible");
+    harness.state_mut().loading.saving = true;
+    harness.key_press(egui::Key::H);
+    harness.step();
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    harness.state_mut().loading.saving = false;
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let image_id = &harness.state().work.current.as_ref().unwrap().image.image_id;
+    assert_eq!(api.image_state(image_id).current_annotation(&id).unwrap().geometry, harness.state().work.annotations[0].geometry);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and_retry() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for fail_first_save in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+        let task_id = app.work.selected_task_id.clone().unwrap();
+        app.work.tasks.iter_mut().find(|task| task.task_id == task_id).unwrap().skeleton = Some(SkeletonSpec {
+            keypoints: vec![KeypointSpec { name: "center".into(), required: true }],
+            edges: vec![], allow_hidden: true, allow_absent: false,
+        });
+        api.set_image_state(app.work.current_state.clone().unwrap());
+        app.runtime.api = Some(api.clone());
+        app.work.inspector_panel_collapsed = true;
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+        harness.run_steps(3);
+        assert!(harness.query_by_label_contains("Add missing object").is_none());
+        assert!(harness.query_by_label_contains("Edit added").is_none());
+        let first = harness.get_by_label("Annotation canvas").rect().center();
+        click_at(&mut harness, first);
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let first_draft = harness.state().work.migration.draft.clone().unwrap();
+        assert_eq!(first_draft.keypoints[0].state, KeypointState::Hidden);
+        api.state.borrow_mut().fail_next_migration = fail_first_save;
+        let second = first + egui::vec2(100.0, 80.0);
+        click_at(&mut harness, second);
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        if fail_first_save {
+            assert!(harness.state().work.migration.error.is_some());
+            assert_eq!(harness.state().work.migration.draft.as_ref(), Some(&first_draft));
+            assert!(harness.state().work.migration.pending_overview_intent.is_some());
+            harness.state_mut().trigger_migration_primary_action();
+            step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        }
+        assert!(harness.state().work.migration.error.is_none());
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        assert!(harness.state().work.migration.editing_missing_annotation_id.is_none());
+        let first_id = labello_domain::AnnotationId::from("spy-discovered");
+        let state = harness.state().work.current_state.as_ref().unwrap();
+        assert_eq!(state.current_annotation(&first_id).unwrap().geometry, AnnotationGeometry::Skeleton(first_draft));
+        let second_draft = harness.state().work.migration.draft.clone().unwrap();
+        assert_ne!(second_draft.keypoints[0].point, state.current_annotation(&first_id).and_then(|annotation| {
+            if let AnnotationGeometry::Skeleton(skeleton) = &annotation.geometry { skeleton.keypoints[0].point } else { None }
+        }));
+        click_at(&mut harness, first);
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        harness.run_steps(3);
+        assert_eq!(harness.state().work.migration.editing_missing_annotation_id.as_ref(), Some(&first_id));
+        let second_id = labello_domain::AnnotationId::from("spy-discovered-1");
+        assert_eq!(harness.state().work.current_state.as_ref().unwrap().current_annotation(&second_id).unwrap().geometry, AnnotationGeometry::Skeleton(second_draft));
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let moved = first - egui::vec2(30.0, 0.0);
+        drag_at(&mut harness, first, moved);
+        let edited_first = harness.state().work.migration.draft.clone().unwrap();
+        assert_eq!(edited_first.keypoints[0].state, KeypointState::Visible);
+        click_at(&mut harness, first + egui::vec2(-100.0, 80.0));
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        let saved = harness.state().work.current_state.as_ref().unwrap().current_annotation(&first_id).unwrap();
+        assert_eq!(saved.version, 2);
+        assert_eq!(saved.geometry, AnnotationGeometry::Skeleton(edited_first));
+        assert!(harness.state().work.migration.editing_missing_annotation_id.is_none());
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        assert!(harness.state().work.migration.pending_overview_intent.is_none());
+        assert!(matches!(harness.state().work.migration.cursor, Some(labello_domain::MigrationCursor::FullImage)));
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().status, labello_domain::AssignmentStatus::Active);
+    }
+}
+
+
+#[test]
+fn background_keypoint_save_keeps_controls_live_and_preserves_newer_edits() {
+    for fail_save in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        {
+            let mut state = api.state.borrow_mut();
+            let task = &mut state.metadata.tasks[0];
+            task.annotation_type = AnnotationType::Skeleton;
+            task.prelabel_config_ids.clear();
+            task.skeleton = Some(SkeletonSpec {
+                keypoints: vec![KeypointSpec { name: "head".into(), required: true },
+                    KeypointSpec { name: "tail".into(), required: true }],
+                edges: vec![], allow_hidden: true, allow_absent: false,
+            });
+        }
+        let mut harness = loaded_work_harness(api.clone());
+        step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
+        let workflow = harness.state().selected_workflow().unwrap();
+        let label = workflow.label();
+        let workflow_rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect();
+        let center = harness.get_by_label("Annotation canvas").rect().center();
+        click_at(&mut harness, center);
+        let assignment = harness.state().work.assignment.clone().unwrap();
+        let id = harness.state().work.selected_annotation.clone().unwrap();
+        let stats_before = api.counts().dataset_stats;
+        harness.state_mut().work.last_edit_at = Some(Instant::now() - Duration::from_secs(1));
+        harness.state_mut().autosave_if_due();
+        let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+        assert!(matches!(command, UiCommand::SaveAnnotations { submit: false, .. }));
+        let operation = harness.state().work.active_operation_id;
+        harness.run_steps(2);
+        assert!(harness.state().loading.saving);
+        assert!(!harness.state().saving_blocks_interaction());
+        let card = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
+        assert!(!card.accesskit_node().is_disabled());
+        assert_eq!(card.rect(), workflow_rect);
+        assert_eq!(harness.state().workflow_marker_reason(&workflow.task_id), None);
+        assert!(!harness.get_by_label("Set head as occluded").accesskit_node().is_disabled());
+        assert!(!harness.get_by_label("Delete").accesskit_node().is_disabled());
+        assert!(harness.get_by_label("Submit & next").accesskit_node().is_disabled());
+        click_accesskit_button(&mut harness, "Set head as occluded");
+        click_at(&mut harness, center + egui::vec2(60.0, 40.0));
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let edited = harness.state().work.annotations[0].geometry.clone();
+        let AnnotationGeometry::Skeleton(skeleton) = &edited else { panic!("expected skeleton") };
+        assert!(skeleton.keypoints.iter().all(|point| point.state == KeypointState::Hidden && point.point.is_some()));
+        harness.state_mut().trigger_user_action(labello_domain::UserAction::UndoEdit);
+        assert_ne!(harness.state().work.annotations[0].geometry, edited);
+        harness.state_mut().trigger_user_action(labello_domain::UserAction::RedoEdit);
+        assert_eq!(harness.state().work.annotations[0].geometry, edited);
+        harness.state_mut().autosave();
+        assert_eq!(harness.state().work.active_operation_id, operation);
+        assert!(!harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::SaveAnnotations { .. })));
+        harness.state_mut().work.last_edit_at = None;
+        if fail_save { api.fail_next_batch(); }
+        harness.state_mut().start_workflow_command(api.clone(), command);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert_eq!(harness.state().work.annotations[0].geometry, edited);
+        assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&id));
+        assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
+        assert!(harness.state().work.background_save_operation_id.is_none());
+        assert_eq!(api.counts().dataset_stats, stats_before);
+        harness.state_mut().autosave();
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        let saved = harness.state().work.current_state.as_ref().unwrap().current_annotation(&id).unwrap();
+        assert_eq!(saved.geometry, edited);
+        assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment.assignment_id);
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert_eq!(api.counts().dataset_stats, stats_before);
+    }
+}
+
+#[test]
+fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
+    let current = harness.state().selected_workflow().unwrap();
+    let destination = harness.state().workflow_choices().into_iter()
+        .find(|workflow| workflow.task_id != current.task_id).unwrap();
+    let canvas = harness.get_by_label("Annotation canvas").rect();
+    drag_at(&mut harness, canvas.center(), canvas.center() + egui::vec2(60.0, 40.0));
+    harness.state_mut().autosave();
+    let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+    assert!(matches!(command, UiCommand::SaveAnnotations { submit: false, .. }));
+    let operation = harness.state().work.active_operation_id;
+    harness.step();
+    click_accesskit_button(&mut harness, &destination.label());
+    assert_eq!(harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+    assert!(harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
+    assert!(!harness.get_by_label("Cancel").accesskit_node().is_disabled());
+    click_accesskit_button(&mut harness, "Cancel");
+    assert!(harness.state().work.pending_transition.is_none());
+    assert_eq!(harness.state().work.active_operation_id, operation);
+    click_accesskit_button(&mut harness, &destination.label());
+    harness.state_mut().release_pending_transition();
+    assert_eq!(harness.state().work.active_operation_id, operation);
+    assert_eq!(harness.state().work.selected_task_id.as_ref(), Some(&current.task_id));
+    harness.state_mut().start_workflow_command(api, command);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert!(!harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
+    assert_eq!(harness.state().work.pending_transition,
+        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+    click_accesskit_button(&mut harness, "Submit and switch");
+    step_until(&mut harness, 20, |app| app.work.selected_task_id.as_ref() == Some(&destination.task_id) && !app.loading.saving);
+}

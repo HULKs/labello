@@ -270,6 +270,7 @@ impl LabelloApp {
         let mut open = None;
         let mut visible = BTreeSet::new();
         let output = egui::ScrollArea::vertical()
+            .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
             .id_salt("inspection-gallery")
             .vertical_scroll_offset(self.inspection.scroll)
             .show_rows(
@@ -578,6 +579,7 @@ pub(super) fn filter_menu(
             // popup's cached/default area height before creating the scroll area.
             ui.set_max_height(height);
             egui::ScrollArea::vertical()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .max_height(height)
                 .show(ui, choices);
         });

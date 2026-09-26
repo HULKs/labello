@@ -136,6 +136,7 @@ impl CanvasInteraction {
 
 #[derive(Clone, Debug)]
 pub struct CanvasState {
+    keypoint_selection: Option<KeypointSelection>,
     drag: Option<DragOperation>,
     missing_drag: Option<u32>,
     draft_box: Option<BoundingBox>,
@@ -160,6 +161,7 @@ impl Default for CanvasState {
             missing_drag: None,
             draft_box: None,
             draft_keypoint: None,
+            keypoint_selection: None,
             zoom: MIN_ZOOM,
             pan: Vec2::ZERO,
             modifier_pan: false,
@@ -185,6 +187,14 @@ enum ReviewViewTarget {
 }
 
 impl CanvasState {
+    pub(crate) fn selected_keypoint(&self) -> Option<&KeypointSelection> {
+        self.keypoint_selection.as_ref()
+    }
+
+    pub(crate) fn select_keypoint(&mut self, selection: Option<KeypointSelection>) {
+        self.keypoint_selection = selection;
+    }
+
     /// Whether an annotation create, move, or resize interaction is active.
     pub fn is_dragging(&self) -> bool {
         self.drag.is_some()
@@ -322,7 +332,10 @@ impl CanvasState {
     /// Keep the editing view stable across geometry changes and saved versions.
     pub(crate) fn set_annotation_edit_focus(&mut self, annotation: Option<&AnnotationVersion>) {
         let Some(annotation) = annotation else {
-            self.clear_review_focus();
+            // Leaving automatic object focus preserves an explicit Refocus request.
+            if matches!(self.review_target, ReviewViewTarget::EditingAnnotation(_)) {
+                self.clear_review_focus();
+            }
             return;
         };
         let target = ReviewViewTarget::EditingAnnotation(annotation.annotation_id.clone());
@@ -2137,5 +2150,58 @@ mod tests {
         assert_eq!(harness.state().actions.len(), 1);
         assert_eq!(harness.state().canvas.current_zoom(), MIN_ZOOM);
         assert_eq!(harness.state().canvas.pan, Vec2::ZERO);
+    }
+    #[test]
+    fn pen_drag_survives_finger_zoom_in_both_contact_orders() {
+        for fingers_first in [false, true] {
+            let mut harness = canvas_harness(true);
+            crate::pointer_input::set_pen_pointer(&harness.ctx, true);
+            let touch = |id, phase, pos| Event::Touch {
+                device_id: TouchDeviceId(1),
+                id: TouchId(id),
+                phase,
+                pos,
+                force: None,
+            };
+            let start = pos2(150.0, 130.0);
+            let begin_fingers = |harness: &mut Harness<'static, InteractiveTestState>| {
+                harness.event(touch(1, TouchPhase::Start, pos2(180.0, 140.0)));
+                harness.event(touch(2, TouchPhase::Start, pos2(280.0, 140.0)));
+                harness.step();
+            };
+            if fingers_first {
+                begin_fingers(&mut harness);
+            }
+            harness.event(Event::PointerMoved(start));
+            harness.event(Event::PointerButton {
+                pos: start,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            });
+            harness.step();
+            assert!(harness.state().canvas.is_dragging());
+            if !fingers_first {
+                begin_fingers(&mut harness);
+            }
+            harness.event(touch(1, TouchPhase::Move, pos2(160.0, 150.0)));
+            harness.event(touch(2, TouchPhase::Move, pos2(310.0, 150.0)));
+            harness.event(Event::PointerMoved(pos2(250.0, 200.0)));
+            harness.step();
+            assert!(harness.state().canvas.current_zoom() > 1.0);
+            assert!(harness.state().canvas.is_dragging());
+            assert!(harness.state().actions.is_empty());
+            harness.event(Event::PointerButton {
+                pos: pos2(250.0, 200.0),
+                button: PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            });
+            harness.step();
+            assert!(matches!(
+                harness.state().actions.as_slice(),
+                [CanvasAction::CreateBoundingBox(_)]
+            ));
+        }
     }
 }

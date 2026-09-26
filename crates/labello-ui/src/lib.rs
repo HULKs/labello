@@ -16,6 +16,7 @@ mod manual_migration;
 mod missing_objects;
 pub mod panels;
 mod persistence;
+pub mod pointer_input;
 mod prelabel_flow;
 mod prelabel_review;
 mod presence;

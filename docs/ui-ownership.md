@@ -70,6 +70,18 @@ states through AccessKit without image coordinates. Gesture tests stay with the
 canvas. The workflow reducer retains every persisted annotation ID, including
 deleted versions; Undo/Redo rebases a restored object on its latest version.
 Later keypoint autosaves mark an existing skeleton as a new human-edited revision.
+Non-submitting annotation saves retain an operation-scoped background marker.
+Workflow selection, local annotation edits, prelabel confirmation, and companion
+guide navigation remain available while saving;
+transaction guards still prevent overlapping save, submit, or release requests.
+A workflow change stages the normal confirmation and waits for the save before
+committing a transition. Save replies preserve newer local edits through the edit
+generation check. Annotation reconciliation copies immutable origin, object group,
+creation time, workflow, and annotation type from persisted state before comparing
+drafts and rebasing versions. This also applies to Undo/Redo and browser recovery,
+so a snapshot taken before prelabel acceptance cannot replace server provenance.
+Routine saves use periodic statistics refresh; completion
+requests an immediate refresh.
 
 ## Browser input
 
@@ -77,7 +89,13 @@ Later keypoint autosaves mark an existing skeleton as a new human-edited revisio
 eframe's mouse/touch compatibility listeners. Its browser-only app wrapper
 feeds egui pointer events to the unchanged `LabelloApp`, including synchronous
 press/release processing for browser user activation. It owns pen capture,
-cancellation, and duplicate-event suppression. Annotation policy and persistence
+cancellation, duplicate-event suppression, and separate finger touch events.
+`pointer_input.rs` retains the adapter's pointer identity and canvas hit region.
+Shared scroll areas consult that identity to keep pen presses out of drag-scroll;
+pen ownership also suspends egui's touch long-press timeout and restores the
+configured timeout when a mouse or finger owns the pointer again. This prevents
+active finger contacts from stealing a held pen's widget drag ownership.
+Canvas gestures allow independent pen editing during two-finger navigation. Annotation policy and persistence
 remain in the shared canvas and workflow owners. See the
 [stylus input contract](stylus-input.md) for evidence boundaries.
 
@@ -169,6 +187,11 @@ of the image. Geometry clamping uses only a numerical floor, so small boxes are
 not enlarged when rendered, hit-tested, or edited at deep zoom. Workspace
 preferences are not overwritten while dataset/assignment loading or restoration
 is pending, so a restored deep view survives asynchronous browser startup.
+
+Automatic annotation focus is limited to pending/accepted model objects and
+migration companions. Manually drawn boxes keep the current zoom and pan even
+after prelabel review has started; existing explicit Refocus remains available
+during prelabel review.
 
 Bounding-box assignments without a restored selection select their first visible
 migration companion. Focus occurs once per activation of an annotation identity,
@@ -357,6 +380,11 @@ the executing browser's identity. Copy succeeds only after the platform confirms
 it; failure opens selectable manual-copy text. Mismatch navigation uses ordinary
 transition guards. No mismatch means no reserved status-panel height.
 
+The primary action in annotation, migration, and review is anchored to the bottom
+right, after the secondary actions, with the same icon fallback at narrow widths.
+This includes migration saving and final confirmation, and review approval or
+correction submission. Compact review puts secondary actions above the decision row.
+
 The bottom action bar remains empty until session, dataset, image, and required
 assignment are loaded. Background availability refresh preserves loaded actions.
 Resize measurement requests a settling repaint only when height changes, avoiding
@@ -368,3 +396,28 @@ existing request/epoch gate. Replies must also match the current configuration I
 and filename. Filename edits, configuration reload, save and discard clear stale
 inspection state. Rendering stages profile edits; ordinary Admin save remains the
 publication boundary.
+
+## Editing after placement
+
+New annotation boxes stay selected for movement/resizing. Completed skeletons
+keep their selected annotation and expose per-keypoint Visible/Occluded controls
+in the inspector when the task permits hidden points. These changes use the
+same edit history, versioning, and autosave owner as geometry edits. Canvas
+keypoint selection survives pointer release and is validated against the current
+editable object before routing visibility changes. Placement retains the most
+recent point as the editing target; next-point placement mode remains separate.
+
+Review overview box additions retain their correction editor after staging,
+matching skeleton additions. Further edits remain local until review submission.
+Blank-canvas placement can start another object after retaining the current one.
+
+Migration full-image confirmation starts a missing-object skeleton on a blank
+canvas click and selects existing objects directly. No Add missing object or
+Edit added object buttons are shown. After a complete draft, the next blank click
+saves it through the existing migration command and starts the next object only
+after success. Selecting another object uses the same save-before-switch path.
+The reducer retains the pending canvas action and draft on failure for retry;
+assignment completion still requires explicit confirmation. Existing objects
+retain selection priority. Completed drafts remain editable before
+explicit confirmation, with placed-point visibility controls for both guided and
+missing-object drafts. These controls preserve migration dirty-state ownership.

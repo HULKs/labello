@@ -60,6 +60,7 @@ impl LabelloApp {
         self.work.active_load_id = None;
         self.work.active_prefetch_id = None;
         self.work.active_operation_id = None;
+        self.work.background_save_operation_id = None;
         self.runtime.persistence.work_ready = None;
         self.reset_work_draft_tracking();
         self.loading.image = false;
@@ -791,6 +792,7 @@ impl LabelloApp {
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
         let edit_generation = self.work.edit_generation;
         self.work.save_status = SaveStatus::Saving;
+        self.work.background_save_operation_id = (!submit).then_some(operation_id);
         self.queue_command(UiCommand::SaveAnnotations {
             request,
             operation_id,
@@ -977,7 +979,14 @@ impl LabelloApp {
         operation_id
     }
 
+    pub(crate) fn saving_blocks_interaction(&self) -> bool {
+        self.loading.saving
+            && (self.work.active_operation_id.is_none()
+                || self.work.background_save_operation_id != self.work.active_operation_id)
+    }
+
     pub(crate) fn begin_operation(&mut self) -> u64 {
+        self.work.background_save_operation_id = None;
         let operation_id = self.next_operation();
         self.work.active_operation_id = Some(operation_id);
         self.loading.saving = true;

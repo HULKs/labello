@@ -400,7 +400,7 @@ fn admin_image_card(ui: &mut egui::Ui, item: &ImageExplorerItem) {
 }
 
 fn admin_image_grid(ui: &mut egui::Ui, items: &[ImageExplorerItem]) {
-    egui::ScrollArea::horizontal()
+    egui::ScrollArea::horizontal().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
         .id_salt("admin-image-grid-scroll")
         .show(ui, |ui| {
             egui::Grid::new("admin-image-grid")

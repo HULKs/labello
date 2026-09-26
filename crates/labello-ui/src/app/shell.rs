@@ -47,6 +47,7 @@ impl eframe::App for LabelloApp {
         if self.navigation.statistics.open || self.work.pending_transition.is_some() {
             ui.disable();
         }
+        crate::pointer_input::set_canvas_rect(ui.ctx(), egui::Rect::NOTHING, ui.layer_id());
         let viewport = ui.available_size();
         let layout = LayoutMode::for_width(ui.available_width());
         let workflow_panel_width = self.workflow_panel_width(ui.ctx());
@@ -56,7 +57,7 @@ impl eframe::App for LabelloApp {
             .show(ui, |ui| self.app_bar(ui, layout));
         self.sync_workspace_bars();
         let compact_action_height = self.work_view()
-        .then(|| self.workspace_actions_height(layout, viewport));
+        .then(|| self.workspace_actions_height(ui.ctx(), layout, viewport));
         if self.work_view() {
             egui::Panel::top("workspace_context")
                 .min_size(self.workspace_context_height(ui.ctx(), layout, viewport))
@@ -117,7 +118,7 @@ impl eframe::App for LabelloApp {
                     .exact_size(workflow_panel_width)
                     .frame(theme::side_frame())
                     .show(ui, |ui| {
-                        egui::ScrollArea::vertical().show(ui, |ui| self.task_panel(ui));
+                        egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx())).show(ui, |ui| self.task_panel(ui));
                     });
             } else {
                 // Panel::show consumes one parent auto-ID; keep the Inspector stable.
@@ -134,7 +135,7 @@ impl eframe::App for LabelloApp {
                         bottom: 16,
                     }))
                     .show(ui, |ui| {
-                        egui::ScrollArea::vertical()
+                        egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 egui::Frame::new()

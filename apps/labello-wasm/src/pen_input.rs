@@ -4,7 +4,7 @@
 //! complete pen stream here so a browser need not emit compatibility movement,
 //! and a stylus reported through both PointerEvent and TouchEvent is handled once.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2};
 use wasm_bindgen::{JsCast, JsValue};
@@ -14,8 +14,9 @@ struct PenInput {
     active: Option<i32>,
     last_pen: bool,
     mouse_down: bool,
-    touch_count: u32,
-    suppress_touches: bool,
+    pen_seen: bool,
+    touches: BTreeMap<i32, Pos2>,
+    touch_pointer: Option<i32>,
     position: Pos2,
     events: Vec<Event>,
 }
@@ -101,14 +102,30 @@ impl BrowserApp {
                 &options,
                 move |event: web_sys::Event, app_runner, _| {
                     handle_event(&mut input.borrow_mut(), &event, &canvas, &ctx);
-                    if matches!(event.type_().as_str(), "pointerdown" | "pointerup")
+                    let pen_button = matches!(event.type_().as_str(), "pointerdown" | "pointerup")
                         && event
                             .dyn_ref::<web_sys::PointerEvent>()
-                            .is_some_and(|pointer| pointer.pointer_type() == "pen")
-                    {
+                            .is_some_and(|pointer| pointer.pointer_type() == "pen");
+                    let touch_button = matches!(event.type_().as_str(), "touchstart" | "touchend")
+                        && input
+                            .borrow()
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, Event::PointerButton { .. }));
+                    if pen_button || touch_button {
+                        if touch_button {
+                            let _ = canvas.focus();
+                        }
                         // Preserve eframe's synchronous user-activation path for
                         // browser actions such as opening a picker or clipboard.
                         app_runner.logic();
+                        if touch_button && event.type_() == "touchend" {
+                            // Commit the release before clearing hover, matching
+                            // eframe's touchend order. Gone in the same frame is
+                            // an annotation cancellation, not a normal release.
+                            input.borrow_mut().events.push(Event::PointerGone);
+                            ctx.request_repaint();
+                        }
                     }
                 },
             )?;
@@ -153,17 +170,23 @@ fn handle_event(
     if event.type_() == "blur" {
         input.cancel();
         input.mouse_down = false;
-        input.touch_count = 0;
-        input.suppress_touches = false;
+        if input.touch_pointer.take().is_some() {
+            input.button(false, Modifiers::NONE);
+            input.events.push(Event::PointerGone);
+        }
+        for (id, pos) in std::mem::take(&mut input.touches) {
+            input
+                .events
+                .push(finger_event(id, pos, egui::TouchPhase::Cancel));
+        }
         ctx.request_repaint();
     } else if let Some(pointer) = event.dyn_ref::<web_sys::PointerEvent>() {
         if pointer.pointer_type() != "pen" {
-            if input.active.is_some()
-                || (input.suppress_touches && pointer.pointer_type() == "touch")
-            {
+            if input.active.is_some() || pointer.pointer_type() == "touch" {
                 consume(event);
             } else if pointer.pointer_type() == "mouse" {
                 input.last_pen = false;
+                labello_ui::pointer_input::set_pen_pointer(ctx, false);
                 if event.type_() == "pointerdown" && on_canvas {
                     input.mouse_down = true;
                 } else if event.type_() == "pointerup" || event.type_() == "pointercancel" {
@@ -177,6 +200,12 @@ fn handle_event(
         }
         consume(event);
         input.last_pen = true;
+        input.pen_seen = true;
+        labello_ui::pointer_input::set_pen_pointer(ctx, true);
+        if input.touch_pointer.take().is_some() {
+            input.button(false, Modifiers::NONE);
+            input.events.push(Event::PointerGone);
+        }
         let rect = canvas.get_bounding_client_rect();
         let position = egui::pos2(
             (pointer.client_x() as f32 - rect.left() as f32) / ctx.zoom_factor(),
@@ -192,7 +221,6 @@ fn handle_event(
         match event.type_().as_str() {
             "pointerdown"
                 if input.active.is_none()
-                    && input.touch_count == 0
                     && !input.mouse_down
                     && pointer.is_primary()
                     && pointer.button() == 0
@@ -211,10 +239,7 @@ fn handle_event(
             }
             "pointermove"
                 if input.active == Some(pointer.pointer_id())
-                    || (input.active.is_none()
-                        && pointer.buttons() == 0
-                        && input.touch_count == 0
-                        && !input.mouse_down) =>
+                    || (input.active.is_none() && pointer.buttons() == 0 && !input.mouse_down) =>
             {
                 input.moved(position);
             }
@@ -232,30 +257,79 @@ fn handle_event(
         }
         ctx.request_repaint();
     } else if let Some(touch) = event.dyn_ref::<web_sys::TouchEvent>() {
-        if !on_canvas && input.touch_count == 0 && !input.suppress_touches {
+        if !on_canvas && input.touches.is_empty() {
             return;
         }
-        let stylus = (0..touch.changed_touches().length()).any(|index| {
-            touch
-                .changed_touches()
-                .item(index)
-                .is_some_and(|contact| is_stylus_touch(&contact))
-        });
-        // Stylus compatibility touches must not block their own pointerdown,
-        // including when touchstart arrives before the PointerEvent.
-        input.touch_count = (0..touch.touches().length())
-            .filter_map(|index| touch.touches().item(index))
-            .filter(|contact| !is_stylus_touch(contact))
-            .count() as u32;
-        // A contact ignored during a pen drag stays ignored until lift. It must
-        // not enter eframe halfway through its touch sequence after the pen lifts.
-        if stylus || input.active.is_some() || input.suppress_touches {
-            consume(event);
-            input.suppress_touches = input.touch_count != 0;
+        consume(event);
+        let phase = match event.type_().as_str() {
+            "touchstart" => egui::TouchPhase::Start,
+            "touchmove" => egui::TouchPhase::Move,
+            "touchend" => egui::TouchPhase::End,
+            _ => egui::TouchPhase::Cancel,
+        };
+        let rect = canvas.get_bounding_client_rect();
+        for index in 0..touch.changed_touches().length() {
+            let Some(contact) = touch.changed_touches().item(index) else {
+                continue;
+            };
+            if is_stylus_touch(&contact) {
+                continue;
+            }
+            let id = contact.identifier();
+            let position = egui::pos2(
+                (contact.client_x() as f32 - rect.left() as f32) / ctx.zoom_factor(),
+                (contact.client_y() as f32 - rect.top() as f32) / ctx.zoom_factor(),
+            );
+            input.events.push(finger_event(id, position, phase));
+            match phase {
+                egui::TouchPhase::Start => {
+                    if input.touches.is_empty() && input.active.is_none() && !input.mouse_down {
+                        // egui needs a pointer position to initialize a pinch, even
+                        // when fingers do not own the annotation pointer. A cancelled
+                        // pen may have cleared it. Never move an active pen's pointer.
+                        input.moved(position);
+                        if !input.pen_seen || !labello_ui::pointer_input::on_canvas(ctx, position) {
+                            input.touch_pointer = Some(id);
+                            input.last_pen = false;
+                            labello_ui::pointer_input::set_pen_pointer(ctx, false);
+                            input.button(true, Modifiers::NONE);
+                        }
+                    }
+                    input.touches.insert(id, position);
+                }
+                egui::TouchPhase::Move => {
+                    input.touches.insert(id, position);
+                    if input.touch_pointer == Some(id) {
+                        input.moved(position);
+                    }
+                }
+                egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                    input.touches.remove(&id);
+                    if input.touch_pointer == Some(id) {
+                        input.moved(position);
+                        input.button(false, Modifiers::NONE);
+                        if phase == egui::TouchPhase::Cancel {
+                            input.events.push(Event::PointerGone);
+                        }
+                        input.touch_pointer = None;
+                    }
+                }
+            }
         }
+        ctx.request_repaint();
     } else if event.dyn_ref::<web_sys::MouseEvent>().is_some()
         && (input.last_pen || input.active.is_some())
     {
         consume(event);
+    }
+}
+
+fn finger_event(id: i32, pos: Pos2, phase: egui::TouchPhase) -> Event {
+    Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(id as u64),
+        phase,
+        pos,
+        force: None,
     }
 }

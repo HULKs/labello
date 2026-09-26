@@ -1,4 +1,8 @@
 impl LabelloApp {
+    pub(crate) fn review_secondary_action_count(&self) -> usize {
+        3 + usize::from(self.bar_has_previous_image()) + usize::from(self.bar_review_removable())
+    }
+
     fn review_bottom_actions(&mut self, ui: &mut egui::Ui) {
         let ready = self.work.assignment.is_some()
             && !self.loading.saving && !self.loading.image && !self.work.migration.busy
@@ -6,8 +10,7 @@ impl LabelloApp {
         let compact = LayoutMode::for_width(ui.ctx().content_rect().width()) != LayoutMode::Wide;
         let secondary = |app: &mut Self, ui: &mut egui::Ui| {
             let removable = app.bar_review_removable();
-            let count = (if app.bar_has_previous_image() { 4.0 } else { 3.0 })
-                + if removable { 1.0 } else { 0.0 };
+            let count = app.review_secondary_action_count() as f32;
             let width = compact.then(|| ((ui.available_width() - (count - 1.0) * ui.spacing().item_spacing.x) / count).floor().max(44.0));
             app.review_object_navigation(ui, width);
             app.previous_review_action(ui, width);
@@ -21,19 +24,25 @@ impl LabelloApp {
         };
         if compact {
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
-                    ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center), |ui| self.review_decision_buttons(ui, false, true));
-                    self.review_next_object_action(ui, Some(44.0));
-                });
                 ui.horizontal_wrapped(|ui| secondary(self, ui));
+                ui.horizontal(|ui| {
+                    self.review_next_object_action(ui, Some(44.0));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        self.review_decision_buttons(ui, false, true);
+                    });
+                });
             });
         } else {
-            ui.horizontal_wrapped(|ui| {
-                self.review_decision_buttons(ui, false, false);
-                self.review_next_object_action(ui, None);
-                ui.separator();
-                secondary(self, ui);
+            ui.horizontal(|ui| {
+                let primary_width = text_button_width(ui, self.bar_review_primary_label());
+                let secondary_width = (ui.available_width() - primary_width - ui.spacing().item_spacing.x).max(0.0);
+                ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
+                    secondary(self, ui);
+                    self.review_next_object_action(ui, None);
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.review_decision_buttons(ui, false, false);
+                });
             });
         }
     }
@@ -73,7 +82,8 @@ impl LabelloApp {
     fn annotation_bottom_actions(&mut self, ui: &mut egui::Ui) {
         use labello_domain::UserAction;
         let ready = (self.work.assignment.is_some() || self.runtime.api.is_none())
-            && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
+            && !self.saving_blocks_interaction() && !self.loading.image && self.work.pending_transition.is_none();
+        let can_commit = ready && !self.loading.saving;
         let dirty = matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
         let previous = self.bar_has_previous_image();
         use crate::prelabel_review::PrelabelPrimaryAction;
@@ -91,14 +101,16 @@ impl LabelloApp {
         let count = 5 + usize::from(previous) - usize::from(save_in_menu);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
             / count as f32).floor().max(44.0);
+        let primary_width = width.min(text_button_width(ui, primary_label));
+        let secondary_width = (ui.available_width() - primary_width - ui.spacing().item_spacing.x).max(0.0);
+        ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::NextImage, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, ready, theme::Intent::Accent, primary_help),
-                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
+                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, can_commit && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
                 (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
-                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
+                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, can_commit && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
                 (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model object advances to the next one."),
-                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, ready, theme::Intent::Neutral, "Release this assignment and claim another."),
+                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, can_commit, theme::Intent::Neutral, "Release this assignment and claim another."),
             ] {
                 if action == UserAction::PreviousImage && !previous || action == UserAction::SaveAnnotations && save_in_menu { continue; }
                 ui.push_id(action, |ui| {
@@ -114,9 +126,16 @@ impl LabelloApp {
             self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
         ];
         if save_in_menu {
-            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", ready && dirty, "Save confirmed annotations and keep this assignment active."));
+            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", can_commit && dirty, "Save confirmed annotations and keep this assignment active."));
         }
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if workspace_toolbar_button(ui, ready && (pending || !self.loading.saving), primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
+                .on_hover_text(format!("{primary_help} ({})", self.shortcut_text(ui.ctx(), UserAction::NextImage))).clicked() {
+                self.trigger_user_action(UserAction::NextImage);
+            }
+        });
     }
 
     fn review_object_navigation(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
@@ -225,7 +244,7 @@ fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum WorkspaceActionIcon { Approve, PreviousImage, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Add, Remove, Pan, Refocus }
+pub(crate) enum WorkspaceActionIcon { Approve, PreviousImage, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Remove, Pan, Refocus }
 
 pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &str, icon: WorkspaceActionIcon, width: Option<f32>, intent: theme::Intent) -> egui::Response {
     let enabled = enabled && ui.is_enabled();
@@ -257,7 +276,6 @@ fn paint_workspace_action_icon(ui: &egui::Ui, response: &egui::Response, icon: W
             WorkspaceActionIcon::Discard => { ui.painter().circle_stroke(point(1.0, 1.0), 8.0, stroke); line(point(-9.0, -8.0), point(-9.0, -1.0)); line(point(-9.0, -1.0), point(-2.0, -1.0)); }
             WorkspaceActionIcon::Skip | WorkspaceActionIcon::Next | WorkspaceActionIcon::Redo => { line(point(-7.0, -7.0), point(4.0, 0.0)); line(point(4.0, 0.0), point(-7.0, 7.0)); line(point(8.0, -8.0), point(8.0, 8.0)); }
             WorkspaceActionIcon::Save => { ui.painter().rect_stroke(egui::Rect::from_center_size(center, egui::vec2(18.0, 18.0)), 1.0, stroke, egui::StrokeKind::Inside); line(point(-5.0, -8.0), point(-5.0, -1.0)); line(point(-5.0, -1.0), point(5.0, -1.0)); line(point(5.0, -1.0), point(5.0, -8.0)); }
-            WorkspaceActionIcon::Add => { line(point(-8.0, 0.0), point(8.0, 0.0)); line(point(0.0, -8.0), point(0.0, 8.0)); }
             WorkspaceActionIcon::Remove => { line(point(-8.0, -6.0), point(8.0, -6.0)); line(point(-5.0, -3.0), point(-5.0, 8.0)); line(point(-5.0, 8.0), point(5.0, 8.0)); line(point(5.0, 8.0), point(5.0, -3.0)); }
             WorkspaceActionIcon::Pan => { line(point(-9.0, 0.0), point(9.0, 0.0)); line(point(0.0, -9.0), point(0.0, 9.0)); for (x, y) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] { line(point(x * 9.0, y * 9.0), point(x * 5.0 - y * 3.0, y * 5.0 + x * 3.0)); line(point(x * 9.0, y * 9.0), point(x * 5.0 + y * 3.0, y * 5.0 - x * 3.0)); } }
             WorkspaceActionIcon::Refocus => { ui.painter().circle_stroke(center, 9.0, stroke); ui.painter().circle_stroke(center, 4.0, stroke); }

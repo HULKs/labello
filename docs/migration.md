@@ -35,6 +35,20 @@ older passes stay historical.
 
 ## Add a missing object
 
+In the full-image view, tap blank image space to start a skeleton for an object
+without an imported guide. Creation and editing need no mode buttons: existing
+objects take selection priority, and clicking one opens it for editing. After the
+last keypoint, the draft remains editable: drag points or use Visible/Occluded
+controls when permitted by the task. Click empty canvas again to save that complete
+object and start another. Selecting another object also saves the current valid
+changes first. Incomplete objects must be finished or discarded before switching.
+Failed saves preserve the current draft and resume the clicked action after a
+successful retry. Saving objects does not confirm or finish the image.
+
+The overview keeps its canvas view when selecting added objects. Refocus remains
+available explicitly. The same visibility controls apply to placed points in
+guided migration drafts.
+
 A discovered skeleton creates a linked bounding box in the configured guide task
 in the same event transaction. The box uses positioned Visible and Occluded
 keypoints and spans at least 15% of image width and height, with a one-original-pixel

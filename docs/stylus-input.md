@@ -15,7 +15,7 @@ The browser canvas disables native page pan/zoom during direct manipulation.
 
 | OS, browser, and event source | Evidence and support boundary |
 | --- | --- |
-| Ubuntu 24.04, Chromium 149.0.7827.55, CDP-emulated primary pen | Browser-generated pen events reach the real WASM client and API. Box create/move/resize, keypoint place/move, and sequential pen/mouse/touch use are checked. This is an emulated event contract, not a physical pen certification. |
+| Ubuntu 24.04, Chromium 149.0.7827.55, CDP-emulated primary pen | Browser-generated pen events reach the real WASM client and API. Box create/move/resize, keypoint place/move, and sequential pen/mouse/touch use are checked. Overlapping scripted pen and trusted touch streams additionally check both contact orders. This is an emulated event contract, not a physical pen certification. |
 | Ubuntu 24.04, Playwright WebKit 26.5, scripted primary pen | Checks the same production client with explicit DOM events, including movement without compatibility mouse events. This is desktop WebKit, not iPadOS Safari. |
 | iPadOS Safari with Apple Pencil or another pen reporting `pointerType = "pen"` | Priority physical target. Device model, iPadOS/browser version, rapid repeated contact, and mixed-input results must be recorded with the procedure below before claiming verified support. Currently unverified. |
 | iPadOS Firefox with the same pen | Priority physical target and a separate application test. Firefox for iOS uses WebKit, but passing desktop WebKit or Safari does not establish Firefox application behavior. Currently unverified. |
@@ -35,12 +35,25 @@ combination is certified by the automated check.
 
 Unsupported features include pressure-sensitive drawing, tilt-dependent tools,
 eraser/barrel-button tools, Pencil hover previews beyond ordinary pointer hover,
-Scribble, and OS palm-rejection guarantees. Do not use simultaneous pen and mouse
-gestures. An active mouse or touch gesture blocks a new pen gesture. Touches
-beginning during an active pen gesture are ignored through their final lift;
-this is event arbitration, not device-level palm rejection. Lift all contacts
-before switching input methods. Cancelled or lost pen capture discards the edit
-preview. `Escape` also cancels an annotation drag.
+Scribble, and OS palm-rejection guarantees. Simultaneous pen and mouse gestures
+remain unsupported. Two-finger pan/pinch and pen annotation use separate input
+streams and can overlap in either contact order. Navigation changes the image
+transform while the pen edit continues in image coordinates. Finger movement
+and release must not commit or cancel the pen edit.
+Holding the pen still while fingers are down must not turn it into a touch
+long-press or discard the canvas's drag ownership.
+
+After the first pen hover or contact in a browser session, fingers on the image
+canvas navigate with two fingers and do not create annotations. Browsers do not
+provide a reliable connected-stylus inventory, so this policy starts with the
+first observed pen event, not hardware connection. Reloading starts a fresh
+session. Touch-only sessions retain their ordinary annotation behavior. Finger
+presses on controls outside the image still work. Pen drags over scrollable
+controls do not drag-scroll their contents; fingers, scrollbars, and wheel input
+retain their scrolling behavior.
+
+Cancelled or lost pen capture discards the edit preview. `Escape` also cancels
+an annotation drag. These input rules do not certify hardware palm rejection.
 
 ## Automated browser procedure
 
@@ -85,6 +98,12 @@ the touch check ran. WebKit does not provide the CDP injection used by that chec
 The WebKit check accepts only `pointer-only`: this desktop build also lacks a
 usable `Touch` constructor for the scripted compatibility stream.
 Pointer-cancellation and capture-loss probes use scripted events in every mode.
+Chromium also runs overlapping scripted pen and trusted CDP finger gestures in
+both contact orders, verifies the saved edit through the changed view transform,
+and checks that a single finger cannot annotate after pen use. A short inspector
+check verifies that a pen drag does not scroll controls while a wheel still does.
+This is separate
+from the trusted CDP pen checks; it does not prove physical simultaneous delivery.
 
 Repeat relevant cases with `--width 600 --height 800 --dpr 2`,
 `--width 390 --height 844 --dpr 3`, or the other applicable sizes in the
@@ -96,7 +115,9 @@ The check fails within two minutes and prints a bounded JSON outcome with browse
 version, viewport, DPR, event source, and checks actually performed. It retains
 no screenshots, geometry, HTTP payloads, cookies, or browser storage. It uses
 screenshots only in memory to locate the generated flat-color fixture and check
-drag previews. Do not extend it to arbitrary datasets or broad browser traces.
+drag previews. Two colored reference marks locate the rendered image transform
+for concurrent edits even when zoom clips the image edges. Do not extend it to
+arbitrary datasets or broad browser traces.
 `LABELLO_TEST_WEBKIT_EXECUTABLE` can select a locally provisioned Playwright
 WebKit executable when browser libraries are installed outside system paths.
 
@@ -104,6 +125,10 @@ Use `--negative-control --events pointer-only` to suppress pen presses. The
 command must exit nonzero. The original missing movement path is reproduced by
 running `--events pointer-only` against the pre-adapter distribution: the final
 release position can be correct, but the moving preview assertion fails.
+
+Run the same script with `--touch-only` in Chromium to verify that a finger-only
+session can still create and save a box before any pen event. This checks normal
+touch release ordering separately from pen and touch cancellation.
 
 This focused manual browser check supplements
 [canonical verification](verification.md#canonical-entry-point). It is not the
@@ -129,11 +154,12 @@ Use an artificial image and separate box and skeleton workflows.
 3. Lift the pen, use a mouse or trackpad if available, then use the pen again.
    Separately, lift the pen, perform a two-finger pan/pinch, lift both fingers,
    Fit, and annotate again. Check saved object and keypoint counts after each.
-4. While a pen drag is active, touch with a finger or palm. Confirm the pen
-   preview remains correct or cancellation discards it, with no touch pan/zoom
-   or unintended annotation. Keep the finger down after lifting the pen, then
-   lift it and start a new gesture. Record the actual device outcome; do not
-   infer palm rejection from the scripted test.
+4. While a pen box/keypoint edit is active, pan/pinch with two fingers. Confirm
+   navigation works, the edit continues under the pen, and releasing fingers
+   does not commit or cancel it. Repeat with fingers touching first. Check saved
+   geometry after pen release. Then drag one finger on blank image space after
+   lifting the pen; it must not add annotations. Record palm contacts separately;
+   do not infer hardware palm rejection from the scripted test.
 5. Start a drag and interrupt it by switching apps or changing orientation.
    Confirm no partial edit is saved and the next gesture works. Where a keyboard
    is attached, verify `Escape` cancellation and the configured pan modifier.
