@@ -10,6 +10,10 @@ Draw bounding boxes or place the workflow's ordered keypoints. Select an existin
 object to edit it, and drag a placed keypoint to correct its position. New objects
 remain selected and editable after placement. The inspector offers Visible and
 Occluded controls for positioned keypoints when the workflow allows occlusion.
+After releasing a placed or dragged keypoint, its editing visibility control and
+occlusion shortcut update that point without moving it. Clicking another placed
+point selects it for these controls. While a skeleton is incomplete, the separate
+placement controls still configure the next point.
 Submit & next stays at the bottom right, including compact layouts. Skeleton
 keypoints have three outcomes:
 

@@ -596,6 +596,7 @@ impl LabelloApp {
                 }
             }
         }
+        self.editing_keypoint_visibility_control(ui);
         if self.migration_draft_editable()
             && !self.work.migration.busy
             && self.work.migration.inspected_group_id.is_none()
@@ -2257,7 +2258,7 @@ impl LabelloApp {
         self.work.migration.next_hidden = false;
     }
 
-    fn editable_migration_draft_annotation_id(&self) -> Option<AnnotationId> {
+    pub(crate) fn editable_migration_draft_annotation_id(&self) -> Option<AnnotationId> {
         if self.work.migration.adding_missing_object {
             return Some(
                 self.work
@@ -2584,6 +2585,14 @@ impl LabelloApp {
         self.work.migration.draft_dirty = true;
         self.work.assignment_touched = true;
         self.work.migration.next_hidden = false;
+        if let Some(annotation_id) = self.editable_migration_draft_annotation_id() {
+            self.work
+                .canvas
+                .select_keypoint(Some(crate::canvas::KeypointSelection {
+                    annotation_id,
+                    keypoint_index: self.work.migration.keypoint_index - 1,
+                }));
+        }
     }
 
     pub(crate) fn skip_migration_keypoint(&mut self) {

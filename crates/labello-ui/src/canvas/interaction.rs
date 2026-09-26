@@ -280,6 +280,10 @@ fn handle_annotation_pointer(
             && let Some((keypoint_index, point)) =
                 keypoint_at(pointer, image_rect, annotation_id, annotations)
         {
+            state.select_keypoint(Some(KeypointSelection {
+                annotation_id: annotation_id.clone(),
+                keypoint_index,
+            }));
             state.drag = Some(DragOperation::Keypoint {
                 annotation_id: annotation_id.clone(),
                 keypoint_index,
@@ -379,10 +383,12 @@ fn handle_annotation_pointer(
                 selectable_annotations,
             )
         {
+            state.select_keypoint(None);
             return Some(CanvasAction::Select(annotation.annotation_id.clone()));
         }
         if interaction.allow_create && !bounding_box_tool && image_rect.contains(pointer) {
             let point = screen_to_normalized(image_rect, pointer);
+            state.select_keypoint(None);
             return Some(CanvasAction::PlaceKeypoint(NormalizedPoint {
                 x: point.x.clamp(0.0, 1.0),
                 y: point.y.clamp(0.0, 1.0),

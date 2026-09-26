@@ -89,11 +89,24 @@ pub(crate) fn keypoint_placement_mode(
     occluded: &mut bool,
     shortcut: &str,
 ) {
-    ui.label(RichText::new("Placement").color(theme::TEXT_MUTED));
+    keypoint_visibility_mode(ui, keypoint_name, occluded, shortcut, false);
+}
+
+fn keypoint_visibility_mode(
+    ui: &mut egui::Ui,
+    keypoint_name: &str,
+    occluded: &mut bool,
+    shortcut: &str,
+    editing: bool,
+) {
+    ui.label(
+        RichText::new(if editing { "Visibility" } else { "Placement" }).color(theme::TEXT_MUTED),
+    );
+    let verb = if editing { "Set" } else { "Place" };
     ui.horizontal_wrapped(|ui| {
         let enabled = ui.is_enabled();
         let visible_selected = !*occluded;
-        let visible_label = format!("Place {keypoint_name} as visible");
+        let visible_label = format!("{verb} {keypoint_name} as visible");
         let visible = theme::button(
             ui,
             true,
@@ -101,7 +114,11 @@ pub(crate) fn keypoint_placement_mode(
                 .selected(visible_selected)
                 .min_size(egui::vec2(88.0, 44.0)),
         )
-        .on_hover_text("Click the exact keypoint position.");
+        .on_hover_text(if editing {
+            "Mark this keypoint as visible."
+        } else {
+            "Click the exact keypoint position."
+        });
         visible.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
@@ -115,7 +132,7 @@ pub(crate) fn keypoint_placement_mode(
         }
 
         let occluded_selected = *occluded;
-        let occluded_label = format!("Place {keypoint_name} as occluded");
+        let occluded_label = format!("{verb} {keypoint_name} as occluded");
         let occluded_response = theme::button(
             ui,
             true,
@@ -124,9 +141,11 @@ pub(crate) fn keypoint_placement_mode(
                 .shortcut_text(crate::theme::button_shortcut(shortcut))
                 .min_size(egui::vec2(88.0, 44.0)),
         )
-        .on_hover_text(format!(
-            "Click the estimated keypoint position. Toggle placement with {shortcut}."
-        ));
+        .on_hover_text(if editing {
+            format!("Mark this keypoint as occluded. Toggle visibility with {shortcut}.")
+        } else {
+            format!("Click the estimated keypoint position. Toggle placement with {shortcut}.")
+        });
         occluded_response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
@@ -137,19 +156,55 @@ pub(crate) fn keypoint_placement_mode(
         });
         ui.ctx()
             .accesskit_node_builder(occluded_response.id, |node| {
-                node.set_description(format!(
-                    "Click the estimated keypoint position. Toggle placement with {shortcut}."
-                ));
+                node.set_description(if editing {
+                    format!("Mark this keypoint as occluded. Toggle visibility with {shortcut}.")
+                } else {
+                    format!(
+                        "Click the estimated keypoint position. Toggle placement with {shortcut}."
+                    )
+                });
             });
         if occluded_response.clicked() {
             *occluded = true;
         }
     });
-    ui.small(if *occluded {
+    ui.small(if editing {
+        "Change visibility without moving this keypoint."
+    } else if *occluded {
         "Occluded: click the estimated position."
     } else {
         "Visible: click the exact position."
     });
+}
+
+impl LabelloApp {
+    pub(crate) fn editing_keypoint_visibility_control(&mut self, ui: &mut egui::Ui) -> bool {
+        let Some((_, keypoint)) = self.editing_keypoint() else {
+            return false;
+        };
+        if !self
+            .selected_task()
+            .and_then(|task| task.skeleton.as_ref())
+            .is_some_and(|spec| spec.allow_hidden)
+        {
+            return false;
+        }
+        let mut hidden = keypoint.state == KeypointState::Hidden;
+        let shortcut =
+            self.shortcut_text(ui.ctx(), labello_domain::UserAction::ToggleKeypointHidden);
+        ui.label(format!("Edit {}", keypoint.name));
+        ui.add_enabled_ui(self.keypoint_visibility_editable(), |ui| {
+            keypoint_visibility_mode(ui, &keypoint.name, &mut hidden, &shortcut, true);
+        });
+        if hidden != (keypoint.state == KeypointState::Hidden) {
+            self.set_editing_keypoint_visibility(if hidden {
+                KeypointState::Hidden
+            } else {
+                KeypointState::Visible
+            });
+        }
+        true
+    }
 }
 
 fn action_label(action: &labello_domain::UserAction) -> &'static str {
@@ -170,7 +225,7 @@ fn action_label(action: &labello_domain::UserAction) -> &'static str {
         UserAction::SelectNextPrelabel => "Next prelabel",
         UserAction::AcceptPrelabel => "Confirm selected model object",
         UserAction::DiscardPrelabel => "Delete selected model object",
-        UserAction::ToggleKeypointHidden => "Toggle occluded keypoint placement",
+        UserAction::ToggleKeypointHidden => "Toggle keypoint occlusion",
         UserAction::MarkKeypointAbsent => "Mark keypoint as not present",
         UserAction::AddMissingObject => "Add or cancel missing migration object",
         UserAction::RetryImageLoad => "Retry image load",
@@ -256,7 +311,9 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
         UserAction::DiscardPrelabel => {
             "Delete the selected pending model object and focus the next one."
         }
-        UserAction::ToggleKeypointHidden => "Toggle occluded placement for the next keypoint.",
+        UserAction::ToggleKeypointHidden => {
+            "Toggle occlusion for the keypoint being edited, or for the next placement."
+        }
         UserAction::MarkKeypointAbsent => "Record an allowed optional keypoint without a position.",
         UserAction::AddMissingObject => {
             "Begin or cancel a skeleton for an object missing from the imported data."

@@ -179,7 +179,9 @@ impl LabelloApp {
                 .get(self.work.skeleton_keypoint_index)
                 .map(|keypoint| keypoint.name.clone())
         });
-        if let Some(name) = next_keypoint {
+        let editing_keypoint = self.editing_keypoint_visibility_control(ui);
+        if (!editing_keypoint || self.work.active_skeleton.is_some())
+            && let Some(name) = next_keypoint {
             theme::compact_metric(
                 ui,
                 if self.work.active_skeleton.is_some() {

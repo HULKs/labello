@@ -92,6 +92,49 @@ impl LabelloApp {
         self.mark_edited();
     }
 
+    pub(crate) fn editing_keypoint(&self) -> Option<(crate::canvas::KeypointSelection, KeypointAnnotation)> {
+        let selection = self.work.canvas.selected_keypoint()?.clone();
+        let geometry = if self.view == AppView::Review {
+            if !self.work.canvas.is_dragging() { return None; }
+            let draft = self.work.correction_draft.as_ref()?;
+            if draft.annotation_id != selection.annotation_id { return None; }
+            draft.edited_geometry.clone()
+        } else if self.manual_migration_active() {
+            if self.editable_migration_draft_annotation_id().as_ref() != Some(&selection.annotation_id)
+                || self.work.migration.inspected_group_id.is_some() { return None; }
+            AnnotationGeometry::Skeleton(self.work.migration.draft.clone()?)
+        } else {
+            if self.work.selected_annotation.as_ref() != Some(&selection.annotation_id) { return None; }
+            self.annotation_objects().into_iter().find(|annotation| annotation.annotation_id == selection.annotation_id)?.geometry
+        };
+        let AnnotationGeometry::Skeleton(skeleton) = geometry else { return None; };
+        let keypoint = skeleton.keypoints.get(selection.keypoint_index)?.clone();
+        keypoint.point?;
+        Some((selection, keypoint))
+    }
+
+    pub(crate) fn keypoint_visibility_editable(&self) -> bool {
+        matches!(self.view, AppView::Annotate | AppView::Review)
+            && (self.work.assignment.is_some() || self.runtime.api.is_none())
+            && !self.loading.saving && !self.loading.image && !self.work.migration.busy
+            && self.work.pending_transition.is_none()
+            && self.work.review_corrections.submission.is_none()
+            && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+    }
+
+    pub(crate) fn set_editing_keypoint_visibility(&mut self, state: KeypointState) {
+        if !self.keypoint_visibility_editable() { return; }
+        let Some((selection, _)) = self.editing_keypoint() else { return; };
+        if self.view == AppView::Review {
+            self.select_correction_keypoint(selection.keypoint_index);
+            self.set_correction_keypoint_state(state);
+        } else if self.manual_migration_active() {
+            self.set_migration_keypoint_visibility(selection.keypoint_index, state);
+        } else {
+            self.set_annotation_keypoint_visibility(selection.annotation_id, selection.keypoint_index, state);
+        }
+    }
+
     pub(crate) fn edit_keypoint(&mut self, edit: crate::canvas::KeypointEdit) {
         self.update_annotation_keypoint(edit.annotation_id, edit.keypoint_index, Some(edit.point), None);
     }
@@ -215,6 +258,10 @@ impl LabelloApp {
                 }
                 self.work.skeleton_keypoint_index = keypoint_index + 1;
                 self.work.next_keypoint_hidden = false;
+                self.work.canvas.select_keypoint(Some(crate::canvas::KeypointSelection {
+                    annotation_id: annotation.annotation_id.clone(),
+                    keypoint_index,
+                }));
                 if completed {
                     self.work.active_skeleton = None;
                     self.work.skeleton_keypoint_index = 0;
@@ -272,6 +319,10 @@ impl LabelloApp {
                 deleted: false,
             });
         self.work.selected_annotation = Some(annotation_id.clone());
+        self.work.canvas.select_keypoint(Some(crate::canvas::KeypointSelection {
+            annotation_id: annotation_id.clone(),
+            keypoint_index: 0,
+        }));
         if keypoint_count > 1 {
             self.work.active_skeleton = Some(annotation_id);
             self.work.skeleton_keypoint_index = 1;

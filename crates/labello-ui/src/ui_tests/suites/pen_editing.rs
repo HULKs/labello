@@ -66,7 +66,8 @@ fn migration_blank_canvas_starts_missing_pose_and_completed_points_stay_editable
     let before = harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].point;
     drag_at(&mut harness, start, start - egui::vec2(30.0, 0.0));
     assert_ne!(harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].point, before);
-    harness.state_mut().set_migration_keypoint_visibility(0, KeypointState::Hidden);
+    harness.key_press(egui::Key::H);
+    harness.step();
     assert_eq!(harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].state, KeypointState::Hidden);
     assert!(harness.state().work.migration.draft_dirty);
 }
@@ -90,4 +91,63 @@ fn review_new_box_keeps_editor_for_immediate_move_and_resize() {
     assert_ne!(moved, draft.edited_geometry);
     drag_at(&mut harness, end + egui::vec2(20.0, 10.0), end + egui::vec2(40.0, 30.0));
     assert_ne!(harness.state().work.correction_draft.as_ref().unwrap().edited_geometry, moved);
+}
+
+#[test]
+fn released_keypoint_visibility_toggle_edits_the_point_and_preserves_next_placement() {
+    let api = Rc::new(SpyApi::new());
+    {
+        let mut state = api.state.borrow_mut();
+        let task = &mut state.metadata.tasks[0];
+        task.annotation_type = AnnotationType::Skeleton;
+        task.prelabel_config_ids.clear();
+        task.skeleton = Some(SkeletonSpec {
+            keypoints: vec![
+                KeypointSpec { name: "head".into(), required: true },
+                KeypointSpec { name: "tail".into(), required: true },
+            ],
+            edges: vec![], allow_hidden: true, allow_absent: false,
+        });
+    }
+    let mut harness = loaded_work_harness(api.clone());
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
+    harness.run_steps(3);
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    let AnnotationGeometry::Skeleton(before) = harness.state().work.annotations[0].geometry.clone() else { panic!() };
+    assert!(!harness.state().work.canvas.is_dragging());
+    click_accesskit_button(&mut harness, "Set head as occluded");
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+    assert_eq!(skeleton.keypoints[0].point, before.keypoints[0].point);
+    assert!(skeleton.keypoints[1].point.is_none());
+    assert!(!harness.state().work.next_keypoint_hidden);
+    harness.state_mut().undo();
+    assert_eq!(harness.state().work.annotations[0].geometry, AnnotationGeometry::Skeleton(before));
+    harness.state_mut().redo();
+    click_accesskit_button(&mut harness, "Place tail as occluded");
+    assert!(harness.state().work.next_keypoint_hidden);
+    click_at(&mut harness, center + egui::vec2(70.0, 40.0));
+    harness.run_steps(3);
+    assert!(harness.state().work.active_skeleton.is_none());
+    click_accesskit_button(&mut harness, "Set tail as visible");
+    harness.key_press(egui::Key::H);
+    harness.step();
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
+    assert_eq!(skeleton.keypoints[1].state, KeypointState::Hidden);
+    assert!(!harness.state().work.next_keypoint_hidden);
+    click_at(&mut harness, center);
+    harness.run_steps(3);
+    click_accesskit_button(&mut harness, "Set head as visible");
+    harness.state_mut().loading.saving = true;
+    harness.key_press(egui::Key::H);
+    harness.step();
+    let AnnotationGeometry::Skeleton(skeleton) = &harness.state().work.annotations[0].geometry else { panic!() };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    harness.state_mut().loading.saving = false;
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let image_id = &harness.state().work.current.as_ref().unwrap().image.image_id;
+    assert_eq!(api.image_state(image_id).current_annotation(&id).unwrap().geometry, harness.state().work.annotations[0].geometry);
 }

@@ -121,6 +121,16 @@ impl LabelloApp {
                 _ => {}
             }
         }
+        if action == UserAction::ToggleKeypointHidden
+            && let Some((_, keypoint)) = self.editing_keypoint()
+        {
+            self.set_editing_keypoint_visibility(if keypoint.state == KeypointState::Hidden {
+                KeypointState::Visible
+            } else {
+                KeypointState::Hidden
+            });
+            return;
+        }
         if action == UserAction::ToggleKeypointHidden && self.view == AppView::Review {
             if self.work.assignment.is_some()
                 && !self.loading.saving

@@ -383,7 +383,10 @@ publication boundary.
 New annotation boxes stay selected for movement/resizing. Completed skeletons
 keep their selected annotation and expose per-keypoint Visible/Occluded controls
 in the inspector when the task permits hidden points. These changes use the
-same edit history, versioning, and autosave owner as geometry edits.
+same edit history, versioning, and autosave owner as geometry edits. Canvas
+keypoint selection survives pointer release and is validated against the current
+editable object before routing visibility changes. Placement retains the most
+recent point as the editing target; next-point placement mode remains separate.
 
 Review overview box additions retain their correction editor after staging,
 matching skeleton additions. Further edits remain local until review submission.

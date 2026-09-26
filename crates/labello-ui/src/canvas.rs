@@ -136,6 +136,7 @@ impl CanvasInteraction {
 
 #[derive(Clone, Debug)]
 pub struct CanvasState {
+    keypoint_selection: Option<KeypointSelection>,
     drag: Option<DragOperation>,
     missing_drag: Option<u32>,
     draft_box: Option<BoundingBox>,
@@ -160,6 +161,7 @@ impl Default for CanvasState {
             missing_drag: None,
             draft_box: None,
             draft_keypoint: None,
+            keypoint_selection: None,
             zoom: MIN_ZOOM,
             pan: Vec2::ZERO,
             modifier_pan: false,
@@ -185,6 +187,14 @@ enum ReviewViewTarget {
 }
 
 impl CanvasState {
+    pub(crate) fn selected_keypoint(&self) -> Option<&KeypointSelection> {
+        self.keypoint_selection.as_ref()
+    }
+
+    pub(crate) fn select_keypoint(&mut self, selection: Option<KeypointSelection>) {
+        self.keypoint_selection = selection;
+    }
+
     /// Whether an annotation create, move, or resize interaction is active.
     pub fn is_dragging(&self) -> bool {
         self.drag.is_some()
