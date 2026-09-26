@@ -147,13 +147,14 @@ impl LabelloApp {
 
     pub(crate) fn submit_and_advance(&mut self) {
         if self.view != AppView::Annotate
-            || self.loading.saving
+            || self.saving_blocks_interaction()
             || (self.work.assignment.is_none() && self.runtime.api.is_some())
         {
             return;
         }
         if self.advance_companion_guide() { return; }
         if self.confirm_prelabel_object() { return; }
+        if self.loading.saving { return; }
         if let Some(issue) = self.submission_issue() {
             self.runtime.error = Some(issue);
             return;

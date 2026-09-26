@@ -1265,3 +1265,96 @@ fn retained_prelabel_defaults_do_not_cross_workspace_or_account_epochs() {
         assert_eq!(app.prelabel_choice(&task), None);
     }
 }
+
+#[test]
+fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() {
+    for use_shortcut in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_prelabel_work_harness(api.clone());
+        add_second_prelabel(harness.state_mut());
+        harness.run_steps(3);
+        click_accesskit_button(&mut harness, "Confirm & next");
+        assert_eq!(harness.state().work.annotations.len(), 1);
+        let second = harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .annotation_id
+            .clone();
+        harness.state_mut().autosave();
+        let command = harness.state_mut().runtime.commands.pop_back().unwrap();
+        assert!(matches!(
+            command,
+            UiCommand::SaveAnnotations { submit: false, .. }
+        ));
+        let operation = harness.state().work.active_operation_id;
+        harness.run_steps(2);
+        assert!(harness.state().loading.saving);
+        assert!(
+            !harness
+                .get_by_label("Confirm & next")
+                .accesskit_node()
+                .is_disabled()
+        );
+        if use_shortcut {
+            harness.key_press(egui::Key::Space);
+            harness.run_steps(2);
+        } else {
+            click_accesskit_button(&mut harness, "Confirm & next");
+        }
+        assert!(harness.state().pending_prelabel_objects().is_empty());
+        assert_eq!(harness.state().work.annotations.len(), 2);
+        assert!(
+            harness
+                .state()
+                .work
+                .annotations
+                .iter()
+                .any(|annotation| annotation.annotation_id == second)
+        );
+        assert_eq!(harness.state().work.active_operation_id, operation);
+        assert!(
+            harness
+                .get_by_label("Submit & next")
+                .accesskit_node()
+                .is_disabled()
+        );
+        harness.key_press(egui::Key::Space);
+        harness.step();
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert!(harness.state().work.pending_transition.is_none());
+        assert!(
+            !harness
+                .state()
+                .runtime
+                .commands
+                .iter()
+                .any(|command| matches!(command, UiCommand::SaveAnnotations { .. }))
+        );
+        harness.state_mut().work.last_edit_at = None;
+        if use_shortcut {
+            api.fail_next_batch();
+        }
+        harness
+            .state_mut()
+            .start_workflow_command(api.clone(), command);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert_eq!(harness.state().work.annotations.len(), 2);
+        assert!(harness.state().pending_prelabel_objects().is_empty());
+        harness.state_mut().autosave();
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        let state = harness.state().work.current_state.as_ref().unwrap();
+        assert_eq!(state.active_annotations().count(), 2);
+        assert!(state.current_annotation(&second).is_some());
+        assert_eq!(harness.state().work.save_status, SaveStatus::Saved);
+        assert_eq!(api.counts().complete_assignment, 0);
+        assert_eq!(
+            api.events()
+                .iter()
+                .filter(|event| matches!(event, EventPayload::AnnotationVersionCreated { .. }))
+                .count(),
+            2
+        );
+    }
+}

@@ -131,7 +131,7 @@ impl LabelloApp {
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if workspace_toolbar_button(ui, can_commit, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
+            if workspace_toolbar_button(ui, ready && (pending || !self.loading.saving), primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
                 .on_hover_text(format!("{primary_help} ({})", self.shortcut_text(ui.ctx(), UserAction::NextImage))).clicked() {
                 self.trigger_user_action(UserAction::NextImage);
             }
