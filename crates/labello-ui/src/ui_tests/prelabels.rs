@@ -1303,6 +1303,7 @@ fn prelabel_confirmation_continues_during_autosave_without_losing_acceptances() 
         } else {
             click_accesskit_button(&mut harness, "Confirm & next");
         }
+        harness.run_steps(2);
         assert!(harness.state().pending_prelabel_objects().is_empty());
         assert_eq!(harness.state().work.annotations.len(), 2);
         assert!(
