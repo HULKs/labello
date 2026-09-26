@@ -27,6 +27,7 @@ impl PrelabelService {
         &self,
         dataset: &DatasetId,
         repo: &DatasetRepository,
+        user: &UserId,
         image_id: &ImageId,
         task_id: &TaskId,
         config_id: &PrelabelConfigId,
@@ -50,6 +51,11 @@ impl PrelabelService {
         if !config.available_to_annotators {
             return Err(PrelabelFailure::Invalid);
         }
+        let _permit = if matches!(config.execution, PrelabelExecution::ServerSide { .. }) {
+            Some(self.inner.workers.interactive().await?)
+        } else {
+            None
+        };
         let model = self.model(config).await?;
         let model_digest = blake3::hash(&model).to_hex().to_string();
         let control = self.lock(dataset).await?;
@@ -114,17 +120,20 @@ impl PrelabelService {
             });
         }
         drop(control);
-        let _permit = self
-            .inner
-            .workers
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PrelabelFailure::Busy)?;
         let image = files::image(repo, record)?;
         let candidates = self
             .inner
             .runner
-            .infer(model, image, config.clone(), task.clone())
+            .infer(
+                InferenceOwner::Interactive {
+                    dataset: dataset.clone(),
+                    user: user.clone(),
+                },
+                model,
+                image,
+                config.clone(),
+                task.clone(),
+            )
             .await?;
         let control = self.lock(dataset).await?;
         self.revalidate(repo, &control, &item).await?;

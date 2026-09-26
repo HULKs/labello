@@ -98,7 +98,7 @@ pub fn inspect(model: &[u8]) -> Result<PrelabelModelInspection, String> {
         Some("model requires one static float32 input [1, 3, S, S]; S must be 32..1280 and divisible by 32".into())
     } else {
         (if native::available() {
-            native::load_session(model, NativeProvider::Cpu).map(|_| ())
+            native::load_session(model, NativeProvider::Cpu, 1).map(|_| ())
         } else {
             cpu::load(model).map(|_| ())
         })

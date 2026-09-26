@@ -481,7 +481,11 @@ proofs before file cleanup; report cleanup failure and retry instead of deleting
 control files. Interrupted runs require explicit retry after restart.
 
 Watch safe run counts and available storage. Runtime errors are bounded public
-categories; worker stderr is discarded. Do not log model bytes, prediction
+categories; worker stderr is discarded. The `prelabel_provider_fallback` warning
+records only provider and bounded failure category. Debug events
+`prelabel_worker_started` and `prelabel_inference_completed` record provider and
+whether a session was loaded, allowing operators to distinguish cold loads from
+reuse without logging model or image identities. Do not log model bytes, prediction
 geometry, browser grants, signing secrets, or evidence signatures. Models and
 runtime assets are not fetched from external sources during inference.
 
@@ -492,3 +496,9 @@ updated profile. Native CUDA/WebGPU failures fall through to CPU within the requ
 timeout. See the [runtime configuration and resource limits](prelabels.md#execution-and-coordinates)
 before installing native provider libraries. Library paths are operator-controlled;
 workers do not inherit the server's environment or authentication secrets.
+
+Persistent inference workers retain model memory between requests. Size
+`prelabel.workers.maxWorkers` for available RAM; its default is four processes,
+each with the limits described in the prelabel guide. Session eviction and idle
+expiry do not delete hints. Restarting discards compiled sessions and interrupts
+active runs; completed results remain reusable when the administrator retries.

@@ -12,8 +12,9 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard, Semaphore, watch};
+use tokio::sync::{Mutex, OwnedMutexGuard, watch};
 
+mod admission;
 mod files;
 mod predictions;
 mod runs;
@@ -97,11 +98,20 @@ impl PrelabelLimits {
 pub type InferenceFuture = Pin<Box<dyn Future<Output = Result<PrelabelInferenceResult>> + Send>>;
 pub type ModelInspectionFuture =
     Pin<Box<dyn Future<Output = Result<PrelabelModelInspection>> + Send>>;
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InferenceOwner {
+    Interactive { dataset: DatasetId, user: UserId },
+    Batch { dataset: DatasetId, run: String },
+}
+
 pub trait PrelabelRunner: Send + Sync {
     fn inspect(&self, model: Vec<u8>) -> ModelInspectionFuture;
+    fn release(&self, _owner: &InferenceOwner) {}
+    fn shutdown(&self) {}
     /// Implementations must bound execution time/memory and terminate on future cancellation.
     fn infer(
         &self,
+        owner: InferenceOwner,
         model: Vec<u8>,
         image: Vec<u8>,
         config: PrelabelConfig,
@@ -119,7 +129,7 @@ struct Inner {
     models: std::fs::File,
     limits: PrelabelLimits,
     runner: Arc<dyn PrelabelRunner>,
-    workers: Arc<Semaphore>,
+    workers: admission::Admission,
     datasets: Mutex<BTreeMap<DatasetId, Arc<Mutex<Control>>>>,
     running: Mutex<BTreeMap<String, watch::Sender<bool>>>,
 }
@@ -204,7 +214,7 @@ impl PrelabelService {
                 _root: root,
                 path,
                 models,
-                workers: Arc::new(Semaphore::new(limits.max_concurrent_inferences)),
+                workers: admission::Admission::new(limits.max_concurrent_inferences),
                 limits,
                 runner,
                 datasets: Mutex::new(BTreeMap::new()),
@@ -307,16 +317,12 @@ impl PrelabelService {
 
     /// An unsaved filename can be checked before a class mapping or configuration exists.
     pub async fn inspect_model(&self, location: &str) -> Result<PrelabelModelInspection> {
-        let _permit = self
-            .inner
-            .workers
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| PrelabelFailure::Busy)?;
+        let _permit = self.inner.workers.interactive().await?;
         self.inner.runner.inspect(self.model_file(location)?).await
     }
 
     pub async fn shutdown(&self) {
+        self.inner.runner.shutdown();
         for cancel in self.inner.running.lock().await.values() {
             let _ = cancel.send(true);
         }

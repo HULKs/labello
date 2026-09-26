@@ -9,8 +9,14 @@ struct Runner {
     empty: bool,
     pause: Option<Arc<tokio::sync::Notify>>,
     started: tokio::sync::Notify,
+    owners: std::sync::Mutex<Vec<InferenceOwner>>,
+    released: std::sync::Mutex<Vec<InferenceOwner>>,
 }
 impl PrelabelRunner for Arc<Runner> {
+    fn release(&self, owner: &InferenceOwner) {
+        self.released.lock().unwrap().push(owner.clone());
+    }
+
     fn inspect(&self, _model: Vec<u8>) -> crate::prelabel::ModelInspectionFuture {
         Box::pin(async {
             Ok(PrelabelModelInspection {
@@ -25,11 +31,13 @@ impl PrelabelRunner for Arc<Runner> {
 
     fn infer(
         &self,
+        owner: InferenceOwner,
         _: Vec<u8>,
         _: Vec<u8>,
         config: PrelabelConfig,
         task: TaskDefinition,
     ) -> InferenceFuture {
+        self.owners.lock().unwrap().push(owner);
         let runner = self.clone();
         Box::pin(async move {
             runner.calls.fetch_add(1, Ordering::SeqCst);
@@ -133,19 +141,17 @@ async fn model_inspection_uses_managed_files_and_shared_worker_limit_without_wri
     let metadata = fixture.repo.load_dataset_config().await.unwrap();
     let location = &metadata.prelabel_configs[0].model.location;
     assert!(fixture.service.inspect_model(location).await.is_ok());
-    let permit = fixture
-        .service
-        .inner
-        .workers
-        .clone()
-        .acquire_owned()
-        .await
-        .unwrap();
-    assert_eq!(
-        fixture.service.inspect_model(location).await.unwrap_err(),
-        PrelabelFailure::Busy
+    let permit = fixture.service.inner.workers.interactive().await.unwrap();
+    let mut waiting = std::pin::pin!(fixture.service.inspect_model(location));
+    use std::future::Future;
+    assert!(
+        waiting
+            .as_mut()
+            .poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+            .is_pending()
     );
     drop(permit);
+    assert!(waiting.await.is_ok());
     assert_eq!(
         fixture.service.admin_state(&fixture.dataset).await.unwrap(),
         before
@@ -483,6 +489,7 @@ impl Fixture {
             .suggestions(
                 &self.dataset,
                 &self.repo,
+                &"annotator".into(),
                 &"fresh".into(),
                 &"boxes".into(),
                 &"model".into(),
@@ -528,6 +535,20 @@ async fn batch_selects_remaining_work_and_reuses_results_without_claims_or_event
     let completed = fixture.finish().await;
     assert_eq!(completed.runs[0].generated, 6);
     assert_eq!(completed.runs[0].phase, PrelabelRunPhase::Completed);
+    let owner = InferenceOwner::Batch {
+        dataset: fixture.dataset.clone(),
+        run: preflight.runs[0].run_id.clone(),
+    };
+    assert!(
+        fixture
+            .runner
+            .owners
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|seen| seen == &owner)
+    );
+    assert!(fixture.runner.released.lock().unwrap().contains(&owner));
     assert_eq!(
         fixture
             .repo
@@ -638,6 +659,7 @@ async fn in_flight_interactive_generation_cannot_publish_after_reset() {
             .suggestions(
                 &dataset,
                 &repo,
+                &"annotator".into(),
                 &"fresh".into(),
                 &"boxes".into(),
                 &"model".into(),
@@ -672,7 +694,20 @@ async fn browser_claims_are_bound_and_disclosed_and_tampered_acceptance_is_rejec
     let grant = f.hints().await.browser_grant.unwrap();
     let config = metadata.prelabel_configs[0].clone();
     let task = metadata.tasks[0].clone();
-    let candidates = f.runner.infer(vec![], vec![], config, task).await.unwrap();
+    let candidates = f
+        .runner
+        .infer(
+            InferenceOwner::Interactive {
+                dataset: "test".into(),
+                user: "test".into(),
+            },
+            vec![],
+            vec![],
+            config,
+            task,
+        )
+        .await
+        .unwrap();
     let request = BrowserPrelabelResult {
         grant: grant.clone(),
         execution: PrelabelExecutionKind::BrowserCpu,
@@ -914,6 +949,16 @@ async fn cancel_stops_in_flight_batch_without_publishing_or_completing_work() {
     })
     .await
     .unwrap();
+    assert!(
+        f.runner
+            .released
+            .lock()
+            .unwrap()
+            .contains(&InferenceOwner::Batch {
+                dataset: f.dataset.clone(),
+                run: run_id.clone()
+            })
+    );
     release.notify_one();
     let state = f.service.admin_state(&f.dataset).await.unwrap();
     assert_eq!(state.retained_results, 0);
@@ -1021,4 +1066,34 @@ async fn batch_rechecks_completed_work_and_excludes_disabled_or_import_excluded_
     let state = f.finish().await;
     assert_eq!((state.runs[0].generated, state.runs[0].skipped), (1, 1));
     assert_eq!(f.runner.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn interactive_worker_owner_uses_authenticated_user_and_dataset() {
+    let f = Fixture::new(Runner::default()).await;
+    f.hints().await;
+    f.service
+        .suggestions(
+            &f.dataset,
+            &f.repo,
+            &"second-user".into(),
+            &"fresh".into(),
+            &"boxes".into(),
+            &"model".into(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *f.runner.owners.lock().unwrap(),
+        vec![
+            InferenceOwner::Interactive {
+                dataset: f.dataset.clone(),
+                user: "annotator".into()
+            },
+            InferenceOwner::Interactive {
+                dataset: f.dataset.clone(),
+                user: "second-user".into()
+            },
+        ]
+    );
 }

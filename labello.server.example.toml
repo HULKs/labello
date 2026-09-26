@@ -95,6 +95,11 @@ cacheEntries = 4096
 # [prelabel.runtime]
 # onnxLibrary = "/srv/labello-runtime/libonnxruntime.so"
 # webgpuLibrary = "/srv/labello-runtime/libonnxruntime_providers_webgpu.so"
+# Optional persistent workers, separate from active inference concurrency.
+# [prelabel.workers]
+# maxWorkers = 4
+# idleTimeoutSeconds = 120
+# threadsPerWorker = 1
 # [prelabel.limits]
 # maxConcurrentInferences = 1
 # maxWorkItems = 100_000

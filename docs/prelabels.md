@@ -113,8 +113,9 @@ the named keypoints. A keypoint score below 0.5 becomes hidden when the workflow
 allows hidden points; otherwise it remains visible for human correction.
 
 Server inference runs on Linux through Rust `ort`. It tries native ONNX Runtime
-CUDA, then native WebGPU, then CPU. Provider initialization, model loading, execution
-failure, crashes, and timeouts fall through to the next provider in a fresh worker.
+CUDA, then native WebGPU, then CPU for a new worker. A warm worker reuses its
+successful provider. Provider initialization, model loading, execution failure,
+crashes, and timeouts fall through to another provider in a fresh worker.
 The configured timeout is shared by the whole request; each GPU attempt gets at
 most one quarter of it, reserving time for CPU fallback. Native providers may use
 CPU kernels for unsupported operators. Provenance records the successful provider
@@ -138,14 +139,41 @@ operator configuration, never dataset-admin input. If native ONNX Runtime cannot
 load, the included Tract runtime retains CPU inference without an external
 runtime installation. No production inference path invokes Python.
 
-Each attempt gets a fresh child process with a cleared environment, bounded binary
-input/output, a 300-second CPU limit, and no core dumps. CPU and inspection workers
+Workers start lazily, one per active dataset/account and one per dataset generation
+run, subject to a global cap. Each retains up to two compiled model sessions, keyed
+by model content. Subsequent images and workflows reuse the session but apply their
+current output selection, class mapping, and processing settings. Model bytes are
+sent to the child only on a cache miss. Sessions are volatile execution caches;
+retained hints and their validity still follow the durable rules below.
+
+The defaults retain at most four workers, expire idle workers after 120 seconds,
+and use one native inference thread per worker. Idle cleanup runs at most every
+30 seconds. A new owner can evict the least recently used idle worker immediately.
+Batch completion or cancellation releases its worker. The Tract CPU backend remains
+single-threaded. Configure these bounds separately from execution concurrency:
+
+```toml
+[prelabel.workers]
+maxWorkers = 4
+idleTimeoutSeconds = 120
+threadsPerWorker = 1
+```
+
+Each child has a cleared environment, bounded binary input/output, a renewed
+300-second CPU budget per request, and no core dumps. CPU and inspection workers
 have a 4 GiB address-space limit. GPU workers instead limit their data allocations
 to 4 GiB, allowing the large virtual address reservations used by GPU drivers;
 CUDA's device memory arena is limited to 1 GiB. Driver/device allocations are not
-covered by the host allocation limit. Dropping or timing out an attempt kills and
-reaps its child. Workers execute a fixed protocol, never a dataset-configured
-command. The default global concurrency is one, shared with model checks.
+covered by the host allocation limit. Cancelling or timing out an active request
+kills and reaps its child; replacement waits for the old process to exit. Workers
+execute a fixed protocol, never a dataset-configured command.
+
+The default global execution concurrency is one, shared with model checks.
+Interactive requests take priority between batch items; they do not interrupt
+an image already running. At most 64 interactive requests wait for admission,
+for up to 30 seconds before returning busy. After admission, `timeoutSeconds`
+bounds worker acquisition and all provider attempts together. Resource limits
+apply to each process, so size the worker cap for the host's available memory.
 
 Browser inference uses self-hosted ONNX Runtime Web in a dedicated worker.
 WebGPU-preferred configurations try WebGPU, then retry on WASM CPU if execution

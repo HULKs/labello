@@ -18,6 +18,7 @@ impl PrelabelRunner for Runner {
 
     fn infer(
         &self,
+        _owner: labello_storage::prelabel::InferenceOwner,
         _: Vec<u8>,
         _: Vec<u8>,
         config: PrelabelConfig,

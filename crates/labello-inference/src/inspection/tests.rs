@@ -315,3 +315,32 @@ fn class_names_accept_python_and_json_strings_but_never_expressions_or_sparse_id
         assert!(names::parse(invalid).is_err(), "{invalid}");
     }
 }
+
+#[test]
+fn compiled_session_reuses_model_but_revalidates_each_requests_mapping_and_digest() {
+    let bytes = model().encode_to_vec();
+    let mut session = crate::InferenceSession::new(&bytes, NativeProvider::Cpu, 1).unwrap();
+    let (mut config, mut task) = crate::tests::contract(false);
+    let spec = config.yolo.as_mut().unwrap();
+    spec.input_size = 32;
+    spec.output_name = Some("predictions".into());
+    spec.model_digest = Some(crate::model_digest(&bytes));
+    drop(bytes);
+    let image = image::RgbImage::from_pixel(32, 32, image::Rgb([128, 128, 128]));
+    let mut encoded = std::io::Cursor::new(Vec::new());
+    image
+        .write_to(&mut encoded, image::ImageFormat::Png)
+        .unwrap();
+    let first = session.infer(encoded.get_ref(), &config, &task).unwrap();
+    assert_eq!(first.suggestions[0].class_id.as_str(), "person");
+    config.yolo.as_mut().unwrap().class_ids[0] = Some("other".into());
+    task.class_ids[0] = "other".into();
+    let second = session.infer(encoded.get_ref(), &config, &task).unwrap();
+    assert_eq!(second.suggestions[0].class_id.as_str(), "other");
+    assert_eq!(
+        first.suggestions[0].geometry,
+        second.suggestions[0].geometry
+    );
+    config.yolo.as_mut().unwrap().model_digest = Some("0".repeat(64));
+    assert!(session.infer(encoded.get_ref(), &config, &task).is_err());
+}

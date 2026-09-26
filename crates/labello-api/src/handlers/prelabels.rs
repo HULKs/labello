@@ -61,6 +61,7 @@ pub(super) async fn suggestions(
             .suggestions(
                 &dataset_id,
                 &repo,
+                &actor.user_id,
                 &request.image_id,
                 &request.task_id,
                 &request.config_id,

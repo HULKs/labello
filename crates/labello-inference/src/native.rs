@@ -75,6 +75,7 @@ impl Drop for RegisteredProvider {
 pub(super) fn load_session(
     model: &[u8],
     provider: NativeProvider,
+    threads: usize,
 ) -> Result<NativeSession, String> {
     configure_runtime(&NativeRuntimeConfig::default());
     let backend = BACKEND.get().expect("configured runtime");
@@ -82,7 +83,12 @@ pub(super) fn load_session(
         return Err("GPU execution provider unavailable".into());
     }
     let mut registered_provider = None;
-    let mut builder = Session::builder().map_err(|_| "model runtime initialization failed")?;
+    let mut builder = Session::builder()
+        .map_err(|_| "model runtime initialization failed")?
+        .with_intra_threads(threads)
+        .map_err(|_| "model thread configuration failed")?
+        .with_inter_threads(1)
+        .map_err(|_| "model thread configuration failed")?;
     builder = match provider {
         NativeProvider::Cpu => builder,
         NativeProvider::Cuda => builder

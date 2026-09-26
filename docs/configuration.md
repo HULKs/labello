@@ -480,3 +480,20 @@ Tract CPU fallback. Runtime/provider failures do not disable the whole feature.
 The model check and inference share the configured worker concurrency limit.
 See [Model prelabels](prelabels.md#execution-and-coordinates) for dependencies,
 resource bounds and the overall timeout budget.
+
+Optional `[prelabel.workers]` controls retained inference processes:
+
+| Field | Default | Range |
+| --- | --- | --- |
+| `maxWorkers` | 4 | 1–8 |
+| `idleTimeoutSeconds` | 120 | 1–3600 |
+| `threadsPerWorker` | 1 | 1–16 |
+
+Workers are scoped to dataset/account or dataset generation run. Each caches two
+compiled models. `maxWorkers` bounds live processes, including idle workers and
+ones being reaped; `limits.maxConcurrentInferences` separately bounds active
+inference and model checks. Native runtime thread counts use `threadsPerWorker`;
+the included Tract backend is single-threaded. Idle processes expire within the
+configured interval plus at most 30 seconds, or earlier under capacity pressure.
+Interactive requests have priority between batch items. Up to 64 wait for admission
+for at most 30 seconds; saturation returns busy without disabling manual work.

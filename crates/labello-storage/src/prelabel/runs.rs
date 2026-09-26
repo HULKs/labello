@@ -438,6 +438,17 @@ impl PrelabelService {
         run_id: &str,
         mut cancel: watch::Receiver<bool>,
     ) -> Result<()> {
+        let owner = InferenceOwner::Batch {
+            dataset: dataset.clone(),
+            run: run_id.to_owned(),
+        };
+        struct RunWorker(Arc<dyn PrelabelRunner>, InferenceOwner);
+        impl Drop for RunWorker {
+            fn drop(&mut self) {
+                self.0.release(&self.1);
+            }
+        }
+        let _worker = RunWorker(self.inner.runner.clone(), owner.clone());
         loop {
             let item = {
                 let mut control = self.lock(dataset).await?;
@@ -470,12 +481,7 @@ impl PrelabelService {
                 }
             };
             let inference = async {
-                let _permit = self
-                    .inner
-                    .workers
-                    .acquire()
-                    .await
-                    .map_err(|_| PrelabelFailure::Busy)?;
+                let _permit = self.inner.workers.batch().await?;
                 let control = self.lock(dataset).await?;
                 self.revalidate(repo, &control, &item.1).await?;
                 drop(control);
@@ -494,7 +500,7 @@ impl PrelabelService {
                 let candidates = self
                     .inner
                     .runner
-                    .infer(model, image, config.clone(), task.clone())
+                    .infer(owner.clone(), model, image, config.clone(), task.clone())
                     .await?;
                 Ok::<_, PrelabelFailure>((
                     candidates,

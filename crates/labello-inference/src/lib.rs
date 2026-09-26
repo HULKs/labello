@@ -266,40 +266,85 @@ pub fn infer_with_provider(
     task: &TaskDefinition,
     provider: NativeProvider,
 ) -> Result<InferenceResult, String> {
-    config.validate_for_task(task).map_err(|e| e.to_string())?;
-    if model.is_empty() || model.len() > MAX_MODEL_BYTES {
-        return Err("model exceeds inference byte limit".into());
+    InferenceSession::new(model, provider, 1)?.infer(image, config, task)
+}
+
+/// One compiled model. Processing and workflow mappings are validated per request.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct InferenceSession {
+    digest: String,
+    provider: NativeProvider,
+    backend: SessionBackend,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+enum SessionBackend {
+    Cpu(Box<cpu::CpuSession>),
+    Native(native::NativeSession),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl InferenceSession {
+    pub fn new(model: &[u8], provider: NativeProvider, threads: usize) -> Result<Self, String> {
+        if model.is_empty() || model.len() > MAX_MODEL_BYTES || !(1..=16).contains(&threads) {
+            return Err("invalid model or thread limit".into());
+        }
+        let backend = if provider == NativeProvider::Cpu && !native::available() {
+            SessionBackend::Cpu(Box::new(cpu::CpuSession::new(model)?))
+        } else {
+            SessionBackend::Native(native::load_session(model, provider, threads)?)
+        };
+        Ok(Self {
+            digest: model_digest(model),
+            provider,
+            backend,
+        })
     }
-    let spec = config.yolo.as_ref().ok_or("missing YOLO profile")?;
-    if spec
-        .model_digest
-        .as_ref()
-        .is_some_and(|digest| blake3::hash(model).to_hex().as_str() != digest)
-    {
-        return Err("model changed; check the model and mapping again".into());
+
+    pub fn infer(
+        &mut self,
+        image: &[u8],
+        config: &PrelabelConfig,
+        task: &TaskDefinition,
+    ) -> Result<InferenceResult, String> {
+        config.validate_for_task(task).map_err(|e| e.to_string())?;
+        let spec = config.yolo.as_ref().ok_or("missing YOLO profile")?;
+        if spec
+            .model_digest
+            .as_ref()
+            .is_some_and(|digest| digest != &self.digest)
+        {
+            return Err("model changed; check the model and mapping again".into());
+        }
+        let SessionBackend::Native(native_session) = &mut self.backend else {
+            let SessionBackend::Cpu(cpu) = &self.backend else {
+                unreachable!()
+            };
+            return cpu.infer(image, config, task);
+        };
+        let session = &mut native_session.session;
+        validate_session(session, spec)?;
+        let output_index = selected_output(session, spec)?;
+        let (input, letterbox) = prepare(image, spec.input_size)?;
+        let tensor = Tensor::from_array((
+            [1, 3, spec.input_size as usize, spec.input_size as usize],
+            input,
+        ))
+        .map_err(|_| "model tensor preparation failed")?;
+        let output = session
+            .run(ort::inputs![tensor])
+            .map_err(|_| "model execution failed")?;
+        let (shape, data) = output[output_index]
+            .try_extract_tensor::<f32>()
+            .map_err(|_| "model output must be float32")?;
+        Ok(InferenceResult {
+            execution: self.provider.execution(),
+            suggestions: decode(shape, data, letterbox, config, task)?,
+        })
     }
-    if provider == NativeProvider::Cpu && !native::available() {
-        return cpu::infer(model, image, config, task);
-    }
-    let mut native_session = native::load_session(model, provider)?;
-    let session = &mut native_session.session;
-    validate_session(session, spec)?;
-    let output_index = selected_output(session, spec)?;
-    let (input, letterbox) = prepare(image, spec.input_size)?;
-    let tensor = Tensor::from_array((
-        [1, 3, spec.input_size as usize, spec.input_size as usize],
-        input,
-    ))
-    .map_err(|_| "model tensor preparation failed")?;
-    let output = session
-        .run(ort::inputs![tensor])
-        .map_err(|_| "model execution failed")?;
-    let (shape, data) = output[output_index]
-        .try_extract_tensor::<f32>()
-        .map_err(|_| "model output must be float32")?;
-    let suggestions = decode(shape, data, letterbox, config, task)?;
-    Ok(InferenceResult {
-        execution: provider.execution(),
-        suggestions,
-    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn model_digest(model: &[u8]) -> String {
+    blake3::hash(model).to_hex().to_string()
 }
