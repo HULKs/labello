@@ -90,12 +90,7 @@ impl LabelloApp {
                 })
                 .cloned();
         }
-        metadata
-            .prelabel_configs
-            .iter()
-            .filter(available)
-            .map(|c| c.config_id.clone())
-            .next()
+        None
     }
 
     pub(crate) fn refresh_prelabels_if_due(&mut self, ctx: &egui::Context) {

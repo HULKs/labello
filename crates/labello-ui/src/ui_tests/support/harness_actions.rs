@@ -23,6 +23,24 @@ pub(super) fn loaded_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloAp
     harness
 }
 
+pub(super) fn loaded_prelabel_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloApp> {
+    let mut harness = loaded_work_harness(api);
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
+    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
+    harness
+}
+
+pub(super) fn choose_prelabels(harness: &mut Harness<'static, LabelloApp>, before: &str, after: &str) {
+    harness
+        .query_all_by_role(egui::accesskit::Role::ComboBox)
+        .find(|node| node.accesskit_node().value().as_deref() == Some(before))
+        .expect("prelabel selector")
+        .click();
+    harness.run_steps(3);
+    harness.get_by_label(after).click();
+    harness.run_steps(3);
+}
+
 pub(super) fn loaded_review_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloApp> {
     let mut harness = live_harness(api);
     step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);

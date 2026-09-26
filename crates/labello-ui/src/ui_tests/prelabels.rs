@@ -38,19 +38,62 @@ fn model_check_replies_cannot_replace_a_changed_filename_or_removed_configuratio
 }
 
 #[test]
-fn prelabel_choice_defaults_to_available_model_and_explicit_none_survives_preferences() {
+fn prelabels_wait_for_explicit_selection_and_stop_when_disabled() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    let task = harness.state().selected_task().unwrap().task_id.clone();
+    assert_eq!(harness.state().prelabel_choice(&task), None);
+    assert!(harness.state().visible_prelabels().is_empty());
+    assert!(
+        harness
+            .query_all_by_role(egui::accesskit::Role::ComboBox)
+            .any(|node| node.accesskit_node().value().as_deref() == Some("No prelabels"))
+    );
+    assert!(harness.query_by_label("Prelabels turned off").is_some());
+    assert_eq!(api.counts().prelabel_suggestions, 0);
+    assert_eq!(api.counts().prelabel_generation, 0);
+
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
+    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
+    assert_eq!(
+        harness.state().prelabel_choice(&task),
+        Some("demo-prelabel".into())
+    );
+    assert!(api.counts().prelabel_suggestions > 0);
+
+    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
+    assert_eq!(harness.state().prelabel_choice(&task), None);
+    assert!(harness.state().visible_prelabels().is_empty());
+    assert!(harness.state().work.prelabels.pending.is_none());
+    let before = api.counts();
+    for _ in 0..8 {
+        harness.step();
+    }
+    assert_eq!(
+        api.counts().prelabel_suggestions,
+        before.prelabel_suggestions
+    );
+    assert_eq!(api.counts().prelabel_generation, before.prelabel_generation);
+}
+
+#[test]
+fn explicit_prelabel_choices_survive_preferences_and_unavailable_models_become_none() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     let app = harness.state_mut();
     let task = app.selected_task().unwrap().task_id.clone();
-    assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
     let key = format!("{}/{task}", app.config.dataset_id);
-    app.work.prelabels.choices.insert(key.clone(), None);
-    assert_eq!(app.prelabel_choice(&task), None);
-    app.persist_workspace_preference();
-    let preference = app.runtime.persistence.preference.as_ref().unwrap();
-    let decoded: WorkspacePreference =
-        serde_json::from_slice(&serde_json::to_vec(preference).unwrap()).unwrap();
-    assert_eq!(decoded.prelabel_choices.get(&key), Some(&None));
+    for choice in [Some("demo-prelabel".into()), None] {
+        app.work
+            .prelabels
+            .choices
+            .insert(key.clone(), choice.clone());
+        assert_eq!(app.prelabel_choice(&task), choice);
+        app.persist_workspace_preference();
+        let preference = app.runtime.persistence.preference.as_ref().unwrap();
+        let decoded: WorkspacePreference =
+            serde_json::from_slice(&serde_json::to_vec(preference).unwrap()).unwrap();
+        assert_eq!(decoded.prelabel_choices.get(&key), Some(&choice));
+    }
     app.work
         .prelabels
         .choices
@@ -61,6 +104,7 @@ fn prelabel_choice_defaults_to_available_model_and_explicit_none_survives_prefer
 #[test]
 fn prelabel_filter_reacts_to_draft_creation_edit_deletion_and_confidence() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
     step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
     let app = harness.state_mut();
     let hint = app.visible_prelabels().remove(0);
@@ -96,6 +140,7 @@ fn prelabel_filter_reacts_to_draft_creation_edit_deletion_and_confidence() {
 #[test]
 fn prelabel_generation_reset_clears_hints_and_preserves_edits_and_rejects_stale_response() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
     step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
     let app = harness.state_mut();
     app.cancel_prelabel_load();
@@ -223,6 +268,7 @@ fn prelabel_admin_removal_requires_confirmation_and_controls_fit_narrow_and_shor
 #[test]
 fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
     let mut loaded = loaded_work_harness(Rc::new(SpyApi::new()));
+    choose_prelabels(&mut loaded, "No prelabels", "Demo prelabels");
     let mut app = std::mem::replace(loaded.state_mut(), base_live_app(Rc::new(SpyApi::new())));
     app.cancel_prelabel_load();
     app.work.prelabels.hints.clear();

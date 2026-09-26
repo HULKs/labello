@@ -1281,7 +1281,7 @@ fn submit_failure_preserves_current_and_prepared_queue() {
 #[test]
 fn save_keeps_the_same_assignment_active() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
     let claims_before = api.counts().assign_next_image;
     click(&mut harness, "Accept");
@@ -1311,7 +1311,7 @@ fn save_keeps_the_same_assignment_active() {
 #[test]
 fn annotation_edits_debounce_once_and_undo_redo_remain_available() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
 
     click(&mut harness, "Accept");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
@@ -1364,7 +1364,7 @@ fn annotation_edits_debounce_once_and_undo_redo_remain_available() {
 fn persisted_undo_redo_keeps_the_tombstoned_identity_across_save_retry() {
     for (retry, redo_during_save) in [(false, false), (true, false), (false, true), (true, true)] {
         let api = Rc::new(SpyApi::new());
-        let mut harness = loaded_work_harness(api.clone());
+        let mut harness = loaded_prelabel_work_harness(api.clone());
         click(&mut harness, "Accept");
         let original = harness.state().work.annotations[0].clone();
         harness.state_mut().autosave();
@@ -1445,7 +1445,7 @@ fn persisted_undo_redo_keeps_the_tombstoned_identity_across_save_retry() {
 #[test]
 fn autosave_waits_for_an_active_canvas_drag() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     click(&mut harness, "Accept");
     let start = harness.get_by_label("Annotation canvas").rect().center();
     harness.drag_at(start);
@@ -1463,7 +1463,7 @@ fn autosave_waits_for_an_active_canvas_drag() {
 #[test]
 fn edits_made_during_save_remain_dirty_when_the_saved_generation_finishes() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     click(&mut harness, "Accept");
     harness.state_mut().request_save(false);
     harness.state_mut().create_bbox(BoundingBox {
@@ -1482,7 +1482,7 @@ fn edits_made_during_save_remain_dirty_when_the_saved_generation_finishes() {
 #[test]
 fn a_full_command_queue_cannot_strand_save_loading() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api);
+    let mut harness = loaded_prelabel_work_harness(api);
     click(&mut harness, "Accept");
     while harness.state().runtime.commands.len() < 64 {
         let request_id = 10_000 + harness.state().runtime.commands.len() as u64;
@@ -1900,7 +1900,7 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
 #[test]
 fn dirty_skip_requires_an_explicit_discard_or_submit_choice() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     click(&mut harness, "Accept");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
 
@@ -1939,7 +1939,7 @@ fn dirty_skip_requires_an_explicit_discard_or_submit_choice() {
 #[test]
 fn dirty_skip_can_submit_and_switch_with_a_pointer_click() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     let original = harness
         .state()
         .work
@@ -2157,7 +2157,7 @@ fn review_correction_drawer_and_actions_stay_reachable() {
 #[test]
 fn work_workflow_draws_saves_submits_and_reviews() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     assert!(harness.state().work.current.is_some());
     assert_eq!(harness.state().work.queue.queue_size(), IMAGE_QUEUE_SIZE);
     assert!(harness.query_by_label("Assignment").is_none());
@@ -2257,7 +2257,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
 #[test]
 fn dirty_workflow_changes_save_before_loading_the_new_assignment() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
     let original_image = harness
         .state()
         .work.current
@@ -3295,7 +3295,7 @@ fn review_and_save_responses_propagate_renewed_assignments_without_refetching_st
     );
 
     let save_api = Rc::new(SpyApi::new());
-    let mut work = loaded_work_harness(save_api);
+    let mut work = loaded_prelabel_work_harness(save_api);
     click(&mut work, "Accept");
     let original_save_expiry = work.state().work.assignment.as_ref().unwrap().expires_at;
     work.state_mut().request_save(false);
@@ -3802,7 +3802,7 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
 #[test]
 fn saved_annotation_work_still_requires_navigation_confirmation() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api);
+    let mut harness = loaded_prelabel_work_harness(api);
     click(&mut harness, "Accept");
     harness.state_mut().request_save(false);
     step_until(&mut harness, 12, |app| !app.loading.saving);
@@ -3831,7 +3831,7 @@ fn discarded_review_correction_still_requires_navigation_confirmation() {
 #[test]
 fn automatic_release_rejects_stale_completions_and_blocks_background_input() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api);
+    let mut harness = loaded_prelabel_work_harness(api);
     harness.state_mut().open_view(AppView::Setup);
     let command = harness.state_mut().runtime.commands.pop_back().unwrap();
     let UiCommand::ReleaseAssignment { request, operation_id, assignment, .. } = command else {
@@ -4173,7 +4173,7 @@ fn assert_workflow_dot(harness: &Harness<LabelloApp>, name: &str, selected: bool
 
 #[test]
 fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     click(&mut harness, "Accept");
     harness.run();
     let before = assert_workflow_dot(&harness, "Person boxes", true);

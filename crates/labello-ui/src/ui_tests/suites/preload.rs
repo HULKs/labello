@@ -20,7 +20,7 @@ fn preload_resizing_releases_surplus_and_preserves_current_work_for_both_kinds()
         let mut harness = if review {
             loaded_review_harness(api.clone())
         } else {
-            loaded_work_harness(api.clone())
+            loaded_prelabel_work_harness(api.clone())
         };
         step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
         if !review {

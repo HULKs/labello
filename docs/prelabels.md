@@ -162,9 +162,12 @@ timeouts, and download failures leave manual annotation available.
 ## Annotator controls and filtering
 
 The Prelabels selector offers compatible, available configurations and
-**No prelabels**. The initial choice is the first available configuration.
+**No prelabels**. Without a saved choice, the initial selection is **No prelabels**;
+annotators explicitly choose a model while working before hints are requested.
 An explicit selection, including none, persists per account, API origin,
-dataset, and workflow. A removed or unavailable saved selection becomes none.
+dataset, and workflow and is restored when returning. Adding or linking a model
+does not enable hints for a workflow with no saved choice.
+A removed or unavailable saved selection becomes none.
 Hints load independently of the image and are prefetched for prepared images.
 Changing selection cancels obsolete work and clears queued hints while keeping
 annotation drafts. **Refresh hints** retries a failed request.
