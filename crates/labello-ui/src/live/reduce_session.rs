@@ -13,6 +13,10 @@ impl LabelloApp {
                         self.work.migration.pending_activate_target.take();
                     match *result {
                         Ok(result) => {
+                            let pending_overview_intent = if matches!(self.work.migration.retry_request.as_ref().map(|retry| &retry.action),
+                                Some(crate::app::MigrationAction::AddSkeleton(_) | crate::app::MigrationAction::EditSkeleton(_))) {
+                                self.work.migration.pending_overview_intent.take()
+                            } else { None };
                             let review_committed = matches!(self.work.migration.retry_request.as_ref().map(|retry| &retry.action), Some(crate::app::MigrationAction::Review(_)));
                             let reviewed_item = self.view == AppView::Review && review_committed && !self.review_overview();
                             self.work.migration.retry_request = None;
@@ -63,6 +67,9 @@ impl LabelloApp {
                                 self.work.migration.next_hidden = retained.next_hidden;
                                 self.work.migration.exclusion_note = retained.exclusion_note;
                                 self.work.migration.exclusion_dirty = retained.exclusion_dirty;
+                            }
+                            if let Some(intent) = pending_overview_intent {
+                                self.resume_migration_overview_intent(intent);
                             }
                             if reviewed_item { self.finish_local_review_item(); }
                             if self.view == AppView::Review {

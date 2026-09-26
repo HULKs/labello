@@ -393,7 +393,12 @@ matching skeleton additions. Further edits remain local until review submission.
 Blank-canvas placement can start another object after retaining the current one.
 
 Migration full-image confirmation starts a missing-object skeleton on a blank
-canvas tap; Add missing object remains a keyboard-accessible alternative. Existing
-objects retain selection priority. Completed drafts remain editable before
+canvas click and selects existing objects directly. No Add missing object or
+Edit added object buttons are shown. After a complete draft, the next blank click
+saves it through the existing migration command and starts the next object only
+after success. Selecting another object uses the same save-before-switch path.
+The reducer retains the pending canvas action and draft on failure for retry;
+assignment completion still requires explicit confirmation. Existing objects
+retain selection priority. Completed drafts remain editable before
 explicit confirmation, with placed-point visibility controls for both guided and
 missing-object drafts. These controls preserve migration dirty-state ownership.

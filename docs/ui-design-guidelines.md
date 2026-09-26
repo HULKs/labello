@@ -168,7 +168,9 @@ has been recorded.
   Signed-out secondary navigation also puts About last.
 - **Workspace:** keep Submit & next at the bottom right in annotation, including
   compact layouts. Placed objects remain editable; expose placed-keypoint
-  Visible/Occluded controls when allowed by the task. Preserve tested canvas geometry and gestures; keep Pan and Fit
+  Visible/Occluded controls when allowed by the task. Migration overview uses
+  canvas clicks to create and select objects; omit Add missing object and Edit
+  added object mode buttons. Preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
   pinch instructions in Settings. Review opens each focused item for direct editing. Primary drag edits the item;

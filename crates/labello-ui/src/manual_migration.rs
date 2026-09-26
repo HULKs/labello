@@ -46,6 +46,12 @@ impl MigrationPrimaryAction {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) enum MigrationOverviewIntent {
+    Place(NormalizedPoint),
+    Select(AnnotationId, Option<usize>),
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct ManualMigrationState {
     pub cursor: Option<MigrationCursor>,
     pub pending_companion_reconciliation: Option<AnnotationId>,
@@ -60,6 +66,7 @@ pub(crate) struct ManualMigrationState {
     pub restore_revisit_focus: bool,
     pub retry_request: Option<MigrationRetry>,
     pub active_pass_id: Option<MigrationPassId>,
+    pub pending_overview_intent: Option<MigrationOverviewIntent>,
     pub adding_missing_object: bool,
     pub editing_missing_annotation_id: Option<AnnotationId>,
     pub draft: Option<SkeletonGeometry>,
@@ -92,6 +99,7 @@ impl Default for ManualMigrationState {
             restore_revisit_focus: false,
             retry_request: None,
             active_pass_id: None,
+            pending_overview_intent: None,
             adding_missing_object: false,
             editing_missing_annotation_id: None,
             draft: None,
@@ -191,6 +199,7 @@ impl LabelloApp {
             self.work.migration.inspected_group_id = None;
             self.work.migration.pending_revisit_target = None;
             self.work.migration.pending_activate_target = None;
+            self.work.migration.pending_overview_intent = None;
             self.work.migration.adding_missing_object = false;
             self.work.migration.editing_missing_annotation_id = None;
             self.work.migration.draft = None;
@@ -230,9 +239,13 @@ impl LabelloApp {
                 .cloned()
         });
         let discovery_focus = self.current_migration_discovery_focus();
-        self.work
-            .canvas
-            .set_review_focus(discovery_focus.as_ref().or(guide.as_ref()));
+        let overview = self.view == AppView::Annotate
+            && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage));
+        self.work.canvas.set_review_focus(if overview {
+            None
+        } else {
+            discovery_focus.as_ref().or(guide.as_ref())
+        });
         let task_id = task.task_id.clone();
         let mut annotations = Vec::new();
         let mut annotation_styles = std::collections::BTreeMap::new();
@@ -303,7 +316,6 @@ impl LabelloApp {
                 && annotation.annotation_type == AnnotationType::Skeleton
         }) {
             if self.view == AppView::Annotate
-                && !self.work.migration.adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
             {
                 selectable_annotations.insert(skeleton.annotation_id.clone());
@@ -497,17 +509,25 @@ impl LabelloApp {
         }
         match action {
             Some(CanvasAction::PlaceKeypoint(point)) => {
-                if self.migration_can_add_missing_object() {
-                    self.begin_missing_migration_object();
+                if matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+                    && (!self.work.migration.adding_missing_object || self.migration_draft_valid())
+                {
+                    self.request_migration_overview_intent(MigrationOverviewIntent::Place(point));
+                } else {
+                    self.place_migration_keypoint(point);
                 }
-                self.place_migration_keypoint(point);
             }
             Some(CanvasAction::Select(annotation_id)) => {
-                if self.is_discovered_migration_skeleton(&annotation_id) {
-                    self.begin_edit_missing_migration_object(annotation_id);
-                } else {
-                    self.activate_migration_from_inactive_guide(&annotation_id);
-                }
+                let keypoint = self
+                    .work
+                    .canvas
+                    .selected_keypoint()
+                    .filter(|selection| selection.annotation_id == annotation_id)
+                    .map(|selection| selection.keypoint_index);
+                self.request_migration_overview_intent(MigrationOverviewIntent::Select(
+                    annotation_id,
+                    keypoint,
+                ));
             }
             Some(CanvasAction::EditKeypoint(edit)) => self.edit_migration_keypoint(edit),
             _ => {}
@@ -1025,9 +1045,6 @@ impl LabelloApp {
                 "{discovered} additional {} added during full-image review",
                 if discovered == 1 { "object" } else { "objects" }
             ));
-            if show_primary_action {
-                self.migration_discovered_edit_actions(ui, false, None);
-            }
         }
         let confirmation = if expected == 0 {
             "Confirm that this image has no canonical guides and needs no skeletons."
@@ -1035,6 +1052,9 @@ impl LabelloApp {
             "Confirm that every imported guide is resolved and that any objects missing from the import were added."
         };
         ui.label(confirmation);
+        ui.small(
+            "Click empty image space to add an object, or click an existing object to edit it.",
+        );
         if show_primary_action {
             self.migration_primary_button(ui, false, None);
             self.migration_object_navigation_button(ui);
@@ -1277,10 +1297,9 @@ impl LabelloApp {
             return;
         }
         let bar = self.displayed_migration_bar();
-        let extra_actions = usize::from(bar.adding_missing_object || bar.can_add_missing_object)
+        let extra_actions = usize::from(bar.adding_missing_object)
             + usize::from(bar.editing_missing_annotation_id.is_some())
-            + usize::from(bar.keypoint_undo)
-            + usize::from(!bar.discoveries.is_empty() && bar.full_image);
+            + usize::from(bar.keypoint_undo);
         let count = (3 + extra_actions + usize::from(self.bar_has_previous_image())) as f32;
         let width = Some(
             ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
@@ -1305,43 +1324,19 @@ impl LabelloApp {
                 self.begin_revisit_migration_target(group_id);
             }
         } else {
-            let adding_missing_object = bar.adding_missing_object;
-            if !adding_missing_object && bar.full_image {
-                self.migration_discovered_edit_actions(ui, compact, width);
-            }
-            if (adding_missing_object || bar.can_add_missing_object)
+            if bar.adding_missing_object
                 && workspace_toolbar_button(
                     ui,
                     !self.work.migration.busy,
-                    if adding_missing_object {
-                        if bar.editing_missing_annotation_id.is_some() {
-                            "Cancel editing object"
-                        } else {
-                            "Cancel adding object"
-                        }
-                    } else {
-                        "Add missing object"
-                    },
-                    if adding_missing_object {
-                        WorkspaceActionIcon::Discard
-                    } else {
-                        WorkspaceActionIcon::Add
-                    },
+                    "Discard object changes",
+                    WorkspaceActionIcon::Discard,
                     width,
                     theme::Intent::Neutral,
                 )
-                .on_hover_text(if adding_missing_object {
-                    if bar.editing_missing_annotation_id.is_some() {
-                        "Discard changes to this added missing-object skeleton."
-                    } else {
-                        "Discard this unsaved missing-object skeleton."
-                    }
-                } else {
-                    "Add a skeleton for an object that had no imported guide."
-                })
+                .on_hover_text("Discard the current unsaved object changes.")
                 .clicked()
             {
-                self.trigger_missing_migration_object_action();
+                self.cancel_missing_migration_object();
             }
             if let Some(annotation_id) = bar.editing_missing_annotation_id.clone()
                 && workspace_toolbar_button(
@@ -1542,59 +1537,6 @@ impl LabelloApp {
         self.queue_migration_action(MigrationAction::ReconcileCompanion(request));
         if !self.work.migration.busy {
             self.work.migration.preserving_companion_draft = false;
-        }
-    }
-
-    fn migration_discovered_edit_actions(
-        &mut self,
-        ui: &mut egui::Ui,
-        compact: bool,
-        width: Option<f32>,
-    ) {
-        let skeletons = self.displayed_migration_bar().discoveries;
-        match skeletons.as_slice() {
-            [] => {}
-            [skeleton] => {
-                if workspace_toolbar_button(
-                    ui,
-                    !self.work.migration.busy,
-                    if compact {
-                        "Edit added"
-                    } else {
-                        "Edit added object 1"
-                    },
-                    WorkspaceActionIcon::Save,
-                    width,
-                    theme::Intent::Neutral,
-                )
-                .on_hover_text("Edit the skeleton for the object added during full-image review.")
-                .clicked()
-                {
-                    self.begin_edit_missing_migration_object(skeleton.clone());
-                }
-            }
-            _ => {
-                let response = workspace_toolbar_button(
-                    ui,
-                    !self.work.migration.busy,
-                    "Edit added object",
-                    WorkspaceActionIcon::Save,
-                    width,
-                    theme::Intent::Neutral,
-                )
-                .on_hover_text("Choose an added missing object to edit.");
-                egui::Popup::menu(&response).show(|ui| {
-                    for (index, skeleton) in skeletons.into_iter().enumerate() {
-                        if ui
-                            .button(format!("Edit added object {}", index + 1))
-                            .clicked()
-                        {
-                            self.begin_edit_missing_migration_object(skeleton);
-                            ui.close();
-                        }
-                    }
-                });
-            }
         }
     }
 
@@ -2197,6 +2139,79 @@ impl LabelloApp {
         self.work.migration.draft_dirty || self.work.migration.exclusion_dirty
     }
 
+    fn request_migration_overview_intent(&mut self, intent: MigrationOverviewIntent) {
+        if self.work.migration.busy
+            || self.loading.image
+            || self.loading.saving
+            || self.work.pending_transition.is_some()
+            || self.view != AppView::Annotate
+        {
+            return;
+        }
+        if !matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)) {
+            if let MigrationOverviewIntent::Select(id, _) = intent {
+                self.activate_migration_from_inactive_guide(&id);
+            }
+            return;
+        }
+        if let MigrationOverviewIntent::Select(id, _) = &intent
+            && self.editable_migration_draft_annotation_id().as_ref() == Some(id)
+        {
+            return;
+        }
+        if self.work.migration.adding_missing_object && self.work.migration.draft_dirty {
+            if !self.migration_draft_valid() {
+                self.work.migration.error = Some("Finish the current object's keypoints or discard its changes before selecting another object.".into());
+                return;
+            }
+            self.work.migration.pending_overview_intent = Some(intent);
+            if let Some(id) = self.work.migration.editing_missing_annotation_id.clone() {
+                self.request_edit_migration_skeleton(id);
+            } else {
+                self.request_add_migration_skeleton();
+            }
+            return;
+        }
+        self.resume_migration_overview_intent(intent);
+    }
+
+    pub(crate) fn resume_migration_overview_intent(&mut self, intent: MigrationOverviewIntent) {
+        if self.work.migration.busy
+            || self.loading.image
+            || self.loading.saving
+            || self.work.pending_transition.is_some()
+            || self.view != AppView::Annotate
+            || !matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+        {
+            return;
+        }
+        self.cancel_missing_migration_object();
+        self.work.migration.error = None;
+        match intent {
+            MigrationOverviewIntent::Place(point) => {
+                self.work.migration.inspected_group_id = None;
+                self.begin_missing_migration_object();
+                self.place_migration_keypoint(point);
+            }
+            MigrationOverviewIntent::Select(id, keypoint) => {
+                if self.is_discovered_migration_skeleton(&id) {
+                    self.work.migration.inspected_group_id = None;
+                    self.begin_edit_missing_migration_object(id.clone());
+                    self.work
+                        .canvas
+                        .select_keypoint(keypoint.map(|keypoint_index| {
+                            crate::canvas::KeypointSelection {
+                                annotation_id: id,
+                                keypoint_index,
+                            }
+                        }));
+                } else {
+                    self.activate_migration_from_inactive_guide(&id);
+                }
+            }
+        }
+    }
+
     fn begin_missing_migration_object(&mut self) {
         if self.work.migration.busy
             || !matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
@@ -2223,6 +2238,8 @@ impl LabelloApp {
     }
 
     fn cancel_missing_migration_object(&mut self) {
+        self.work.migration.pending_overview_intent = None;
+        self.work.canvas.select_keypoint(None);
         self.work.migration.adding_missing_object = false;
         self.work.migration.editing_missing_annotation_id = None;
         self.work.migration.draft = None;
@@ -3311,11 +3328,8 @@ mod tests {
 #[derive(Clone)]
 pub(crate) struct MigrationBarPresentation {
     adding_missing_object: bool,
-    can_add_missing_object: bool,
     editing_missing_annotation_id: Option<AnnotationId>,
     keypoint_undo: bool,
-    full_image: bool,
-    discoveries: Vec<AnnotationId>,
     inspected_group_id: Option<ObjectGroupId>,
     next_returns_to_current: bool,
     primary: Option<(MigrationPrimaryAction, bool)>,
@@ -3326,19 +3340,12 @@ impl LabelloApp {
     pub(crate) fn migration_bar_presentation(&self) -> MigrationBarPresentation {
         MigrationBarPresentation {
             adding_missing_object: self.work.migration.adding_missing_object,
-            can_add_missing_object: self.migration_can_add_missing_object(),
             editing_missing_annotation_id: self
                 .work
                 .migration
                 .editing_missing_annotation_id
                 .clone(),
             keypoint_undo: self.migration_keypoint_undo_available(),
-            full_image: matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)),
-            discoveries: self
-                .discovered_migration_skeletons()
-                .into_iter()
-                .map(|s| s.annotation_id)
-                .collect(),
             inspected_group_id: self.work.migration.inspected_group_id.clone(),
             next_returns_to_current: self.inspection_next_returns_to_current(),
             primary: self.migration_primary_action(),

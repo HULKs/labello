@@ -383,7 +383,10 @@ fn handle_annotation_pointer(
                 selectable_annotations,
             )
         {
-            state.select_keypoint(None);
+            state.select_keypoint(keypoint_at(pointer, image_rect, &annotation.annotation_id, annotations)
+                .map(|(keypoint_index, _)| KeypointSelection {
+                    annotation_id: annotation.annotation_id.clone(), keypoint_index,
+                }));
             return Some(CanvasAction::Select(annotation.annotation_id.clone()));
         }
         if interaction.allow_create && !bounding_box_tool && image_rect.contains(pointer) {

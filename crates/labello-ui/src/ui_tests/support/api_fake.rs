@@ -724,8 +724,16 @@ impl ImportApi for SpyApi {
     ) -> ApiFuture<'a, labello_client::ManualMigrationCommandResult> {
         let mut state = self.state.borrow_mut();
         state.counts.migration_commands += 1;
-        let annotation_id = labello_domain::AnnotationId::from("spy-discovered");
+        if std::mem::take(&mut state.fail_next_migration) {
+            return ready(Err(labello_client::ClientError::Demo("migration command failed".into())));
+        }
         let image_state = state.states.get_mut(image_id).unwrap();
+        let count = image_state.annotations.keys().filter(|id| id.as_str().starts_with("spy-discovered")).count();
+        let annotation_id = labello_domain::AnnotationId::from(if count == 0 {
+            "spy-discovered".to_owned()
+        } else {
+            format!("spy-discovered-{count}")
+        });
         image_state.annotations.insert(
             annotation_id.clone(),
             vec![labello_domain::AnnotationVersion::native(

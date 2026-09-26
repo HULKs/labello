@@ -151,3 +151,76 @@ fn released_keypoint_visibility_toggle_edits_the_point_and_preserves_next_placem
     let image_id = &harness.state().work.current.as_ref().unwrap().image.image_id;
     assert_eq!(api.image_state(image_id).current_annotation(&id).unwrap().geometry, harness.state().work.annotations[0].geometry);
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and_retry() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for fail_first_save in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+        let task_id = app.work.selected_task_id.clone().unwrap();
+        app.work.tasks.iter_mut().find(|task| task.task_id == task_id).unwrap().skeleton = Some(SkeletonSpec {
+            keypoints: vec![KeypointSpec { name: "center".into(), required: true }],
+            edges: vec![], allow_hidden: true, allow_absent: false,
+        });
+        api.set_image_state(app.work.current_state.clone().unwrap());
+        app.runtime.api = Some(api.clone());
+        app.work.inspector_panel_collapsed = true;
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+        harness.run_steps(3);
+        assert!(harness.query_by_label_contains("Add missing object").is_none());
+        assert!(harness.query_by_label_contains("Edit added").is_none());
+        let first = harness.get_by_label("Annotation canvas").rect().center();
+        click_at(&mut harness, first);
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let first_draft = harness.state().work.migration.draft.clone().unwrap();
+        assert_eq!(first_draft.keypoints[0].state, KeypointState::Hidden);
+        api.state.borrow_mut().fail_next_migration = fail_first_save;
+        let second = first + egui::vec2(100.0, 80.0);
+        click_at(&mut harness, second);
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        if fail_first_save {
+            assert!(harness.state().work.migration.error.is_some());
+            assert_eq!(harness.state().work.migration.draft.as_ref(), Some(&first_draft));
+            assert!(harness.state().work.migration.pending_overview_intent.is_some());
+            let key = harness.state().work.migration.retry_request.as_ref().unwrap().key.clone();
+            harness.state_mut().trigger_migration_primary_action();
+            assert_eq!(harness.state().work.migration.retry_request.as_ref().unwrap().key, key);
+            step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        }
+        assert!(harness.state().work.migration.error.is_none());
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        assert!(harness.state().work.migration.editing_missing_annotation_id.is_none());
+        let first_id = AnnotationId::from("spy-discovered");
+        let state = harness.state().work.current_state.as_ref().unwrap();
+        assert_eq!(state.current_annotation(&first_id).unwrap().geometry, AnnotationGeometry::Skeleton(first_draft));
+        let second_draft = harness.state().work.migration.draft.clone().unwrap();
+        assert_ne!(second_draft.keypoints[0].point, state.current_annotation(&first_id).and_then(|annotation| {
+            if let AnnotationGeometry::Skeleton(skeleton) = &annotation.geometry { skeleton.keypoints[0].point } else { None }
+        }));
+        click_at(&mut harness, first);
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        harness.run_steps(3);
+        assert_eq!(harness.state().work.migration.editing_missing_annotation_id.as_ref(), Some(&first_id));
+        let second_id = AnnotationId::from("spy-discovered-1");
+        assert_eq!(harness.state().work.current_state.as_ref().unwrap().current_annotation(&second_id).unwrap().geometry, AnnotationGeometry::Skeleton(second_draft));
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let moved = first - egui::vec2(30.0, 0.0);
+        drag_at(&mut harness, first, moved);
+        let edited_first = harness.state().work.migration.draft.clone().unwrap();
+        assert_eq!(edited_first.keypoints[0].state, KeypointState::Visible);
+        click_at(&mut harness, first + egui::vec2(-100.0, 80.0));
+        step_until(&mut harness, 12, |app| !app.work.migration.busy);
+        let saved = harness.state().work.current_state.as_ref().unwrap().current_annotation(&first_id).unwrap();
+        assert_eq!(saved.version, 2);
+        assert_eq!(saved.geometry, AnnotationGeometry::Skeleton(edited_first));
+        assert!(harness.state().work.migration.editing_missing_annotation_id.is_none());
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        assert!(harness.state().work.migration.pending_overview_intent.is_none());
+        assert!(matches!(harness.state().work.migration.cursor, Some(labello_domain::MigrationCursor::FullImage)));
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().status, labello_domain::AssignmentStatus::Active);
+    }
+}
