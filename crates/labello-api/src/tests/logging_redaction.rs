@@ -613,6 +613,7 @@ async fn diagnostic_overrides_preserve_public_responses_and_dependency_errors_ar
 async fn annotation_batch_resource_limit_is_visible_without_changing_public_status() {
     let temp = tempfile::tempdir().unwrap();
     let request = labello_client::AnnotationBatchRequest {
+            prelabel_acceptances: Default::default(),
         payloads: vec![
             EventPayload::AnnotationDeleted {
                 annotation_id: AnnotationId::from("private-sentinel"),

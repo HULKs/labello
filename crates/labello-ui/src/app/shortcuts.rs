@@ -65,8 +65,7 @@ impl LabelloApp {
 
     fn cycle_object(&mut self, direction: isize) {
         let objects = self
-            .work
-            .annotations
+            .annotation_objects()
             .iter()
             .filter(|annotation| {
                 !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
@@ -87,54 +86,6 @@ impl LabelloApp {
             |current| (current as isize + direction).rem_euclid(objects.len() as isize) as usize,
         );
         self.work.selected_annotation = Some(objects[next].clone());
-    }
-
-    fn cycle_prelabel(&mut self, direction: isize) {
-        let prelabels = self.visible_prelabels();
-        if prelabels.is_empty() {
-            self.work.selected_prelabel = None;
-            return;
-        }
-        let current = self.work.selected_prelabel.as_ref().and_then(|selected| {
-            prelabels
-                .iter()
-                .position(|suggestion| &suggestion.suggestion_id == selected)
-        });
-        let next = current.map_or_else(
-            || {
-                if direction < 0 {
-                    prelabels.len() - 1
-                } else {
-                    0
-                }
-            },
-            |current| (current as isize + direction).rem_euclid(prelabels.len() as isize) as usize,
-        );
-        self.work.selected_prelabel = Some(prelabels[next].suggestion_id.clone());
-    }
-
-    fn active_prelabel(&self) -> Option<labello_domain::PrelabelSuggestion> {
-        let prelabels = self.visible_prelabels();
-        self.work
-            .selected_prelabel
-            .as_ref()
-            .and_then(|selected| {
-                prelabels
-                    .iter()
-                    .find(|suggestion| &suggestion.suggestion_id == selected)
-            })
-            .cloned()
-            .or_else(|| prelabels.into_iter().next())
-    }
-
-    pub(crate) fn discard_prelabel(&mut self, suggestion_id: String) {
-        if !self.work.accepted_prelabels.contains(&suggestion_id) {
-            self.work.accepted_prelabels.push(suggestion_id);
-        }
-        self.work.selected_prelabel = self
-            .visible_prelabels()
-            .first()
-            .map(|suggestion| suggestion.suggestion_id.clone());
     }
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
@@ -336,24 +287,16 @@ impl LabelloApp {
                 self.cycle_object(1)
             }
             UserAction::SelectPreviousPrelabel if self.view == AppView::Annotate && ready => {
-                self.cycle_prelabel(-1)
+                self.cycle_prelabel_object(-1)
             }
             UserAction::SelectNextPrelabel if self.view == AppView::Annotate && ready => {
-                self.cycle_prelabel(1)
+                self.cycle_prelabel_object(1)
             }
             UserAction::AcceptPrelabel if self.view == AppView::Annotate && ready => {
-                if let Some(suggestion) = self.active_prelabel() {
-                    self.accept_prelabel(&suggestion);
-                    self.work.selected_prelabel = self
-                        .visible_prelabels()
-                        .first()
-                        .map(|suggestion| suggestion.suggestion_id.clone());
-                }
+                self.confirm_prelabel_object();
             }
             UserAction::DiscardPrelabel if self.view == AppView::Annotate && ready => {
-                if let Some(suggestion) = self.active_prelabel() {
-                    self.discard_prelabel(suggestion.suggestion_id);
-                }
+                self.delete_prelabel_object();
             }
             UserAction::ToggleKeypointHidden
                 if self.view == AppView::Annotate

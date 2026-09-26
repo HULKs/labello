@@ -24,6 +24,8 @@ struct BarPresentation {
     review_removable: bool,
     review_primary: &'static str,
     review_next: &'static str,
+    prelabel_progress: Option<String>,
+    annotation_primary: crate::prelabel_review::PrelabelPrimaryAction,
 }
 
 impl LabelloApp {
@@ -65,6 +67,8 @@ impl LabelloApp {
             .filter(|_| self.runtime.api.is_none() || self.work.assignment.is_some())
             .map(|current| BarPresentation {
                 image: current.image.clone(),
+                prelabel_progress: self.prelabel_progress(),
+                annotation_primary: self.prelabel_primary_action(),
                 review: ReviewBarContent::from_app(self),
                 migration: self
                     .manual_migration_active()
@@ -88,6 +92,14 @@ impl LabelloApp {
 
     pub(crate) fn workspace_bars_blank(&self) -> bool {
         self.workspace_bars_loading() && self.navigation.workspace_bars.presentation.is_none()
+    }
+
+    fn bar_prelabel_progress(&self) -> Option<String> {
+        self.navigation.workspace_bars.presentation.as_ref().and_then(|bar| bar.prelabel_progress.clone())
+    }
+
+    fn bar_annotation_primary(&self) -> crate::prelabel_review::PrelabelPrimaryAction {
+        self.navigation.workspace_bars.presentation.as_ref().map(|bar| bar.annotation_primary).unwrap_or_default()
     }
 
     fn bar_availability_loading(&self) -> bool {

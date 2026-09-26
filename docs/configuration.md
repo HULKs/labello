@@ -21,7 +21,7 @@ system.
 
 The [complete example](../labello.server.example.toml) lists supported server
 fields. Top-level settings and `[developmentAuth]` are required; unknown fields
-are rejected. OAuth and import sections are optional, but require their complete
+are rejected. OAuth, import, and prelabel sections are optional, but require their complete
 settings when present. Individual import, preview, and export limits use their
 documented defaults when omitted. Environment overrides apply after file loading.
 
@@ -455,3 +455,45 @@ Use TLS, secure session cookies, exact browser origins, and external secret
 injection. Disable local admin login. Run one server per datasets root and back
 up that root, including authentication state. Follow [deployment](deployment.md)
 for the supported guest layout and [operations](operations.md) for backup and recovery.
+
+## Prelabel models and limits
+
+Enable `[prelabel]` with an operator-managed `modelsRoot` to support server and
+browser model configurations. Omission disables model delivery, generation, and
+management. Add the section to `labello.server.toml` or the file selected by
+`LABELLO_CONFIG`, restart the server, and reload the web app. When omitted,
+Automation, workflow settings, and the annotation inspector show
+"Prelabeling is disabled by server configuration." The UI hides model/hint
+controls and does not request hints or poll hint management. Existing dataset
+model configurations and workflow bindings are preserved.
+
+`timeoutSeconds` defaults to 120 and accepts 1 through 300.
+`[prelabel.limits]` fields are optional and use the values in the
+[server example](../labello.server.example.toml). Model supply, supported tensor
+shapes, processing, Linux worker limits and retention are defined in
+[Model prelabels](prelabels.md).
+
+Optional `[prelabel.runtime]` settings `onnxLibrary` and `webgpuLibrary` select
+operator-owned native ONNX Runtime and WebGPU plugin libraries. Server inference
+tries CUDA, WebGPU, then CPU; missing native runtime libraries retain the included
+Tract CPU fallback. Runtime/provider failures do not disable the whole feature.
+The model check and inference share the configured worker concurrency limit.
+See [Model prelabels](prelabels.md#execution-and-coordinates) for dependencies,
+resource bounds and the overall timeout budget.
+
+Optional `[prelabel.workers]` controls retained inference processes:
+
+| Field | Default | Range |
+| --- | --- | --- |
+| `maxWorkers` | 4 | 1–8 |
+| `idleTimeoutSeconds` | 120 | 1–3600 |
+| `threadsPerWorker` | 1 | 1–16 |
+
+Workers are scoped to dataset/account or dataset generation run. Each caches two
+compiled models. `maxWorkers` bounds live processes, including idle workers and
+ones being reaped; `limits.maxConcurrentInferences` separately bounds active
+inference and model checks. Native runtime thread counts use `threadsPerWorker`;
+the included Tract backend is single-threaded. Idle processes expire within the
+configured interval plus at most 30 seconds, or earlier under capacity pressure.
+Interactive requests have priority between batch items. Up to 64 wait for admission
+for at most 30 seconds; saturation returns busy without disabling manual work.

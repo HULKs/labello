@@ -245,6 +245,7 @@ impl LabelloApp {
             return;
         }
         let current = self.displayed_bar_image();
+        let progress = self.bar_prelabel_progress();
         let workflow = self.selected_workflow().map(|workflow| workflow.label());
         let has_assignment = self.work.assignment.is_some();
         let short = Self::short_viewport(ui.ctx().content_rect().size());
@@ -253,7 +254,7 @@ impl LabelloApp {
                 if filename_width > 0.0 {
                     ui.add_sized(
                         [filename_width, 44.0],
-                        egui::Label::new(RichText::new(&current.file_name).strong())
+                        egui::Label::new(RichText::new(progress.as_ref().unwrap_or(&current.file_name)).strong())
                             .truncate(),
                     )
                     .on_hover_text(&current.file_name);
@@ -280,7 +281,7 @@ impl LabelloApp {
         let response = if layout == LayoutMode::Compact {
             ui.horizontal(|ui| {
                 let control_count = if current.is_some() {
-                    if self.bar_migration_active() { 5.0 } else { 4.0 }
+                    if self.bar_migration_active() || self.bar_prelabel_progress().is_some() { 5.0 } else { 4.0 }
                 } else { 2.0 };
                 let loading_availability = self.bar_availability_loading();
                 let spinner_width = if loading_availability { 12.0 + ui.spacing().item_spacing.x } else { 0.0 };
@@ -292,7 +293,7 @@ impl LabelloApp {
                     |ui| {
                         let label = current.as_ref().map_or_else(
                             || if has_assignment { "Preview unavailable" } else { "No active assignment" }.to_owned(),
-                            |current| workflow.clone().unwrap_or_else(|| current.file_name.clone()),
+                            |current| progress.clone().or_else(|| workflow.clone()).unwrap_or_else(|| current.file_name.clone()),
                         );
                         ui.add(egui::Label::new(&label).truncate()).on_hover_text(label);
                     },
@@ -370,7 +371,7 @@ impl LabelloApp {
 
     fn canvas_controls(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         ui.horizontal(|ui| {
-            let show_refocus = self.view == AppView::Review || self.bar_migration_active();
+            let show_refocus = self.view == AppView::Review || self.bar_migration_active() || self.bar_prelabel_progress().is_some();
             let dense = layout == LayoutMode::Compact
                 || (show_refocus && (layout != LayoutMode::Wide || ui.ctx().content_rect().width() < 1366.0));
             if self.view != AppView::Review {

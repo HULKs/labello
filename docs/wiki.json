@@ -9,6 +9,7 @@
       {"source": "docs/annotation.md", "page": "Annotation-and-review"},
       {"source": "docs/stylus-input.md", "page": "Stylus-input"},
       {"source": "docs/administration.md", "page": "Dataset-administration"},
+      {"source": "docs/prelabels.md", "page": "Model-prelabels"},
       {"source": "docs/import.md", "page": "Dataset-import"},
       {"source": "docs/migration.md", "page": "Guided-migration"},
       {"source": "docs/export.md", "page": "Dataset-export"},

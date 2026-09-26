@@ -77,6 +77,9 @@ profiles_for_path() {
         crates/labello-domain/*)
             printf '%s\n' domain
             ;;
+        crates/labello-inference/*)
+            printf '%s\n' domain api browser
+            ;;
         crates/labello-storage/*)
             printf '%s\n' storage
             ;;

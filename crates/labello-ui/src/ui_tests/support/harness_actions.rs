@@ -13,7 +13,32 @@ pub(super) fn loaded_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloAp
     // Work fixtures expose inspector actions explicitly; the application defaults closed.
     harness.state_mut().work.inspector_panel_collapsed = false;
     harness.step();
+    // Image readiness is independent of inference. Work-editing fixtures need both settled.
+    step_until(&mut harness, 12, |app| {
+        let Some(task) = app.selected_task() else { return true; };
+        let Some(config) = app.prelabel_choice(&task.task_id) else { return true; };
+        let Some(current) = &app.work.current else { return false; };
+        app.work.prelabels.hints.contains_key(&(current.image.image_id.clone(), task.task_id.clone(), config))
+    });
     harness
+}
+
+pub(super) fn loaded_prelabel_work_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloApp> {
+    let mut harness = loaded_work_harness(api);
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
+    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
+    harness
+}
+
+pub(super) fn choose_prelabels(harness: &mut Harness<'static, LabelloApp>, before: &str, after: &str) {
+    harness
+        .query_all_by_role(egui::accesskit::Role::ComboBox)
+        .find(|node| node.accesskit_node().value().as_deref() == Some(before))
+        .expect("prelabel selector")
+        .click();
+    harness.run_steps(3);
+    harness.get_by_label(after).click();
+    harness.run_steps(3);
 }
 
 pub(super) fn loaded_review_harness(api: Rc<SpyApi>) -> Harness<'static, LabelloApp> {

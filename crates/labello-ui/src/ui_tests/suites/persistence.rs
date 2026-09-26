@@ -105,6 +105,7 @@ fn replacement_session_request_ignores_the_stale_result() {
             result: Ok(SessionInfo {
                 account: account.clone(),
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "stale-csrf-token".to_string(),
             }),
         })
@@ -124,6 +125,7 @@ fn replacement_session_request_ignores_the_stale_result() {
             result: Ok(SessionInfo {
                 account: account.clone(),
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "active-csrf-token".to_string(),
             }),
         })
@@ -236,6 +238,7 @@ fn assignment_availability_mutations_invalidate_current_and_persisted_state() {
     app.work.availability.checked_at = Some(labello_domain::now());
     app.work.availability.load_after_resolution = true;
     app.runtime.persistence.preference = Some(WorkspacePreference {
+                    prelabel_choices: Default::default(),
         version: 2,
         dataset_id: app.config.dataset_id.clone(),
         view: StoredView::Annotate,
@@ -1839,8 +1842,8 @@ fn stale_assignment_operations_do_not_clear_the_active_loading_owner() {
 #[test]
 fn editing_a_persisted_box_saves_a_new_annotation_version() {
     let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
-    click(&mut harness, "Accept");
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    click(&mut harness, "Confirm & next");
     click(&mut harness, "Save");
     step_until(&mut harness, 10, |app| app.work.save_status == SaveStatus::Saved);
 

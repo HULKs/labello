@@ -148,7 +148,7 @@ another frozen state.
 
 Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
-`admin`, `statistics`, `dialog-settings`, `dialog-transition`,
+`admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
 `statistics-failure`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
 `import-preflight`, `import-ready`, `import-running`, `import-failure`,

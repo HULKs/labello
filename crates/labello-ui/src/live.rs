@@ -156,6 +156,10 @@ impl LabelloApp {
     }
 
     fn reduce_message(&mut self, ctx: &egui::Context, message: UiMessage) {
+        let message = match self.reduce_prelabel_message(message) {
+            None => return,
+            Some(message) => message,
+        };
         let message = match self.reduce_export_message(ctx, message) {
             None => return,
             Some(message) => message,
@@ -199,6 +203,10 @@ impl LabelloApp {
         let Some(api) = self.runtime.api.clone() else {
             self.rollback_command(&command, "API is not configured");
             return;
+        };
+        let command = match self.dispatch_prelabel_command(api.clone(), command) {
+            None => return,
+            Some(command) => command,
         };
         let command = match self.dispatch_export_command(api.clone(), command) {
             None => return,
@@ -294,3 +302,5 @@ where
         Poll::Pending => panic!("test fake API future did not complete immediately"),
     }
 }
+
+include!("live/prelabels.rs");

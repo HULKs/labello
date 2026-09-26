@@ -166,8 +166,8 @@ fn action_label(action: &labello_domain::UserAction) -> &'static str {
         UserAction::SelectNextObject => "Next object",
         UserAction::SelectPreviousPrelabel => "Previous prelabel",
         UserAction::SelectNextPrelabel => "Next prelabel",
-        UserAction::AcceptPrelabel => "Accept active prelabel",
-        UserAction::DiscardPrelabel => "Discard active prelabel",
+        UserAction::AcceptPrelabel => "Confirm selected model object",
+        UserAction::DiscardPrelabel => "Delete selected model object",
         UserAction::ToggleKeypointHidden => "Toggle occluded keypoint placement",
         UserAction::MarkKeypointAbsent => "Mark keypoint as not present",
         UserAction::AddMissingObject => "Add or cancel missing migration object",
@@ -248,8 +248,12 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
         UserAction::SelectNextObject => "Select the next annotation.",
         UserAction::SelectPreviousPrelabel => "Highlight the previous suggestion.",
         UserAction::SelectNextPrelabel => "Highlight the next suggestion.",
-        UserAction::AcceptPrelabel => "Convert the active suggestion to an annotation.",
-        UserAction::DiscardPrelabel => "Hide the active suggestion.",
+        UserAction::AcceptPrelabel => {
+            "Confirm the selected model object with its current edits, then focus the next one."
+        }
+        UserAction::DiscardPrelabel => {
+            "Delete the selected pending model object and focus the next one."
+        }
         UserAction::ToggleKeypointHidden => "Toggle occluded placement for the next keypoint.",
         UserAction::MarkKeypointAbsent => "Record an allowed optional keypoint without a position.",
         UserAction::AddMissingObject => {

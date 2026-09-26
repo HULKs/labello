@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 mod import_config;
 mod logging;
+mod prelabel;
 mod preview_config;
 
 use import_config::{ImportFileConfig, import_root_owners, storage_import_config};
@@ -28,6 +29,8 @@ struct ServerConfig {
     previews: preview_config::PreviewFileConfig,
     #[serde(default)]
     export: Option<labello_storage::export::ExportLimits>,
+    #[serde(default)]
+    prelabel: Option<prelabel::PrelabelFileConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,12 +65,22 @@ impl Default for ServerConfig {
             import: None,
             previews: Default::default(),
             export: None,
+            prelabel: None,
         }
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--prelabel-worker")) {
+        std::process::exit(if prelabel::worker().is_ok() { 0 } else { 2 });
+    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(serve())
+}
+
+async fn serve() -> anyhow::Result<()> {
     logging::init()?;
 
     let mut config = load_or_create_config()?;
@@ -114,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
             shutdown_state.shutdown_exports().await;
+            shutdown_state.shutdown_prelabels().await;
         })
         .await?;
     tracing::info!(event = "server.stopped", "labello server stopped");
@@ -225,6 +239,9 @@ async fn build_state(config: ServerConfig, bind: SocketAddr) -> anyhow::Result<A
         .await
         .context("cannot initialize dataset export service")?;
         state = state.with_export_service(service);
+    }
+    if let Some(config) = config.prelabel {
+        state = state.with_prelabel_service(prelabel::service(&datasets_root, config).await?);
     }
     Ok(state)
 }

@@ -14,6 +14,7 @@ workflow events, exact retries, and historical replay compatibility.
     auth.json
     imports/
     exports/<job-id>/
+    prelabels/<dataset-id>/
   <dataset-id>/
     labello.dataset.toml
     labello.schema.json
@@ -49,12 +50,13 @@ or external integrations.
 | `.labello-server/auth.json` | Authoritative secret authentication/session state | Restore only from the matching full-root backup; never log, publish, or merge it |
 | `.labello-server/imports/` | Authoritative private in-progress import, reservation, upload, and API control state | Let startup recovery reconcile it; do not delete apparently stale workspaces manually |
 | `.labello-server/exports/` | Private derived captures, job state, and verified archives | Startup interrupts unpublished jobs and preserves completed artifacts until expiry; never edit job records or publish partial files |
+| `.labello-server/prelabels/` | Private durable hint generations, pause/run state and signing keys; derived indexed result files | Preserve in full backups; use authenticated reset/retry commands and automatic interrupted-run recovery; omitted from snapshots |
 | `labello.dataset.toml` | Authoritative dataset configuration, workflow definition, and role state | Valid supported schema required; restore rather than hand-edit damaged data |
 | `images-index.json` | Authoritative image identity, hash, path, and metadata index | Valid supported schema required; image-directory contents alone do not reproduce stable identities |
 | `images/` | Authoritative image bytes addressed by the image index | Include in full backups; omitted from Labello snapshots |
 | `annotations/<image-id>/events.jsonl` | Authoritative append-only audit and workflow history | Replay in sequence; never truncate, reorder, merge, or edit by hand |
 | `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, on a supported older schema, or with an older review projection generation |
-| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link or captured review-assignment events; do not treat it as annotation authority |
+| `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link or captured review-assignment events or accepted prelabel origins; do not treat it as annotation authority |
 | `users/<user-id>/keybindings.toml` | Authoritative keyboard and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
 | `.labello/imports/<import-id>/manifest.json` | Authoritative committed import provenance | Must match the dataset and directory import ID |
 | `.labello/imports/<import-id>/source-objects.jsonl` | Authoritative committed source-object audit record | Preserve with its manifest and event history |
@@ -370,3 +372,20 @@ and configured Pending defaults are composed from current index/configuration
 values. Restart rebuilds summaries lazily. No schema, snapshot, import/export
 identity, or audit-history change is introduced. Warm filtering still evaluates
 lightweight metadata in memory; this does not claim constant-time queries.
+
+## Prelabel hints and accepted annotations
+
+[Model prelabels](prelabels.md) owns the model contract, result publication,
+retention, reset, and recovery details. Hints never write workflow events.
+Acceptance holds the prelabel control guard before taking the image transaction
+lock; reset and API configuration writes use the same control guard. The normal
+lock/reload/validate/append/replay path rejects duplicate or suppressed acceptance.
+Accepted prediction provenance lives in immutable annotation origin and remains
+in event/state schema 3, snapshots, and offline bundles. Derived hint files,
+private signing keys, pause markers, and jobs are excluded from snapshots.
+
+Checked prelabel profiles add optional output tensor name, total class count,
+explicit model-to-dataset mappings and model digest to dataset configuration.
+Historical positional mappings remain readable without rewriting their meaning.
+The private hint index records the successful server provider; historical index
+entries without that field default to server CPU. Neither change rewrites events.

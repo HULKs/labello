@@ -136,6 +136,7 @@ impl<'de> Deserialize<'de> for AppendEventRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnnotationBatchRequest {
     pub payloads: Vec<EventPayload>,
+    pub prelabel_acceptances: BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
     pub complete: bool,
 }
 
@@ -149,12 +150,15 @@ impl Serialize for AnnotationBatchRequest {
         struct Wire<'a> {
             schema_version: u32,
             payloads: &'a [EventPayload],
+            #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+            prelabel_acceptances: &'a BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
             complete: bool,
         }
 
         Wire {
             schema_version: labello_domain::SCHEMA_VERSION,
             payloads: &self.payloads,
+            prelabel_acceptances: &self.prelabel_acceptances,
             complete: self.complete,
         }
         .serialize(serializer)
@@ -189,7 +193,9 @@ impl<'de> Deserialize<'de> for AnnotationBatchRequest {
             .transpose()
             .map_err(D::Error::custom)?
             .unwrap_or(false);
-        Ok(Self { payloads, complete })
+        let prelabel_acceptances = object.remove("prelabelAcceptances")
+            .map(serde_json::from_value).transpose().map_err(D::Error::custom)?.unwrap_or_default();
+        Ok(Self { payloads, complete, prelabel_acceptances })
     }
 }
 

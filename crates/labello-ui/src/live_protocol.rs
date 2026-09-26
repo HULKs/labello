@@ -179,6 +179,10 @@ impl std::fmt::Display for UiRequestError {
 
 #[derive(Debug)]
 pub(crate) enum UiMessage {
+    PrelabelFinished {
+        request: RequestIdentity,
+        result: Box<Result<crate::prelabel_flow::PrelabelReply, String>>,
+    },
     Inspected {
         request: RequestIdentity,
         result: Result<crate::dataset_inspector::InspectorReply, UiRequestError>,
@@ -419,6 +423,11 @@ pub(crate) enum UiMessage {
 }
 
 pub(crate) enum UiCommand {
+    Prelabel {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+        action: crate::prelabel_flow::PrelabelAction,
+    },
     Inspect {
         request: RequestIdentity,
         action: crate::dataset_inspector::InspectorAction,
@@ -654,6 +663,8 @@ pub(crate) enum UiCommand {
         dataset_id: DatasetId,
         assignment: Assignment,
         annotations: Vec<labello_domain::AnnotationVersion>,
+        prelabel_evidence:
+            std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
         persisted: BTreeSet<AnnotationId>,
         modified: BTreeSet<AnnotationId>,
         submit: bool,
@@ -715,6 +726,7 @@ impl UiCommand {
             Self::Inspect { request, .. }
             | Self::BuildInformation { request }
             | Self::Export { request, .. }
+            | Self::Prelabel { request, .. }
             | Self::AuthOptions { request }
             | Self::Session { request }
             | Self::LocalAdminLogin { request }
@@ -998,6 +1010,7 @@ impl UiMessage {
             | Self::BuildInformationLoaded { request, .. }
             | Self::BuildInformationCopied { request, .. }
             | Self::ExportFinished { request, .. }
+            | Self::PrelabelFinished { request, .. }
             | Self::AuthOptionsLoaded { request, .. }
             | Self::SessionLoaded { request, .. }
             | Self::LogoutFinished { request, .. }

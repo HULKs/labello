@@ -132,12 +132,14 @@ impl ScoringProjection {
                     }
                 }
                 EventPayload::AnnotationVersionCreated { annotation, .. } => {
-                    if matches!(
-                        annotation.revision_source,
-                        RevisionSource::PrelabelSuggestion { .. }
-                            | RevisionSource::Import { .. }
-                            | RevisionSource::MigrationSkeleton { .. }
-                    ) {
+                    if matches!(annotation.origin, crate::AnnotationOrigin::Prelabel { .. })
+                        || matches!(
+                            annotation.revision_source,
+                            RevisionSource::PrelabelSuggestion { .. }
+                                | RevisionSource::Import { .. }
+                                | RevisionSource::MigrationSkeleton { .. }
+                        )
+                    {
                         prelabels.insert(annotation.annotation_id.clone());
                     }
                     current.insert(annotation.annotation_id.clone(), annotation);

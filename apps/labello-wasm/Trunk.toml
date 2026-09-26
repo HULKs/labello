@@ -7,6 +7,11 @@ public_url = "./"
 no_spa = true
 
 [[hooks]]
+stage = "pre_build"
+command = "python3"
+command_arguments = ["../../scripts/prepare-onnx-runtime.py"]
+
+[[hooks]]
 stage = "post_build"
 command = "sh"
 command_arguments = [

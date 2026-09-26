@@ -3,8 +3,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 use labello_domain::{
     Assignment, DatasetId, DatasetMetadata, DatasetStats, EventLogEntry, EventPayload, ImageId,
     ImageRecord, ImageState, ImportId, KeybindingSet, OfflineBundle, OfflineSyncRequest,
-    OfflineSyncResult, PrelabelConfig, PrelabelSuggestion, ReviewRecord, TaskDefinition,
-    UserAccount, UserId,
+    OfflineSyncResult, PrelabelConfig, ReviewRecord, TaskDefinition, UserAccount, UserId,
 };
 
 use crate::{

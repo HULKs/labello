@@ -53,7 +53,7 @@ impl DatasetRepository {
         let mut next_state = self.load_image_state(image_id).await?;
         let previous_state = next_state.clone();
         if payloads.iter().any(|payload| {
-            matches!(
+            matches!(payload, EventPayload::AnnotationVersionCreated { annotation, .. } if matches!(annotation.origin, labello_domain::AnnotationOrigin::Prelabel { .. })) || matches!(
                 payload,
                 EventPayload::WorkReturnedToReview { .. }
                     | EventPayload::ReviewAssignmentOpened { .. }

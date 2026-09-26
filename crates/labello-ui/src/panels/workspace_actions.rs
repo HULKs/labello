@@ -76,18 +76,30 @@ impl LabelloApp {
             && !self.loading.saving && !self.loading.image && self.work.pending_transition.is_none();
         let dirty = matches!(self.work.save_status, SaveStatus::Dirty | SaveStatus::Retry);
         let previous = self.bar_has_previous_image();
-        let count = 4 + usize::from(previous);
+        use crate::prelabel_review::PrelabelPrimaryAction;
+        let primary = self.bar_annotation_primary();
+        let pending = !matches!(primary, PrelabelPrimaryAction::Submit);
+        let (primary_label, primary_help) = match primary {
+            PrelabelPrimaryAction::Confirm => ("Confirm & next", "Confirm this object's edited geometry and focus the next object."),
+            PrelabelPrimaryAction::Focus => ("Next object", "Focus the next model object that needs confirmation."),
+            PrelabelPrimaryAction::Submit => ("Submit & next", "Save, complete this assignment, and claim another."),
+        };
+        let objects = self.annotation_objects();
+        let selected = objects.iter().any(|object| Some(&object.annotation_id) == self.work.selected_annotation.as_ref());
+        let save_in_menu = LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Compact;
+        let count = 5 + usize::from(previous) - usize::from(save_in_menu);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
             / count as f32).floor().max(44.0);
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::NextImage, "Submit & next", WorkspaceActionIcon::Next, ready, theme::Intent::Accent, "Save, complete this assignment, and claim another."),
+                (UserAction::NextImage, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, ready, theme::Intent::Accent, primary_help),
                 (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
-                (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && self.work.annotations.iter().any(|annotation| !annotation.deleted && self.annotation_matches_selected_workflow(annotation)), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
-                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save edits and keep this assignment active."),
+                (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
+                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
+                (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model object advances to the next one."),
                 (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, ready, theme::Intent::Neutral, "Release this assignment and claim another."),
             ] {
-                if action == UserAction::PreviousImage && !previous { continue; }
+                if action == UserAction::PreviousImage && !previous || action == UserAction::SaveAnnotations && save_in_menu { continue; }
                 ui.push_id(action, |ui| {
                     if workspace_toolbar_button(ui, enabled, label, icon, Some(width), intent)
                         .on_hover_text(format!("{help} ({})", self.shortcut_text(ui.ctx(), action))).clicked() {
@@ -96,10 +108,13 @@ impl LabelloApp {
                 });
             }
         });
-        let actions = [
+        let mut actions = vec![
             self.workspace_secondary_action(ui.ctx(), UserAction::UndoEdit, "Undo", ready && !self.work.undo_stack.is_empty(), "Undo the last edit."),
             self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
         ];
+        if save_in_menu {
+            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", ready && dirty, "Save confirmed annotations and keep this assignment active."));
+        }
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
     }
 

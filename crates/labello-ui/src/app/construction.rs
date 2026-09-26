@@ -45,6 +45,7 @@ impl LabelloApp {
             tool: Tool::BoundingBox,
             assignment: None,
             previous_assignment: None,
+            previous_prelabel_decisions: None,
             current,
             current_state: None,
             current_texture: None,
@@ -53,7 +54,9 @@ impl LabelloApp {
             persisted_annotations: BTreeSet::new(),
             modified_annotations: BTreeSet::new(),
             accepted_prelabels: Vec::new(),
-            selected_prelabel: None,
+            prelabel_evidence: Default::default(),
+            prelabels: Default::default(),
+            prelabel_review: Default::default(),
             selected_annotation: None,
             active_skeleton: None,
             skeleton_keypoint_index: 0,
@@ -101,6 +104,7 @@ impl LabelloApp {
             auth: AuthState {
                 account: None,
                 can_create_datasets: false,
+                prelabel_available: true,
                 options: AuthOptions {
                     github_oauth: false,
                     local_admin_login: false,
@@ -135,6 +139,7 @@ impl LabelloApp {
         app.setup.create_dataset_name.clear();
         app.auth.options_checked = false;
         app.auth.checked = false;
+        app.auth.prelabel_available = false;
         app.work.current = None;
         app.work.queue.clear();
         app.rebuild_http_api();
@@ -172,6 +177,7 @@ fn demo_image(index: usize) -> QueuedImage {
         media_type: "image/jpeg".to_string(),
     };
     let prelabels = vec![PrelabelSuggestion {
+            evidence: None,
         suggestion_id: format!("pre_demo_{index}"),
         config_id: labello_domain::PrelabelConfigId::from("demo-prelabel"),
         task_id: TaskId::from("bounding_box:person"),

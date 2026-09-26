@@ -149,6 +149,8 @@ pub struct ClassStats {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvenanceStats {
+    #[serde(default)]
+    pub accepted_prelabel_annotations: usize,
     pub imported_direct_annotations: usize,
     pub imported_derived_annotations: usize,
     pub human_authored_annotations: usize,
@@ -183,6 +185,7 @@ impl ProvenanceStats {
                     self.imported_derived_annotations += 1;
                 }
             },
+            AnnotationOrigin::Prelabel { .. } => self.accepted_prelabel_annotations += 1,
             AnnotationOrigin::Native { .. } => {
                 if matches!(annotation.revision_source, RevisionSource::Human { .. }) {
                     self.human_authored_annotations += 1;

@@ -163,7 +163,7 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
         assert!(card.width() >= 900.0, "{label} was only {card:?}");
         assert!(card.right() >= 1250.0, "{label} was only {card:?}");
     }
-    for label in ["Name", "Model name", "Location"] {
+    for label in ["Name", "Model name"] {
         let field = harness
             .get_by_role_and_label(egui::accesskit::Role::TextInput, label)
             .rect();
@@ -324,13 +324,13 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.step();
     let prelabels_card = harness.get_by_label("Prelabels card").rect();
     let location = harness
-        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Location")
+        .get_by_role_and_label(egui::accesskit::Role::TextInput, "Model file")
         .rect();
     assert!(location.left() <= prelabels_card.left() + 16.0);
-    assert!(
-        location.right() >= prelabels_card.right() - 32.0,
-        "location={location:?}, card={prelabels_card:?}"
-    );
+    let check_model = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Check model").rect();
+    assert!(location.right() <= check_model.left());
+    assert!(check_model.right() >= prelabels_card.right() - 32.0);
+    assert!(check_model.right() <= prelabels_card.right());
     assert_visible_controls_clamped(&harness, 320.0, 568.0);
 }
 

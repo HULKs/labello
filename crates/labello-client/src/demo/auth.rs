@@ -49,6 +49,7 @@ impl AuthApi for DemoLabelloApi {
             Ok(SessionInfo {
                 account,
                 can_create_datasets: true,
+                prelabel_available: true,
                 csrf_token: "demo-csrf-token".to_string(),
             })
         })

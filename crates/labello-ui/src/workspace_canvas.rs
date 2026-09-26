@@ -35,13 +35,7 @@ impl LabelloApp {
         }
         if let Some(current) = self.work.current.clone() {
             let texture = self.work.current_texture.clone();
-            let mut annotations = self
-                .work
-                .annotations
-                .iter()
-                .filter(|annotation| self.annotation_matches_selected_workflow(annotation))
-                .cloned()
-                .collect::<Vec<_>>();
+            let mut annotations = self.annotation_objects();
             if let Some(draft) = self.work.correction_draft.as_ref()
                 && let Some(annotation) = annotations
                     .iter_mut()
@@ -65,7 +59,7 @@ impl LabelloApp {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let prelabels = self.visible_prelabels();
+            let prelabels = Vec::new();
             let annotator_editable =
                 self.view == AppView::Annotate && self.work.pending_transition.is_none();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
@@ -115,7 +109,8 @@ impl LabelloApp {
                 let companion = selected_annotation.as_ref().and_then(|id| {
                     annotations.iter().find(|annotation| {
                         &annotation.annotation_id == id
-                            && self.is_migration_companion_box(annotation)
+                            && (self.is_migration_companion_box(annotation)
+                                || self.work.prelabel_review.started)
                     })
                 });
                 self.work.canvas.set_annotation_edit_focus(companion);

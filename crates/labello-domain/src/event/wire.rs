@@ -242,6 +242,14 @@ pub(crate) fn transform_annotation(
         object.insert("revisionSource".to_string(), source);
     } else {
         if object
+            .get("origin")
+            .and_then(|origin| origin.get("origin"))
+            .and_then(serde_json::Value::as_str)
+            == Some("prelabel")
+        {
+            return Err("accepted prelabel provenance requires schema version 3");
+        }
+        if object
             .get("revisionSource")
             .and_then(|source| source.get("source"))
             .and_then(serde_json::Value::as_str)

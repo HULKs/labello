@@ -88,6 +88,7 @@ include!("suites/workspace_overflow.rs");
 include!("suites/presence.rs");
 
 include!("suites/workflow_reasons.rs");
+mod prelabels;
 
 include!("suites/loading_bars.rs");
 

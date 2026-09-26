@@ -509,6 +509,7 @@ mod tests {
                 });
                 let annotation = test_annotation(geometry.clone());
                 let prelabel = PrelabelSuggestion {
+                    evidence: None,
                     suggestion_id: "synthetic-suggestion".into(),
                     config_id: "synthetic-config".into(),
                     task_id: annotation.task_id.clone(),

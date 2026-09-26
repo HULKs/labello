@@ -6,6 +6,41 @@ impl ImageState {
         annotation: AnnotationVersion,
         previous_version: Option<u32>,
     ) -> DomainResult<()> {
+        if let AnnotationOrigin::Prelabel { prelabel } = &annotation.origin {
+            let provenance = &prelabel.provenance;
+            provenance.processing.validate()?;
+            prelabel.predicted_geometry.validate()?;
+            if previous_version.is_none() {
+                let hint = crate::PrelabelSuggestion {
+                    suggestion_id: provenance.suggestion_id.clone(),
+                    config_id: provenance.config_id.clone(),
+                    task_id: provenance.task_id.clone(),
+                    class_id: provenance.class_id.clone(),
+                    confidence: provenance.confidence,
+                    geometry: prelabel.predicted_geometry.clone(),
+                    evidence: None,
+                };
+                let current = self.active_annotations().cloned().collect::<Vec<_>>();
+                if crate::filter_prelabels(&[hint], &current, &provenance.processing).is_empty() {
+                    return Err(DomainError::InvalidGeometry("accepted prelabel overlaps existing annotations or fails confidence filtering".into()));
+                }
+            }
+            if provenance.image_id != self.image_id
+                || provenance.task_id != annotation.task_id
+                || !provenance.confidence.is_finite()
+                || !(0.0..=1.0).contains(&provenance.confidence)
+                || provenance.suggestion_id.is_empty()
+                || (previous_version.is_none()
+                    && self.annotations.values().flatten().any(|other| {
+                        matches!(&other.origin, AnnotationOrigin::Prelabel { prelabel: previous }
+                        if previous.provenance.suggestion_id == provenance.suggestion_id)
+                    }))
+            {
+                return Err(DomainError::InvalidGeometry(
+                    "invalid or already accepted prelabel provenance".into(),
+                ));
+            }
+        }
         let versions = self
             .annotations
             .entry(annotation.annotation_id.clone())

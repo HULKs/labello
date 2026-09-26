@@ -150,6 +150,11 @@ impl LabelloApp {
                     self.work.pending_transition = None;
                     match *result {
                         Ok(loaded) => {
+                            let decisions = self.work.previous_prelabel_decisions.take().filter(|decisions|
+                                decisions.dataset_id == self.config.dataset_id
+                                    && decisions.image_id == loaded.assignment.image_id
+                                    && decisions.task_id == loaded.assignment.task_id
+                                    && loaded.assignment.kind == labello_domain::AssignmentKind::Annotation);
                             let displaced = self.work.assignment.clone();
                             self.begin_workspace_epoch();
                             self.clear_current_image();
@@ -163,6 +168,10 @@ impl LabelloApp {
                             self.runtime.notice =
                                 Some("Returned to previous assignment".to_string());
                             self.apply_loaded_image(ctx, loaded);
+                            if let Some(decisions) = decisions {
+                                self.work.accepted_prelabels = decisions.suggestion_ids;
+                                self.work.prelabel_review.changed = !self.work.accepted_prelabels.is_empty();
+                            }
                             self.request_assignment_availability();
                         }
                         Err(error) => {
@@ -266,12 +275,16 @@ impl LabelloApp {
                     match *result {
                         Ok(state) => {
                             if self.work.edit_generation == edit_generation {
-                                if let Some(assignment) = self.work.assignment.as_ref() {
+                                if (!self.work.prelabel_review.changed || completed)
+                                    && let Some(assignment) = self.work.assignment.as_ref() {
                                     let assignment = assignment.clone();
                                     self.clear_current_work_draft(&assignment);
                                 }
                                 self.apply_state(state);
                                 self.work.save_status = SaveStatus::Saved;
+                                if self.work.prelabel_review.changed && !completed {
+                                    self.rebase_work_draft_after_save(edit_generation);
+                                }
                             } else {
                                 self.renew_assignment_from_state(&state);
                                 self.work.persisted_annotations =

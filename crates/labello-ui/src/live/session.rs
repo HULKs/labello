@@ -19,6 +19,7 @@ impl LabelloApp {
         self.auth.account = None;
         self.auth.recovery = None;
         self.auth.can_create_datasets = false;
+        self.auth.prelabel_available = false;
         self.datasets.summaries.clear();
         self.datasets.summaries_error = None;
         self.datasets.metadata = None;
@@ -41,6 +42,7 @@ impl LabelloApp {
         self.work.keybindings =
             labello_domain::KeybindingSet::defaults_for(self.config.user_id.clone());
         self.work.previous_assignment = None;
+        self.work.previous_prelabel_decisions = None;
         self.clear_current_image();
         self.isolate_browser_workspace();
         self.runtime.storage_error = None;

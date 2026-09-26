@@ -30,6 +30,28 @@ pub struct ImageQueue {
 }
 
 impl ImageQueue {
+    pub(crate) fn clear_prelabels(&mut self) {
+        for item in &mut self.items {
+            item.prelabels.clear();
+        }
+        for item in &mut self.prepared {
+            item.queued.prelabels.clear();
+        }
+    }
+
+    pub(crate) fn set_prelabels(
+        &mut self,
+        image_id: &labello_domain::ImageId,
+        hints: Vec<PrelabelSuggestion>,
+    ) {
+        if let Some(item) = self
+            .prepared
+            .iter_mut()
+            .find(|item| &item.queued.image.image_id == image_id)
+        {
+            item.queued.prelabels = hints;
+        }
+    }
     pub fn new(queue_size: usize) -> Self {
         Self {
             queue_size: queue_size.clamp(1, labello_domain::MAX_PRELOAD_QUEUE_SIZE),

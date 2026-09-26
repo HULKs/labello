@@ -11,10 +11,11 @@ Internal dependencies are intentionally acyclic:
 | --- | --- |
 | `labello-domain` | None |
 | `labello-storage` | `labello-domain` |
-| `labello-client` | `labello-domain` |
+| `labello-inference` | `labello-domain` |
+| `labello-client` | `labello-domain`; `labello-inference` on WASM |
 | `labello-api` | `labello-client`, `labello-domain`, `labello-storage` |
 | `labello-ui` | `labello-client`, `labello-domain` |
-| `labello-server` | `labello-api`, `labello-domain`, `labello-storage` |
+| `labello-server` | `labello-api`, `labello-domain`, `labello-storage`, `labello-inference` |
 | `labello-wasm` | `labello-domain`, `labello-ui` |
 
 Domain code cannot depend on HTTP, filesystems, browser APIs, or UI types.
@@ -150,3 +151,14 @@ demonstrated need.
 - [`import.md`](import.md)
 - [`ui-ownership.md`](ui-ownership.md)
 - [Event history and compatibility](event-history.md)
+
+## Prelabel execution
+
+`labello-inference` owns image preprocessing, the supported YOLO tensor contract,
+shared decoding, native ONNX execution, and the browser worker adapter.
+`labello-storage::prelabel` owns managed acquisition, durable derived results,
+runs, signing and reset generations through an injected runner. The server app
+provides the bounded child-process runner. The browser HTTP client obtains a
+signed grant, runs inference in a worker, and submits browser-reported candidates
+for validation. Pure IoU policy stays in the domain. API acceptance verifies
+signed evidence before the existing assignment transaction commits provenance.

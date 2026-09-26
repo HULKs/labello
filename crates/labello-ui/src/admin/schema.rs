@@ -9,6 +9,7 @@ impl LabelloApp {
             && self.loading.roles_user.is_none()
             && !self.loading.uploading
             && !self.loading.ingesting;
+        let prelabel_available = self.auth.prelabel_available;
         if let Some(config) = self.datasets.admin_config.as_mut() {
             ui.add_enabled_ui(enabled, |ui| {
                 edit_quick_workflows(ui, config);
@@ -18,6 +19,7 @@ impl LabelloApp {
                     &mut config.tasks,
                     &config.label_classes,
                     &config.prelabel_configs,
+                    prelabel_available,
                 );
             });
         }
@@ -399,6 +401,7 @@ fn edit_tasks(
     tasks: &mut Vec<TaskDefinition>,
     labels: &[LabelClass],
     prelabels: &[PrelabelConfig],
+    prelabel_available: bool,
 ) {
     admin_card(ui, "Labeling Workflows card", |ui| {
         ui.heading("Labeling Workflows");
@@ -440,13 +443,14 @@ fn edit_tasks(
                                     task,
                                     labels,
                                     prelabels,
+                                    prelabel_available,
                                 );
                                 edit_workflow_instructions(&mut columns[1], task);
                             });
                             remove_clicked
                         } else {
                             let remove_clicked =
-                                edit_workflow_basics(ui, index, task, labels, prelabels);
+                                edit_workflow_basics(ui, index, task, labels, prelabels, prelabel_available);
                             edit_workflow_instructions(ui, task);
                             remove_clicked
                         };
@@ -494,6 +498,7 @@ fn edit_workflow_basics(
     task: &mut TaskDefinition,
     labels: &[LabelClass],
     prelabels: &[PrelabelConfig],
+    prelabel_available: bool,
 ) -> bool {
     ui.label(RichText::new("Workflow").color(theme::BLUE).strong());
     let mut task_id = task.task_id.to_string();
@@ -562,26 +567,30 @@ fn edit_workflow_basics(
     {
         edit_skeleton(ui, index, skeleton);
     }
-    ui.label("Prelabel sources");
-    if prelabels.is_empty() {
-        ui.small("No prelabel sources configured.");
-    }
-    for prelabel in prelabels {
-        let mut enabled = task.prelabel_config_ids.contains(&prelabel.config_id);
-        if ui
-            .checkbox(
-                &mut enabled,
-                format!("{} ({})", prelabel.name, prelabel.config_id),
-            )
-            .changed()
-        {
-            if enabled {
-                task.prelabel_config_ids.push(prelabel.config_id.clone());
-            } else {
-                task.prelabel_config_ids
-                    .retain(|config_id| config_id != &prelabel.config_id);
+    if prelabel_available {
+        ui.label("Prelabel sources");
+        if prelabels.is_empty() {
+            ui.small("No prelabel sources configured.");
+        }
+        for prelabel in prelabels {
+            let mut enabled = task.prelabel_config_ids.contains(&prelabel.config_id);
+            if ui
+                .checkbox(
+                    &mut enabled,
+                    format!("{} ({})", prelabel.name, prelabel.config_id),
+                )
+                .changed()
+            {
+                if enabled {
+                    task.prelabel_config_ids.push(prelabel.config_id.clone());
+                } else {
+                    task.prelabel_config_ids
+                        .retain(|config_id| config_id != &prelabel.config_id);
+                }
             }
         }
+    } else {
+        crate::prelabel_flow::disabled_notice(ui);
     }
     edit_review(ui, index, task);
     destructive_button(
@@ -806,8 +815,16 @@ fn edit_review(ui: &mut egui::Ui, task_index: usize, task: &mut TaskDefinition) 
                 egui::ComboBox::from_id_salt(format!("review-workflow-{task_index}"))
                     .selected_text(review_workflow_name(&task.review.workflow))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut task.review.workflow, ReviewWorkflow::None, "none");
-                        ui.selectable_value(&mut task.review.workflow, ReviewWorkflow::Approval, "approval");
+                        ui.selectable_value(
+                            &mut task.review.workflow,
+                            ReviewWorkflow::None,
+                            "none",
+                        );
+                        ui.selectable_value(
+                            &mut task.review.workflow,
+                            ReviewWorkflow::Approval,
+                            "approval",
+                        );
                     });
             });
             if task.review.workflow == ReviewWorkflow::Approval {
@@ -831,6 +848,9 @@ fn edit_prelabels(
     ui: &mut egui::Ui,
     configs: &mut Vec<PrelabelConfig>,
     tasks: &mut [TaskDefinition],
+    labels: &[LabelClass],
+    checks: &mut std::collections::BTreeMap<PrelabelConfigId, crate::prelabel_flow::ModelCheckUi>,
+    actions: &mut Vec<crate::prelabel_flow::PrelabelAction>,
 ) {
     admin_card(ui, "Prelabels card", |ui| {
         ui.heading("Prelabels");
@@ -935,24 +955,63 @@ fn edit_prelabels(
                 )
                 .on_hover_text("Model display name.");
             }
-            theme::labeled_text_field(
+            edit_model_location(ui, config, checks, actions);
+            let mut version = config.model.version.clone().unwrap_or_default();
+            if theme::labeled_text_field(
                 ui,
-                "Location",
-                &mut config.model.location,
+                "Model version",
+                &mut version,
                 theme::COMPACT_TEXT_FIELD_HEIGHT,
             )
-            .on_hover_text("Server/browser model location, depending on execution mode.");
-            ui.scope(|ui| {
-                ui.spacing_mut().slider_width = (ui.available_width() - 140.0).max(100.0);
-                ui.add_sized(
-                    [ui.available_width(), 44.0],
-                    egui::Slider::new(
-                        &mut config.output_processing.confidence_threshold,
-                        0.0..=1.0,
-                    )
-                    .text("confidence"),
-                );
-            });
+            .changed()
+            {
+                config.model.version = (!version.trim().is_empty()).then_some(version);
+            }
+            let mut mode = match config.execution {
+                PrelabelExecution::ServerSide { .. } => 0,
+                PrelabelExecution::BrowserLocal {
+                    acceleration: BrowserAcceleration::WebGpuPreferred,
+                } => 1,
+                _ => 2,
+            };
+            let old_mode = mode;
+            egui::ComboBox::from_id_salt(("model_execution", index))
+                .width(ui.available_width().min(420.0))
+                .truncate()
+                .selected_text(
+                    [
+                        "Server GPU with CPU fallback",
+                        "Browser WebGPU with CPU fallback",
+                        "Browser CPU",
+                    ][mode],
+                )
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut mode, 0, "Server GPU with CPU fallback");
+                    ui.selectable_value(&mut mode, 1, "Browser WebGPU with CPU fallback");
+                    ui.selectable_value(&mut mode, 2, "Browser CPU");
+                });
+            if mode != old_mode {
+                config.execution = match mode {
+                    0 => PrelabelExecution::ServerSide { command: vec![] },
+                    1 => PrelabelExecution::BrowserLocal {
+                        acceleration: BrowserAcceleration::WebGpuPreferred,
+                    },
+                    _ => PrelabelExecution::BrowserLocal {
+                        acceleration: BrowserAcceleration::WasmCpuFallback,
+                    },
+                };
+            }
+            edit_model_profile(ui, config, labels, tasks, checks);
+            let mut iou = config.output_processing.iou_threshold();
+            if prelabel_threshold_field(ui, "Overlap IoU", &mut iou).changed() {
+                config.output_processing.suppress_overlaps_iou = Some(iou);
+            }
+            ui.small("Existing boxes win. Hints compete only within the same workflow and class.");
+            prelabel_threshold_field(
+                ui,
+                "Confidence",
+                &mut config.output_processing.confidence_threshold,
+            );
         }
         if let Some(index) = remove {
             let removed = configs.remove(index).config_id;
@@ -972,7 +1031,7 @@ fn edit_prelabels(
                     model_id: "model".to_string(),
                     display_name: "Model".to_string(),
                     version: None,
-                    location: "models/model.onnx".to_string(),
+                    location: "model.onnx".to_string(),
                 },
                 execution: PrelabelExecution::BrowserLocal {
                     acceleration: BrowserAcceleration::WasmCpuFallback,
@@ -982,6 +1041,7 @@ fn edit_prelabels(
                     suppress_overlaps_iou: None,
                 },
                 available_to_annotators: true,
+                yolo: None,
             });
         }
         show_issues(ui, &prelabel_issues(configs));
@@ -1252,6 +1312,13 @@ fn prelabel_issues(configs: &[PrelabelConfig]) -> Vec<String> {
     let mut ids = BTreeSet::new();
     for (index, config) in configs.iter().enumerate() {
         let context = format!("Prelabel {}", index + 1);
+        if config.yolo.is_some()
+            && let Err(error) = config.validate()
+        {
+            issues.push(format!(
+                "{context}: {error}. Check the ONNX profile and model filename."
+            ));
+        }
         validate_id(&mut issues, &context, config.config_id.as_str());
         if !ids.insert(config.config_id.as_str()) {
             issues.push(format!(
@@ -1419,4 +1486,39 @@ fn show_issues(ui: &mut egui::Ui, issues: &[String]) {
     for issue in issues {
         ui.label(RichText::new(format!("- {issue}")).color(theme::DANGER));
     }
+}
+
+// Preserve separators while typing; normalization must not eat the comma before the next name.
+fn prelabel_list_field(
+    ui: &mut egui::Ui,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+    label: &str,
+    canonical: String,
+) -> Option<String> {
+    let id = ui.id().with(("prelabel_list_buffer", salt));
+    let previous = ui.data_mut(|data| data.get_temp::<(egui::Id, String)>(id));
+    let mut text = previous
+        .filter(|(field, _)| ui.memory(|memory| memory.has_focus(*field)))
+        .map_or(canonical, |(_, text)| text);
+    let response =
+        theme::labeled_text_field(ui, label, &mut text, theme::COMPACT_TEXT_FIELD_HEIGHT);
+    if response.has_focus() {
+        ui.data_mut(|data| data.insert_temp(id, (response.id, text.clone())));
+    } else {
+        ui.data_mut(|data| data.remove::<(egui::Id, String)>(id));
+    }
+    response.changed().then_some(text)
+}
+
+fn prelabel_threshold_field(ui: &mut egui::Ui, label: &str, value: &mut f32) -> egui::Response {
+    ui.vertical(|ui| {
+        let label = ui.label(label);
+        ui.spacing_mut().slider_width = (ui.available_width() - 88.0).max(24.0);
+        ui.add_sized(
+            [ui.available_width(), 44.0],
+            egui::Slider::new(value, 0.0..=1.0),
+        )
+        .labelled_by(label.id)
+    })
+    .inner
 }

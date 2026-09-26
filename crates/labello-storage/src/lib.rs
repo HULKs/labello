@@ -10,6 +10,7 @@ pub mod import;
 pub mod ingest;
 pub mod keybindings;
 pub mod paths;
+pub mod prelabel;
 pub mod preview;
 pub mod repository;
 mod review_history;

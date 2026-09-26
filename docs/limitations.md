@@ -14,13 +14,11 @@ for the supported workflows.
   connection, retain versioned offline mutations, synchronize them, or
   present merge conflicts. Browser draft recovery is not offline mode.
 - Independent multi-annotator labeling and agreement calculation are not operational.
-- Prelabel configuration, task association, queued loading, display,
-  acceptance, and discard controls exist, but annotators cannot choose among
-  the available configurations: every configuration associated with the task
-  is requested. No model is executed. The server returns fixed placeholder
-  geometry; browser-local WebGPU and CPU/WASM fallback execution are not
-  implemented. Accepted placeholders currently record a generic model identity
-  rather than the configured model's exact identity.
+- [Prelabels](prelabels.md) support static float32 Ultralytics YOLO detection
+  and pose ONNX exports. Server execution requires Linux; browser execution
+  reports browser trust and may fall back to CPU. Model files are supplied by
+  the operator. Dataset-wide pose generation and external prediction import
+  are unavailable.
 - Task tutorials display configured title and text only. Administrators can
   enter example-image paths, but those images are not loaded or shown to
   annotators.
@@ -49,7 +47,7 @@ for the supported workflows.
   legacy version. Version 1 artifacts are rejected; no `1 -> 2` migration is available.
 - Snapshots are downloadable annotation/audit packages, not complete backups.
   They omit image bytes, authentication state, user keybindings, and private
-  import/export control state, and there is no native snapshot-restore operation.
+  import/export/prelabel control state, and there is no native snapshot-restore operation.
 
 ## Operations
 
