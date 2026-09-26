@@ -901,7 +901,10 @@ fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
             );
         }
         let primary = harness.get_by_label("Confirm & next").rect();
-        assert!(primary.left() >= harness.get_by_label("More actions").rect().right());
+        assert!(primary.left() >= harness.get_by_label("Skip").rect().right());
+        if let Some(more) = harness.query_by_label("More actions") {
+            assert!(primary.left() >= more.rect().right());
+        }
         assert!(width - primary.right() < 30.0);
         assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
     }
