@@ -16,7 +16,12 @@ or inaccessible source fails creation without silently switching to an empty sch
 | Class and task IDs, names, relationships | Images, annotations, reviews, assignment history |
 | Workflow settings and instructions text | Source users, roles, ingestion paths, balance settings |
 | Skeleton specifications and ordered keypoints | Tutorial image references and prelabel bindings/models |
-| Migration guide links | Original dataset identity |
+| | Migration configuration and guide links, original dataset identity |
+
+Copied skeleton workflows use ordinary annotation and retain their review
+settings. They do not require imported guide boxes or migration confirmation.
+The source dataset keeps its migration configuration and history. This applies
+to newly created copies; existing datasets are not changed retroactively.
 
 The datasets are independent after creation. Matching IDs, unchanged definitions,
 and matching [export selections](export.md#compatible-exports-from-copied-schemas)
