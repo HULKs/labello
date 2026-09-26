@@ -75,7 +75,13 @@ Later keypoint autosaves mark an existing skeleton as a new human-edited revisio
 eframe's mouse/touch compatibility listeners. Its browser-only app wrapper
 feeds egui pointer events to the unchanged `LabelloApp`, including synchronous
 press/release processing for browser user activation. It owns pen capture,
-cancellation, and duplicate-event suppression. Annotation policy and persistence
+cancellation, duplicate-event suppression, and separate finger touch events.
+`pointer_input.rs` retains the adapter's pointer identity and canvas hit region.
+Shared scroll areas consult that identity to keep pen presses out of drag-scroll;
+pen ownership also suspends egui's touch long-press timeout and restores the
+configured timeout when a mouse or finger owns the pointer again. This prevents
+active finger contacts from stealing a held pen's widget drag ownership.
+Canvas gestures allow independent pen editing during two-finger navigation. Annotation policy and persistence
 remain in the shared canvas and workflow owners. See the
 [stylus input contract](stylus-input.md) for evidence boundaries.
 
@@ -326,7 +332,27 @@ the executing browser's identity. Copy succeeds only after the platform confirms
 it; failure opens selectable manual-copy text. Mismatch navigation uses ordinary
 transition guards. No mismatch means no reserved status-panel height.
 
+Annotation's Submit & next action is anchored to the bottom right, after the
+secondary actions, with the same icon fallback at narrow widths.
+
 The bottom action bar remains empty until session, dataset, image, and required
 assignment are loaded. Background availability refresh preserves loaded actions.
 Resize measurement requests a settling repaint only when height changes, avoiding
 input-dependent gaps or repaint loops at unsupported tiny sizes.
+
+## Editing after placement
+
+New annotation boxes stay selected for movement/resizing. Completed skeletons
+keep their selected annotation and expose per-keypoint Visible/Occluded controls
+in the inspector when the task permits hidden points. These changes use the
+same edit history, versioning, and autosave owner as geometry edits.
+
+Review overview box additions retain their correction editor after staging,
+matching skeleton additions. Further edits remain local until review submission.
+Blank-canvas placement can start another object after retaining the current one.
+
+Migration full-image confirmation starts a missing-object skeleton on a blank
+canvas tap; Add missing object remains a keyboard-accessible alternative. Existing
+objects retain selection priority. Completed drafts remain editable before
+explicit confirmation, with placed-point visibility controls for both guided and
+missing-object drafts. These controls preserve migration dirty-state ownership.

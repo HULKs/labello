@@ -2081,4 +2081,57 @@ mod tests {
         assert_eq!(harness.state().canvas.current_zoom(), MIN_ZOOM);
         assert_eq!(harness.state().canvas.pan, Vec2::ZERO);
     }
+    #[test]
+    fn pen_drag_survives_finger_zoom_in_both_contact_orders() {
+        for fingers_first in [false, true] {
+            let mut harness = canvas_harness(true);
+            crate::pointer_input::set_pen_pointer(&harness.ctx, true);
+            let touch = |id, phase, pos| Event::Touch {
+                device_id: TouchDeviceId(1),
+                id: TouchId(id),
+                phase,
+                pos,
+                force: None,
+            };
+            let start = pos2(150.0, 130.0);
+            let begin_fingers = |harness: &mut Harness<'static, InteractiveTestState>| {
+                harness.event(touch(1, TouchPhase::Start, pos2(180.0, 140.0)));
+                harness.event(touch(2, TouchPhase::Start, pos2(280.0, 140.0)));
+                harness.step();
+            };
+            if fingers_first {
+                begin_fingers(&mut harness);
+            }
+            harness.event(Event::PointerMoved(start));
+            harness.event(Event::PointerButton {
+                pos: start,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            });
+            harness.step();
+            assert!(harness.state().canvas.is_dragging());
+            if !fingers_first {
+                begin_fingers(&mut harness);
+            }
+            harness.event(touch(1, TouchPhase::Move, pos2(160.0, 150.0)));
+            harness.event(touch(2, TouchPhase::Move, pos2(310.0, 150.0)));
+            harness.event(Event::PointerMoved(pos2(250.0, 200.0)));
+            harness.step();
+            assert!(harness.state().canvas.current_zoom() > 1.0);
+            assert!(harness.state().canvas.is_dragging());
+            assert!(harness.state().actions.is_empty());
+            harness.event(Event::PointerButton {
+                pos: pos2(250.0, 200.0),
+                button: PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            });
+            harness.step();
+            assert!(matches!(
+                harness.state().actions.as_slice(),
+                [CanvasAction::CreateBoundingBox(_)]
+            ));
+        }
+    }
 }

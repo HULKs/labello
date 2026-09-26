@@ -79,9 +79,11 @@ impl LabelloApp {
         let count = 4 + usize::from(previous);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
             / count as f32).floor().max(44.0);
+        let primary_width = width.min(text_button_width(ui, "Submit & next"));
+        let secondary_width = (ui.available_width() - primary_width - ui.spacing().item_spacing.x).max(0.0);
+        ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::NextImage, "Submit & next", WorkspaceActionIcon::Next, ready, theme::Intent::Accent, "Save, complete this assignment, and claim another."),
                 (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
                 (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && self.work.annotations.iter().any(|annotation| !annotation.deleted && self.annotation_matches_selected_workflow(annotation)), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
                 (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save edits and keep this assignment active."),
@@ -101,6 +103,13 @@ impl LabelloApp {
             self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
         ];
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if workspace_toolbar_button(ui, ready, "Submit & next", WorkspaceActionIcon::Next, Some(width), theme::Intent::Accent)
+                .on_hover_text(format!("Save, complete this assignment, and claim another. ({})", self.shortcut_text(ui.ctx(), UserAction::NextImage))).clicked() {
+                self.trigger_user_action(UserAction::NextImage);
+            }
+        });
     }
 
     fn review_object_navigation(&mut self, ui: &mut egui::Ui, width: Option<f32>) {

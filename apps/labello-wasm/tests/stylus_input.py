@@ -32,6 +32,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parents[3]
 COLOR = (187, 43, 129)
+REFERENCE_COLOR = (53, 126, 190)
 
 
 def require(condition, category):
@@ -54,9 +55,16 @@ def png():
         return (struct.pack(">I", len(data)) + kind + data
                 + struct.pack(">I", zlib.crc32(kind + data)))
 
+    rows = []
+    for y in range(600):
+        row = bytearray(bytes(COLOR) * 800)
+        for x, center_y in [(200, 150), (600, 450)]:
+            if center_y - 8 <= y < center_y + 8:
+                row[(x - 8) * 3:(x + 8) * 3] = bytes(REFERENCE_COLOR) * 16
+        rows.append(b"\0" + row)
     return (b"\x89PNG\r\n\x1a\n"
             + chunk(b"IHDR", struct.pack(">IIBBBBB", 800, 600, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress((b"\0" + bytes(COLOR) * 800) * 600))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows)))
             + chunk(b"IEND", b""))
 
 
@@ -201,9 +209,9 @@ class Scenario:
             }""")
         await until(canvas_ready, "canvas-backing-size-dpr-mismatch")
         # Start at a fixed desktop viewport, then resize the annotation workspace.
-        await self.page.mouse.move(450, 205)
-        button = await until(lambda: self.color_bounds((94, 234, 212)), "setup-not-rendered")
-        await self.page.mouse.click((button[0] + button[2]) / 2, (button[1] + button[3]) / 2)
+        # App navigation is available even when Setup has no recommendation yet.
+        await self.page.wait_for_timeout(1000)
+        await self.page.mouse.click(64, 28)  # Annotate in the desktop application bar.
         self.bounds = await until(lambda: self.color_bounds(COLOR), "annotation-image-not-rendered")
         self.cdp = None
         if browser_name == "chromium":
@@ -236,7 +244,9 @@ class Scenario:
         require(len(state["annotations"]) == 1, "duplicate-annotation")
         require(len(next(iter(state["annotations"].values()))) == version,
                 "delayed-duplicate-revision")
-        require(await self.color_bounds(COLOR) == self.bounds, "pen-changed-viewport")
+        async def viewport_settled():
+            return await self.color_bounds(COLOR) == self.bounds
+        await until(viewport_settled, "pen-changed-viewport")
         return annotation
 
     def point(self, normalized):
@@ -370,6 +380,122 @@ class Scenario:
         await self.gesture((0.4, 0.4), (0.6, 0.6))
         check_point(await self.annotation(5), (0.6, 0.6))
 
+    async def touch_only_annotation(self):
+        require(self.cdp is not None, "touch-only-check-requires-chromium")
+        for event, point in [("touchStart", (0.2, 0.2)), ("touchMove", (0.5, 0.5)), ("touchEnd", None)]:
+            points = [] if point is None else [{"id": 1, "x": self.point(point)[0], "y": self.point(point)[1]}]
+            await self.cdp.send("Input.dispatchTouchEvent", {"type": event, "touchPoints": points})
+            await self.page.wait_for_timeout(200)
+        check_box(await self.annotation(1), (0.2, 0.2, 0.3, 0.3))
+
+    async def pen_controls_do_not_scroll(self):
+        original_size = self.page.viewport_size
+        await self.page.set_viewport_size({"width": 1288, "height": 400})
+        async def controls():
+            with Image.open(io.BytesIO(await self.page.screenshot(scale="css"))) as capture:
+                return capture.convert("RGB").crop((1000, 125, 1288, 325))
+        # Inspector visibility can change when leaving a compact layout.
+        # Establish a genuinely scrollable panel before checking pen behavior.
+        for _ in range(2):
+            await self.page.keyboard.press("i")
+            await self.page.wait_for_timeout(500)
+            await self.page.mouse.move(5, 5)
+            before = await controls()
+            await self.page.mouse.move(1120, 250)
+            await self.page.mouse.wheel(0, 300)
+            await self.page.mouse.move(5, 5)
+            await self.page.wait_for_timeout(500)
+            if ImageChops.difference(before, await controls()).getbbox() is not None:
+                break
+        else:
+            raise AssertionError("inspector-scroll-negative-control")
+        await self.page.mouse.move(1120, 250)
+        await self.page.mouse.wheel(0, -10000)
+        await self.page.mouse.move(5, 5)
+        await self.page.wait_for_timeout(500)
+        before = await controls()
+        for event, y in [("pointerdown", 280), ("pointermove", 210), ("pointercancel", 210), ("pointerup", 210)]:
+            await self.page.evaluate("""p => document.getElementById('labello-canvas').dispatchEvent(new PointerEvent(p.event, {
+                bubbles:true, cancelable:true, pointerType:'pen', pointerId:91, isPrimary:true,
+                button:p.event === 'pointermove' ? -1 : 0,
+                buttons:['pointerdown','pointermove'].includes(p.event) ? 1 : 0,
+                clientX:1120, clientY:p.y
+            }))""", {"event": event, "y": y})
+            await self.page.wait_for_timeout(100)
+        await self.page.mouse.move(5, 5)
+        await self.page.wait_for_timeout(300)
+        require(ImageChops.difference(before, await controls()).getbbox() is None, "pen-scrolled-inspector-controls")
+        await self.page.keyboard.press("i")
+        await self.page.set_viewport_size(original_size)
+
+    async def concurrent_touch_pen(self, kind):
+        if self.cdp is None:
+            return
+        # Exercise the adapter with separate browser pen and finger streams.
+        # Each sequence finishes with Fit so the saved-geometry helpers retain
+        # their original-image coordinate checks.
+        for fingers_first in [False, True]:
+            before = await self.state()
+            annotation = next(iter(before["annotations"].values()))[-1]
+            version = annotation["version"]
+            geometry = annotation["geometry"]["geometry"]
+            start = ((geometry["x"] + geometry["width"] / 2,
+                      geometry["y"] + geometry["height"] / 2) if kind == "bounding_box"
+                     else tuple(geometry["keypoints"][0]["point"][axis] for axis in ["x", "y"]))
+            x, y = self.point(start)
+            async def pen(event, px=x, py=y):
+                await self.page.evaluate("""p => {
+                    document.getElementById('labello-canvas').dispatchEvent(new PointerEvent(p.event, {
+                        bubbles:true, cancelable:true, pointerType:'pen', pointerId:81,
+                        isPrimary:true, button:p.event === 'pointermove' ? -1 : 0,
+                        buttons:p.event === 'pointerup' ? 0 : 1, clientX:p.x, clientY:p.y
+                    }));
+                }""", {"event": event, "x": px, "y": py})
+                await self.page.wait_for_timeout(80)
+            async def fingers(event, spread=0.1):
+                points = [] if event == "touchEnd" else [
+                    {"id": index + 1, "x": self.point((u, 0.5))[0], "y": self.point((u, 0.5))[1]}
+                    for index, u in enumerate([0.5 - spread, 0.5 + spread])]
+                await self.cdp.send("Input.dispatchTouchEvent", {"type": event, "touchPoints": points})
+                await self.page.wait_for_timeout(150)
+            if fingers_first:
+                await fingers("touchStart")
+            await pen("pointerdown")
+            if not fingers_first:
+                await fingers("touchStart")
+            # A held pen must not become egui's touch long-press when fingers
+            # are also down; that would silently discard widget drag ownership.
+            await self.page.wait_for_timeout(1000)
+            await fingers("touchMove", 0.12)
+            require(await self.color_bounds(COLOR) != self.bounds, "concurrent-touch-did-not-zoom")
+            # Read the rendered transform from two fixture reference marks.
+            # Touch coordinates are rounded by the browser adapter, and a
+            # clipped image rectangle cannot reveal pan at narrow widths.
+            reference = await self.color_bounds(REFERENCE_COLOR)
+            require(reference is not None, "pinch-reference-marks-missing")
+            image_width = (reference[2] - reference[0]) / (0.5 + 16 / 800)
+            image_height = (reference[3] - reference[1]) / (0.5 + 16 / 600)
+            target = (start[0] + 0.02, start[1] - 0.02)
+            px = reference[0] + (target[0] - (0.25 - 8 / 800)) * image_width
+            py = reference[1] + (target[1] - (0.25 - 8 / 600)) * image_height
+            await pen("pointermove", px, py)
+            await pen("pointerup", px, py)
+            await fingers("touchEnd")
+            await self.page.keyboard.press("0")
+            await self.page.wait_for_timeout(300)
+            saved = await self.annotation(version + 1)
+            if kind == "bounding_box":
+                check_box(saved, (geometry["x"] + 0.02, geometry["y"] - 0.02, geometry["width"], geometry["height"]))
+            else:
+                check_point(saved, target)
+        before = await self.state()
+        for event, point in [("touchStart", (0.1, 0.7)), ("touchMove", (0.25, 0.85)), ("touchEnd", None)]:
+            points = [] if point is None else [{"id": 7, "x": self.point(point)[0], "y": self.point(point)[1]}]
+            await self.cdp.send("Input.dispatchTouchEvent", {"type": event, "touchPoints": points})
+            await self.page.wait_for_timeout(100)
+        await self.page.wait_for_timeout(1000)
+        require((await self.state())["annotations"] == before["annotations"], "finger-created-annotation-after-pen")
+
     async def touch_then_fit(self):
         if self.cdp is None:
             return  # Trusted touch injection is tested separately in Chromium.
@@ -408,6 +534,8 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--negative-control", action="store_true",
                         help="Suppress pen pointerdown; the check must fail, never use for acceptance.")
+    parser.add_argument("--touch-only", action="store_true",
+                        help="Check finger-only box creation before any pen event (Chromium).")
     parser.add_argument("--width", type=int, default=1288)
     parser.add_argument("--height", type=int, default=820)
     parser.add_argument("--dpr", type=float, default=1)
@@ -441,14 +569,24 @@ async def main():
                 await until(ready, "server-readiness-timeout")
                 await scenario.seed(args.kind)
                 await scenario.open(args.width, args.height, args.negative_control, args.events, args.browser)
+                if args.touch_only:
+                    require(args.kind == "bounding_box", "touch-only-check-requires-boxes")
+                    await scenario.touch_only_annotation()
+                    print(json.dumps({"result": "passed", "browser": browser.version,
+                                      "viewport": [args.width, args.height], "dpr": args.dpr,
+                                      "checks": ["touch-only-box-create-and-save-before-pen"]}))
+                    return
                 await (scenario.boxes() if args.kind == "bounding_box" else scenario.keypoints())
+                await scenario.concurrent_touch_pen(args.kind)
+                if scenario.cdp is not None:
+                    await scenario.pen_controls_do_not_scroll()
                 require(not scenario.errors, "browser-pageerror")
                 checks = ["geometry", "drag-preview", "single-revision-per-edit",
                           "pen-mouse-pen", "unchanged-pen-viewport"]
                 if args.events == "dom-compat":
                     checks.append("duplicate-stylus-touch-and-mouse")
                 if scenario.cdp is not None:
-                    checks.append("pen-touch-pen")
+                    checks.extend(["pen-touch-pen", "concurrent-dom-pen-trusted-touch-both-orders", "finger-does-not-annotate-after-pen", "pen-controls-do-not-scroll"])
                 if args.kind == "bounding_box":
                     checks.append("escape-pointercancel-lostcapture")
                 print(json.dumps({"result": "passed", "browser": browser.version,

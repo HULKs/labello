@@ -363,7 +363,7 @@ impl LabelloApp {
                 .as_ref()
                 .map(|page| page.entries.as_slice())
                 .unwrap_or(&[]);
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("import-source-picker-entries")
                 .max_height((max_height - 180.0).max(1.0))
                 .show(ui, |ui| {

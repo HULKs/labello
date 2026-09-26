@@ -107,7 +107,9 @@ the user workflow.
   gestures and shortcuts discoverable through controls or concise hints.
 - Pen-tip annotation must track movement before release and commit each action
   once, including when the browser also emits compatibility mouse or stylus
-  touch events. Follow the [stylus contract and physical procedure](stylus-input.md)
+  touch events. Two-finger navigation must coexist with pen editing in either
+  contact order. After pen detection, finger contacts on the canvas must not
+  annotate, and pen drags over controls must not scroll their contents. Follow the [stylus contract and physical procedure](stylus-input.md)
   for cancellation, mixed input, and iPadOS Safari/Firefox acceptance. Desktop
   WebKit and Chromium pen emulation do not certify an iPad or Android device.
 
@@ -164,7 +166,9 @@ has been recorded.
   in every Setup section, with About last. Each section owns its heading;
   do not repeat a dataset-specific welcome banner above unrelated sections.
   Signed-out secondary navigation also puts About last.
-- **Workspace:** preserve tested canvas geometry and gestures; keep Pan and Fit
+- **Workspace:** keep Submit & next at the bottom right in annotation, including
+  compact layouts. Placed objects remain editable; expose placed-keypoint
+  Visible/Occluded controls when allowed by the task. Preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
   pinch instructions in Settings. Review opens each focused item for direct editing. Primary drag edits the item;

@@ -33,7 +33,7 @@ impl LabelloApp {
             .constrain_to(workspace)
             .show(ctx, |ui| {
                 ui.heading(title);
-                egui::ScrollArea::vertical().show(ui, |ui| ui.label(text));
+                egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx())).show(ui, |ui| ui.label(text));
             });
         if !open {
             self.work.show_tutorial = false;
@@ -158,7 +158,7 @@ impl LabelloApp {
                 ui.set_max_width((ctx.content_rect().width() - 48.0).clamp(240.0, 560.0));
                 let action_rows = if self.view == AppView::Annotate { 3.0 } else { 2.0 };
                 let action_height = action_rows * (ui.spacing().interact_size.y + ui.spacing().item_spacing.y);
-                egui::ScrollArea::vertical()
+                egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .max_height((ctx.content_rect().height() - 64.0 - action_height).max(48.0))
                     .show(ui, |ui| {
                 ui.heading(modal_title);
@@ -239,7 +239,7 @@ impl LabelloApp {
                 if ctx.content_rect().height() < 480.0 {
                     ui.set_height(height);
                 }
-                egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
+                egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx())).max_height(height).show(ui, |ui| {
                     ui.heading("Reconcile companion box?");
                     ui.label("Create or regenerate the box from the saved skeleton. This replaces the current box geometry and reopens its correction and review workflow. Earlier versions and reviews remain in history. Your unsaved skeleton draft is retained.");
                     ui.horizontal_wrapped(|ui| {
@@ -694,7 +694,7 @@ impl LabelloApp {
                 if short {
                     action_list(ui);
                 } else {
-                    egui::ScrollArea::vertical()
+                    egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                         .max_height(scroll_height)
                         .show(ui, |ui| action_list(ui));
                 }
@@ -770,7 +770,7 @@ impl LabelloApp {
                 });
             };
             if short {
-                egui::ScrollArea::vertical()
+                egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .id_salt("settings-modal-scroll")
                     .max_height(max_height)
                     .show(ui, |ui| contents(ui));

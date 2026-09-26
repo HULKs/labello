@@ -92,3 +92,4 @@ include!("suites/workflow_reasons.rs");
 include!("suites/loading_bars.rs");
 
 include!("suites/preload.rs");
+include!("suites/pen_editing.rs");

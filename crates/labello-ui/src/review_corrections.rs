@@ -836,6 +836,16 @@ impl LabelloApp {
         Some(annotation)
     }
 
+    pub(crate) fn stage_review_addition_keep_editor(&mut self) {
+        let editor = self.work.review_corrections.editor.clone();
+        let draft = self.work.correction_draft.clone();
+        self.stage_review_correction();
+        if self.work.correction_draft.is_none() {
+            self.work.review_corrections.editor = editor;
+            self.work.correction_draft = draft;
+        }
+    }
+
     pub(crate) fn place_review_correction_keypoint(&mut self, point: NormalizedPoint) {
         let overview = self.review_overview();
         // Reopened or recovered additions can still have an editor after completion.
@@ -911,13 +921,7 @@ impl LabelloApp {
         if completed_addition {
             // Stage the addition while keeping its last point available for immediate edits.
             // The completed-addition guard above starts another object on the next placement.
-            let editor = self.work.review_corrections.editor.clone();
-            let draft = self.work.correction_draft.clone();
-            self.stage_review_correction();
-            if self.work.correction_draft.is_none() {
-                self.work.review_corrections.editor = editor;
-                self.work.correction_draft = draft;
-            }
+            self.stage_review_addition_keep_editor();
         }
     }
 }

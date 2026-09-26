@@ -229,6 +229,18 @@ impl LabelloApp {
                 });
             }
         }
+        if let Some(id) = self.work.selected_annotation.clone()
+            && self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+            && let Some(AnnotationGeometry::Skeleton(skeleton)) = self.work.annotations.iter().find(|annotation| annotation.annotation_id == id && !annotation.deleted).map(|annotation| annotation.geometry.clone())
+        {
+            ui.add_enabled_ui(!self.loading.saving && !self.loading.image && self.work.pending_transition.is_none(), |ui| {
+                if let Some((index, state)) = placed_keypoint_visibility(ui, &skeleton) {
+                    self.set_annotation_keypoint_visibility(id, index, state);
+                }
+            });
+        }
+
+
     }
 
     fn review_context_section(&self, ui: &mut egui::Ui) -> bool {
