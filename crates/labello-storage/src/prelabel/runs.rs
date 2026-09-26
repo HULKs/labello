@@ -523,9 +523,10 @@ impl PrelabelService {
                             &config,
                             &task,
                             dimensions,
-                            candidates,
-                            PrelabelExecutionKind::ServerCpu,
-                        ),
+                            candidates.suggestions,
+                            candidates.execution.clone(),
+                        )
+                        .map(|suggestions| (suggestions, candidates.execution)),
                         Err(error) => Err(error),
                     }
                 }
@@ -533,7 +534,7 @@ impl PrelabelService {
             };
             let mut next = control.clone();
             let outcome = match result {
-                Ok(suggestions) => {
+                Ok((suggestions, execution)) => {
                     self.check_result_size(&suggestions)?;
                     let key = result_key(&item.1)?;
                     if next.results.len() >= self.inner.limits.max_retained_results
@@ -565,6 +566,7 @@ impl PrelabelService {
                     next.results.insert(
                         key,
                         CachedResult {
+                            execution,
                             task_id: item.1.task_id.clone(),
                             config_id: item.1.config_id.clone(),
                             created_at: now(),

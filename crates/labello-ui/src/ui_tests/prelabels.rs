@@ -3,6 +3,41 @@ use crate::prelabel_flow::{HintStatus, PrelabelAction, PrelabelReply};
 use labello_domain::{PrelabelGeneration, PrelabelResponse};
 
 #[test]
+fn model_check_replies_cannot_replace_a_changed_filename_or_removed_configuration() {
+    let api = Rc::new(SpyApi::new());
+    let metadata = api.metadata();
+    let mut app = base_live_app(api);
+    app.datasets.admin_config = Some(metadata);
+    app.auth.prelabel_available = true;
+    let config = app.datasets.admin_config.as_ref().unwrap().prelabel_configs[0].clone();
+    app.request_prelabels(PrelabelAction::InspectModel {
+        config_id: config.config_id.clone(),
+        location: config.model.location.clone(),
+    });
+    let request = app.runtime.commands.back().unwrap().request().clone();
+    app.datasets.admin_config.as_mut().unwrap().prelabel_configs[0]
+        .model
+        .location = "different.onnx".into();
+    app.runtime
+        .tx
+        .send(UiMessage::PrelabelFinished {
+            request,
+            result: Box::new(Err("old file failed".into())),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    let check = &app.admin.prelabels.model_checks[&config.config_id];
+    assert!(check.pending.is_none());
+    assert!(check.result.is_none());
+    assert_eq!(
+        app.datasets.admin_config.as_ref().unwrap().prelabel_configs[0]
+            .model
+            .location,
+        "different.onnx"
+    );
+}
+
+#[test]
 fn prelabel_choice_defaults_to_available_model_and_explicit_none_survives_preferences() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     let app = harness.state_mut();

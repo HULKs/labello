@@ -14,12 +14,15 @@ impl LabelloApp {
         };
         use crate::prelabel_flow::{PrelabelAction, PrelabelReply};
         let (abort, registration) = futures::future::AbortHandle::new_pair();
-        if !matches!(action, PrelabelAction::Admin(_)) {
+        if matches!(action, PrelabelAction::Load(_) | PrelabelAction::Check(_)) {
             self.work.prelabels.abort = Some(abort);
         }
         self.spawn_message(request.clone(), async move {
             let future = async {
                 match action {
+                    PrelabelAction::InspectModel { location, .. } => api
+                        .inspect_prelabel_model(&dataset_id, labello_client::PrelabelModelCheckRequest { location })
+                        .await.map(PrelabelReply::Model),
                     PrelabelAction::Load(query) => api
                         .prelabel_suggestions(&dataset_id, query)
                         .await
@@ -61,6 +64,7 @@ impl LabelloApp {
                     .pending
                     .as_ref()
                     .is_some_and(|(id, _)| *id == request.request_id)
+                    || self.admin.prelabels.model_checks.values().any(|check| check.pending == Some(request.request_id))
                     || self
                         .work
                         .prelabels
@@ -72,6 +76,21 @@ impl LabelloApp {
             }
             other => return Some(other),
         };
+        if let Some((id, check)) = self.admin.prelabels.model_checks.iter_mut()
+            .find(|(_, check)| check.pending == Some(request.request_id))
+        {
+            check.pending = None;
+            let current = self.datasets.admin_config.as_ref().and_then(|dataset|
+                dataset.prelabel_configs.iter().find(|config| &config.config_id == id));
+            if current.is_some_and(|config| config.model.location == check.location) {
+                check.result = Some(match result {
+                    Ok(PrelabelReply::Model(model)) => Ok(model),
+                    Err(error) => Err(error),
+                    _ => Err("Unexpected model check response".into()),
+                });
+            }
+            return None;
+        }
         if self
             .admin
             .prelabels

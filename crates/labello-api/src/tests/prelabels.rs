@@ -2,8 +2,20 @@ use super::*;
 use labello_domain::*;
 use labello_storage::prelabel::{InferenceFuture, PrelabelLimits, PrelabelRunner, PrelabelService};
 
-struct Runner;
+struct Runner(PrelabelExecutionKind);
 impl PrelabelRunner for Runner {
+    fn inspect(&self, _model: Vec<u8>) -> labello_storage::prelabel::ModelInspectionFuture {
+        Box::pin(async {
+            Ok(PrelabelModelInspection {
+                model_digest: "a".repeat(64),
+                inputs: vec![],
+                input_size: Some(320),
+                outputs: vec![],
+                problem: None,
+            })
+        })
+    }
+
     fn infer(
         &self,
         _: Vec<u8>,
@@ -11,23 +23,155 @@ impl PrelabelRunner for Runner {
         config: PrelabelConfig,
         task: TaskDefinition,
     ) -> InferenceFuture {
+        let execution = self.0.clone();
         Box::pin(async move {
-            Ok(vec![PrelabelSuggestion {
-                suggestion_id: "candidate".into(),
-                config_id: config.config_id,
-                task_id: task.task_id,
-                class_id: "pixel".into(),
-                confidence: 0.9,
-                geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-                    x: 0.1,
-                    y: 0.1,
-                    width: 0.4,
-                    height: 0.4,
-                }),
-                evidence: None,
-            }])
+            Ok(PrelabelInferenceResult {
+                execution,
+                suggestions: vec![PrelabelSuggestion {
+                    suggestion_id: "candidate".into(),
+                    config_id: config.config_id,
+                    task_id: task.task_id,
+                    class_id: "pixel".into(),
+                    confidence: 0.9,
+                    geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+                        x: 0.1,
+                        y: 0.1,
+                        width: 0.4,
+                        height: 0.4,
+                    }),
+                    evidence: None,
+                }],
+            })
         })
     }
+}
+
+#[tokio::test]
+async fn model_check_accepts_an_unsaved_filename_and_enforces_admin_csrf_and_path_limits() {
+    let fixture = Fixture::new().await;
+    let route = "/datasets/ds/prelabel-model-check";
+    let request = json!({"location": "model.onnx"});
+    assert_eq!(
+        fixture
+            .request("POST", route, "admin", request.clone())
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    for actor in ["other_annotator", "outsider"] {
+        assert_eq!(
+            fixture
+                .request("POST", route, actor, request.clone())
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    for location in [
+        "../model.onnx",
+        "/tmp/model.onnx",
+        "https://example.com/model.onnx",
+    ] {
+        assert_eq!(
+            fixture
+                .request("POST", route, "admin", json!({"location": location}))
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let missing = fixture
+        .request("POST", route, "admin", json!({"location":"missing.onnx"}))
+        .await;
+    assert_eq!(missing.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(missing).await;
+    assert!(
+        !body
+            .to_string()
+            .contains(fixture._temp.path().to_str().unwrap())
+    );
+    assert_eq!(
+        fixture
+            .request("POST", route, "admin", json!({"location":"x".repeat(5000)}))
+            .await
+            .status(),
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+    assert_eq!(
+        fixture
+            .request(
+                "POST",
+                "/datasets/missing/prelabel-model-check",
+                "admin",
+                request.clone()
+            )
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let denied = fixture
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(route)
+                .header("x-test-user-id", "admin")
+                .header(crate::csrf::HEADER, "invalid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(request.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn explicit_model_mapping_rejects_unknown_dataset_classes_and_round_trips() {
+    let fixture = Fixture::new().await;
+    let mut config = fixture
+        .repo
+        .load_dataset_config()
+        .await
+        .unwrap()
+        .prelabel_configs
+        .remove(0);
+    let spec = config.yolo.as_mut().unwrap();
+    spec.use_explicit_mapping(80);
+    spec.output_name = Some("output0".into());
+    spec.class_mappings[0].model_class_id = 32;
+    let saved = fixture
+        .request(
+            "POST",
+            "/datasets/ds/prelabels",
+            "admin",
+            serde_json::to_value(&config).unwrap(),
+        )
+        .await;
+    assert_eq!(saved.status(), StatusCode::OK);
+    assert_eq!(
+        fixture
+            .repo
+            .load_dataset_config()
+            .await
+            .unwrap()
+            .prelabel_configs[0],
+        config
+    );
+    config.yolo.as_mut().unwrap().class_mappings[0].class_id = "unknown".into();
+    assert_eq!(
+        fixture
+            .request(
+                "POST",
+                "/datasets/ds/prelabels",
+                "admin",
+                serde_json::to_value(config).unwrap()
+            )
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
 }
 
 struct Fixture {
@@ -36,8 +180,65 @@ struct Fixture {
     repo: labello_storage::DatasetRepository,
     assignment: Value,
 }
+
+#[tokio::test]
+async fn server_gpu_provenance_survives_acceptance_replay_snapshots_and_offline_wire() {
+    for execution in [
+        PrelabelExecutionKind::ServerCuda,
+        PrelabelExecutionKind::ServerWebGpu,
+    ] {
+        let fixture = Fixture::with_execution(execution.clone()).await;
+        let response = fixture.hints().await;
+        assert_eq!(response.execution, Some(execution.clone()));
+        let hint = &response.suggestions[0];
+        assert_eq!(
+            hint.evidence.as_ref().unwrap().provenance.execution,
+            execution
+        );
+        assert_eq!(
+            hint.evidence.as_ref().unwrap().provenance.trust,
+            PredictionTrust::ServerGenerated
+        );
+        let saved = fixture
+            .save(&fixture.batch("accepted", hint, false, false))
+            .await;
+        assert_eq!(saved.status(), StatusCode::OK);
+        let saved: ImageState = serde_json::from_value(response_json(saved).await).unwrap();
+        let mut replayed = ImageState::new(fixture.image());
+        for event in fixture.repo.load_events(&fixture.image()).await.unwrap() {
+            replayed.apply_event(&event).unwrap();
+            assert_eq!(
+                serde_json::from_slice::<ImageState>(&serde_json::to_vec(&replayed).unwrap())
+                    .unwrap(),
+                replayed
+            );
+        }
+        assert_eq!(saved, replayed);
+        let snapshot = fixture.repo.create_snapshot().await.unwrap();
+        let bytes = fixture
+            .repo
+            .snapshot_file(
+                &snapshot.snapshot_id,
+                &format!("annotations/{}/state.json", fixture.image()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(serde_json::from_slice::<ImageState>(&bytes).unwrap(), saved);
+        let bundle = fixture
+            .repo
+            .create_offline_bundle(&"admin".into(), 10, false)
+            .await
+            .unwrap();
+        let decoded: OfflineBundle =
+            serde_json::from_slice(&serde_json::to_vec(&bundle).unwrap()).unwrap();
+        assert_eq!(decoded.images[0].state, saved);
+    }
+}
 impl Fixture {
     async fn new() -> Self {
+        Self::with_execution(PrelabelExecutionKind::ServerCpu).await
+    }
+    async fn with_execution(execution: PrelabelExecutionKind) -> Self {
         let temp = tempfile::tempdir().unwrap();
         std::fs::create_dir(temp.path().join("models")).unwrap();
         std::fs::write(temp.path().join("models/model.onnx"), b"test runner model").unwrap();
@@ -45,7 +246,7 @@ impl Fixture {
             temp.path(),
             &temp.path().join("models"),
             PrelabelLimits::default(),
-            std::sync::Arc::new(Runner),
+            std::sync::Arc::new(Runner(execution)),
         )
         .await
         .unwrap();
@@ -75,6 +276,7 @@ impl Fixture {
                 input_size: 320,
                 class_ids: vec![Some("pixel".into())],
                 keypoints: vec![],
+                ..Default::default()
             }),
         }];
         repo.save_dataset(&metadata).await.unwrap();
@@ -530,7 +732,7 @@ async fn sessions_report_prelabel_availability_without_requiring_generation() {
                     temp.path(),
                     &models,
                     PrelabelLimits::default(),
-                    std::sync::Arc::new(Runner),
+                    std::sync::Arc::new(Runner(PrelabelExecutionKind::ServerCpu)),
                 )
                 .await
                 .unwrap(),

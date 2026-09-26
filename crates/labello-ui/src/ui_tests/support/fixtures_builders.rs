@@ -326,7 +326,8 @@ pub(super) fn seed_review_annotation(
 
 pub(super) fn prelabel_config(id: &str) -> PrelabelConfig {
     PrelabelConfig {
-        yolo: Some(labello_domain::YoloModelSpec { input_size: 640, class_ids: vec![Some("person".into())], keypoints: vec![] }),
+        yolo: Some(labello_domain::YoloModelSpec { input_size: 640, class_ids: vec![Some("person".into())], keypoints: vec![], ..Default::default()
+}),
         config_id: PrelabelConfigId::from(id),
         name: "Demo prelabels".to_string(),
         model: ModelSpec {

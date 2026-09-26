@@ -91,6 +91,10 @@ cacheEntries = 4096
 # [prelabel]
 # modelsRoot = "/srv/labello-models"
 # timeoutSeconds = 120
+# Optional native GPU runtime; without it the included CPU backend remains available.
+# [prelabel.runtime]
+# onnxLibrary = "/srv/labello-runtime/libonnxruntime.so"
+# webgpuLibrary = "/srv/labello-runtime/libonnxruntime_providers_webgpu.so"
 # [prelabel.limits]
 # maxConcurrentInferences = 1
 # maxWorkItems = 100_000

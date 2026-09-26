@@ -90,6 +90,12 @@ pub struct PrelabelSuggestionRequest {
     pub task_id: TaskId,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PrelabelModelCheckRequest {
+    pub location: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthLoginRequest {

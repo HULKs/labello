@@ -2235,6 +2235,10 @@ impl KeybindingApi for SpyApi {
 }
 
 impl PrelabelApi for SpyApi {
+    fn inspect_prelabel_model<'a>(&'a self, _dataset_id: &'a DatasetId, _request: labello_client::PrelabelModelCheckRequest) -> ApiFuture<'a, labello_domain::PrelabelModelInspection> {
+        Box::pin(async { Err(labello_client::ClientError::Demo("Test model unavailable".into())) })
+    }
+
     fn list_prelabel_configs<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

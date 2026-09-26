@@ -50,13 +50,36 @@ and executable commands are rejected. Existing configurations without a YOLO
 profile remain readable but cannot run until configured. The historical
 server `command` field must be empty.
 
-Set the model ID and version, input size, execution mode, confidence threshold,
-IoU threshold, task associations, and annotator availability. List dataset
-class IDs in model output-index order; `-` ignores an output class. For a COCO
-person detector, map output index zero to the dataset's person class and mark
-the other 79 outputs `-`. Every class in a linked workflow must be mapped.
-For pose, list keypoint names in model order, exactly matching the workflow's
-ordered skeleton specification. Detection models link to box workflows;
+Enter the model filename and select **Check model**. The server checks the
+managed file before a configuration or class mapping has been saved. Inspection
+runs in a bounded worker without an image and reports the static input dimensions,
+output tensor names, data types and shapes, class count, and available class names.
+It reads Ultralytics task/class metadata and cross-checks output dimensions;
+pose inspection also requires `kpt_shape = [keypoints, 3]`. Missing task metadata,
+inconsistent class counts, and unsupported layouts produce an explanation rather
+than a guessed mapping. Class names are optional; numeric output IDs are authoritative.
+
+Select the **Output tensor** from the discovered outputs. A sole compatible output
+is selected automatically; unsupported outputs are shown with their reason. The
+selected output name is saved and used by both execution environments. Each dataset
+class has a selector for model class IDs `0` through `classCount - 1`. For example,
+map `person` to `0` and `ball` to `32` in the standard 80-class COCO detector.
+Unmapped outputs produce no hints. Multiple model outputs may map to the same
+dataset class, but a model output ID cannot map to conflicting dataset classes.
+The total model class count stays independent of the selected mappings.
+
+Changing the filename invalidates the check. Changing the selected tensor
+revalidates mappings; invalid saved mappings remain visible until removed.
+The checked model's BLAKE3 digest pins the profile. Replacing the file requires
+checking the model and saving its configuration again before generation can resume.
+Historical positional `classIds` arrays remain readable and keep their exact
+meaning; checking them converts their mappings to explicit `classMappings` entries
+with `modelClassId` and `classId`. Configuration changes use normal staged Admin save.
+
+Set the model ID and version, execution mode, confidence/IoU thresholds, task
+associations, and annotator availability. Every class in a linked workflow must be
+mapped. For pose, keypoint names remain in model order and must exactly match the
+workflow's ordered skeleton specification. Detection models link to box workflows;
 pose models link to skeleton workflows.
 
 ## Execution and coordinates
@@ -73,13 +96,40 @@ Pose uses its object box for confidence-ordered IoU suppression, then returns
 the named keypoints. A keypoint score below 0.5 becomes hidden when the workflow
 allows hidden points; otherwise it remains visible for human correction.
 
-Server inference runs on Linux CPU through Rust `ort` with the `ort-tract`
-backend. Each execution gets a fresh child process with a cleared environment,
-bounded binary input/output, a configurable timeout, a 4 GiB address-space
-limit, a 300-second CPU limit, and no core dumps. Dropping the inference future
-kills the child. It executes a fixed server worker, never a configured command.
-The default global inference concurrency is one. Model bytes are reloaded and
-hashed so replacing a model invalidates earlier results.
+Server inference runs on Linux through Rust `ort`. It tries native ONNX Runtime
+CUDA, then native WebGPU, then CPU. Provider initialization, model loading, execution
+failure, crashes, and timeouts fall through to the next provider in a fresh worker.
+The configured timeout is shared by the whole request; each GPU attempt gets at
+most one quarter of it, reserving time for CPU fallback. Native providers may use
+CPU kernels for unsupported operators. Provenance records the successful provider
+as `server_cuda`, `server_web_gpu`, or `server_cpu`.
+
+Native ONNX Runtime is loaded from the system library search path, or from an
+operator-configured absolute path. A separate WebGPU plugin is optional when
+WebGPU is already built into that runtime:
+
+```toml
+[prelabel.runtime]
+onnxLibrary = "/srv/labello-runtime/libonnxruntime.so"
+webgpuLibrary = "/srv/labello-runtime/libonnxruntime_providers_webgpu.so"
+```
+
+The runtime must provide ONNX Runtime API 24 or later. CUDA also needs compatible
+NVIDIA drivers and the runtime's CUDA/cuDNN dependencies. Native WebGPU needs a
+compatible provider and Vulkan drivers on Linux. Place dependent shared libraries
+beside `onnxLibrary` or install them in the system loader paths. These paths are
+operator configuration, never dataset-admin input. If native ONNX Runtime cannot
+load, the included Tract runtime retains CPU inference without an external
+runtime installation. No production inference path invokes Python.
+
+Each attempt gets a fresh child process with a cleared environment, bounded binary
+input/output, a 300-second CPU limit, and no core dumps. CPU and inspection workers
+have a 4 GiB address-space limit. GPU workers instead limit their data allocations
+to 4 GiB, allowing the large virtual address reservations used by GPU drivers;
+CUDA's device memory arena is limited to 1 GiB. Driver/device allocations are not
+covered by the host allocation limit. Dropping or timing out an attempt kills and
+reaps its child. Workers execute a fixed protocol, never a dataset-configured
+command. The default global concurrency is one, shared with model checks.
 
 Browser inference uses self-hosted ONNX Runtime Web in a dedicated worker.
 WebGPU-preferred configurations try WebGPU, then retry on WASM CPU if execution

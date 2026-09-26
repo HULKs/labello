@@ -1,0 +1,163 @@
+use super::*;
+use prost::Message;
+
+fn value(name: &str, shape: &[i64]) -> pb::ValueInfoProto {
+    pb::ValueInfoProto {
+        name: name.into(),
+        r#type: Some(pb::TypeProto {
+            value: Some(pb::type_proto::Value::TensorType(pb::type_proto::Tensor {
+                elem_type: 1,
+                shape: Some(pb::TensorShapeProto {
+                    dim: shape
+                        .iter()
+                        .map(|&value| pb::tensor_shape_proto::Dimension {
+                            value: Some(pb::tensor_shape_proto::dimension::Value::DimValue(value)),
+                            ..Default::default()
+                        })
+                        .collect(),
+                }),
+            })),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+fn model() -> pb::ModelProto {
+    pb::ModelProto {
+        ir_version: 9,
+        opset_import: vec![pb::OperatorSetIdProto {
+            domain: "".into(),
+            version: 17,
+        }],
+        metadata_props: vec![
+            pb::StringStringEntryProto {
+                key: "task".into(),
+                value: "detect".into(),
+            },
+            pb::StringStringEntryProto {
+                key: "names".into(),
+                value: "{0: 'person', 1: 'ball'}".into(),
+            },
+        ],
+        graph: Some(pb::GraphProto {
+            name: "inspection_fixture".into(),
+            input: vec![value("images", &[1, 3, 32, 32])],
+            output: vec![value("auxiliary", &[1]), value("predictions", &[1, 6, 1])],
+            initializer: vec![
+                pb::TensorProto {
+                    name: "auxiliary".into(),
+                    dims: vec![1],
+                    data_type: 1,
+                    float_data: vec![0.0],
+                    ..Default::default()
+                },
+                pb::TensorProto {
+                    name: "predictions".into(),
+                    dims: vec![1, 6, 1],
+                    data_type: 1,
+                    float_data: vec![16.0, 16.0, 10.0, 10.0, 0.9, 0.1],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn discovers_named_outputs_and_classes_without_running_an_image() {
+    let inspected = inspect(&model().encode_to_vec()).unwrap();
+    assert_eq!(inspected.problem, None);
+    assert_eq!(inspected.input_size, Some(32));
+    assert_eq!(inspected.outputs[0].profile, None);
+    assert_eq!(inspected.outputs[1].tensor.name, "predictions");
+    let profile = inspected.outputs[1].profile.as_ref().unwrap();
+    assert_eq!(profile.class_count, 2);
+    assert_eq!(profile.class_names, ["person", "ball"]);
+}
+
+#[test]
+fn inference_uses_selected_output_and_rejects_missing_name_or_replaced_model() {
+    let bytes = model().encode_to_vec();
+    let (mut config, task) = crate::tests::contract(false);
+    let spec = config.yolo.as_mut().unwrap();
+    spec.input_size = 32;
+    spec.use_explicit_mapping(2);
+    spec.output_name = Some("predictions".into());
+    spec.model_digest = Some(blake3::hash(&bytes).to_hex().to_string());
+    let mut image = Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(32, 32)
+        .write_to(&mut image, image::ImageFormat::Png)
+        .unwrap();
+    let result = infer(&bytes, image.get_ref(), &config, &task).unwrap();
+    assert_eq!(result.suggestions.len(), 1);
+    assert_eq!(result.suggestions[0].class_id.as_str(), "person");
+    config.yolo.as_mut().unwrap().output_name = Some("missing".into());
+    assert!(infer(&bytes, image.get_ref(), &config, &task).is_err());
+    config.yolo.as_mut().unwrap().output_name = Some("predictions".into());
+    config.yolo.as_mut().unwrap().model_digest = Some("0".repeat(64));
+    assert!(infer(&bytes, image.get_ref(), &config, &task).is_err());
+}
+
+#[test]
+fn metadata_and_output_disagreements_and_unsupported_layouts_are_explained() {
+    let mut model = model();
+    model.metadata_props[1].value = "{0: 'person'}".into();
+    let inspected = inspect(&model.encode_to_vec()).unwrap();
+    assert_eq!(
+        inspected.outputs[1].problem.as_deref(),
+        Some("class metadata disagrees with output dimensions")
+    );
+    model.metadata_props.clear();
+    assert!(
+        inspect(&model.encode_to_vec())
+            .unwrap()
+            .outputs
+            .iter()
+            .all(|o| o.profile.is_none())
+    );
+    assert!(inspect(b"not onnx").is_err());
+    model.graph.as_mut().unwrap().initializer[0].data_location = Some(1);
+    assert!(inspect(&model.encode_to_vec()).is_err());
+}
+
+#[test]
+fn pose_count_subtracts_keypoint_channels_and_checks_declared_classes() {
+    let mut model = model();
+    model.metadata_props[0].value = "pose".into();
+    model.metadata_props[1].value = "{0: 'person'}".into();
+    model.metadata_props.push(pb::StringStringEntryProto {
+        key: "kpt_shape".into(),
+        value: "[17, 3]".into(),
+    });
+    let graph = model.graph.as_mut().unwrap();
+    graph.output[1] = value("predictions", &[1, 56, 1]);
+    graph.initializer[1].dims = vec![1, 56, 1];
+    graph.initializer[1].float_data = vec![0.0; 56];
+    let inspected = inspect(&model.encode_to_vec()).unwrap();
+    let profile = inspected.outputs[1].profile.as_ref().unwrap();
+    assert_eq!((profile.class_count, profile.keypoint_count), (1, 17));
+}
+
+#[test]
+fn class_names_accept_python_and_json_strings_but_never_expressions_or_sparse_ids() {
+    assert_eq!(
+        names::parse(r#"{0: "person's hat", 1: 'ball, \'red\'', 2: '\u00e4'}"#).unwrap(),
+        ["person's hat", "ball, 'red'", "ä"]
+    );
+    assert_eq!(
+        names::parse(r#"{"0": "person", "1": "ball"}"#).unwrap(),
+        ["person", "ball"]
+    );
+    for invalid in [
+        "{1: 'person'}",
+        "{0: 'a', 0: 'b'}",
+        "{0: execute()}",
+        "{0: 'a'} trailing",
+        "{0: ''}",
+    ] {
+        assert!(names::parse(invalid).is_err(), "{invalid}");
+    }
+}

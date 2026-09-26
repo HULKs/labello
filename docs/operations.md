@@ -484,3 +484,11 @@ Watch safe run counts and available storage. Runtime errors are bounded public
 categories; worker stderr is discarded. Do not log model bytes, prediction
 geometry, browser grants, signing secrets, or evidence signatures. Models and
 runtime assets are not fetched from external sources during inference.
+
+Model checks are bounded read-only worker operations using the same managed file
+access and concurrency limit as inference. Checked profiles pin model content;
+after replacing a model, the dataset administrator must check it and save the
+updated profile. Native CUDA/WebGPU failures fall through to CPU within the request
+timeout. See the [runtime configuration and resource limits](prelabels.md#execution-and-coordinates)
+before installing native provider libraries. Library paths are operator-controlled;
+workers do not inherit the server's environment or authentication secrets.

@@ -13,12 +13,17 @@ pub(crate) enum PrelabelAction {
     Load(labello_client::PrelabelSuggestionRequest),
     Check(labello_client::PrelabelSuggestionRequest),
     Admin(Option<PrelabelAdminCommand>),
+    InspectModel {
+        config_id: PrelabelConfigId,
+        location: String,
+    },
 }
 #[derive(Debug)]
 pub(crate) enum PrelabelReply {
     Hints(Box<PrelabelResponse>),
     Generation(PrelabelGeneration),
     Admin(PrelabelAdminState),
+    Model(PrelabelModelInspection),
 }
 type HintKey = (ImageId, TaskId, PrelabelConfigId);
 #[derive(Default)]
@@ -37,6 +42,7 @@ pub(crate) struct HintStatus {
 }
 #[derive(Default)]
 pub(crate) struct PrelabelAdminUi {
+    pub model_checks: BTreeMap<PrelabelConfigId, ModelCheckUi>,
     pub state: Option<PrelabelAdminState>,
     pub pending: Option<(u64, PrelabelAction)>,
     pub error: Option<String>,
@@ -44,6 +50,13 @@ pub(crate) struct PrelabelAdminUi {
     pub mappings: BTreeMap<TaskId, PrelabelConfigId>,
     pub reset_scope: PrelabelScope,
     pub confirm_reset: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct ModelCheckUi {
+    pub location: String,
+    pub pending: Option<u64>,
+    pub result: Option<Result<PrelabelModelInspection, String>>,
 }
 
 impl LabelloApp {
@@ -181,6 +194,36 @@ impl LabelloApp {
         if self.runtime.api.is_none() || !self.auth.prelabel_available {
             return;
         }
+        if let PrelabelAction::InspectModel {
+            config_id,
+            location,
+        } = &action
+        {
+            if self
+                .admin
+                .prelabels
+                .model_checks
+                .get(config_id)
+                .is_some_and(|check| check.pending.is_some())
+            {
+                return;
+            }
+            let request = self.request_identity(Some(self.config.dataset_id.clone()));
+            self.admin.prelabels.model_checks.insert(
+                config_id.clone(),
+                ModelCheckUi {
+                    location: location.clone(),
+                    pending: Some(request.request_id),
+                    result: None,
+                },
+            );
+            self.queue_command(UiCommand::Prelabel {
+                request,
+                dataset_id: self.config.dataset_id.clone(),
+                action,
+            });
+            return;
+        }
         let pending = if matches!(action, PrelabelAction::Admin(_)) {
             &self.admin.prelabels.pending
         } else {
@@ -281,6 +324,12 @@ impl LabelloApp {
                     ui.label("Using dataset hints");
                 }
                 match status.execution {
+                    Some(PrelabelExecutionKind::ServerCuda) => {
+                        ui.small("Server CUDA");
+                    }
+                    Some(PrelabelExecutionKind::ServerWebGpu) => {
+                        ui.small("Server WebGPU");
+                    }
                     Some(PrelabelExecutionKind::BrowserWebGpu) => {
                         ui.label("Generated in your browser using WebGPU");
                     }

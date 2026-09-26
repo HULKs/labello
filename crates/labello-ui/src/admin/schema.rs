@@ -848,6 +848,9 @@ fn edit_prelabels(
     ui: &mut egui::Ui,
     configs: &mut Vec<PrelabelConfig>,
     tasks: &mut [TaskDefinition],
+    labels: &[LabelClass],
+    checks: &mut std::collections::BTreeMap<PrelabelConfigId, crate::prelabel_flow::ModelCheckUi>,
+    actions: &mut Vec<crate::prelabel_flow::PrelabelAction>,
 ) {
     admin_card(ui, "Prelabels card", |ui| {
         ui.heading("Prelabels");
@@ -952,15 +955,7 @@ fn edit_prelabels(
                 )
                 .on_hover_text("Model display name.");
             }
-            theme::labeled_text_field(
-                ui,
-                "Location",
-                &mut config.model.location,
-                theme::COMPACT_TEXT_FIELD_HEIGHT,
-            )
-            .on_hover_text(
-                "ONNX filename in the server’s configured models root, for example yolo11n.onnx.",
-            );
+            edit_model_location(ui, config, checks, actions);
             let mut version = config.model.version.clone().unwrap_or_default();
             if theme::labeled_text_field(
                 ui,
@@ -985,13 +980,13 @@ fn edit_prelabels(
                 .truncate()
                 .selected_text(
                     [
-                        "Server CPU",
+                        "Server GPU with CPU fallback",
                         "Browser WebGPU with CPU fallback",
                         "Browser CPU",
                     ][mode],
                 )
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut mode, 0, "Server CPU");
+                    ui.selectable_value(&mut mode, 0, "Server GPU with CPU fallback");
                     ui.selectable_value(&mut mode, 1, "Browser WebGPU with CPU fallback");
                     ui.selectable_value(&mut mode, 2, "Browser CPU");
                 });
@@ -1006,69 +1001,7 @@ fn edit_prelabels(
                     },
                 };
             }
-            if config.yolo.is_none()
-                && ui
-                    .button("Configure YOLO ONNX")
-                    .on_hover_text("Configure an Ultralytics YOLO detection or pose export.")
-                    .clicked()
-            {
-                config.yolo = Some(labello_domain::YoloModelSpec {
-                    input_size: 640,
-                    class_ids: tasks
-                        .iter()
-                        .flat_map(|t| t.class_ids.iter().cloned())
-                        .take(1)
-                        .map(Some)
-                        .collect(),
-                    keypoints: vec![],
-                });
-            }
-            if let Some(spec) = &mut config.yolo {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Square input size");
-                    ui.add(
-                        egui::DragValue::new(&mut spec.input_size)
-                            .range(32..=1280)
-                            .speed(32),
-                    );
-                });
-                let classes = spec
-                    .class_ids
-                    .iter()
-                    .map(|id| id.as_ref().map_or("-", |id| id.as_str()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if let Some(classes) = prelabel_list_field(
-                    ui,
-                    (&config.config_id, "classes"),
-                    "Class IDs in model order (comma separated; - ignores a class)",
-                    classes,
-                ) {
-                    spec.class_ids = classes
-                        .split(',')
-                        .map(|id| {
-                            if id.trim() == "-" || id.trim().is_empty() {
-                                None
-                            } else {
-                                Some(labello_domain::ClassId::from(id.trim()))
-                            }
-                        })
-                        .collect();
-                }
-                if let Some(keypoints) = prelabel_list_field(
-                    ui,
-                    (&config.config_id, "keypoints"),
-                    "Pose keypoint names in model order (empty for detection)",
-                    spec.keypoints.join(", "),
-                ) {
-                    spec.keypoints = keypoints
-                        .split(',')
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                        .map(str::to_owned)
-                        .collect();
-                }
-            }
+            edit_model_profile(ui, config, labels, tasks, checks);
             let mut iou = config.output_processing.iou_threshold();
             if prelabel_threshold_field(ui, "Overlap IoU", &mut iou).changed() {
                 config.output_processing.suppress_overlaps_iou = Some(iou);
@@ -1108,16 +1041,7 @@ fn edit_prelabels(
                     suppress_overlaps_iou: None,
                 },
                 available_to_annotators: true,
-                yolo: Some(labello_domain::YoloModelSpec {
-                    input_size: 640,
-                    class_ids: tasks
-                        .iter()
-                        .flat_map(|t| t.class_ids.iter().cloned())
-                        .take(1)
-                        .map(Some)
-                        .collect(),
-                    keypoints: vec![],
-                }),
+                yolo: None,
             });
         }
         show_issues(ui, &prelabel_issues(configs));

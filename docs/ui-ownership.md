@@ -41,7 +41,7 @@ dataset, import, and pending ownership before new requests start.
 | `panels/workspace_overflow.rs` | Action measurement, visible prefix, overflow focus and command identity |
 | `panels/task_selector.rs` | Task selection; `workflow_marker.rs` owns reason icons and the committed-workflow marker |
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
-| `prelabel_flow.rs`, `live/prelabels.rs` | Model choice, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset |
+| `prelabel_flow.rs`, `live/prelabels.rs` | Model choice, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
 | `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
 | `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
@@ -331,3 +331,10 @@ The bottom action bar remains empty until session, dataset, image, and required
 assignment are loaded. Background availability refresh preserves loaded actions.
 Resize measurement requests a settling repaint only when height changes, avoiding
 input-dependent gaps or repaint loops at unsupported tiny sizes.
+
+`admin/prelabel_models.rs` renders managed model inspection, named tensor selection
+and explicit dataset-class mappings. Checks belong to the Admin owner and use the
+existing request/epoch gate. Replies must also match the current configuration ID
+and filename. Filename edits, configuration reload, save and discard clear stale
+inspection state. Rendering stages profile edits; ordinary Admin save remains the
+publication boundary.

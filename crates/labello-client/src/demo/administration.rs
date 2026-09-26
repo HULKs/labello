@@ -61,6 +61,14 @@ impl KeybindingApi for DemoLabelloApi {
 }
 
 impl PrelabelApi for DemoLabelloApi {
+    fn inspect_prelabel_model<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _request: crate::PrelabelModelCheckRequest,
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelModelInspection> {
+        Box::pin(async { Err(ClientError::Demo("Connect to a server to check a model".into())) })
+    }
+
     fn list_prelabel_configs<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

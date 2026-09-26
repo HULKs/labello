@@ -11,6 +11,7 @@ extern "C" {
         size: u32,
         gpu: bool,
         runtime: &str,
+        output_name: &str,
     ) -> Result<Run, JsValue>;
     #[wasm_bindgen(method, getter)]
     fn promise(this: &Run) -> js_sys::Promise;
@@ -52,6 +53,7 @@ pub async fn infer(
                 spec.input_size,
                 gpu,
                 runtime_url,
+                spec.output_name.as_deref().unwrap_or_default(),
             )
             .map_err(|_| "browser inference worker could not start")?,
         );

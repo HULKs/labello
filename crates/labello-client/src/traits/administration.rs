@@ -22,6 +22,12 @@ pub trait KeybindingApi {
 }
 
 pub trait PrelabelApi {
+    fn inspect_prelabel_model<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        request: crate::PrelabelModelCheckRequest,
+    ) -> ApiFuture<'a, labello_domain::PrelabelModelInspection>;
+
     fn list_prelabel_configs<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

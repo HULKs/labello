@@ -44,6 +44,7 @@ include!("admin/overview.rs");
 include!("admin/images.rs");
 include!("admin/schema.rs");
 include!("admin/automation.rs");
+include!("admin/prelabel_models.rs");
 include!("admin/people.rs");
 include!("admin/backups.rs");
 

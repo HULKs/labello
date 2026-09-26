@@ -74,6 +74,16 @@ impl KeybindingApi for HttpLabelloApi {
 }
 
 impl PrelabelApi for HttpLabelloApi {
+    fn inspect_prelabel_model<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        request: crate::PrelabelModelCheckRequest,
+    ) -> crate::ApiFuture<'a, labello_domain::PrelabelModelInspection> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/prelabel-model-check"))?, &request).await
+        })
+    }
+
     fn list_prelabel_configs<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

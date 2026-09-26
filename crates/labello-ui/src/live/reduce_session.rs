@@ -284,6 +284,7 @@ impl LabelloApp {
                             self.sync_work_config(loaded.metadata.clone());
                             self.upsert_dataset_summary(&loaded.metadata);
                             self.datasets.admin_baseline = Some(loaded.metadata.clone());
+                            self.admin.prelabels.model_checks.clear();
                             self.datasets.admin_config = Some(loaded.metadata);
                             self.datasets.users_baseline = loaded.users.clone();
                             self.datasets.users = loaded.users;
@@ -313,6 +314,7 @@ impl LabelloApp {
                         self.sync_work_config(metadata.clone());
                         self.upsert_dataset_summary(&metadata);
                         self.datasets.admin_baseline = Some(metadata.clone());
+                        self.admin.prelabels.model_checks.clear();
                         self.datasets.admin_config = Some(metadata);
                         self.clear_admin_draft();
                         self.runtime.error = None;

@@ -10,6 +10,8 @@ mod filtering;
 pub use filtering::filter_prelabels;
 mod management;
 pub use management::*;
+mod model;
+pub use model::*;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -76,13 +78,22 @@ impl OutputProcessing {
 
 /// Static float32 Ultralytics YOLO exports with batch=1, dynamic=false and nms=false.
 /// Model class indices map explicitly to dataset IDs; None ignores an output class.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloModelSpec {
     pub input_size: u32,
-    #[serde(with = "class_mapping")]
+    /// Legacy positional mapping, retained when reading existing configurations.
+    #[serde(default, with = "class_mapping", skip_serializing_if = "Vec::is_empty")]
     #[schemars(with = "Vec<String>")]
     pub class_ids: Vec<Option<ClassId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub class_mappings: Vec<YoloClassMapping>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_digest: Option<String>,
     #[serde(default)]
     pub keypoints: Vec<String>,
 }
@@ -123,18 +134,8 @@ impl PrelabelConfig {
             .validate_path_segment()
             .map_err(|_| invalid())?;
         self.output_processing.validate()?;
-        if self.name.trim().is_empty()
-            || self.model.model_id.trim().is_empty()
-            || self.model.location.is_empty()
-            || self.model.location.len() > 128
-            || !self.model.location.ends_with(".onnx")
-            || !self
-                .model
-                .location
-                .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-            || self.model.location.starts_with('.')
-        {
+        ModelSpec::validate_location(&self.model.location)?;
+        if self.name.trim().is_empty() || self.model.model_id.trim().is_empty() {
             return Err(invalid());
         }
         if let PrelabelExecution::ServerSide { command } = &self.execution
@@ -147,14 +148,14 @@ impl PrelabelConfig {
         let spec = self.yolo.as_ref().ok_or_else(invalid)?;
         if !(32..=1280).contains(&spec.input_size)
             || spec.input_size % 32 != 0
-            || spec.class_ids.is_empty()
-            || spec.class_ids.len() > 1000
-            || !spec.class_ids.iter().any(Option::is_some)
+            || !(1..=1000).contains(&spec.model_class_count())
+            || spec.mapped_classes().next().is_none()
             || spec.keypoints.len() > 256
         {
             return Err(invalid());
         }
-        for id in spec.class_ids.iter().flatten() {
+        spec.validate_mapping()?;
+        for id in spec.mapped_classes() {
             id.validate_path_segment().map_err(|_| invalid())?;
         }
         let mut names = std::collections::BTreeSet::new();
@@ -174,7 +175,7 @@ impl PrelabelConfig {
             && task
                 .class_ids
                 .iter()
-                .all(|id| spec.class_ids.iter().flatten().any(|mapped| mapped == id))
+                .all(|id| spec.mapped_classes().any(|mapped| mapped == id))
             && match task.annotation_type {
                 crate::AnnotationType::BoundingBox => spec.keypoints.is_empty(),
                 crate::AnnotationType::Skeleton => task.skeleton.as_ref().is_some_and(|s| {
@@ -198,8 +199,26 @@ impl PrelabelConfig {
 #[serde(rename_all = "snake_case")]
 pub enum PrelabelExecutionKind {
     ServerCpu,
+    ServerCuda,
+    ServerWebGpu,
     BrowserWebGpu,
     BrowserCpu,
+}
+
+impl PrelabelExecutionKind {
+    pub fn is_server(&self) -> bool {
+        matches!(
+            self,
+            Self::ServerCpu | Self::ServerCuda | Self::ServerWebGpu
+        )
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrelabelInferenceResult {
+    pub execution: PrelabelExecutionKind,
+    pub suggestions: Vec<PrelabelSuggestion>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

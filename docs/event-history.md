@@ -206,3 +206,8 @@ Historical v2/v3 histories keep their existing meaning. V2 output rejects new
 prelabel origins rather than dropping provenance. Schemas, snapshots and offline
 bundles preserve it. New acceptance requires online signed-evidence validation;
 ordinary/offline mutations cannot author a new `prelabel_suggestion` revision.
+
+Server prediction execution may be `server_cpu`, `server_cuda`, or `server_web_gpu`.
+All three retain server-generated trust through accepted origin, replay, snapshots
+and offline wire data. Browser submissions cannot claim any server execution kind.
+Historical CPU and browser execution values keep their existing meaning.

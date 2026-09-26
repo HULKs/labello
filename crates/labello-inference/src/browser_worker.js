@@ -1,7 +1,7 @@
 // Browser adapter only: preprocessing, decoding and hint policy live in Rust.
 // Each run owns a worker so cancellation stops CPU execution and frees model memory.
 function workerMain() {
-  self.onmessage = async ({ data: { model, input, size, gpu, runtime } }) => {
+  self.onmessage = async ({ data: { model, input, size, gpu, runtime, outputName } }) => {
     let session;
     try {
       importScripts(new URL("ort.webgpu.min.js", runtime).href);
@@ -14,13 +14,15 @@ function workerMain() {
       });
       const metadata = session.inputMetadata[0];
       const expected = [1, 3, size, size];
-      if (session.inputNames.length !== 1 || session.outputNames.length !== 1 ||
+      if (session.inputNames.length !== 1 ||
           metadata.type !== "float32" || metadata.shape.length !== 4 ||
           !metadata.shape.every((dimension, index) => dimension === expected[index])) {
         throw new Error("Unsupported model input");
       }
-      const outputs = await session.run({ [session.inputNames[0]]: new ort.Tensor("float32", input, expected) });
-      const tensor = outputs[session.outputNames[0]];
+      const name = outputName || (session.outputNames.length === 1 ? session.outputNames[0] : null);
+      if (!name || !session.outputNames.includes(name)) throw new Error("Selected model output unavailable");
+      const outputs = await session.run({ [session.inputNames[0]]: new ort.Tensor("float32", input, expected) }, [name]);
+      const tensor = outputs[name];
       if (tensor.type !== "float32" || tensor.size > 8000000) throw new Error("Unsupported model output");
       const data = new Float32Array(await tensor.getData());
       self.postMessage({ shape: tensor.dims, data }, [data.buffer]);
@@ -34,7 +36,7 @@ function workerMain() {
   };
 }
 
-export function start(model, input, size, gpu, runtime) {
+export function start(model, input, size, gpu, runtime, outputName) {
   const url = URL.createObjectURL(new Blob([`(${workerMain.toString()})();`], { type: "text/javascript" }));
   const worker = new Worker(url);
   URL.revokeObjectURL(url);
@@ -50,7 +52,7 @@ export function start(model, input, size, gpu, runtime) {
       done = true; stop();
       if (data.failed) reject(new Error("Model execution failed")); else resolve(data);
     };
-    worker.postMessage({ model, input, size, gpu, runtime }, [model.buffer, input.buffer]);
+    worker.postMessage({ model, input, size, gpu, runtime, outputName }, [model.buffer, input.buffer]);
   });
   return { promise, cancel() { stop(); if (!done) { done = true; rejectRun(new Error("Inference cancelled")); } } };
 }

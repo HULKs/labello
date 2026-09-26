@@ -4,12 +4,25 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 #[derive(Default)]
 struct Runner {
     calls: AtomicUsize,
+    execution: Option<PrelabelExecutionKind>,
     failures: AtomicUsize,
     empty: bool,
     pause: Option<Arc<tokio::sync::Notify>>,
     started: tokio::sync::Notify,
 }
 impl PrelabelRunner for Arc<Runner> {
+    fn inspect(&self, _model: Vec<u8>) -> crate::prelabel::ModelInspectionFuture {
+        Box::pin(async {
+            Ok(PrelabelModelInspection {
+                model_digest: "a".repeat(64),
+                inputs: vec![],
+                input_size: Some(320),
+                outputs: vec![],
+                problem: None,
+            })
+        })
+    }
+
     fn infer(
         &self,
         _: Vec<u8>,
@@ -34,22 +47,34 @@ impl PrelabelRunner for Arc<Runner> {
                 return Err(PrelabelFailure::Inference);
             }
             if runner.empty {
-                return Ok(vec![]);
+                return Ok(PrelabelInferenceResult {
+                    execution: runner
+                        .execution
+                        .clone()
+                        .unwrap_or(PrelabelExecutionKind::ServerCpu),
+                    suggestions: vec![],
+                });
             }
-            Ok(vec![PrelabelSuggestion {
-                suggestion_id: "untrusted-id".into(),
-                config_id: config.config_id,
-                task_id: task.task_id,
-                class_id: "person".into(),
-                confidence: 0.9,
-                geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-                    x: 0.1,
-                    y: 0.1,
-                    width: 0.3,
-                    height: 0.3,
-                }),
-                evidence: None,
-            }])
+            Ok(PrelabelInferenceResult {
+                execution: runner
+                    .execution
+                    .clone()
+                    .unwrap_or(PrelabelExecutionKind::ServerCpu),
+                suggestions: vec![PrelabelSuggestion {
+                    suggestion_id: "untrusted-id".into(),
+                    config_id: config.config_id,
+                    task_id: task.task_id,
+                    class_id: "person".into(),
+                    confidence: 0.9,
+                    geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+                        x: 0.1,
+                        y: 0.1,
+                        width: 0.3,
+                        height: 0.3,
+                    }),
+                    evidence: None,
+                }],
+            })
         })
     }
 }
@@ -59,6 +84,132 @@ struct Fixture {
     service: PrelabelService,
     runner: Arc<Runner>,
     dataset: DatasetId,
+}
+
+#[tokio::test]
+async fn batch_cache_retains_gpu_execution_for_predictions_and_empty_results() {
+    for (execution, empty) in [
+        (PrelabelExecutionKind::ServerCuda, false),
+        (PrelabelExecutionKind::ServerWebGpu, true),
+    ] {
+        let fixture = Fixture::new(Runner {
+            execution: Some(execution.clone()),
+            empty,
+            ..Default::default()
+        })
+        .await;
+        let ready = fixture
+            .command(PrelabelAdminCommand::Preflight {
+                mappings: BTreeMap::new(),
+            })
+            .await;
+        fixture
+            .command(PrelabelAdminCommand::Start {
+                run_id: ready.runs[0].run_id.clone(),
+            })
+            .await;
+        fixture.finish().await;
+        let hints = fixture.hints().await;
+        assert!(hints.from_batch);
+        assert_eq!(hints.execution, Some(execution.clone()));
+        assert_eq!(hints.suggestions.is_empty(), empty);
+        for hint in hints.suggestions {
+            assert_eq!(
+                hint.evidence.as_ref().unwrap().provenance.execution,
+                execution
+            );
+            assert_eq!(
+                hint.evidence.as_ref().unwrap().provenance.trust,
+                PredictionTrust::ServerGenerated
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn model_inspection_uses_managed_files_and_shared_worker_limit_without_writing_hints() {
+    let fixture = Fixture::new(Runner::default()).await;
+    let before = fixture.service.admin_state(&fixture.dataset).await.unwrap();
+    let metadata = fixture.repo.load_dataset_config().await.unwrap();
+    let location = &metadata.prelabel_configs[0].model.location;
+    assert!(fixture.service.inspect_model(location).await.is_ok());
+    let permit = fixture
+        .service
+        .inner
+        .workers
+        .clone()
+        .acquire_owned()
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture.service.inspect_model(location).await.unwrap_err(),
+        PrelabelFailure::Busy
+    );
+    drop(permit);
+    assert_eq!(
+        fixture.service.admin_state(&fixture.dataset).await.unwrap(),
+        before
+    );
+    assert_eq!(fixture.runner.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        fixture
+            .service
+            .inspect_model("missing.onnx")
+            .await
+            .unwrap_err(),
+        PrelabelFailure::ModelUnavailable
+    );
+    assert_eq!(
+        fixture
+            .service
+            .inspect_model("../model.onnx")
+            .await
+            .unwrap_err(),
+        PrelabelFailure::Invalid
+    );
+}
+
+#[tokio::test]
+async fn checked_mapping_rejects_replaced_model_and_config_round_trips_in_toml() {
+    let fixture = Fixture::new(Runner::default()).await;
+    let mut metadata = fixture.repo.load_dataset_config().await.unwrap();
+    let bytes = fixture
+        .service
+        .model(&metadata.prelabel_configs[0])
+        .await
+        .unwrap();
+    let config = &mut metadata.prelabel_configs[0];
+    let spec = config.yolo.as_mut().unwrap();
+    spec.use_explicit_mapping(80);
+    spec.output_name = Some("predictions".into());
+    spec.model_digest = Some(blake3::hash(&bytes).to_hex().to_string());
+    fixture.repo.save_dataset(&metadata).await.unwrap();
+    let loaded = fixture.repo.load_dataset_config().await.unwrap();
+    assert_eq!(loaded.prelabel_configs, metadata.prelabel_configs);
+    assert!(
+        fixture
+            .service
+            .model(&loaded.prelabel_configs[0])
+            .await
+            .is_ok()
+    );
+    std::fs::write(
+        fixture
+            .temp
+            .path()
+            .join("models")
+            .join(&loaded.prelabel_configs[0].model.location),
+        b"replaced model",
+    )
+    .unwrap();
+    assert_eq!(
+        fixture
+            .service
+            .model(&loaded.prelabel_configs[0])
+            .await
+            .unwrap_err(),
+        PrelabelFailure::Stale
+    );
 }
 
 #[tokio::test]
@@ -247,6 +398,7 @@ impl Fixture {
                 input_size: 320,
                 class_ids: vec![Some("person".into()), None],
                 keypoints: vec![],
+                ..Default::default()
             }),
         });
         repo.initialize(metadata).await.unwrap();
@@ -524,7 +676,7 @@ async fn browser_claims_are_bound_and_disclosed_and_tampered_acceptance_is_rejec
     let request = BrowserPrelabelResult {
         grant: grant.clone(),
         execution: PrelabelExecutionKind::BrowserCpu,
-        suggestions: candidates,
+        suggestions: candidates.suggestions,
     };
     let response = f
         .service
@@ -545,15 +697,21 @@ async fn browser_claims_are_bound_and_disclosed_and_tampered_acceptance_is_rejec
             .await,
         Err(PrelabelFailure::Invalid)
     ));
-    let mut forged = request.clone();
-    forged.execution = PrelabelExecutionKind::ServerCpu;
-    assert_eq!(
-        f.service
-            .certify_browser(&f.dataset, &f.repo, forged)
-            .await
-            .unwrap_err(),
-        PrelabelFailure::Invalid
-    );
+    for execution in [
+        PrelabelExecutionKind::ServerCpu,
+        PrelabelExecutionKind::ServerCuda,
+        PrelabelExecutionKind::ServerWebGpu,
+    ] {
+        let mut forged = request.clone();
+        forged.execution = execution;
+        assert_eq!(
+            f.service
+                .certify_browser(&f.dataset, &f.repo, forged)
+                .await
+                .unwrap_err(),
+            PrelabelFailure::Invalid
+        );
+    }
     f.command(PrelabelAdminCommand::Reset {
         scope: Default::default(),
     })
@@ -673,7 +831,7 @@ async fn model_paths_reject_traversal_and_symlinks() {
     config.model.location = "link.onnx".into();
     assert_eq!(
         f.service.model(&config).await.unwrap_err(),
-        PrelabelFailure::Invalid
+        PrelabelFailure::ModelUnavailable
     );
 }
 

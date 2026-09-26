@@ -318,6 +318,10 @@ pub fn router(state: ApiState) -> Router {
             get(prelabels::model),
         )
         .route(
+            "/datasets/{dataset_id}/prelabel-model-check",
+            post(prelabels::inspect_model).layer(DefaultBodyLimit::max(4096)),
+        )
+        .route(
             "/datasets/{dataset_id}/prelabel-management",
             get(prelabels::admin_state).post(prelabels::admin_command),
         )
@@ -1055,7 +1059,7 @@ async fn add_prelabel_config(
         .validate()
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     if config.yolo.as_ref().is_some_and(|spec| {
-        spec.class_ids.iter().flatten().any(|id| {
+        spec.mapped_classes().any(|id| {
             !metadata
                 .label_classes
                 .iter()
@@ -1139,7 +1143,7 @@ fn validate_config_update(
                 .map_err(|error| ApiError::BadRequest(error.to_string()))?;
         }
         if config.yolo.as_ref().is_some_and(|spec| {
-            spec.class_ids.iter().flatten().any(|id| {
+            spec.mapped_classes().any(|id| {
                 !request
                     .label_classes
                     .iter()

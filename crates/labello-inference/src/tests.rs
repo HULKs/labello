@@ -1,6 +1,6 @@
 use super::*;
 
-fn contract(pose: bool) -> (PrelabelConfig, TaskDefinition) {
+pub(super) fn contract(pose: bool) -> (PrelabelConfig, TaskDefinition) {
     let keypoints = if pose { vec!["nose".into()] } else { vec![] };
     let config = PrelabelConfig {
         config_id: "model".into(),
@@ -21,6 +21,7 @@ fn contract(pose: bool) -> (PrelabelConfig, TaskDefinition) {
             input_size: 320,
             class_ids: vec![Some("person".into()), None],
             keypoints,
+            ..Default::default()
         }),
     };
     let task = TaskDefinition {
@@ -52,6 +53,31 @@ fn contract(pose: bool) -> (PrelabelConfig, TaskDefinition) {
         enabled: true,
     };
     (config, task)
+}
+
+#[test]
+fn sparse_mapping_keeps_all_model_scores_and_keypoint_offsets() {
+    let (mut config, task) = contract(false);
+    let spec = config.yolo.as_mut().unwrap();
+    spec.class_ids.clear();
+    spec.class_count = Some(80);
+    spec.output_name = Some("predictions".into());
+    spec.class_mappings = vec![YoloClassMapping {
+        model_class_id: 32,
+        class_id: "person".into(),
+    }];
+    let mut data = vec![0.0; 84];
+    data[..4].copy_from_slice(&[160.0, 160.0, 80.0, 80.0]);
+    data[4 + 32] = 0.9;
+    let result = decode(&[1, 84, 1], &data, letterbox(), &config, &task).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].class_id.as_str(), "person");
+    data[4 + 79] = 0.95;
+    assert!(
+        decode(&[1, 84, 1], &data, letterbox(), &config, &task)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 fn letterbox() -> Letterbox {

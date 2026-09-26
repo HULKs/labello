@@ -165,7 +165,14 @@ impl LabelloApp {
                 self.fail_inspection(request.request_id, error.to_owned());
             }
             UiCommand::Prelabel { action, .. } => {
-                if matches!(action, crate::prelabel_flow::PrelabelAction::Admin(_)) { self.admin.prelabels.pending = None; self.admin.prelabels.error = Some(error.to_owned()); }
+                if let crate::prelabel_flow::PrelabelAction::InspectModel { config_id, .. } = action {
+                    if let Some(check) = self.admin.prelabels.model_checks.get_mut(config_id)
+                        && check.pending == Some(request_id) {
+                        check.pending = None;
+                        check.result = Some(Err(error.to_owned()));
+                    }
+                }
+                else if matches!(action, crate::prelabel_flow::PrelabelAction::Admin(_)) { self.admin.prelabels.pending = None; self.admin.prelabels.error = Some(error.to_owned()); }
                 else { self.work.prelabels.pending = None; }
                 return;
             }

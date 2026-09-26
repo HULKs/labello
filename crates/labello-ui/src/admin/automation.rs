@@ -15,6 +15,7 @@ impl LabelloApp {
                 crate::prelabel_flow::disabled_notice(ui);
             });
         }
+        let mut model_checks = Vec::new();
         if let Some(config) = self.datasets.admin_config.as_mut() {
             ui.add_enabled_ui(enabled, |ui| {
                 admin_card(ui, "Image preloading card", |ui| {
@@ -28,11 +29,12 @@ impl LabelloApp {
                     ui.small("Preload upcoming annotation and review work. Larger queues use more memory and reserve more work. Balance limits may keep the queue below this target.");
                 });
                 if prelabel_available {
-                    edit_prelabels(ui, &mut config.prelabel_configs, &mut config.tasks);
+                    edit_prelabels(ui, &mut config.prelabel_configs, &mut config.tasks, &config.label_classes, &mut self.admin.prelabels.model_checks, &mut model_checks);
                 }
                 edit_imbalance(ui, &mut config.imbalance);
             });
         }
+        for action in model_checks { self.request_prelabels(action); }
         self.prelabel_admin_panel(ui);
     }
 }

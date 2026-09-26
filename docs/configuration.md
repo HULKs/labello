@@ -472,3 +472,11 @@ model configurations and workflow bindings are preserved.
 [server example](../labello.server.example.toml). Model supply, supported tensor
 shapes, processing, Linux worker limits and retention are defined in
 [Model prelabels](prelabels.md).
+
+Optional `[prelabel.runtime]` settings `onnxLibrary` and `webgpuLibrary` select
+operator-owned native ONNX Runtime and WebGPU plugin libraries. Server inference
+tries CUDA, WebGPU, then CPU; missing native runtime libraries retain the included
+Tract CPU fallback. Runtime/provider failures do not disable the whole feature.
+The model check and inference share the configured worker concurrency limit.
+See [Model prelabels](prelabels.md#execution-and-coordinates) for dependencies,
+resource bounds and the overall timeout budget.

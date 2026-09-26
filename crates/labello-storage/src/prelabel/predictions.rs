@@ -84,7 +84,7 @@ impl PrelabelService {
                     .await
                     .map_err(|_| PrelabelFailure::Storage)?;
             return Ok(PrelabelResponse {
-                execution: Some(PrelabelExecutionKind::ServerCpu),
+                execution: Some(cached.execution.clone()),
                 generation,
                 suggestions,
                 from_batch: true,
@@ -135,12 +135,12 @@ impl PrelabelService {
             config,
             task,
             record.dimensions(),
-            candidates,
-            PrelabelExecutionKind::ServerCpu,
+            candidates.suggestions,
+            candidates.execution.clone(),
         )?;
         self.check_result_size(&suggestions)?;
         Ok(PrelabelResponse {
-            execution: Some(PrelabelExecutionKind::ServerCpu),
+            execution: Some(candidates.execution),
             generation,
             suggestions,
             from_batch: false,
@@ -160,7 +160,7 @@ impl PrelabelService {
         if &grant.dataset_id != dataset
             || grant.expires_at < now()
             || !valid_signature(&control.key, &grant, &signature)?
-            || result.execution == PrelabelExecutionKind::ServerCpu
+            || result.execution.is_server()
         {
             return Err(PrelabelFailure::Invalid);
         }
@@ -396,7 +396,7 @@ pub(super) fn certify(
             model_version: config.model.version.clone(),
             model_digest: item.model_digest.clone(),
             execution: execution.clone(),
-            trust: if execution == PrelabelExecutionKind::ServerCpu {
+            trust: if execution.is_server() {
                 PredictionTrust::ServerGenerated
             } else {
                 PredictionTrust::BrowserReported

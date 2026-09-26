@@ -383,3 +383,9 @@ lock/reload/validate/append/replay path rejects duplicate or suppressed acceptan
 Accepted prediction provenance lives in immutable annotation origin and remains
 in event/state schema 3, snapshots, and offline bundles. Derived hint files,
 private signing keys, pause markers, and jobs are excluded from snapshots.
+
+Checked prelabel profiles add optional output tensor name, total class count,
+explicit model-to-dataset mappings and model digest to dataset configuration.
+Historical positional mappings remain readable without rewriting their meaning.
+The private hint index records the successful server provider; historical index
+entries without that field default to server CPU. Neither change rewrites events.

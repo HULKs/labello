@@ -37,6 +37,10 @@ pub enum PrelabelFailure {
     Paused,
     #[error("model execution failed or exceeded its resource limit")]
     Inference,
+    #[error("model file is missing, unreadable, or outside the configured models directory")]
+    ModelUnavailable,
+    #[error("file is not a supported, self-contained ONNX model")]
+    ModelInvalid,
     #[error("prelabel run is not ready for this action; check remaining workflows again")]
     NotReady,
     #[error("prelabel run was not found")]
@@ -90,8 +94,11 @@ impl PrelabelLimits {
     }
 }
 
-pub type InferenceFuture = Pin<Box<dyn Future<Output = Result<Vec<PrelabelSuggestion>>> + Send>>;
+pub type InferenceFuture = Pin<Box<dyn Future<Output = Result<PrelabelInferenceResult>> + Send>>;
+pub type ModelInspectionFuture =
+    Pin<Box<dyn Future<Output = Result<PrelabelModelInspection>> + Send>>;
 pub trait PrelabelRunner: Send + Sync {
+    fn inspect(&self, model: Vec<u8>) -> ModelInspectionFuture;
     /// Implementations must bound execution time/memory and terminate on future cancellation.
     fn infer(
         &self,
@@ -150,6 +157,8 @@ struct ScopeControl {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct CachedResult {
+    #[serde(default = "server_cpu")]
+    execution: PrelabelExecutionKind,
     task_id: TaskId,
     config_id: PrelabelConfigId,
     created_at: Timestamp,
@@ -274,11 +283,37 @@ impl PrelabelService {
 
     pub async fn model(&self, config: &PrelabelConfig) -> Result<Vec<u8>> {
         config.validate().map_err(|_| PrelabelFailure::Invalid)?;
-        files::read_beneath(
-            &self.inner.models,
-            Path::new(&config.model.location),
-            256 * 1024 * 1024,
+        let model = self.model_file(&config.model.location)?;
+        if config
+            .yolo
+            .as_ref()
+            .and_then(|spec| spec.model_digest.as_ref())
+            .is_some_and(|digest| blake3::hash(&model).to_hex().as_str() != digest)
+        {
+            return Err(PrelabelFailure::Stale);
+        }
+        Ok(model)
+    }
+
+    fn model_file(&self, location: &str) -> Result<Vec<u8>> {
+        ModelSpec::validate_location(location).map_err(|_| PrelabelFailure::Invalid)?;
+        files::read_beneath(&self.inner.models, Path::new(location), 256 * 1024 * 1024).map_err(
+            |error| match error {
+                PrelabelFailure::Limit => error,
+                _ => PrelabelFailure::ModelUnavailable,
+            },
         )
+    }
+
+    /// An unsaved filename can be checked before a class mapping or configuration exists.
+    pub async fn inspect_model(&self, location: &str) -> Result<PrelabelModelInspection> {
+        let _permit = self
+            .inner
+            .workers
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| PrelabelFailure::Busy)?;
+        self.inner.runner.inspect(self.model_file(location)?).await
     }
 
     pub async fn shutdown(&self) {
@@ -356,4 +391,8 @@ fn configuration<'a>(
         .validate_for_task(task)
         .map_err(|_| PrelabelFailure::Invalid)?;
     Ok((task, config, digest(&(task, config))?))
+}
+
+fn server_cpu() -> PrelabelExecutionKind {
+    PrelabelExecutionKind::ServerCpu
 }

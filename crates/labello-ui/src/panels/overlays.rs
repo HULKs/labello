@@ -337,6 +337,7 @@ impl LabelloApp {
             )
         });
         if discard {
+            self.admin.prelabels.model_checks.clear();
             self.datasets.admin_config = self.datasets.admin_baseline.clone();
             self.datasets.users = self.datasets.users_baseline.clone();
             self.clear_admin_draft();

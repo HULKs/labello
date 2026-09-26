@@ -8,13 +8,22 @@ use ort::{
     session::Session,
     value::{Tensor, TensorElementType, ValueType},
 };
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
 pub use browser::infer;
+#[cfg(not(target_arch = "wasm32"))]
+mod inspection;
+#[cfg(not(target_arch = "wasm32"))]
+pub use inspection::inspect;
+#[cfg(not(target_arch = "wasm32"))]
+mod cpu;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::{NativeProvider, NativeRuntimeConfig, configure_runtime};
 
 pub const MAX_MODEL_BYTES: usize = 256 * 1024 * 1024;
 pub const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
@@ -23,12 +32,7 @@ pub const MAX_CANDIDATES: usize = 35_000;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InferenceResult {
-    pub execution: PrelabelExecutionKind,
-    pub suggestions: Vec<PrelabelSuggestion>,
-}
+pub type InferenceResult = PrelabelInferenceResult;
 
 #[derive(Clone, Copy, Debug)]
 struct Letterbox {
@@ -89,9 +93,10 @@ fn prepare(image: &[u8], size: u32) -> Result<(Vec<f32>, Letterbox), String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn validate_session(session: &Session, spec: &YoloModelSpec) -> Result<(), String> {
-    if session.inputs().len() != 1 || session.outputs().len() != 1 {
-        return Err("model must have one input and one output".into());
+    if session.inputs().len() != 1 {
+        return Err("model must have one input".into());
     }
+    selected_output(session, spec)?;
     let expected = [1, 3, i64::from(spec.input_size), i64::from(spec.input_size)];
     match session.inputs()[0].dtype() {
         ValueType::Tensor {
@@ -106,6 +111,19 @@ fn validate_session(session: &Session, spec: &YoloModelSpec) -> Result<(), Strin
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn selected_output(session: &Session, spec: &YoloModelSpec) -> Result<usize, String> {
+    match &spec.output_name {
+        Some(name) => session
+            .outputs()
+            .iter()
+            .position(|output| output.name() == name)
+            .ok_or_else(|| "selected model output was not found; check the model again".into()),
+        None if session.outputs().len() == 1 => Ok(0),
+        None => Err("select a model output tensor".into()),
+    }
+}
+
 fn decode(
     shape: &[i64],
     data: &[f32],
@@ -114,7 +132,7 @@ fn decode(
     task: &TaskDefinition,
 ) -> Result<Vec<PrelabelSuggestion>, String> {
     let spec = config.yolo.as_ref().ok_or("missing YOLO profile")?;
-    let channels = 4 + spec.class_ids.len() + spec.keypoints.len() * 3;
+    let channels = 4 + spec.model_class_count() + spec.keypoints.len() * 3;
     if shape.len() != 3
         || shape[0] != 1
         || shape[1] != channels as i64
@@ -140,14 +158,14 @@ fn decode(
     let mut pose_boxes = Vec::new();
     for index in 0..count {
         let at = |channel: usize| data[channel * count + index];
-        let (class_index, confidence) = (0..spec.class_ids.len())
+        let (class_index, confidence) = (0..spec.model_class_count())
             .map(|class| (class, at(4 + class)))
             .max_by(|a, b| a.1.total_cmp(&b.1).then_with(|| b.0.cmp(&a.0)))
             .ok_or("missing model classes")?;
         if !(0.0..=1.0).contains(&confidence) {
             return Err("invalid model confidence".into());
         }
-        let Some(class_id) = &spec.class_ids[class_index] else {
+        let Some(class_id) = spec.dataset_class(class_index) else {
             continue;
         };
         if !task.class_ids.contains(class_id) {
@@ -173,7 +191,7 @@ fn decode(
         } else {
             let mut keypoints = Vec::new();
             for (keypoint, name) in spec.keypoints.iter().enumerate() {
-                let offset = 4 + spec.class_ids.len() + keypoint * 3;
+                let offset = 4 + spec.model_class_count() + keypoint * 3;
                 let visibility = at(offset + 2);
                 if !(0.0..=1.0).contains(&visibility) {
                     return Err("invalid keypoint confidence".into());
@@ -237,20 +255,36 @@ pub fn infer(
     config: &PrelabelConfig,
     task: &TaskDefinition,
 ) -> Result<InferenceResult, String> {
+    infer_with_provider(model, image, config, task, NativeProvider::Cpu)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn infer_with_provider(
+    model: &[u8],
+    image: &[u8],
+    config: &PrelabelConfig,
+    task: &TaskDefinition,
+    provider: NativeProvider,
+) -> Result<InferenceResult, String> {
     config.validate_for_task(task).map_err(|e| e.to_string())?;
     if model.is_empty() || model.len() > MAX_MODEL_BYTES {
         return Err("model exceeds inference byte limit".into());
     }
-    static INIT: std::sync::Once = std::sync::Once::new();
-    INIT.call_once(|| {
-        ort::set_api(ort_tract::api());
-    });
     let spec = config.yolo.as_ref().ok_or("missing YOLO profile")?;
-    let mut session = Session::builder()
-        .map_err(|_| "model runtime initialization failed")?
-        .commit_from_memory(model)
-        .map_err(|_| "model loading failed")?;
-    validate_session(&session, spec)?;
+    if spec
+        .model_digest
+        .as_ref()
+        .is_some_and(|digest| blake3::hash(model).to_hex().as_str() != digest)
+    {
+        return Err("model changed; check the model and mapping again".into());
+    }
+    if provider == NativeProvider::Cpu && !native::available() {
+        return cpu::infer(model, image, config, task);
+    }
+    let mut native_session = native::load_session(model, provider)?;
+    let session = &mut native_session.session;
+    validate_session(session, spec)?;
+    let output_index = selected_output(session, spec)?;
     let (input, letterbox) = prepare(image, spec.input_size)?;
     let tensor = Tensor::from_array((
         [1, 3, spec.input_size as usize, spec.input_size as usize],
@@ -260,11 +294,12 @@ pub fn infer(
     let output = session
         .run(ort::inputs![tensor])
         .map_err(|_| "model execution failed")?;
-    let (shape, data) = output[0]
+    let (shape, data) = output[output_index]
         .try_extract_tensor::<f32>()
         .map_err(|_| "model output must be float32")?;
+    let suggestions = decode(shape, data, letterbox, config, task)?;
     Ok(InferenceResult {
-        execution: PrelabelExecutionKind::ServerCpu,
-        suggestions: decode(shape, data, letterbox, config, task)?,
+        execution: provider.execution(),
+        suggestions,
     })
 }
