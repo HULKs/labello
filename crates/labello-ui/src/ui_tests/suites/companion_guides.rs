@@ -621,39 +621,54 @@ fn last_companion_guide_stays_submittable_after_save_and_reload() {
 
 #[test]
 fn small_box_at_deep_zoom_resolves_last_guide_and_can_submit() {
-    let (api, id) = source_guide_api();
-    let mut harness = loaded_work_harness(api.clone());
-    for _ in 0..30 {
-        harness.state_mut().work.canvas.zoom_in();
+    for half_size in [8.0, 40.0] {
+        let (api, id) = source_guide_api();
+        let mut harness = loaded_work_harness(api.clone());
+        for _ in 0..30 {
+            harness.state_mut().work.canvas.zoom_in();
+        }
+        harness.run();
+        assert_eq!(harness.state().work.canvas.current_zoom(), 48.0);
+        let center = harness.get_by_label("Annotation canvas").rect().center();
+        // A click or sub-threshold jitter must not resolve the guide.
+        drag_at(&mut harness, center, center + egui::vec2(1.0, 1.0));
+        assert!(
+            harness.state().companion_needs_box(
+                harness
+                    .state()
+                    .work
+                    .annotations
+                    .iter()
+                    .find(|a| a.annotation_id == id)
+                    .unwrap()
+            )
+        );
+        drag_at(
+            &mut harness,
+            center - egui::vec2(half_size, half_size),
+            center + egui::vec2(half_size, half_size),
+        );
+        harness.run();
+        let annotation = harness
+            .state()
+            .work
+            .annotations
+            .iter()
+            .find(|a| a.annotation_id == id)
+            .unwrap();
+        assert!(
+            !harness.state().companion_needs_box(annotation),
+            "visible small box must resolve the last guide"
+        );
+        assert_eq!(annotation.version, 2);
+        let AnnotationGeometry::BoundingBox(bounds) = annotation.geometry else {
+            panic!()
+        };
+        assert!(bounds.width < 0.005 && bounds.height < 0.005);
+        harness.get_by_label("Submit & next").click();
+        step_until(&mut harness, 20, |app| {
+            api.counts().complete_assignment == 1 && app.work.pending_transition.is_none()
+        });
+        assert!(harness.state().runtime.error.is_none());
     }
-    harness.run();
-    assert_eq!(harness.state().work.canvas.current_zoom(), 48.0);
-    let center = harness.get_by_label("Annotation canvas").rect().center();
-    drag_at(
-        &mut harness,
-        center - egui::vec2(40.0, 40.0),
-        center + egui::vec2(40.0, 40.0),
-    );
-    harness.run();
-    let annotation = harness
-        .state()
-        .work
-        .annotations
-        .iter()
-        .find(|a| a.annotation_id == id)
-        .unwrap();
-    assert!(
-        !harness.state().companion_needs_box(annotation),
-        "visible small box must resolve the last guide"
-    );
-    assert_eq!(annotation.version, 2);
-    let AnnotationGeometry::BoundingBox(bounds) = annotation.geometry else {
-        panic!()
-    };
-    assert!(bounds.width < 0.005 && bounds.height < 0.005);
-    harness.get_by_label("Submit & next").click();
-    step_until(&mut harness, 20, |app| {
-        api.counts().complete_assignment == 1 && app.work.pending_transition.is_none()
-    });
-    assert!(harness.state().runtime.error.is_none());
 }

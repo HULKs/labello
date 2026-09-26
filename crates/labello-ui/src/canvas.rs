@@ -14,7 +14,9 @@ use crate::theme;
 pub(crate) const MIN_ZOOM: f32 = 1.0;
 pub(crate) const MAX_ZOOM: f32 = 48.0;
 const ZOOM_STEP: f32 = 1.25;
-const MIN_BOX_SIZE: f32 = 0.001;
+// Numerical floor only; deliberate creation is measured in visible canvas points.
+const MIN_BOX_SIZE: f32 = 0.000_001;
+const MIN_CREATE_BOX_POINTS: f32 = 3.0;
 const HANDLE_HIT_RADIUS: f32 = 12.0;
 const HANDLE_SIZE: f32 = 8.0;
 const VIEWPORT_CORNER_RADIUS: u8 = 18;

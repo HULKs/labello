@@ -315,7 +315,8 @@ fn handle_annotation_pointer(
         let keypoint = state.draft_keypoint.take();
         match (drag, bbox, keypoint) {
             (Some(DragOperation::Create { .. }), Some(bbox), _)
-                if bbox.width > 0.005 && bbox.height > 0.005 =>
+                if bbox.width * image_rect.width() >= MIN_CREATE_BOX_POINTS
+                    && bbox.height * image_rect.height() >= MIN_CREATE_BOX_POINTS =>
             {
                 return Some(CanvasAction::CreateBoundingBox(bbox));
             }

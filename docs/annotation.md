@@ -54,7 +54,9 @@ Settings are staged until saved and can be restored to defaults.
 
 Canvas zoom ranges from fit-to-view to 48 times that scale, including restored
 workspace views. Zoom magnifies the working preview; it does not fetch additional
-image detail.
+image detail. Box creation requires a drag of at least three canvas points in
+each dimension, independent of zoom, so small objects remain drawable at deep
+zoom; clicks and tiny pointer jitter do not create boxes.
 
 Migration-created box work uses [source keypoints as read-only guides](migration.md#add-a-missing-object)
 until the box is drawn. Select guides on the canvas, in Inspector, or with the
