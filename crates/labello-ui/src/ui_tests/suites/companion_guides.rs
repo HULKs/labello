@@ -399,3 +399,29 @@ fn pending_workspace_reload_does_not_replace_saved_deep_view() {
     app.persist_workspace_preference();
     assert_eq!(app.runtime.persistence.preference.as_ref(), Some(&saved));
 }
+
+#[test]
+fn companion_box_submit_button_completes_assignment_before_and_after_save() {
+    for save_first in [false, true] {
+        let (api, id) = source_guide_api();
+        let mut harness = loaded_work_harness(api.clone());
+        let assignment_id = harness.state().work.assignment.as_ref().unwrap().assignment_id.clone();
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        drag_at(&mut harness, canvas.center(), canvas.center() + canvas.size() * 0.4);
+        if save_first {
+            harness.state_mut().request_save(false);
+            step_until(&mut harness, 10, |app| app.work.save_status == SaveStatus::Saved);
+        }
+        harness.run();
+        harness.get_by_label("Submit & next").click();
+        step_until(&mut harness, 20, |_| api.counts().complete_assignment == 1);
+        assert_eq!(api.counts().complete_assignment, 1);
+        assert!(harness.state().runtime.error.is_none());
+        assert!(harness.state().work.pending_transition.is_none());
+        assert_ne!(harness.state().work.assignment.as_ref().map(|a| &a.assignment_id), Some(&assignment_id));
+        let spy = api.state.borrow();
+        let state = spy.states.values().find(|state| state.annotations.contains_key(&id)).unwrap();
+        assert_eq!(state.current_annotation(&id).unwrap().version, 2);
+        assert_eq!(state.annotations[&"source".into()].len(), 1);
+    }
+}
