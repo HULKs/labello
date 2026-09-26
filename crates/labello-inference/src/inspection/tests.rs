@@ -144,6 +144,51 @@ fn detection_metadata_is_optional_and_class_names_accept_the_classes_alias() {
 }
 
 #[test]
+fn task_metadata_accepts_plain_and_json_strings_without_ignoring_other_values() {
+    for task in ["detect", r#""detect""#, r#" "de\u0074ect" "#] {
+        let mut model = model();
+        model.metadata_props[0].value = task.into();
+        let inspected = inspect(&model.encode_to_vec()).unwrap();
+        assert_eq!(inspected.problem, None);
+        assert_eq!(inspected.outputs[1].problem, None, "task {task}");
+        assert_eq!(
+            inspected.outputs[1].profile.as_ref().unwrap().class_count,
+            2
+        );
+    }
+    for task in [
+        r#""segment""#,
+        r#""pose""#,
+        r#""detect"#,
+        "null",
+        "true",
+        "1",
+        r#"["detect"]"#,
+    ] {
+        let mut model = model();
+        model.metadata_props[0].value = task.into();
+        assert!(
+            inspect(&model.encode_to_vec()).unwrap().outputs[1]
+                .profile
+                .is_none(),
+            "task {task}"
+        );
+    }
+    let mut model = model();
+    model.metadata_props[0].value = r#""detect""#.into();
+    model.metadata_props.push(pb::StringStringEntryProto {
+        key: "kpt_shape".into(),
+        value: "[17, 3]".into(),
+    });
+    assert_eq!(
+        inspect(&model.encode_to_vec()).unwrap().outputs[1]
+            .problem
+            .as_deref(),
+        Some("detection metadata must not declare keypoints")
+    );
+}
+
+#[test]
 fn class_aliases_must_be_valid_consistent_and_match_output_channels() {
     for (classes, expected_problem) in [
         (r#"{"0": "person", "1": "ball"}"#, None),
@@ -235,6 +280,10 @@ fn pose_count_subtracts_keypoint_channels_and_checks_declared_classes() {
     graph.output[1] = value("predictions", &[1, 56, 1]);
     graph.initializer[1].dims = vec![1, 56, 1];
     graph.initializer[1].float_data = vec![0.0; 56];
+    let inspected = inspect(&model.encode_to_vec()).unwrap();
+    let profile = inspected.outputs[1].profile.as_ref().unwrap();
+    assert_eq!((profile.class_count, profile.keypoint_count), (1, 17));
+    model.metadata_props[0].value = r#""pose""#.into();
     let inspected = inspect(&model.encode_to_vec()).unwrap();
     let profile = inspected.outputs[1].profile.as_ref().unwrap();
     assert_eq!((profile.class_count, profile.keypoint_count), (1, 17));

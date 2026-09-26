@@ -115,7 +115,10 @@ pub fn inspect(model: &[u8]) -> Result<PrelabelModelInspection, String> {
 
 fn keypoint_count(metadata: &BTreeMap<&str, &str>) -> Result<u32, &'static str> {
     let shape = metadata.get("kpt_shape");
-    match metadata.get("task").copied() {
+    let task = metadata
+        .get("task")
+        .map(|value| serde_json::from_str::<String>(value).unwrap_or_else(|_| (*value).to_owned()));
+    match task.as_deref() {
         None | Some("detect") if shape.is_none() => Ok(0),
         None | Some("pose") => shape
             .and_then(|value| serde_json::from_str::<Vec<u32>>(value).ok())

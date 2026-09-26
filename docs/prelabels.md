@@ -59,6 +59,9 @@ Task metadata is optional. Without `task` or `kpt_shape`, inspection treats the
 output as detection: four box-coordinate channels followed by class scores.
 `kpt_shape = [keypoints, 3]` identifies pose and remains required for pose outputs;
 an explicit `task` must be `detect` or `pose` and agree with the keypoint metadata.
+The task value accepts plain text or a JSON string, so `detect` and `"detect"`
+have the same meaning. Unsupported tasks, malformed values, and contradictory
+keypoint metadata remain invalid.
 Class names are optional and may use either `names` or `classes`, as a dictionary
 of contiguous IDs starting at zero. If both keys are present, their mappings must
 agree. Class metadata is cross-checked against output dimensions; malformed or
