@@ -253,6 +253,7 @@ pub(crate) struct AdminToolsState {
     pub dataset_id: Option<DatasetId>,
     pub section: AdminSection,
     pub export: crate::export_flow::ExportState,
+    pub prelabels: crate::prelabel_flow::PrelabelAdminUi,
     pub load_error: Option<String>,
     pub upload_error: Option<String>,
     pub people_search: String,
@@ -277,6 +278,7 @@ impl Default for AdminToolsState {
             dataset_id: None,
             section: AdminSection::default(),
             export: Default::default(),
+            prelabels: Default::default(),
             load_error: None,
             upload_error: None,
             people_search: String::new(),
@@ -326,6 +328,7 @@ pub(crate) struct SessionRecovery {
 pub(crate) struct AuthState {
     pub account: Option<UserAccount>,
     pub can_create_datasets: bool,
+    pub prelabel_available: bool,
     pub options: AuthOptions,
     pub options_checked: bool,
     pub options_error: Option<String>,
@@ -425,7 +428,10 @@ pub struct WorkState {
     pub(crate) persisted_annotations: BTreeSet<AnnotationId>,
     pub(crate) modified_annotations: BTreeSet<AnnotationId>,
     pub(crate) accepted_prelabels: Vec<String>,
-    pub(crate) selected_prelabel: Option<String>,
+    pub(crate) prelabel_evidence:
+        std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
+    pub(crate) prelabels: crate::prelabel_flow::PrelabelWorkState,
+    pub(crate) prelabel_review: crate::prelabel_review::PrelabelReview,
     pub(crate) selected_annotation: Option<AnnotationId>,
     pub(crate) active_skeleton: Option<AnnotationId>,
     pub(crate) skeleton_keypoint_index: usize,
@@ -495,8 +501,11 @@ impl CorrectionDraft {
 
 #[derive(Clone, Debug)]
 pub(crate) struct EditSnapshot {
+    prelabel_review: crate::prelabel_review::PrelabelReview,
     annotations: Vec<labello_domain::AnnotationVersion>,
     accepted_prelabels: Vec<String>,
+    prelabel_evidence:
+        std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
     selected_annotation: Option<AnnotationId>,
     active_skeleton: Option<AnnotationId>,
     skeleton_keypoint_index: usize,

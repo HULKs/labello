@@ -36,7 +36,7 @@ configuration.
 | People | Assign annotator, reviewer, and data-admin roles; bootstrap-admin protections still apply |
 | Images | Configure relative filesystem roots, upload folders, run ingestion, inspect job results |
 | Schema | Define classes and box/skeleton tasks, keypoint order, workflow settings, and instructions |
-| Automation | Configure assignment balance and prelabels; model execution is currently a placeholder |
+| Automation | Configure assignment balance, models, and [dataset hint generation/removal](prelabels.md) |
 | Backups | Create and download annotation snapshots |
 | Export | Preflight, build, inspect, cancel, and download private detection/pose jobs |
 

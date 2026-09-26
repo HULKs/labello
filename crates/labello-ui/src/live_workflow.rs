@@ -3,7 +3,6 @@ use std::{collections::BTreeSet, rc::Rc};
 use eframe::egui;
 use labello_client::{
     AnnotationBatchRequest, AssignNextRequest, AssignmentActionRequest, LabelloApi,
-    PrelabelSuggestionRequest,
 };
 use labello_domain::{
     AnnotationId, Assignment, AssignmentKind, EventPayload, PrelabelConfigId, ReviewDecision,
@@ -40,7 +39,8 @@ impl LabelloApp {
         self.work.persisted_annotations.clear();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
-        self.work.selected_prelabel = None;
+        self.work.prelabel_evidence.clear();
+        self.work.prelabel_review = Default::default();
         self.work.selected_annotation = None;
         self.work.active_skeleton = None;
         self.work.skeleton_keypoint_index = 0;
@@ -349,6 +349,7 @@ impl LabelloApp {
                 dataset_id,
                 assignment,
                 annotations,
+                prelabel_evidence,
                 persisted,
                 modified,
                 submit,
@@ -359,6 +360,7 @@ impl LabelloApp {
                     dataset_id,
                     assignment,
                     annotations,
+                    prelabel_evidence,
                     persisted,
                     modified,
                     submit,
@@ -752,6 +754,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_save(&mut self, submit: bool) {
+        if submit && !self.visible_prelabels().is_empty() {
+            self.runtime.error =
+                Some("Confirm or delete the remaining model objects before submitting.".into());
+            return;
+        }
         let Some(assignment) = self.work.assignment.clone() else {
             return;
         };
@@ -772,6 +779,7 @@ impl LabelloApp {
             dataset_id: self.config.dataset_id.clone(),
             assignment,
             annotations: self.work.annotations.clone(),
+            prelabel_evidence: self.work.prelabel_evidence.clone(),
             persisted: self.work.persisted_annotations.clone(),
             modified: self.work.modified_annotations.clone(),
             submit,
@@ -968,6 +976,8 @@ struct SaveAnnotationsJob {
     dataset_id: labello_domain::DatasetId,
     assignment: Assignment,
     annotations: Vec<labello_domain::AnnotationVersion>,
+    prelabel_evidence:
+        std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
     persisted: BTreeSet<AnnotationId>,
     modified: BTreeSet<AnnotationId>,
     submit: bool,
@@ -978,7 +988,14 @@ async fn save_annotations(
 ) -> labello_client::ClientResult<labello_domain::ImageState> {
     let action = assignment_action(&job.assignment);
     let mut payloads = Vec::new();
+    let mut prelabel_acceptances = std::collections::BTreeMap::new();
     for annotation in job.annotations {
+        if !job.persisted.contains(&annotation.annotation_id)
+            && !annotation.deleted
+            && let Some(proof) = job.prelabel_evidence.get(&annotation.annotation_id)
+        {
+            prelabel_acceptances.insert(annotation.annotation_id.clone(), proof.clone());
+        }
         let payload = if job.persisted.contains(&annotation.annotation_id) && annotation.deleted {
             EventPayload::AnnotationDeleted {
                 annotation_id: annotation.annotation_id,
@@ -1008,6 +1025,7 @@ async fn save_annotations(
             action,
             AnnotationBatchRequest {
                 payloads,
+                prelabel_acceptances,
                 complete: job.submit,
             },
         )
@@ -1050,21 +1068,10 @@ async fn load_image_data(
         [preview.width as usize, preview.height as usize],
         &preview.rgba,
     ));
-    let mut prelabels = Vec::new();
-    if fetch_prelabels {
-        let requests = prelabel_config_ids.into_iter().map(|config_id| {
-            api.prelabel_suggestions(
-                &dataset_id,
-                PrelabelSuggestionRequest {
-                    config_id,
-                    task_id: assignment.task_id.clone(),
-                },
-            )
-        });
-        for mut suggestions in futures::future::try_join_all(requests).await? {
-            prelabels.append(&mut suggestions);
-        }
-    }
+    // Model execution is scheduled independently after the image is usable.
+    // Failure or a slow model cannot prevent manual annotation or queue preparation.
+    let _ = (prelabel_config_ids, fetch_prelabels);
+    let prelabels = Vec::new();
     let annotations = state.active_annotations().cloned().collect();
     Ok(LoadedImage {
         prepared_until: None,

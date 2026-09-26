@@ -242,28 +242,10 @@ fn construct_offline_mutation(
                             OfflineAnnotationSource::Human => RevisionSource::Human {
                                 action: HumanRevisionKind::Authored,
                             },
-                            OfflineAnnotationSource::PrelabelSuggestion {
-                                config_id,
-                                model_id,
-                                confidence,
-                            } => {
-                                let valid = confidence.is_finite()
-                                    && (0.0..=1.0).contains(&confidence)
-                                    && metadata.prelabel_configs.iter().any(|config| {
-                                        config.available_to_annotators
-                                            && config.config_id == config_id
-                                            && config.model.model_id == model_id
-                                    });
-                                if !valid {
-                                    return Err(StorageError::InvalidAssignment(
-                                        "offline prelabel source is not available".to_string(),
-                                    ));
-                                }
-                                RevisionSource::PrelabelSuggestion {
-                                    config_id,
-                                    model_id,
-                                    confidence,
-                                }
+                            OfflineAnnotationSource::PrelabelSuggestion { .. } => {
+                                return Err(StorageError::InvalidAssignment(
+                                    "prelabel acceptance requires online validation".into(),
+                                ));
                             }
                         };
                         (

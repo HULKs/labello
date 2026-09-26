@@ -143,6 +143,7 @@ impl LabelloApp {
                                 if recovery.user_id == account.user_id {
                                     self.auth.account = Some(account);
                                     self.auth.can_create_datasets = session.can_create_datasets;
+                                    self.auth.prelabel_available = session.prelabel_available;
                                     self.view = recovery.view;
                                     self.runtime.notice = Some("Session restored. Your draft is unchanged.".to_string());
                                     self.runtime.persistence.restoration_attempted = true;
@@ -163,6 +164,7 @@ impl LabelloApp {
                             );
                             self.auth.account = Some(account);
                             self.auth.can_create_datasets = session.can_create_datasets;
+                            self.auth.prelabel_available = session.prelabel_available;
                             if self.setup.section != SetupSection::About {
                                 self.setup.section = SetupSection::Datasets;
                             }
@@ -173,6 +175,7 @@ impl LabelloApp {
                         Err(error) => {
                             let had_account = self.auth.account.take().is_some();
                             self.auth.can_create_datasets = false;
+                            self.auth.prelabel_available = false;
                             self.datasets.summaries.clear();
                             self.datasets.summaries_error = None;
                             self.view = AppView::Setup;
@@ -281,6 +284,7 @@ impl LabelloApp {
                             self.sync_work_config(loaded.metadata.clone());
                             self.upsert_dataset_summary(&loaded.metadata);
                             self.datasets.admin_baseline = Some(loaded.metadata.clone());
+                            self.admin.prelabels.model_checks.clear();
                             self.datasets.admin_config = Some(loaded.metadata);
                             self.datasets.users_baseline = loaded.users.clone();
                             self.datasets.users = loaded.users;
@@ -310,6 +314,7 @@ impl LabelloApp {
                         self.sync_work_config(metadata.clone());
                         self.upsert_dataset_summary(&metadata);
                         self.datasets.admin_baseline = Some(metadata.clone());
+                        self.admin.prelabels.model_checks.clear();
                         self.datasets.admin_config = Some(metadata);
                         self.clear_admin_draft();
                         self.runtime.error = None;

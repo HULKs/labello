@@ -198,7 +198,12 @@ pub(super) fn construct_annotation_mutation(
             RevisionSource::Human { .. } => RevisionSource::Human {
                 action: HumanRevisionKind::Authored,
             },
-            source @ RevisionSource::PrelabelSuggestion { .. } => source,
+            RevisionSource::PrelabelSuggestion { .. } => {
+                return Err(ApiError::BadRequest(
+                    "accept prelabels with their evidence through the annotation batch endpoint"
+                        .into(),
+                ));
+            }
             RevisionSource::Import { .. }
             | RevisionSource::ReviewerCorrection { .. }
             | RevisionSource::MigrationSkeleton { .. } => {

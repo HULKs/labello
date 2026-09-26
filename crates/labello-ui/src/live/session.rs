@@ -19,6 +19,7 @@ impl LabelloApp {
         self.auth.account = None;
         self.auth.recovery = None;
         self.auth.can_create_datasets = false;
+        self.auth.prelabel_available = false;
         self.datasets.summaries.clear();
         self.datasets.summaries_error = None;
         self.datasets.metadata = None;

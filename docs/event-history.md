@@ -194,3 +194,20 @@ version-3 histories still replay; version-2 output rejects this new event.
 Generated schemas, snapshot event logs and offline bundle event fragments retain
 it. Raw event and offline mutation interfaces cannot author it. A missing or
 interrupted state cache rebuilds from the committed event log.
+
+## Accepted model predictions
+
+Schema 3 annotations may have immutable `prelabel` origin. It captures the exact
+prediction and [execution provenance](prelabels.md#acceptance-and-history).
+The accepting revision is human accepted-unchanged or edited; later versions
+retain origin. Replay rejects duplicate suggestion acceptance and applies the
+recorded confidence/IoU policy against existing boxes at the acceptance event.
+Historical v2/v3 histories keep their existing meaning. V2 output rejects new
+prelabel origins rather than dropping provenance. Schemas, snapshots and offline
+bundles preserve it. New acceptance requires online signed-evidence validation;
+ordinary/offline mutations cannot author a new `prelabel_suggestion` revision.
+
+Server prediction execution may be `server_cpu`, `server_cuda`, or `server_web_gpu`.
+All three retain server-generated trust through accepted origin, replay, snapshots
+and offline wire data. Browser submissions cannot claim any server execution kind.
+Historical CPU and browser execution values keep their existing meaning.

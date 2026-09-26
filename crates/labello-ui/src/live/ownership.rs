@@ -164,6 +164,18 @@ impl LabelloApp {
             UiCommand::Inspect { request, .. } => {
                 self.fail_inspection(request.request_id, error.to_owned());
             }
+            UiCommand::Prelabel { action, .. } => {
+                if let crate::prelabel_flow::PrelabelAction::InspectModel { config_id, .. } = action {
+                    if let Some(check) = self.admin.prelabels.model_checks.get_mut(config_id)
+                        && check.pending == Some(request_id) {
+                        check.pending = None;
+                        check.result = Some(Err(error.to_owned()));
+                    }
+                }
+                else if matches!(action, crate::prelabel_flow::PrelabelAction::Admin(_)) { self.admin.prelabels.pending = None; self.admin.prelabels.error = Some(error.to_owned()); }
+                else { self.work.prelabels.pending = None; }
+                return;
+            }
             UiCommand::Export { .. } => {
                 self.admin.export.request_failed(error.to_owned());
                 return;
@@ -451,6 +463,9 @@ impl LabelloApp {
         self.loading.roles_user = None;
         self.admin.pending_role_saves.clear();
         self.admin.export = Default::default();
+        self.admin.prelabels = Default::default();
+        self.cancel_prelabel_load();
+        self.work.prelabels.hints.clear();
         self.loading.image = false;
         self.loading.saving = false;
         self.loading.ingesting = false;
@@ -478,6 +493,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_auth_epoch(&mut self) {
+        self.auth.prelabel_available = false;
         self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;
         self.auth_epoch = self.auth_epoch.wrapping_add(1);

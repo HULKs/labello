@@ -131,3 +131,13 @@ Closing the browser does not immediately release its leases.
 
 See [current limitations](limitations.md) before relying on offline work,
 prelabels, stylus support, or browser recovery.
+
+## Model suggestions
+
+See [Model prelabels](prelabels.md) for selecting a model or no prelabels,
+loading and fallback states, overlap suppression, and confirming model objects.
+Each object opens selected and zoomed in for editing. **Confirm & next** keeps it
+and advances; **Delete** or the Delete key removes it. The last object returns to
+the full image for **Submit & next**. Pending objects are never accepted by autosave.
+Hints load independently of the image. Model failures leave manual annotation
+available; confirmed objects follow the same submission and review workflow.

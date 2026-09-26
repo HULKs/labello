@@ -219,6 +219,8 @@ pub(super) struct CallCounts {
     pub(super) get_keybindings: usize,
     pub(super) save_keybindings: usize,
     pub(super) prelabel_suggestions: usize,
+    pub(super) prelabel_generation: usize,
+    pub(super) prelabel_admin: usize,
     pub(super) list_dataset_users: usize,
     pub(super) set_dataset_roles: usize,
     pub(super) list_images: usize,
@@ -241,6 +243,7 @@ pub(super) struct CallCounts {
 }
 
 pub(super) struct SpyState {
+    pub(super) prelabel_available: bool,
     pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
     pub(super) fail_next_reasons: bool,
     pub(super) metadata: DatasetMetadata,
@@ -371,6 +374,7 @@ impl SpyState {
             },
         ];
         Self {
+            prelabel_available: true,
             metadata,
             states,
             workflow_reasons: BTreeMap::new(),
@@ -2231,6 +2235,10 @@ impl KeybindingApi for SpyApi {
 }
 
 impl PrelabelApi for SpyApi {
+    fn inspect_prelabel_model<'a>(&'a self, _dataset_id: &'a DatasetId, _request: labello_client::PrelabelModelCheckRequest) -> ApiFuture<'a, labello_domain::PrelabelModelInspection> {
+        Box::pin(async { Err(labello_client::ClientError::Demo("Test model unavailable".into())) })
+    }
+
     fn list_prelabel_configs<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,
@@ -2250,9 +2258,10 @@ impl PrelabelApi for SpyApi {
         &'a self,
         _dataset_id: &'a DatasetId,
         request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, Vec<PrelabelSuggestion>> {
+    ) -> ApiFuture<'a, labello_domain::PrelabelResponse> {
         self.state.borrow_mut().counts.prelabel_suggestions += 1;
-        ready(Ok(vec![PrelabelSuggestion {
+        ready(Ok(labello_domain::PrelabelResponse { execution: None, generation: labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false }, from_batch: false, browser_grant: None, suggestions: vec![PrelabelSuggestion {
+            evidence: None,
             suggestion_id: "suggestion-1".to_string(),
             config_id: request.config_id,
             task_id: request.task_id,
@@ -2264,8 +2273,12 @@ impl PrelabelApi for SpyApi {
                 width: 0.25,
                 height: 0.35,
             }),
-        }]))
+        }] }))
     }
+    fn prelabel_generation<'a>(&'a self, _dataset_id: &'a DatasetId, _request: PrelabelSuggestionRequest) -> ApiFuture<'a, labello_domain::PrelabelGeneration> { self.state.borrow_mut().counts.prelabel_generation += 1; ready(Ok(labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false })) }
+    fn prelabel_admin_state<'a>(&'a self, _dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { self.state.borrow_mut().counts.prelabel_admin += 1; ready(Ok(Default::default())) }
+    fn prelabel_admin_command<'a>(&'a self, _dataset_id: &'a DatasetId, _command: labello_domain::PrelabelAdminCommand) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { self.state.borrow_mut().counts.prelabel_admin += 1; ready(Ok(Default::default())) }
+
 }
 
 impl AuthApi for SpyApi {
@@ -2287,6 +2300,7 @@ impl AuthApi for SpyApi {
         ready(Ok(SessionInfo {
             account: state.users[0].account.clone(),
             can_create_datasets: true,
+            prelabel_available: state.prelabel_available,
             csrf_token: "test-csrf-token".to_string(),
         }))
     }
@@ -2319,6 +2333,7 @@ impl AuthApi for SpyApi {
             ready(Ok(SessionInfo {
                 account: state.users[0].account.clone(),
                 can_create_datasets: true,
+                prelabel_available: state.prelabel_available,
                 csrf_token: "test-csrf-token".to_string(),
             }))
         }

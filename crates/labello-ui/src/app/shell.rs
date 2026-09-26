@@ -18,6 +18,7 @@ impl eframe::App for LabelloApp {
         self.work.canvas.require_pan_mode(false);
         self.sync_manual_migration();
         self.sync_review_editor();
+        self.sync_prelabel_review();
         self.start_next_persistence_command();
         self.start_setup_load();
         if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {
@@ -29,6 +30,7 @@ impl eframe::App for LabelloApp {
         self.refresh_ingest_if_due();
         self.refresh_import_if_due();
         self.refresh_export_if_due(ui.ctx());
+        self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
         self.handle_shortcuts(ui.ctx());
         self.sync_workspace_bars();

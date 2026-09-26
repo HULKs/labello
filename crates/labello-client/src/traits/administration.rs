@@ -1,5 +1,5 @@
 pub trait StatsApi {
-    fn server_presence(&self) -> ApiFuture<'_ , crate::ServerPresence>;
+    fn server_presence(&self) -> ApiFuture<'_, crate::ServerPresence>;
     fn current_user_activity<'a>(
         &'a self,
         dataset_id: &'a DatasetId,
@@ -22,6 +22,12 @@ pub trait KeybindingApi {
 }
 
 pub trait PrelabelApi {
+    fn inspect_prelabel_model<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        request: crate::PrelabelModelCheckRequest,
+    ) -> ApiFuture<'a, labello_domain::PrelabelModelInspection>;
+
     fn list_prelabel_configs<'a>(
         &'a self,
         dataset_id: &'a DatasetId,
@@ -37,7 +43,22 @@ pub trait PrelabelApi {
         &'a self,
         dataset_id: &'a DatasetId,
         request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, Vec<PrelabelSuggestion>>;
+    ) -> ApiFuture<'a, labello_domain::PrelabelResponse>;
+
+    fn prelabel_generation<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        request: PrelabelSuggestionRequest,
+    ) -> ApiFuture<'a, labello_domain::PrelabelGeneration>;
+    fn prelabel_admin_state<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+    ) -> ApiFuture<'a, labello_domain::PrelabelAdminState>;
+    fn prelabel_admin_command<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        command: labello_domain::PrelabelAdminCommand,
+    ) -> ApiFuture<'a, labello_domain::PrelabelAdminState>;
 }
 
 pub trait AuthApi {

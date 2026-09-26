@@ -337,6 +337,7 @@ impl LabelloApp {
             )
         });
         if discard {
+            self.admin.prelabels.model_checks.clear();
             self.datasets.admin_config = self.datasets.admin_baseline.clone();
             self.datasets.users = self.datasets.users_baseline.clone();
             self.clear_admin_draft();
@@ -510,6 +511,17 @@ impl LabelloApp {
                 let mut action_list = |ui: &mut egui::Ui| {
                     let mut current_category = "";
                     for action in labello_domain::UserAction::ACTIVE {
+                        if !self.auth.prelabel_available
+                            && matches!(
+                                action,
+                                labello_domain::UserAction::SelectPreviousPrelabel
+                                    | labello_domain::UserAction::SelectNextPrelabel
+                                    | labello_domain::UserAction::AcceptPrelabel
+                                    | labello_domain::UserAction::DiscardPrelabel
+                            )
+                        {
+                            continue;
+                        }
                         let label = action_label(&action);
                         let category = action_category(action);
                         let description = action_description(action);

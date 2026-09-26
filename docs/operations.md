@@ -468,3 +468,37 @@ Logs must never contain:
 Request logs use matched route templates instead of raw URLs. Internal server
 errors return a generic message to clients; safe error categories and bounded
 diagnostics remain in server logs.
+
+## Model execution and hints
+
+Keep the [managed model directory](prelabels.md#supply-a-model) readable only by
+intended server operators/accounts. Browser-enabled models are downloadable by
+users authorized for that dataset. Keep model files in the operator's backup
+plan separately from `datasetsRoot`. Full-root backups include private prelabel
+control state and derived results; snapshots contain accepted annotations only.
+Use dataset hint reset controls for removal. A reset durably invalidates old
+proofs before file cleanup; report cleanup failure and retry instead of deleting
+control files. Interrupted runs require explicit retry after restart.
+
+Watch safe run counts and available storage. Runtime errors are bounded public
+categories; worker stderr is discarded. The `prelabel_provider_fallback` warning
+records only provider and bounded failure category. Debug events
+`prelabel_worker_started` and `prelabel_inference_completed` record provider and
+whether a session was loaded, allowing operators to distinguish cold loads from
+reuse without logging model or image identities. Do not log model bytes, prediction
+geometry, browser grants, signing secrets, or evidence signatures. Models and
+runtime assets are not fetched from external sources during inference.
+
+Model checks are bounded read-only worker operations using the same managed file
+access and concurrency limit as inference. Checked profiles pin model content;
+after replacing a model, the dataset administrator must check it and save the
+updated profile. Native CUDA/WebGPU failures fall through to CPU within the request
+timeout. See the [runtime configuration and resource limits](prelabels.md#execution-and-coordinates)
+before installing native provider libraries. Library paths are operator-controlled;
+workers do not inherit the server's environment or authentication secrets.
+
+Persistent inference workers retain model memory between requests. Size
+`prelabel.workers.maxWorkers` for available RAM; its default is four processes,
+each with the limits described in the prelabel guide. Session eviction and idle
+expiry do not delete hints. Restarting discards compiled sessions and interrupts
+active runs; completed results remain reusable when the administrator retries.

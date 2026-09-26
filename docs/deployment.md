@@ -338,3 +338,15 @@ Setup > About shows both identities and offers plain-text copying. A quiet
 lower-right warning appears only when both complete release identities differ.
 Server refreshes happen at startup, About opening, retry and visible-tab focus;
 failure clears the previously displayed server identity and mismatch.
+
+## Browser inference assets
+
+The Trunk pre-build hook downloads the pinned ONNX Runtime Web archive using
+Python 3 and verifies its SHA-256 before extracting an explicit allowlist into
+`target/onnx-runtime`. Builds require access to `registry.npmjs.org` unless the
+verified archive is cached. The complete Trunk distribution includes the
+`onnx/` runtime assets and license; publish it atomically with the client.
+Inference loads these assets from the client origin, without a public CDN.
+Serve `.mjs` as JavaScript and `.wasm` as WebAssembly. A restrictive CSP must
+permit the application's blob workers and WebAssembly compilation. See
+[ONNX Runtime Web deployment guidance](https://onnxruntime.ai/docs/tutorials/web/deploy.html).

@@ -152,6 +152,7 @@ impl LabelloApp {
         {
             return;
         }
+        if self.confirm_prelabel_object() { return; }
         if let Some(issue) = self.submission_issue() {
             self.runtime.error = Some(issue);
             return;
@@ -219,6 +220,9 @@ impl LabelloApp {
     }
 
     fn submission_issue(&self) -> Option<String> {
+        if !self.visible_prelabels().is_empty() {
+            return Some("Confirm or delete the remaining model objects before submitting.".into());
+        }
         let task = self.selected_task()?;
         let spec = task.skeleton.as_ref()?;
         if self.work.active_skeleton.is_some() {
@@ -259,7 +263,8 @@ impl LabelloApp {
         self.work.persisted_annotations.clear();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
-        self.work.selected_prelabel = None;
+        self.work.prelabel_evidence.clear();
+        self.work.prelabel_review = Default::default();
         self.work.selected_annotation = None;
         if self.runtime.api.is_some() {
             self.request_next_image();

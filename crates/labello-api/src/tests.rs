@@ -994,6 +994,7 @@ include!("tests/workflow.rs");
 include!("tests/logging_redaction.rs");
 include!("tests/deployment_readiness.rs");
 include!("tests/previews.rs");
+mod prelabels;
 
 include!("tests/review_revisions.rs");
 
