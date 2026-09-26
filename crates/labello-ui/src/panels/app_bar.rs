@@ -347,7 +347,7 @@ impl LabelloApp {
                     close = button.clicked();
                 });
             });
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("application-navigation-scroll")
                 .max_height((max_height - 54.0).max(80.0))
                 .show(ui, |ui| {

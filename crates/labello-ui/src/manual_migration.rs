@@ -401,11 +401,12 @@ impl LabelloApp {
             ))
             || (self.work.migration.adding_missing_object
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)));
+        let can_start_missing = self.migration_can_add_missing_object();
         let mut interaction = CanvasInteraction {
             editable: !self.work.migration.busy
                 && self.work.migration.inspected_group_id.is_none()
-                && (skeleton_editable || !selectable_annotations.is_empty()),
-            allow_create: skeleton_editable,
+                && (skeleton_editable || can_start_missing || !selectable_annotations.is_empty()),
+            allow_create: skeleton_editable || can_start_missing,
             allow_selection: true,
             edit_keypoints: skeleton_editable
                 && selected.is_some()
@@ -495,7 +496,12 @@ impl LabelloApp {
             return;
         }
         match action {
-            Some(CanvasAction::PlaceKeypoint(point)) => self.place_migration_keypoint(point),
+            Some(CanvasAction::PlaceKeypoint(point)) => {
+                if self.migration_can_add_missing_object() {
+                    self.begin_missing_migration_object();
+                }
+                self.place_migration_keypoint(point);
+            }
             Some(CanvasAction::Select(annotation_id)) => {
                 if self.is_discovered_migration_skeleton(&annotation_id) {
                     self.begin_edit_missing_migration_object(annotation_id);
@@ -589,6 +595,18 @@ impl LabelloApp {
                     self.reload_migration_assignment();
                 }
             }
+        }
+        if self.migration_draft_editable()
+            && !self.work.migration.busy
+            && self.work.migration.inspected_group_id.is_none()
+            && let Some(draft) = self.work.migration.draft.clone()
+            && self
+                .selected_task()
+                .and_then(|task| task.skeleton.as_ref())
+                .is_some_and(|spec| spec.allow_hidden)
+            && let Some((index, state)) = crate::panels::placed_keypoint_visibility(ui, &draft)
+        {
+            self.set_migration_keypoint_visibility(index, state);
         }
     }
 
@@ -2252,6 +2270,36 @@ impl LabelloApp {
         let (group_id, target) = self.migration_active_target()?;
         (self.work.migration.draft_group.as_ref() == Some(&group_id))
             .then_some(target.reserved_skeleton_annotation_id)
+    }
+
+    pub(crate) fn set_migration_keypoint_visibility(&mut self, index: usize, state: KeypointState) {
+        if !self.migration_draft_editable()
+            || self.work.migration.busy
+            || self.loading.image
+            || self.work.pending_transition.is_some()
+            || self.work.migration.inspected_group_id.is_some()
+            || !matches!(state, KeypointState::Visible | KeypointState::Hidden)
+            || !self
+                .selected_task()
+                .and_then(|task| task.skeleton.as_ref())
+                .is_some_and(|spec| spec.allow_hidden)
+        {
+            return;
+        }
+        let Some(keypoint) = self
+            .work
+            .migration
+            .draft
+            .as_mut()
+            .and_then(|draft| draft.keypoints.get_mut(index))
+        else {
+            return;
+        };
+        if keypoint.point.is_some() && keypoint.state != state {
+            keypoint.state = state;
+            self.work.migration.draft_dirty = true;
+            self.work.assignment_touched = true;
+        }
     }
 
     fn edit_migration_keypoint(&mut self, edit: crate::canvas::KeypointEdit) {

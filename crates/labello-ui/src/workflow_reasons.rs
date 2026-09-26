@@ -113,6 +113,7 @@ impl LabelloApp {
                             }
                         } else {
                             egui::ScrollArea::vertical()
+                                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                                 .id_salt(&detail_id)
                                 .max_height((canvas_height * 0.3 + 44.0).clamp(88.0, 264.0))
                                 .show(ui, |ui| self.saved_feedback(ui, &reasons, &detail_id));
@@ -158,6 +159,7 @@ impl LabelloApp {
                         details_open = false;
                     }
                     egui::ScrollArea::vertical()
+                        .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                         .id_salt("compact-image-feedback")
                         .max_height((screen.height() - 132.0).max(44.0))
                         .show(ui, |ui| {

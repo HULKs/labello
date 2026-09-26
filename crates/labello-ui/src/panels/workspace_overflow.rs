@@ -195,7 +195,7 @@ pub(crate) fn workspace_secondary_actions(
         }
         egui::Popup::menu(&response).id(popup_id).show(|ui| {
             ui.set_max_width((ui.ctx().content_rect().width() - 32.0).max(44.0));
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .max_height((ui.ctx().content_rect().height() - 32.0).max(44.0))
                 .show(ui, |ui| {
                     for action in &actions[prefix..] {

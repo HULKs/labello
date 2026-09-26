@@ -284,6 +284,7 @@ fn user_detail(user: &PresentUser) -> String {
 fn workspace_status_details(ui: &mut egui::Ui, details: &str) {
     ui.set_max_width((ui.ctx().content_rect().width() - 32.0).clamp(44.0, 320.0));
     egui::ScrollArea::vertical()
+        .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
         .max_height((ui.ctx().content_rect().height() * 0.6).max(44.0))
         .show(ui, |ui| {
             ui.add(egui::Label::new(details).wrap());

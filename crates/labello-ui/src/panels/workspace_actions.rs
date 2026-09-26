@@ -91,9 +91,11 @@ impl LabelloApp {
         let count = 5 + usize::from(previous) - usize::from(save_in_menu);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
             / count as f32).floor().max(44.0);
+        let primary_width = width.min(text_button_width(ui, primary_label));
+        let secondary_width = (ui.available_width() - primary_width - ui.spacing().item_spacing.x).max(0.0);
+        ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::NextImage, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, ready, theme::Intent::Accent, primary_help),
                 (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, ready && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
                 (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
                 (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, ready && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
@@ -117,6 +119,13 @@ impl LabelloApp {
             actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", ready && dirty, "Save confirmed annotations and keep this assignment active."));
         }
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
+        });
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if workspace_toolbar_button(ui, ready, primary_label, if pending { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Next }, Some(width), theme::Intent::Accent)
+                .on_hover_text(format!("{primary_help} ({})", self.shortcut_text(ui.ctx(), UserAction::NextImage))).clicked() {
+                self.trigger_user_action(UserAction::NextImage);
+            }
+        });
     }
 
     fn review_object_navigation(&mut self, ui: &mut egui::Ui, width: Option<f32>) {

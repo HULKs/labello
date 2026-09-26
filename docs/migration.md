@@ -35,6 +35,13 @@ older passes stay historical.
 
 ## Add a missing object
 
+In the full-image view, tap blank image space to start a skeleton for an object
+without an imported guide. Add missing object is also available as a button and
+shortcut. Existing objects take selection priority. After the last keypoint,
+the draft remains editable until explicitly saved: drag points to reposition
+them or use the inspector's Visible/Occluded controls when permitted by the task.
+The same visibility controls apply to placed points in guided migration drafts.
+
 A discovered skeleton creates a linked bounding box in the configured guide task
 in the same event transaction. The box uses positioned Visible and Occluded
 keypoints and spans at least 15% of image width and height, with a one-original-pixel

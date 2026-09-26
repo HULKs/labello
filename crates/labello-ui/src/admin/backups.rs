@@ -133,7 +133,7 @@ fn admin_snapshot_grid(
     active_download: Option<&(String, String)>,
 ) -> Option<(String, String)> {
     let mut download = None;
-    egui::ScrollArea::horizontal()
+    egui::ScrollArea::horizontal().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
         .id_salt("admin-snapshot-grid-scroll")
         .show(ui, |ui| {
             egui::Grid::new("admin-snapshot-grid")

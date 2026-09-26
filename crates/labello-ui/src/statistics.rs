@@ -105,6 +105,7 @@ impl LabelloApp {
                 })
             };
             egui::ScrollArea::vertical()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("statistics-overlay-scroll")
                 .max_height(
                     (max_height - header.response.rect.height() - ui.spacing().item_spacing.y)
@@ -356,6 +357,7 @@ impl LabelloApp {
                 }
             } else {
                 egui::ScrollArea::horizontal()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .id_salt("stats_tasks_horizontal")
                     .show(ui, |ui| {
                         stats_task_grid(ui, rows, &task_names);
@@ -394,6 +396,7 @@ impl LabelloApp {
                 }
             } else {
                 egui::ScrollArea::horizontal()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                     .id_salt("stats_classes_horizontal")
                     .show(ui, |ui| {
                         stats_class_grid(ui, rows, &class_names);
@@ -555,6 +558,7 @@ fn stats_throughput_chart(ui: &mut egui::Ui, points: &[labello_domain::Throughpu
     });
     let available_width = ui.available_width();
     egui::ScrollArea::horizontal()
+        .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
         .id_salt("stats-throughput-chart-scroll")
         .show(ui, |ui| {
             let width = available_width.max(42.0 + points.len() as f32 * 48.0);

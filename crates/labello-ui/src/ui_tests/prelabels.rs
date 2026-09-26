@@ -900,6 +900,9 @@ fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
                 height,
             );
         }
+        let primary = harness.get_by_label("Confirm & next").rect();
+        assert!(primary.left() >= harness.get_by_label("More actions").rect().right());
+        assert!(width - primary.right() < 30.0);
         assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
     }
     harness.state_mut().loading.saving = true;
@@ -1101,17 +1104,27 @@ fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
     let id = app.work.selected_annotation.clone().unwrap();
     let edited = NormalizedPoint { x: 0.6, y: 0.4 };
     app.edit_keypoint(crate::canvas::KeypointEdit {
-        annotation_id: id,
+        annotation_id: id.clone(),
         keypoint_index: 0,
         point: edited,
     });
+    app.set_annotation_keypoint_visibility(id.clone(), 0, KeypointState::Hidden);
+    app.undo();
+    let AnnotationGeometry::Skeleton(skeleton) =
+        &app.selected_prelabel_object().unwrap().annotation.geometry
+    else {
+        panic!("pose object");
+    };
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    assert_eq!(skeleton.keypoints[0].point, Some(edited));
+    app.redo();
     assert!(app.work.annotations.is_empty());
     assert!(app.confirm_prelabel_object());
     let AnnotationGeometry::Skeleton(skeleton) = &app.work.annotations[0].geometry else {
         panic!("pose object");
     };
     assert_eq!(skeleton.keypoints[0].point, Some(edited));
-    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
 }
 
 #[test]

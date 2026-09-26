@@ -104,12 +104,15 @@ fn handle_view_gestures(
         );
         state.pan += touch.translation_delta;
         state.clamp_to_viewport(viewport, fitted_image);
+        if crate::pointer_input::pen_pointer(ui.ctx()) {
+            return false;
+        }
         state.cancel_drag();
         state.modifier_pan = false;
         return true;
     }
 
-    if response.double_clicked() {
+    if response.double_clicked() && !crate::pointer_input::pen_pointer(ui.ctx()) {
         state.fit_view();
         state.cancel_drag();
         return true;
@@ -179,7 +182,7 @@ fn handle_view_gestures(
         }
     }
 
-    let repeated_click = if response.clicked() {
+    let repeated_click = if response.clicked() && !crate::pointer_input::pen_pointer(ui.ctx()) {
         let now = ui.input(|input| input.time);
         let position = response.interact_pointer_pos();
         let repeated = position.is_some_and(|position| {
@@ -195,7 +198,7 @@ fn handle_view_gestures(
     } else {
         false
     };
-    if response.double_clicked() || repeated_click {
+    if (response.double_clicked() || repeated_click) && !crate::pointer_input::pen_pointer(ui.ctx()) {
         state.fit_view();
         state.cancel_drag();
         return true;
@@ -220,7 +223,7 @@ fn handle_annotation_pointer(
     selectable_annotations: Option<&std::collections::BTreeSet<AnnotationId>>,
     view_consumed: bool,
 ) -> Option<CanvasAction<BoundingBoxEdit>> {
-    if view_consumed || ui.input(|input| input.multi_touch().is_some()) {
+    if view_consumed || (ui.input(|input| input.multi_touch().is_some()) && !crate::pointer_input::pen_pointer(ui.ctx())) {
         state.cancel_drag();
         return None;
     }

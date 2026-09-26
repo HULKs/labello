@@ -93,16 +93,30 @@ impl LabelloApp {
     }
 
     pub(crate) fn edit_keypoint(&mut self, edit: crate::canvas::KeypointEdit) {
-        if let Some(item) = self.work.prelabel_review.objects.iter().find(|item| item.annotation.annotation_id == edit.annotation_id) {
+        self.update_annotation_keypoint(edit.annotation_id, edit.keypoint_index, Some(edit.point), None);
+    }
+
+    pub(crate) fn set_annotation_keypoint_visibility(&mut self, annotation_id: AnnotationId, index: usize, state: KeypointState) {
+        if self.view != AppView::Annotate || self.loading.saving || self.loading.image
+            || self.work.pending_transition.is_some()
+            || !matches!(state, KeypointState::Visible | KeypointState::Hidden)
+            || !self.selected_task().and_then(|task| task.skeleton.as_ref()).is_some_and(|spec| spec.allow_hidden)
+        { return; }
+        self.update_annotation_keypoint(annotation_id, index, None, Some(state));
+    }
+
+    fn update_annotation_keypoint(&mut self, annotation_id: AnnotationId, keypoint_index: usize, point: Option<NormalizedPoint>, state: Option<KeypointState>) {
+        if let Some(item) = self.work.prelabel_review.objects.iter().find(|item| item.annotation.annotation_id == annotation_id) {
             let mut geometry = item.annotation.geometry.clone();
             if let AnnotationGeometry::Skeleton(skeleton) = &mut geometry
-                && let Some(point) = skeleton.keypoints.get_mut(edit.keypoint_index) {
-                point.point = Some(edit.point);
-                self.edit_prelabel_geometry(&edit.annotation_id, geometry);
+                && let Some(keypoint) = skeleton.keypoints.get_mut(keypoint_index) {
+                if point.is_none() && keypoint.point.is_none() { return; }
+                if let Some(point) = point { keypoint.point = Some(point); }
+                if let Some(state) = state { keypoint.state = state; }
+                self.edit_prelabel_geometry(&annotation_id, geometry);
             }
             return;
         }
-        let annotation_id = edit.annotation_id;
         let persisted = self.work.persisted_annotations.contains(&annotation_id);
         let persisted_version = self
             .work
@@ -118,10 +132,10 @@ impl LabelloApp {
         let AnnotationGeometry::Skeleton(skeleton) = &self.work.annotations[index].geometry else {
             return;
         };
-        let Some(keypoint) = skeleton.keypoints.get(edit.keypoint_index) else {
+        let Some(keypoint) = skeleton.keypoints.get(keypoint_index) else {
             return;
         };
-        if keypoint.point == Some(edit.point) {
+        if keypoint.point.is_none() || (point.is_none_or(|point| keypoint.point == Some(point)) && state.as_ref().is_none_or(|state| &keypoint.state == state)) {
             return;
         }
 
@@ -131,10 +145,11 @@ impl LabelloApp {
         let AnnotationGeometry::Skeleton(skeleton) = &mut annotation.geometry else {
             return;
         };
-        let Some(keypoint) = skeleton.keypoints.get_mut(edit.keypoint_index) else {
+        let Some(keypoint) = skeleton.keypoints.get_mut(keypoint_index) else {
             return;
         };
-        keypoint.point = Some(edit.point);
+        if let Some(point) = point { keypoint.point = Some(point); }
+        if let Some(state) = state { keypoint.state = state; }
         annotation.updated_at = labello_domain::now();
         if persisted {
             annotation.version = persisted_version.unwrap_or(annotation.version) + 1;
