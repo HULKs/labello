@@ -15,6 +15,7 @@ fn submit_next_is_the_rightmost_bottom_action_at_supported_widths() {
 #[cfg(feature = "inspector-presets")]
 #[test]
 fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation() {
+    use crate::inspector_presets::{self, InspectorPreset};
     for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
         let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0))
             .build_eframe(|ctx| inspector_presets::build(preset, &ctx.egui_ctx));
