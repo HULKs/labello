@@ -1301,137 +1301,147 @@ impl LabelloApp {
             + usize::from(bar.editing_missing_annotation_id.is_some())
             + usize::from(bar.keypoint_undo);
         let count = (3 + extra_actions + usize::from(self.bar_has_previous_image())) as f32;
-        let width = Some(
-            ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
-                .floor()
-                .max(44.0),
+        let width = ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
+            .floor()
+            .max(44.0);
+        let secondary_width = (ui.available_width() - width - ui.spacing().item_spacing.x).max(0.0);
+        let width = Some(width);
+        ui.allocate_ui_with_layout(
+            egui::vec2(secondary_width, 44.0),
+            egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true),
+            |ui| {
+                if bar.inspected_group_id.is_none() {
+                    if bar.adding_missing_object
+                        && workspace_toolbar_button(
+                            ui,
+                            !self.work.migration.busy,
+                            "Discard object changes",
+                            WorkspaceActionIcon::Discard,
+                            width,
+                            theme::Intent::Neutral,
+                        )
+                        .on_hover_text("Discard the current unsaved object changes.")
+                        .clicked()
+                    {
+                        self.cancel_missing_migration_object();
+                    }
+                    if let Some(annotation_id) = bar.editing_missing_annotation_id.clone()
+                        && workspace_toolbar_button(
+                            ui,
+                            !self.work.migration.busy,
+                            "Remove added object",
+                            WorkspaceActionIcon::Remove,
+                            width,
+                            theme::Intent::Error,
+                        )
+                        .on_hover_text(
+                            "Remove this added missing-object skeleton. You can add it again if needed.",
+                        )
+                        .clicked()
+                    {
+                        self.request_delete_migration_skeleton(annotation_id);
+                    }
+                    if bar.keypoint_undo {
+                        let response = workspace_toolbar_button(
+                            ui,
+                            self.migration_keypoint_undo_enabled(),
+                            if compact {
+                                "Undo"
+                            } else {
+                                "Undo last keypoint"
+                            },
+                            WorkspaceActionIcon::Undo,
+                            width,
+                            theme::Intent::Neutral,
+                        );
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Undo last keypoint")
+                        });
+                        if response.clicked() {
+                            self.remove_last_migration_keypoint();
+                        }
+                    }
+                }
+                let ready = self.work.assignment.is_some()
+                    && !self.loading.saving
+                    && !self.loading.image
+                    && !self.work.migration.busy
+                    && self.work.pending_transition.is_none();
+                if workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
+                    "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
+                    .on_hover_text("Edit the previous object in this image. Unsaved changes require confirmation. Stops at the first object.").clicked() {
+                    self.trigger_user_action(labello_domain::UserAction::SelectPreviousObject);
+                }
+                if self.bar_has_previous_image()
+                    && workspace_toolbar_button(
+                        ui,
+                        ready && self.runtime.api.is_some(),
+                        "Previous image",
+                        WorkspaceActionIcon::PreviousImage,
+                        width,
+                        theme::Intent::Neutral,
+                    )
+                    .on_hover_text("Return to the immediately previous eligible assignment.")
+                    .clicked()
+                {
+                    self.trigger_user_action(labello_domain::UserAction::PreviousImage);
+                }
+                if workspace_toolbar_button(
+                    ui,
+                    ready && self.runtime.api.is_some(),
+                    "Skip",
+                    WorkspaceActionIcon::Skip,
+                    width,
+                    theme::Intent::Neutral,
+                )
+                .on_hover_text("Release this assignment and claim another.")
+                .clicked()
+                {
+                    self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
+                }
+                let mut actions = Vec::new();
+                if bar.inspected_group_id.is_some() {
+                    actions.push(crate::panels::WorkspaceAction {
+                        command: crate::panels::WorkspaceCommand::NextMigrationObject,
+                        label: if bar.next_returns_to_current {
+                            "Return to current object"
+                        } else {
+                            "Next object"
+                        }
+                        .into(),
+                        shortcut: self
+                            .shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
+                        enabled: true,
+                        help: "Inspect the next object or return to the current object.",
+                    });
+                }
+                self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
+                    ui, &actions, "More",
+                ));
+            },
         );
-        if let Some(group_id) = bar.inspected_group_id.clone() {
-            if workspace_toolbar_button(
-                ui,
-                !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
-                if compact {
-                    "Edit object"
-                } else {
-                    "Edit this object"
-                },
-                WorkspaceActionIcon::Save,
-                width,
-                theme::Intent::Accent,
-            )
-            .clicked()
-            {
-                self.begin_revisit_migration_target(group_id);
-            }
-        } else {
-            if bar.adding_missing_object
-                && workspace_toolbar_button(
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::BOTTOM), |ui| {
+            if let Some(group_id) = bar.inspected_group_id.clone() {
+                if workspace_toolbar_button(
                     ui,
-                    !self.work.migration.busy,
-                    "Discard object changes",
-                    WorkspaceActionIcon::Discard,
-                    width,
-                    theme::Intent::Neutral,
-                )
-                .on_hover_text("Discard the current unsaved object changes.")
-                .clicked()
-            {
-                self.cancel_missing_migration_object();
-            }
-            if let Some(annotation_id) = bar.editing_missing_annotation_id.clone()
-                && workspace_toolbar_button(
-                    ui,
-                    !self.work.migration.busy,
-                    "Remove added object",
-                    WorkspaceActionIcon::Remove,
-                    width,
-                    theme::Intent::Error,
-                )
-                .on_hover_text(
-                    "Remove this added missing-object skeleton. You can add it again if needed.",
-                )
-                .clicked()
-            {
-                self.request_delete_migration_skeleton(annotation_id);
-            }
-            self.migration_primary_button(ui, compact, width);
-            if bar.keypoint_undo {
-                let response = workspace_toolbar_button(
-                    ui,
-                    self.migration_keypoint_undo_enabled(),
+                    !self.work.migration.busy && self.migration_expectation(&group_id).is_some(),
                     if compact {
-                        "Undo"
+                        "Edit object"
                     } else {
-                        "Undo last keypoint"
+                        "Edit this object"
                     },
-                    WorkspaceActionIcon::Undo,
+                    WorkspaceActionIcon::Save,
                     width,
-                    theme::Intent::Neutral,
-                );
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Undo last keypoint")
-                });
-                if response.clicked() {
-                    self.remove_last_migration_keypoint();
+                    theme::Intent::Accent,
+                )
+                .clicked()
+                {
+                    self.begin_revisit_migration_target(group_id);
                 }
+            } else {
+                self.migration_primary_button(ui, compact, width);
             }
-        }
-        let ready = self.work.assignment.is_some()
-            && !self.loading.saving
-            && !self.loading.image
-            && !self.work.migration.busy
-            && self.work.pending_transition.is_none();
-        if workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
-            "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
-            .on_hover_text("Edit the previous object in this image. Unsaved changes require confirmation. Stops at the first object.").clicked() {
-            self.trigger_user_action(labello_domain::UserAction::SelectPreviousObject);
-        }
-        if self.bar_has_previous_image()
-            && workspace_toolbar_button(
-                ui,
-                ready && self.runtime.api.is_some(),
-                "Previous image",
-                WorkspaceActionIcon::PreviousImage,
-                width,
-                theme::Intent::Neutral,
-            )
-            .on_hover_text("Return to the immediately previous eligible assignment.")
-            .clicked()
-        {
-            self.trigger_user_action(labello_domain::UserAction::PreviousImage);
-        }
-        if workspace_toolbar_button(
-            ui,
-            ready && self.runtime.api.is_some(),
-            "Skip",
-            WorkspaceActionIcon::Skip,
-            width,
-            theme::Intent::Neutral,
-        )
-        .on_hover_text("Release this assignment and claim another.")
-        .clicked()
-        {
-            self.trigger_user_action(labello_domain::UserAction::SkipAssignment);
-        }
-        let mut actions = Vec::new();
-        if bar.inspected_group_id.is_some() {
-            actions.push(crate::panels::WorkspaceAction {
-                command: crate::panels::WorkspaceCommand::NextMigrationObject,
-                label: if bar.next_returns_to_current {
-                    "Return to current object"
-                } else {
-                    "Next object"
-                }
-                .into(),
-                shortcut: self
-                    .shortcut_text(ui.ctx(), labello_domain::UserAction::SelectNextObject),
-                enabled: true,
-                help: "Inspect the next object or return to the current object.",
-            });
-        }
-        self.dispatch_workspace_secondary(crate::panels::workspace_secondary_actions(
-            ui, &actions, "More",
-        ));
+        });
     }
 
     fn migration_companion_status(&self, ui: &mut egui::Ui, annotation_id: &AnnotationId) {

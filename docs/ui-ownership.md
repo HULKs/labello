@@ -363,8 +363,10 @@ the executing browser's identity. Copy succeeds only after the platform confirms
 it; failure opens selectable manual-copy text. Mismatch navigation uses ordinary
 transition guards. No mismatch means no reserved status-panel height.
 
-Annotation's Submit & next action is anchored to the bottom right, after the
-secondary actions, with the same icon fallback at narrow widths.
+The primary action in annotation, migration, and review is anchored to the bottom
+right, after the secondary actions, with the same icon fallback at narrow widths.
+This includes migration saving and final confirmation, and review approval or
+correction submission. Compact review puts secondary actions above the decision row.
 
 The bottom action bar remains empty until session, dataset, image, and required
 assignment are loaded. Background availability refresh preserves loaded actions.

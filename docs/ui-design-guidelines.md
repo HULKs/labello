@@ -166,8 +166,8 @@ has been recorded.
   in every Setup section, with About last. Each section owns its heading;
   do not repeat a dataset-specific welcome banner above unrelated sections.
   Signed-out secondary navigation also puts About last.
-- **Workspace:** keep Submit & next at the bottom right in annotation, including
-  compact layouts. Placed objects remain editable; expose placed-keypoint
+- **Workspace:** keep the primary submit, save-and-advance, or confirm action at
+  the bottom right in annotation, migration, and review, including compact layouts. Placed objects remain editable; expose placed-keypoint
   Visible/Occluded controls when allowed by the task. Migration overview uses
   canvas clicks to create and select objects; omit Add missing object and Edit
   added object mode buttons. Preserve tested canvas geometry and gestures; keep Pan and Fit
@@ -218,8 +218,8 @@ has been recorded.
   loads. The dataset inspector reserves its context row during initial gallery
   loading and retains fixed controls across image loads.
   On Compact, keep Inspector, Refocus, Fit, and Workflow in one top row. Keep
-  Previous image, Previous object, Discard changes, and Skip visible below the
-  decision and Next object/Overview controls. Added migration objects also expose
+  Previous image, Previous object, Discard changes, and Skip visible above the
+  bottom row, with Next object/Overview on the left and the decision on the right. Added migration objects also expose
   Remove item. Icon fallback retains full names/tooltips. Short empty states scroll.
   Use Approve for unchanged items and Submit correction for valid edits. Space
   and Y/N follow the same [review flow](annotation.md#review-and-correct).

@@ -12,6 +12,48 @@ fn submit_next_is_the_rightmost_bottom_action_at_supported_widths() {
     }
 }
 
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation() {
+    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0))
+            .build_eframe(|ctx| inspector_presets::build(preset, &ctx.egui_ctx));
+        harness.run_steps(4);
+        for placing in [false, true] {
+            if placing {
+                let canvas = harness.get_by_label("Annotation canvas").rect();
+                click_at(&mut harness, canvas.left_top() + canvas.size() * 0.1);
+                harness.run_steps(4);
+                assert!(harness.state().work.migration.draft.is_some());
+            }
+            for size in [egui::vec2(1440.0, 900.0), egui::vec2(768.0, 1024.0), egui::vec2(390.0, 844.0), egui::vec2(320.0, 568.0), egui::vec2(844.0, 390.0)] {
+                harness.set_size(size);
+                harness.run_steps(4);
+                let compact = LayoutMode::for_width(size.x) == LayoutMode::Compact;
+                let label = match (preset, placing, compact) {
+                    (InspectorPreset::MigrationObject, _, true) => "Save & next",
+                    (InspectorPreset::MigrationObject, _, false) => "Save skeleton & advance",
+                    (_, true, true) => "Save object",
+                    (_, true, false) => "Save missing object",
+                    (_, false, true) => "Confirm & finish",
+                    (_, false, false) => "Confirm all guides & finish",
+                };
+                let primary = harness.get_by_label(label).rect();
+                for secondary in ["Skip", "Previous object", "Discard object changes", "Undo last keypoint", "More"] {
+                    if let Some(node) = harness.query_by_label(secondary) {
+                        assert!(primary.left() >= node.rect().right(),
+                            "{preset:?} {size:?} {label}={primary:?} {secondary}={:?}", node.rect());
+                    }
+                }
+                assert!(size.x - primary.right() < 30.0 && size.y - primary.bottom() < 30.0,
+                    "{preset:?} {size:?} {label}={primary:?}");
+                assert!(primary.right() <= size.x && primary.bottom() <= size.y);
+                assert!(primary.top() >= harness.get_by_label("Annotation canvas").rect().bottom());
+            }
+        }
+    }
+}
+
 #[test]
 fn placed_annotation_keypoints_can_change_visibility_and_undo_without_reentering_editing() {
     let api = Rc::new(SpyApi::new());

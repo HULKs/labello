@@ -21,19 +21,25 @@ impl LabelloApp {
         };
         if compact {
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    let width = (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(44.0);
-                    ui.allocate_ui_with_layout(egui::vec2(width, 44.0), egui::Layout::left_to_right(egui::Align::Center), |ui| self.review_decision_buttons(ui, false, true));
-                    self.review_next_object_action(ui, Some(44.0));
-                });
                 ui.horizontal_wrapped(|ui| secondary(self, ui));
+                ui.horizontal(|ui| {
+                    self.review_next_object_action(ui, Some(44.0));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        self.review_decision_buttons(ui, false, true);
+                    });
+                });
             });
         } else {
-            ui.horizontal_wrapped(|ui| {
-                self.review_decision_buttons(ui, false, false);
-                self.review_next_object_action(ui, None);
-                ui.separator();
-                secondary(self, ui);
+            ui.horizontal(|ui| {
+                let primary_width = text_button_width(ui, self.bar_review_primary_label());
+                let secondary_width = (ui.available_width() - primary_width - ui.spacing().item_spacing.x).max(0.0);
+                ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
+                    secondary(self, ui);
+                    self.review_next_object_action(ui, None);
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::BOTTOM), |ui| {
+                    self.review_decision_buttons(ui, false, false);
+                });
             });
         }
     }
