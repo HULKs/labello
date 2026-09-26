@@ -117,14 +117,14 @@ fn set_zoom_around(
     }
     state.zoom = zoom;
     state.pan = focus - fitted_image.center() - (focus - old_center) * (zoom / old_zoom);
-    state.pan = clamp_pan(viewport, fitted_image, state.zoom, state.pan);
+    state.pan = clamp_pan(viewport, fitted_image, state.zoom, state.pan, state.pan_margin());
 }
 
-fn clamp_pan(viewport: Rect, fitted_image: Rect, zoom: f32, pan: Vec2) -> Vec2 {
+fn clamp_pan(viewport: Rect, fitted_image: Rect, zoom: f32, pan: Vec2, margin: f32) -> Vec2 {
     if !valid_rect(viewport) || !valid_rect(fitted_image) {
         return Vec2::ZERO;
     }
-    let overflow = fitted_image.size() * ((zoom.max(MIN_ZOOM) - MIN_ZOOM) * 0.5);
+    let overflow = fitted_image.size() * ((zoom.max(MIN_ZOOM) - MIN_ZOOM) * 0.5) + Vec2::splat(margin);
     vec2(
         finite_or(pan.x, 0.0).clamp(-overflow.x, overflow.x),
         finite_or(pan.y, 0.0).clamp(-overflow.y, overflow.y),
