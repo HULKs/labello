@@ -73,7 +73,9 @@ impl LabelloApp {
             .enumerate()
             .map(|(index, annotation)| {
                 let class_name = self.class_name(&annotation.class_id);
-                let geometry = match &annotation.geometry {
+                let geometry = if self.companion_needs_box(annotation) {
+                    "Read-only source keypoints. Draw a bounding box for this object.".to_string()
+                } else { match &annotation.geometry {
                     AnnotationGeometry::BoundingBox(bbox) => format!(
                         "Position: {:.0}% from left, {:.0}% from top\nSize: {:.0}% wide by {:.0}% high",
                         bbox.x * 100.0,
@@ -90,7 +92,7 @@ impl LabelloApp {
                             .count(),
                         skeleton.keypoints.len()
                     ),
-                };
+                }};
                 (
                     annotation.annotation_id.clone(),
                     index + 1,

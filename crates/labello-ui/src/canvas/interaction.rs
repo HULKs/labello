@@ -289,7 +289,11 @@ fn handle_annotation_pointer(
             && interaction.allow_create
             && bounding_box_tool
             && image_rect.contains(pointer)
-            && annotation_at(pointer, image_rect, annotations).is_none()
+            && annotation_at_selectable(pointer, image_rect, annotations, selectable_annotations)
+                .is_none_or(|annotation| {
+                    selected_annotation == Some(&annotation.annotation_id)
+                        && matches!(annotation.geometry, AnnotationGeometry::Skeleton(_))
+                })
         {
             state.drag = Some(DragOperation::Create {
                 start: normalized_pointer,
@@ -311,7 +315,8 @@ fn handle_annotation_pointer(
         let keypoint = state.draft_keypoint.take();
         match (drag, bbox, keypoint) {
             (Some(DragOperation::Create { .. }), Some(bbox), _)
-                if bbox.width > 0.005 && bbox.height > 0.005 =>
+                if bbox.width * image_rect.width() >= MIN_CREATE_BOX_POINTS
+                    && bbox.height * image_rect.height() >= MIN_CREATE_BOX_POINTS =>
             {
                 return Some(CanvasAction::CreateBoundingBox(bbox));
             }

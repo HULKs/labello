@@ -30,6 +30,7 @@ pub(crate) struct PreviousPrelabelDecisions {
 #[derive(Clone, Copy, Default)]
 pub(crate) enum PrelabelPrimaryAction {
     Confirm,
+    Guide,
     Focus,
     #[default]
     Submit,
@@ -37,7 +38,14 @@ pub(crate) enum PrelabelPrimaryAction {
 
 impl LabelloApp {
     pub(crate) fn prelabel_primary_action(&self) -> PrelabelPrimaryAction {
-        if self.selected_prelabel_object().is_some() {
+        if self
+            .work
+            .annotations
+            .iter()
+            .any(|annotation| self.companion_needs_box(annotation))
+        {
+            PrelabelPrimaryAction::Guide
+        } else if self.selected_prelabel_object().is_some() {
             PrelabelPrimaryAction::Confirm
         } else if !self.pending_prelabel_objects().is_empty() {
             PrelabelPrimaryAction::Focus

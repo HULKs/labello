@@ -48,6 +48,27 @@ impl LabelloApp {
                 annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
                 annotations.push(preview);
             }
+            let selectable = annotations
+                .iter()
+                .map(|annotation| annotation.annotation_id.clone())
+                .collect();
+            if self.view == AppView::Annotate {
+                let selected_source = annotations
+                    .iter()
+                    .find(|annotation| {
+                        Some(&annotation.annotation_id) == self.work.selected_annotation.as_ref()
+                            && !self.companion_needs_box(annotation)
+                    })
+                    .and_then(|annotation| self.companion_source(annotation))
+                    .cloned();
+                annotations = annotations
+                    .iter()
+                    .map(|annotation| self.companion_guide(annotation))
+                    .collect();
+                if let Some(source) = selected_source {
+                    annotations.push(source);
+                }
+            }
             let skeleton_edges = self
                 .selected_task()
                 .and_then(|task| task.skeleton.as_ref())
@@ -109,8 +130,11 @@ impl LabelloApp {
                 let companion = selected_annotation.as_ref().and_then(|id| {
                     annotations.iter().find(|annotation| {
                         &annotation.annotation_id == id
-                            && (self.is_migration_companion_box(annotation)
-                                || self.work.prelabel_review.started)
+                            && (self.work.prelabel_review.started
+                                || self.work.annotations.iter().any(|original| {
+                                    original.annotation_id == annotation.annotation_id
+                                        && self.is_migration_companion_box(original)
+                                }))
                     })
                 });
                 self.work.canvas.set_annotation_edit_focus(companion);
@@ -135,6 +159,12 @@ impl LabelloApp {
             let mut missing_action = None;
             let mut styles = std::collections::BTreeMap::new();
             self.style_review_correction_previews(&annotations, &mut styles);
+            if self.work.annotations.iter().any(|annotation| {
+                Some(&annotation.annotation_id) == selected_annotation.as_ref()
+                    && self.companion_needs_box(annotation)
+            }) {
+                ui.label("Source keypoints are read only. Draw a box for this object.");
+            }
             let action = show_canvas_with_evidence(
                 ui,
                 &mut self.work.canvas,
@@ -148,7 +178,7 @@ impl LabelloApp {
                 &prelabels,
                 annotation_color,
                 &styles,
-                None,
+                Some(&selectable),
                 Some(MissingObjectOverlay {
                     locations: &locations,
                     selected: self.work.missing_objects.selected,

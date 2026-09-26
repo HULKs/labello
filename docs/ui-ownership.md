@@ -153,6 +153,23 @@ Historical passes resume the latest pass's outstanding decisions, with no new
 global pass-start control. Discovery editing and companion reconciliation retain
 their separate drafts and transaction rules.
 
+`companion_guides.rs` projects untouched, unreviewed companion boxes as their
+exact source keypoints in Annotate. The projection retains the box ID for
+selection but never enters annotation state or save payloads. Drawing revises
+that box through the normal edit/history/save path. Existing reviewed or edited
+boxes remain boxes, and missing historical sources fall back to ordinary editing.
+The annotation primary action advances through pending companion guides, saving
+the current box without completing the assignment and focusing the next guide.
+Only after all guides are drawn or deleted does it submit the image. Explicit
+whole-assignment transition submission still requires every guide to be resolved.
+Keypoint-guide focus permits a small canvas margin at image edges so corner
+markers remain visible; it does not change annotation coordinates. Box creation
+uses a three-canvas-point minimum per dimension, rather than a fixed fraction
+of the image. Geometry clamping uses only a numerical floor, so small boxes are
+not enlarged when rendered, hit-tested, or edited at deep zoom. Workspace
+preferences are not overwritten while dataset/assignment loading or restoration
+is pending, so a restored deep view survives asynchronous browser startup.
+
 Bounding-box assignments without a restored selection select their first visible
 migration companion. Focus occurs once per activation of an annotation identity,
 not each version, autosave, or manual pan/zoom. Selecting another object and

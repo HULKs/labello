@@ -20,7 +20,7 @@ pub(crate) struct StoredCanvasTransform {
 impl StoredCanvasTransform {
     pub(crate) fn clamped(self) -> Self {
         Self {
-            zoom: finite_or(self.zoom, 1.0).clamp(1.0, 12.0),
+            zoom: finite_or(self.zoom, crate::canvas::MIN_ZOOM).clamp(crate::canvas::MIN_ZOOM, crate::canvas::MAX_ZOOM),
             pan_x: finite_or(self.pan_x, 0.0).clamp(-100_000.0, 100_000.0),
             pan_y: finite_or(self.pan_y, 0.0).clamp(-100_000.0, 100_000.0),
         }

@@ -152,6 +152,7 @@ impl LabelloApp {
         {
             return;
         }
+        if self.advance_companion_guide() { return; }
         if self.confirm_prelabel_object() { return; }
         if let Some(issue) = self.submission_issue() {
             self.runtime.error = Some(issue);
@@ -222,6 +223,9 @@ impl LabelloApp {
     fn submission_issue(&self) -> Option<String> {
         if !self.visible_prelabels().is_empty() {
             return Some("Confirm or delete the remaining model objects before submitting.".into());
+        }
+        if self.work.annotations.iter().any(|annotation| self.companion_needs_box(annotation)) {
+            return Some("Draw a bounding box for each keypoint guide before submitting.".into());
         }
         let task = self.selected_task()?;
         let spec = task.skeleton.as_ref()?;
