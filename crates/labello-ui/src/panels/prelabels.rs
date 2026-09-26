@@ -57,10 +57,19 @@ impl LabelloApp {
             })
             .cloned()
             .collect();
-        labello_domain::filter_prelabels(&hints, &self.work.annotations, &processing)
-            .into_iter()
+        let eligible = hints.iter().filter(|hint| !labello_domain::filter_prelabels(std::slice::from_ref(*hint), &self.work.annotations, &processing).is_empty());
+        let candidates = eligible.map(|hint| {
+            let mut candidate = hint.clone();
+            if let Some(item) = self.work.prelabel_review.objects.iter()
+                .find(|item| item.suggestion.suggestion_id == hint.suggestion_id) {
+                candidate.geometry = item.annotation.geometry.clone();
+            }
+            candidate
+        }).collect::<Vec<_>>();
+        let kept = labello_domain::filter_prelabels(&candidates, &self.work.annotations, &processing);
+        kept.iter().filter_map(|candidate| hints.iter().find(|hint| hint.suggestion_id == candidate.suggestion_id))
             .filter(|suggestion| self.selected_class_id() == Some(&suggestion.class_id))
-            .collect()
+            .cloned().collect()
     }
 
     fn prelabel_panel(&mut self, ui: &mut egui::Ui) {
@@ -72,15 +81,6 @@ impl LabelloApp {
         }
         self.prelabel_selector(ui);
         let prelabels = self.visible_prelabels();
-        if self.work.selected_prelabel.as_ref().is_none_or(|selected| {
-            !prelabels
-                .iter()
-                .any(|suggestion| &suggestion.suggestion_id == selected)
-        }) {
-            self.work.selected_prelabel = prelabels
-                .first()
-                .map(|suggestion| suggestion.suggestion_id.clone());
-        }
         if prelabels.is_empty() {
             let choice = self
                 .selected_task()
@@ -115,75 +115,14 @@ impl LabelloApp {
                 {
                     "No model predictions meet the configured confidence threshold."
                 } else {
-                    "Hints have been accepted, discarded, or suppressed by overlapping boxes."
+                    "Objects have been confirmed, deleted, or suppressed by overlapping boxes."
                 };
                 theme::empty_state(ui, "No remaining suggestions", message, None);
             }
         }
-        for suggestion in &prelabels {
-            let selected = self.work.selected_prelabel.as_ref() == Some(&suggestion.suggestion_id);
-            let frame = theme::prelabel_card_frame(selected);
-            frame.show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        theme::badge(
-                            ui,
-                            &format!("{:.0}%", suggestion.confidence * 100.0),
-                            theme::Intent::Accent,
-                        );
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::selectable(
-                                        selected,
-                                        RichText::new(suggestion.class_id.to_string()).monospace(),
-                                    )
-                                    .truncate(),
-                                )
-                                .on_hover_text(suggestion.class_id.to_string())
-                                .clicked()
-                            {
-                                self.work.selected_prelabel =
-                                    Some(suggestion.suggestion_id.clone());
-                            }
-                        });
-                    });
-                });
-                ui.horizontal(|ui| {
-                    let width = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
-                    let size = egui::vec2(width, 44.0);
-                    if theme::primary_button(
-                        ui,
-                        !self.loading.saving,
-                        egui::Button::new("Approve").min_size(size),
-                    )
-                    .on_hover_text(format!(
-                        "Shortcut: {}",
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::AcceptPrelabel,)
-                    ))
-                    .clicked()
-                    {
-                        self.accept_prelabel(suggestion);
-                        self.work.selected_prelabel = self
-                            .visible_prelabels()
-                            .first()
-                            .map(|suggestion| suggestion.suggestion_id.clone());
-                    }
-                    if theme::danger_button(
-                        ui,
-                        !self.loading.saving,
-                        egui::Button::new("Discard").min_size(size),
-                    )
-                    .on_hover_text(format!(
-                        "Shortcut: {}",
-                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::DiscardPrelabel,)
-                    ))
-                    .clicked()
-                    {
-                        self.discard_prelabel(suggestion.suggestion_id.clone());
-                    }
-                });
-            });
+        if !prelabels.is_empty() {
+            ui.label(format!("{} objects need confirmation", prelabels.len()));
+            ui.label("Edit the selected object on the canvas, then Confirm & next. Delete removes it.");
         }
     }
 }

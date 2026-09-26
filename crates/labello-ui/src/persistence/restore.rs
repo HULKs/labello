@@ -383,9 +383,10 @@ impl crate::app::LabelloApp {
                     crate::app::SaveStatus::Dirty
                         | crate::app::SaveStatus::Saving
                         | crate::app::SaveStatus::Retry
-                ) =>
+                ) || self.work.prelabel_review.changed =>
             {
                 WorkDraftPayload::Annotation(AnnotationDraft {
+                    prelabel_review: self.work.prelabel_review.clone(),
                     annotations: self.work.annotations.clone(),
                     accepted_prelabels: self.work.accepted_prelabels.clone(),
                     prelabel_evidence: self.work.prelabel_evidence.clone(),
@@ -498,6 +499,7 @@ impl crate::app::LabelloApp {
             DraftRecovery::Work(draft, DraftValidation::Valid) => {
                 match draft.payload {
                     WorkDraftPayload::Annotation(draft) => {
+                        self.work.prelabel_review = draft.prelabel_review;
                         self.work.annotations = draft.annotations;
                         self.work.accepted_prelabels = draft.accepted_prelabels;
                         self.work.prelabel_evidence = draft.prelabel_evidence;

@@ -17,6 +17,7 @@ mod missing_objects;
 pub mod panels;
 mod persistence;
 mod prelabel_flow;
+mod prelabel_review;
 mod presence;
 pub mod queue;
 mod review_context;

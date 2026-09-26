@@ -99,6 +99,8 @@ pub(crate) enum DraftKind {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AnnotationDraft {
+    #[serde(default)]
+    pub prelabel_review: crate::prelabel_review::PrelabelReview,
     pub annotations: Vec<AnnotationVersion>,
     pub accepted_prelabels: Vec<String>,
     #[serde(default)]

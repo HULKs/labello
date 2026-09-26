@@ -55,7 +55,7 @@ impl LabelloApp {
             accepted_prelabels: Vec::new(),
             prelabel_evidence: Default::default(),
             prelabels: Default::default(),
-            selected_prelabel: None,
+            prelabel_review: Default::default(),
             selected_annotation: None,
             active_skeleton: None,
             skeleton_keypoint_index: 0,

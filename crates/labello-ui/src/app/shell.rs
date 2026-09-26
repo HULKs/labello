@@ -18,6 +18,7 @@ impl eframe::App for LabelloApp {
         self.work.canvas.require_pan_mode(false);
         self.sync_manual_migration();
         self.sync_review_editor();
+        self.sync_prelabel_review();
         self.start_next_persistence_command();
         self.start_setup_load();
         if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {

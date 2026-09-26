@@ -1843,7 +1843,7 @@ fn stale_assignment_operations_do_not_clear_the_active_loading_owner() {
 fn editing_a_persisted_box_saves_a_new_annotation_version() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api.clone());
-    click(&mut harness, "Approve");
+    click(&mut harness, "Confirm & next");
     click(&mut harness, "Save");
     step_until(&mut harness, 10, |app| app.work.save_status == SaveStatus::Saved);
 

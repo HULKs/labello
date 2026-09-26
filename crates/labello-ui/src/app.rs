@@ -431,7 +431,7 @@ pub struct WorkState {
     pub(crate) prelabel_evidence:
         std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
     pub(crate) prelabels: crate::prelabel_flow::PrelabelWorkState,
-    pub(crate) selected_prelabel: Option<String>,
+    pub(crate) prelabel_review: crate::prelabel_review::PrelabelReview,
     pub(crate) selected_annotation: Option<AnnotationId>,
     pub(crate) active_skeleton: Option<AnnotationId>,
     pub(crate) skeleton_keypoint_index: usize,
@@ -501,6 +501,7 @@ impl CorrectionDraft {
 
 #[derive(Clone, Debug)]
 pub(crate) struct EditSnapshot {
+    prelabel_review: crate::prelabel_review::PrelabelReview,
     annotations: Vec<labello_domain::AnnotationVersion>,
     accepted_prelabels: Vec<String>,
     prelabel_evidence:

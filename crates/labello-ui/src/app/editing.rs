@@ -45,6 +45,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn edit_bbox(&mut self, edit: crate::canvas::BoundingBoxEdit) {
+        if self.edit_prelabel_geometry(&edit.annotation_id, AnnotationGeometry::BoundingBox(edit.bounding_box)) { return; }
         let annotation_id = edit.annotation_id;
         let persisted = self.work.persisted_annotations.contains(&annotation_id);
         let persisted_version = self
@@ -85,6 +86,15 @@ impl LabelloApp {
     }
 
     pub(crate) fn edit_keypoint(&mut self, edit: crate::canvas::KeypointEdit) {
+        if let Some(item) = self.work.prelabel_review.objects.iter().find(|item| item.annotation.annotation_id == edit.annotation_id) {
+            let mut geometry = item.annotation.geometry.clone();
+            if let AnnotationGeometry::Skeleton(skeleton) = &mut geometry
+                && let Some(point) = skeleton.keypoints.get_mut(edit.keypoint_index) {
+                point.point = Some(edit.point);
+                self.edit_prelabel_geometry(&edit.annotation_id, geometry);
+            }
+            return;
+        }
         let annotation_id = edit.annotation_id;
         let persisted = self.work.persisted_annotations.contains(&annotation_id);
         let persisted_version = self
@@ -282,57 +292,8 @@ impl LabelloApp {
         self.mark_edited();
     }
 
-    pub(crate) fn accept_prelabel(&mut self, suggestion: &PrelabelSuggestion) {
-        let Some(task) = self.selected_task() else {
-            return;
-        };
-        let Some(class_id) = self.selected_class_id() else {
-            return;
-        };
-        if suggestion.task_id != task.task_id || &suggestion.class_id != class_id {
-            return;
-        }
-        if self
-            .work
-            .accepted_prelabels
-            .iter()
-            .any(|id| id == &suggestion.suggestion_id)
-        {
-            return;
-        }
-        let timestamp = labello_domain::now();
-        let user_id = self.config.user_id.clone();
-        let annotation_id = AnnotationId::generate();
-        self.record_edit();
-        self.work
-            .annotations
-            .push(labello_domain::AnnotationVersion {
-                annotation_id: annotation_id.clone(),
-                version: 1,
-                object_group_id: None,
-                origin: AnnotationOrigin::native(),
-                task_id: suggestion.task_id.clone(),
-                class_id: suggestion.class_id.clone(),
-                annotation_type: match suggestion.geometry {
-                    AnnotationGeometry::BoundingBox(_) => AnnotationType::BoundingBox,
-                    AnnotationGeometry::Skeleton(_) => AnnotationType::Skeleton,
-                },
-                revision_source: RevisionSource::Human { action: HumanRevisionKind::Authored },
-                geometry: suggestion.geometry.clone(),
-                author_user_id: user_id,
-                created_at: timestamp,
-                updated_at: timestamp,
-                deleted: false,
-            });
-        self.work
-            .accepted_prelabels
-            .push(suggestion.suggestion_id.clone());
-        if let Some(evidence) = &suggestion.evidence { self.work.prelabel_evidence.insert(annotation_id.clone(), evidence.clone()); }
-        self.work.selected_annotation = Some(annotation_id);
-        self.mark_edited();
-    }
-
     pub(crate) fn delete_selected(&mut self) {
+        if self.delete_prelabel_object() { return; }
         if let Some(selected) = self.work.selected_annotation.clone() {
             let persisted = self.work.persisted_annotations.contains(&selected);
             let persisted_version = self
@@ -388,8 +349,10 @@ impl LabelloApp {
                 .map(|value| value.len())
                 .sum::<usize>()
             + serde_json::to_vec(&self.work.prelabel_evidence).map_or(0, |value| value.len())
+            + serde_json::to_vec(&self.work.prelabel_review).map_or(0, |value| value.len())
             + 256;
         EditSnapshot {
+            prelabel_review: self.work.prelabel_review.clone(),
             annotations: self.work.annotations.clone(),
             accepted_prelabels: self.work.accepted_prelabels.clone(),
             prelabel_evidence: self.work.prelabel_evidence.clone(),
@@ -401,13 +364,14 @@ impl LabelloApp {
         }
     }
 
-    fn record_edit(&mut self) {
+    pub(crate) fn record_edit(&mut self) {
         let snapshot = self.snapshot();
         push_history(&mut self.work.undo_stack, snapshot);
         self.work.redo_stack.clear();
     }
 
     fn restore_snapshot(&mut self, snapshot: EditSnapshot) {
+        self.work.prelabel_review = snapshot.prelabel_review;
         self.work.annotations = snapshot.annotations;
         if let Some(state) = self.work.current_state.as_ref() {
             let persisted_annotations = state.active_annotations().cloned().collect::<Vec<_>>();
@@ -485,7 +449,7 @@ impl LabelloApp {
         }
     }
 
-    fn mark_edited(&mut self) {
+    pub(crate) fn mark_edited(&mut self) {
         self.work.assignment_touched = true;
         self.work.edit_generation = self.work.edit_generation.wrapping_add(1);
         self.work.save_status = SaveStatus::Dirty;

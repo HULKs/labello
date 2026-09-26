@@ -155,11 +155,11 @@ impl LabelloApp {
             return self.current_migration_guide();
         }
         if self.view == AppView::Annotate {
-            return self.work.annotations.iter().find(|annotation| {
+            return self.annotation_objects().into_iter().find(|annotation| {
                 self.work.selected_annotation.as_ref() == Some(&annotation.annotation_id)
                     && self.annotation_matches_selected_workflow(annotation)
-                    && self.is_migration_companion_box(annotation)
-            }).cloned();
+                    && (self.is_migration_companion_box(annotation) || self.work.prelabel_review.started)
+            });
         }
         if self.view != AppView::Review {
             return None;

@@ -145,7 +145,8 @@ fn prelabel_generation_reset_clears_hints_and_preserves_edits_and_rejects_stale_
     let app = harness.state_mut();
     app.cancel_prelabel_load();
     let hint = app.visible_prelabels().remove(0);
-    app.accept_prelabel(&hint);
+    app.sync_prelabel_review();
+    assert!(app.confirm_prelabel_object());
     let annotations = app.work.annotations.clone();
     let query = PrelabelSuggestionRequest {
         image_id: app.work.current.as_ref().unwrap().image.image_id.clone(),
@@ -471,67 +472,34 @@ fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration()
 }
 
 #[test]
-fn prelabel_cards_keep_long_classes_and_actions_inside_the_inspector() {
+fn pending_object_summaries_truncate_long_names_and_keep_confidence_visible() {
     let mut loaded = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     let mut app = std::mem::replace(loaded.state_mut(), base_live_app(Rc::new(SpyApi::new())));
     app.cancel_prelabel_load();
-    // Isolate rendering from background work while exercising the production panel.
     app.runtime.api = None;
-    let class_id =
-        "a_very_long_dataset_class_id_that_must_not_push_confidence_or_actions_outside_the_card";
-    let task_id = app.selected_task().unwrap().task_id.clone();
-    app.work
-        .tasks
+    let class = app
+        .work
+        .classes
         .iter_mut()
-        .find(|task| task.task_id == task_id)
-        .unwrap()
-        .class_ids = vec![class_id.into()];
-    let hint = &mut app.work.current.as_mut().unwrap().prelabels[0];
-    hint.class_id = class_id.into();
-    hint.confidence = 0.87;
+        .find(|class| class.class_id == app.work.current.as_ref().unwrap().prelabels[0].class_id)
+        .unwrap();
+    class.name =
+        "a very long dataset class name that must not push confidence outside the object card"
+            .into();
+    let label = format!("Object 1 | {} | Selected", class.name);
     let mut harness = Harness::builder()
         .with_size(egui::vec2(300.0, 1000.0))
         .build_ui_state(|ui, app: &mut LabelloApp| app.right_panel(ui, false), app);
     for width in [260.0, 280.0, 320.0, 390.0] {
         harness.set_size(egui::vec2(width, 1000.0));
         harness.run_steps(3);
-        let class = harness.get_by_label(class_id).rect();
-        let confidence = harness.get_by_label("87%").rect();
-        let approve = harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Approve")
-            .rect();
-        let discard = harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Discard")
-            .rect();
-        assert!(class.right() < confidence.left());
-        assert!((class.center().y - confidence.center().y).abs() < 1.0);
-        assert!((confidence.right() - discard.right()).abs() < 1.0);
-        assert!((approve.width() - discard.width()).abs() < 1.0);
-        assert!((approve.top() - discard.top()).abs() < 1.0);
-        assert!(approve.top() >= class.bottom());
-        assert!(approve.top() - class.bottom() <= 12.0);
-        assert!(discard.bottom() - class.top() <= 100.0);
-        assert!(approve.height() >= 44.0 && discard.height() >= 44.0);
-        assert!(discard.right() <= width);
-        fn truncated(shape: &egui::Shape, text: &str) -> bool {
-            match shape {
-                egui::Shape::Text(shape) => shape.galley.job.text == text && shape.galley.elided,
-                egui::Shape::Vec(shapes) => shapes.iter().any(|shape| truncated(shape, text)),
-                _ => false,
-            }
-        }
-        assert!(
-            harness
-                .output()
-                .shapes
-                .iter()
-                .any(|shape| truncated(&shape.shape, class_id))
-        );
-    }
-    harness.state_mut().loading.saving = true;
-    harness.step();
-    for label in ["Approve", "Discard"] {
-        assert!(harness.get_by_label(label).accesskit_node().is_disabled());
+        let object = harness.get_by_label(&label).rect();
+        let confidence = harness.get_by_label("88%").rect();
+        assert!(object.right() <= width && confidence.right() <= width);
+        assert!(object.height() >= 44.0);
+        assert!(harness.query_by_label("Needs confirmation").is_some());
+        assert!(harness.query_by_label("Approve").is_none());
+        assert!(harness.query_by_label("Discard").is_none());
     }
 }
 
@@ -614,19 +582,424 @@ fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
 }
 
 #[test]
-fn prelabel_actions_support_keyboard_approval_and_discard() {
-    for approve in [true, false] {
+fn prelabel_actions_support_keyboard_confirmation_and_delete() {
+    for confirm in [true, false] {
         let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
-        harness.get_by_label("Approve").focus();
+        harness
+            .get_by_label(if confirm { "Confirm & next" } else { "Delete" })
+            .focus();
         harness.step();
-        if !approve {
-            harness.key_press(egui::Key::Tab);
-            harness.step();
-            assert!(harness.get_by_label("Discard").is_focused());
-        }
         harness.key_press(egui::Key::Enter);
         harness.step();
         assert!(harness.state().visible_prelabels().is_empty());
-        assert_eq!(harness.state().work.annotations.len(), usize::from(approve));
+        assert_eq!(harness.state().work.annotations.len(), usize::from(confirm));
+        assert!(harness.query_by_label("Submit & next").is_some());
     }
+}
+
+#[test]
+fn prelabels_open_as_selected_objects_without_accepting_them() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    harness.run_steps(3);
+    assert!(harness.state().work.selected_annotation.is_some());
+    assert!(harness.state().work.annotations.is_empty());
+    assert!(harness.query_by_label("Confirm & next").is_some());
+    assert!(harness.query_by_label("Delete").is_some());
+    assert!(harness.query_by_label("Approve").is_none());
+    assert!(harness.query_by_label("Discard").is_none());
+}
+
+fn add_second_prelabel(app: &mut LabelloApp) {
+    let mut hint = app.work.current.as_ref().unwrap().prelabels[0].clone();
+    hint.suggestion_id = "second-object".into();
+    hint.confidence = 0.8;
+    hint.geometry = AnnotationGeometry::BoundingBox(BoundingBox {
+        x: 0.7,
+        y: 0.6,
+        width: 0.15,
+        height: 0.2,
+    });
+    app.work.current.as_mut().unwrap().prelabels.push(hint);
+    app.sync_prelabel_review();
+}
+
+#[test]
+fn model_objects_are_editable_before_confirmation_and_advance_without_submitting() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    add_second_prelabel(harness.state_mut());
+    harness.state_mut().work.inspector_panel_collapsed = true;
+    harness.run_steps(3);
+    let first = harness.state().selected_prelabel_object().unwrap().clone();
+    let zoom = harness.state().work.canvas.current_zoom();
+    assert!(zoom > 1.0);
+    let edited = BoundingBox {
+        x: 0.15,
+        y: 0.2,
+        width: 0.2,
+        height: 0.25,
+    };
+    harness.state_mut().edit_bbox(BoundingBoxEdit {
+        annotation_id: first.annotation.annotation_id.clone(),
+        bounding_box: edited,
+    });
+    harness.step();
+    assert_eq!(
+        harness.state().work.canvas.current_zoom(),
+        zoom,
+        "editing must not refocus each frame"
+    );
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert!(
+        api.events().is_empty(),
+        "autosave must not accept either pending object"
+    );
+    assert_eq!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .geometry,
+        AnnotationGeometry::BoundingBox(edited)
+    );
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
+    assert_eq!(harness.state().work.annotations.len(), 1);
+    assert_eq!(
+        harness.state().work.annotations[0].geometry,
+        AnnotationGeometry::BoundingBox(edited)
+    );
+    assert_eq!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .suggestion
+            .suggestion_id,
+        "second-object"
+    );
+    assert_eq!(api.counts().complete_assignment, 0);
+    harness.key_press(egui::Key::Delete);
+    harness.run_steps(3);
+    assert!(harness.state().pending_prelabel_objects().is_empty());
+    assert_eq!(harness.state().work.annotations.len(), 1);
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+    assert!(harness.query_by_label("Image overview").is_some());
+    assert!(harness.query_by_label("Submit & next").is_some());
+    assert_eq!(api.counts().complete_assignment, 0);
+    harness.key_press(egui::Key::Space);
+    step_until(&mut harness, 12, |_| api.counts().complete_assignment == 1);
+    assert_eq!(
+        api.events()
+            .iter()
+            .filter(|event| matches!(event, EventPayload::AnnotationVersionCreated { .. }))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn pending_object_deletion_confirmation_and_edits_share_undo_history() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    add_second_prelabel(harness.state_mut());
+    let first = harness.state().selected_prelabel_object().unwrap().clone();
+    click(&mut harness, "Delete");
+    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
+    harness.state_mut().undo();
+    harness.step();
+    assert_eq!(harness.state().pending_prelabel_objects().len(), 2);
+    assert_eq!(
+        harness.state().work.selected_annotation.as_ref(),
+        Some(&first.annotation.annotation_id)
+    );
+    harness.state_mut().redo();
+    harness.step();
+    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
+    click(&mut harness, "Confirm & next");
+    assert_eq!(harness.state().work.annotations.len(), 1);
+    harness.state_mut().undo();
+    harness.step();
+    assert!(harness.state().work.annotations.is_empty());
+    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
+    assert!(harness.state().selected_prelabel_object().is_some());
+}
+
+#[test]
+fn pending_edits_recover_separately_from_annotations_after_autosave() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    let edited = BoundingBox {
+        x: 0.2,
+        y: 0.15,
+        width: 0.2,
+        height: 0.25,
+    };
+    harness.state_mut().edit_bbox(BoundingBoxEdit {
+        annotation_id: id.clone(),
+        bounding_box: edited,
+    });
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    harness.state_mut().queue_current_drafts();
+    harness.run_steps(10);
+    let before = harness.state().work.prelabel_review.clone();
+    let decoded: crate::prelabel_review::PrelabelReview =
+        serde_json::from_slice(&serde_json::to_vec(&before).unwrap()).unwrap();
+    assert_eq!(decoded, before);
+    harness.state_mut().work.prelabel_review = Default::default();
+    harness.state_mut().work.selected_annotation = None;
+    harness.state_mut().runtime.notice = None;
+    harness.state_mut().request_work_draft_load();
+    step_until(&mut harness, 12, |app| {
+        app.runtime.notice.as_deref() == Some("Recovered the validated browser draft.")
+    });
+    assert!(harness.state().work.annotations.is_empty());
+    assert_eq!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .geometry,
+        AnnotationGeometry::BoundingBox(edited)
+    );
+    assert_eq!(harness.state().work.selected_annotation, Some(id));
+}
+
+#[test]
+fn pending_objects_block_completion_and_retain_edits_when_model_is_disabled() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    harness.state_mut().edit_bbox(BoundingBoxEdit {
+        annotation_id: id.clone(),
+        bounding_box: BoundingBox {
+            x: 0.2,
+            y: 0.2,
+            width: 0.2,
+            height: 0.3,
+        },
+    });
+    harness.state_mut().request_save(true);
+    assert!(!harness.state().loading.saving);
+    assert_eq!(api.counts().complete_assignment, 0);
+    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
+    assert!(harness.state().pending_prelabel_objects().is_empty());
+    assert!(harness.state().work.annotations.is_empty());
+    assert!(harness.state().work.selected_annotation.is_none());
+    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
+    step_until(&mut harness, 20, |app| {
+        app.selected_prelabel_object().is_some()
+    });
+    assert_eq!(harness.state().work.selected_annotation, Some(id));
+    assert!(
+        matches!(harness.state().selected_prelabel_object().unwrap().annotation.geometry,
+        AnnotationGeometry::BoundingBox(ref bbox) if bbox.x == 0.2)
+    );
+}
+
+#[test]
+fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().work.inspector_panel_collapsed = true;
+    for (width, height) in [
+        (320.0, 320.0),
+        (320.0, 568.0),
+        (390.0, 844.0),
+        (600.0, 800.0),
+        (1288.0, 820.0),
+        (1440.0, 1000.0),
+    ] {
+        harness.set_size(egui::vec2(width, height));
+        harness.run_steps(4);
+        for label in ["Confirm & next", "Delete"] {
+            assert_control_inside(
+                &harness,
+                label,
+                egui::accesskit::Role::Button,
+                width,
+                height,
+            );
+        }
+        assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
+    }
+    harness.state_mut().loading.saving = true;
+    harness.step();
+    for label in ["Confirm & next", "Delete"] {
+        assert!(harness.get_by_label(label).accesskit_node().is_disabled());
+    }
+    let pending = harness.state().pending_prelabel_objects().len();
+    harness.key_press(egui::Key::Delete);
+    harness.key_press(egui::Key::Space);
+    harness.step();
+    assert_eq!(harness.state().pending_prelabel_objects().len(), pending);
+}
+
+#[test]
+fn edited_model_object_keeps_original_signed_prediction_for_confirmation() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    let hint = app.work.current.as_ref().unwrap().prelabels[0].clone();
+    let proof = Box::new(labello_domain::PrelabelEvidence {
+        provenance: labello_domain::PrelabelProvenance {
+            dataset_id: app.config.dataset_id.clone(),
+            image_id: app.work.current.as_ref().unwrap().image.image_id.clone(),
+            image_hash: "image-digest".into(),
+            task_id: hint.task_id.clone(),
+            class_id: hint.class_id.clone(),
+            config_id: hint.config_id.clone(),
+            config_digest: "configuration-digest".into(),
+            model_id: "detector".into(),
+            model_version: Some("1".into()),
+            model_digest: "model-digest".into(),
+            execution: labello_domain::PrelabelExecutionKind::ServerCpu,
+            trust: labello_domain::PredictionTrust::ServerGenerated,
+            processing: OutputProcessing {
+                confidence_threshold: 0.25,
+                suppress_overlaps_iou: Some(0.5),
+            },
+            generation: 0,
+            scope_generation: 0,
+            suggestion_id: hint.suggestion_id,
+            confidence: hint.confidence,
+        },
+        predicted_geometry: hint.geometry,
+        signature: "fixture-signature".into(),
+    });
+    app.work.current.as_mut().unwrap().prelabels[0].evidence = Some(proof.clone());
+    app.sync_prelabel_review();
+    let id = app.work.selected_annotation.clone().unwrap();
+    let edited = BoundingBox {
+        x: 0.2,
+        y: 0.2,
+        width: 0.3,
+        height: 0.4,
+    };
+    app.edit_bbox(BoundingBoxEdit {
+        annotation_id: id.clone(),
+        bounding_box: edited,
+    });
+    assert!(app.confirm_prelabel_object());
+    app.request_save(false);
+    let UiCommand::SaveAnnotations {
+        annotations,
+        prelabel_evidence,
+        submit,
+        ..
+    } = app.runtime.commands.back().unwrap()
+    else {
+        panic!("annotation save");
+    };
+    assert!(!submit);
+    assert_eq!(
+        annotations[0].geometry,
+        AnnotationGeometry::BoundingBox(edited)
+    );
+    assert_eq!(prelabel_evidence.get(&id), Some(&proof));
+    assert_ne!(annotations[0].geometry, proof.predicted_geometry);
+}
+
+#[test]
+fn confirming_again_after_saved_undo_reuses_the_annotation_identity_and_version() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_prelabel_work_harness(api.clone());
+    let id = harness.state().work.selected_annotation.clone().unwrap();
+    click(&mut harness, "Confirm & next");
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    harness.state_mut().undo();
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    assert!(harness.state().selected_prelabel_object().is_some());
+    click(&mut harness, "Confirm & next");
+    harness.state_mut().request_save(false);
+    step_until(&mut harness, 12, |app| !app.loading.saving);
+    let annotations = &harness.state().work.annotations;
+    assert_eq!(annotations.len(), 1);
+    assert_eq!(annotations[0].annotation_id, id);
+    assert_eq!(annotations[0].version, 2);
+    assert!(api.events().iter().any(|event| matches!(event,
+        EventPayload::AnnotationVersionCreated { annotation, previous_version: Some(1), .. }
+        if annotation.annotation_id == id)));
+}
+
+#[test]
+fn pending_box_edits_refilter_other_model_objects_without_destroying_their_drafts() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    add_second_prelabel(harness.state_mut());
+    let app = harness.state_mut();
+    app.datasets.metadata.as_mut().unwrap().prelabel_configs[0]
+        .output_processing
+        .suppress_overlaps_iou = Some(0.5);
+    let first = app
+        .selected_prelabel_object()
+        .unwrap()
+        .annotation
+        .annotation_id
+        .clone();
+    let second = app.pending_prelabel_objects()[1].clone();
+    let AnnotationGeometry::BoundingBox(bbox) = second.annotation.geometry else {
+        panic!("box");
+    };
+    app.edit_bbox(BoundingBoxEdit {
+        annotation_id: first,
+        bounding_box: bbox,
+    });
+    assert_eq!(app.pending_prelabel_objects().len(), 1);
+    assert_eq!(app.work.prelabel_review.objects.len(), 2);
+    app.undo();
+    assert_eq!(app.pending_prelabel_objects().len(), 2);
+}
+
+#[test]
+fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let app = harness.state_mut();
+    app.cancel_prelabel_load();
+    app.runtime.api = None;
+    let task_id = app.work.selected_task_id.clone().unwrap();
+    let task = app
+        .work
+        .tasks
+        .iter_mut()
+        .find(|task| task.task_id == task_id)
+        .unwrap();
+    task.annotation_type = AnnotationType::Skeleton;
+    task.skeleton = Some(SkeletonSpec {
+        keypoints: vec![KeypointSpec {
+            name: "head".into(),
+            required: true,
+        }],
+        edges: vec![],
+        allow_hidden: true,
+        allow_absent: false,
+    });
+    let hint = &mut app.work.current.as_mut().unwrap().prelabels[0];
+    hint.suggestion_id = "pose-object".into();
+    hint.geometry = AnnotationGeometry::Skeleton(SkeletonGeometry {
+        keypoints: vec![KeypointAnnotation {
+            name: "head".into(),
+            state: KeypointState::Visible,
+            point: Some(NormalizedPoint { x: 0.4, y: 0.4 }),
+        }],
+    });
+    app.work.prelabel_review = Default::default();
+    app.work.selected_annotation = None;
+    app.sync_prelabel_review();
+    let id = app.work.selected_annotation.clone().unwrap();
+    let edited = NormalizedPoint { x: 0.6, y: 0.4 };
+    app.edit_keypoint(crate::canvas::KeypointEdit {
+        annotation_id: id,
+        keypoint_index: 0,
+        point: edited,
+    });
+    assert!(app.work.annotations.is_empty());
+    assert!(app.confirm_prelabel_object());
+    let AnnotationGeometry::Skeleton(skeleton) = &app.work.annotations[0].geometry else {
+        panic!("pose object");
+    };
+    assert_eq!(skeleton.keypoints[0].point, Some(edited));
+    assert_eq!(skeleton.keypoints[0].state, KeypointState::Visible);
 }

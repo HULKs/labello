@@ -24,7 +24,7 @@ fn preload_resizing_releases_surplus_and_preserves_current_work_for_both_kinds()
         };
         step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
         if !review {
-            click(&mut harness, "Approve");
+            click(&mut harness, "Confirm & next");
             assert!(!harness.state().work.annotations.is_empty());
             harness.state_mut().work.last_edit_at = None;
         }

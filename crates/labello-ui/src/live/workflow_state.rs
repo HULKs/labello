@@ -184,7 +184,7 @@ impl LabelloApp {
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
         self.work.prelabel_evidence.clear();
-        self.work.selected_prelabel = None;
+        self.work.prelabel_review = Default::default();
         self.work.selected_annotation = None;
         self.work.active_skeleton = None;
         self.work.skeleton_keypoint_index = 0;

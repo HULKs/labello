@@ -266,12 +266,16 @@ impl LabelloApp {
                     match *result {
                         Ok(state) => {
                             if self.work.edit_generation == edit_generation {
-                                if let Some(assignment) = self.work.assignment.as_ref() {
+                                if (!self.work.prelabel_review.changed || completed)
+                                    && let Some(assignment) = self.work.assignment.as_ref() {
                                     let assignment = assignment.clone();
                                     self.clear_current_work_draft(&assignment);
                                 }
                                 self.apply_state(state);
                                 self.work.save_status = SaveStatus::Saved;
+                                if self.work.prelabel_review.changed && !completed {
+                                    self.rebase_work_draft_after_save(edit_generation);
+                                }
                             } else {
                                 self.renew_assignment_from_state(&state);
                                 self.work.persisted_annotations =

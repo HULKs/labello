@@ -69,6 +69,7 @@ mod tests {
             7,
             3,
             WorkDraftPayload::Annotation(AnnotationDraft {
+                prelabel_review: Default::default(),
                 prelabel_evidence: Default::default(),
                 annotations: Vec::new(),
                 accepted_prelabels: Vec::new(),

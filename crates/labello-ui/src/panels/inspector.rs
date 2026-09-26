@@ -65,7 +65,7 @@ impl LabelloApp {
 
     fn annotation_object_actions(&mut self, ui: &mut egui::Ui) {
         let objects = self
-            .work.annotations
+            .annotation_objects()
             .iter()
             .filter(|annotation| {
                 !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
@@ -96,6 +96,9 @@ impl LabelloApp {
                     index + 1,
                     class_name,
                     geometry,
+                    self.work.prelabel_review.objects.iter()
+                        .find(|item| item.annotation.annotation_id == annotation.annotation_id)
+                        .map(|item| item.suggestion.confidence),
                 )
             })
             .collect::<Vec<_>>();
@@ -103,7 +106,7 @@ impl LabelloApp {
             theme::empty_state(
                 ui,
                 "No objects yet",
-                "Draw or accept an object to inspect it.",
+                "Draw an object or select a prelabel model.",
                 None,
             );
             return;
@@ -119,7 +122,7 @@ impl LabelloApp {
 
         ui.separator();
         ui.label(RichText::new("Objects").strong());
-        for (annotation_id, number, class_name, geometry) in objects {
+        for (annotation_id, number, class_name, geometry, confidence) in objects {
             let selected = self.work.selected_annotation.as_ref() == Some(&annotation_id);
             theme::selected_card_frame(selected).show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
@@ -145,6 +148,14 @@ impl LabelloApp {
                     self.work.selected_annotation = Some(annotation_id.clone());
                 }
 
+                if let Some(confidence) = confidence {
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            theme::badge(ui, &format!("{:.0}%", confidence * 100.0), theme::Intent::Accent);
+                            ui.add(egui::Label::new("Needs confirmation").truncate());
+                        });
+                    });
+                }
                 egui::CollapsingHeader::new(format!("Geometry details for Object {number}"))
                     .id_salt(annotation_id.as_str())
                     .show(ui, |ui| {
@@ -155,17 +166,6 @@ impl LabelloApp {
                         );
                     });
             });
-        }
-        if self.work.selected_annotation.is_some()
-            && theme::danger_button(
-                ui,
-                true,
-                egui::Button::new("Delete selected annotation").shortcut_text(crate::theme::button_shortcut(
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::DeleteAnnotation))),
-            )
-            .clicked()
-        {
-            self.delete_selected();
         }
     }
 

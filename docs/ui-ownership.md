@@ -42,6 +42,7 @@ dataset, import, and pending ownership before new requests start.
 | `panels/task_selector.rs` | Task selection; `workflow_marker.rs` owns reason icons and the committed-workflow marker |
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
 | `prelabel_flow.rs`, `live/prelabels.rs` | Model choice, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
+| `prelabel_review.rs` | Pending editable model objects, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
 | `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
 | `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
@@ -89,6 +90,18 @@ response or draft requires its complete identity and current workspace to match.
 Browser storage is recoverable convenience; server assignments and events remain
 authoritative. No second client domain model, offline authority, or synchronization
 framework belongs here.
+
+Pending prelabel objects are projected into the normal canvas and object selector,
+but remain outside `work.annotations` and annotation save commands. Confirmation
+transfers one object's edited geometry and its original signed evidence into the
+annotation draft. Deletion records a local dismissal and advances. The normal
+history snapshot includes pending objects, so Undo/Redo retains their geometry and
+selection. Browser annotation drafts store pending objects in a separate optional
+field and remain recoverable after autosaving confirmed work. Older drafts default
+to no pending objects; older clients cannot mistake the separate field for accepted
+annotations. Model and generation checks gate visibility and confirmation after
+recovery. Submission cannot bypass visible pending objects. The retained workspace
+bar presentation includes the current confirmation action and object progress.
 
 ## Assignment navigation and review
 

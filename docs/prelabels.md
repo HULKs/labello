@@ -174,10 +174,32 @@ A removed or unavailable saved selection becomes none.
 Hints load independently of the image and are prefetched for prepared images.
 Changing selection cancels obsolete work and clears queued hints while keeping
 annotation drafts. The **Refresh hints** icon beside the model selector retries
-a failed request. Each suggestion shows its class ID and right-aligned confidence,
-with equally sized **Approve** and **Discard** buttons below. Long class IDs
-truncate with an ellipsis; hover reveals the full ID. **Approve** adds the
-suggestion to the annotation draft for the normal save and review workflow.
+a failed request. Model objects enter the current image's object sequence
+immediately. The first object opens selected and zoomed in, with the usual box
+move/resize handles or editable pose keypoints. The Inspector lists these objects
+alongside annotations, marks them **Needs confirmation**, and shows confidence.
+Long object labels truncate with an ellipsis and retain their full accessible name.
+
+Use **Confirm & next** in the lower bar, or Space with default shortcuts, to keep
+the current geometry and focus the next pending object. **Delete** in the same bar
+or the Delete key removes the selected object and advances. Previous/next object
+navigation can revisit objects; editing, confirmation, and deletion share Undo/Redo.
+These actions work with the Inspector closed. Fit shows the whole image; Refocus
+returns to the selected object. Editing or autosaving does not repeatedly recenter it.
+
+After the last pending object, the canvas fits the full image. Add missing objects
+or correct existing ones, then **Submit & next** completes the normal assignment.
+Unconfirmed objects block submission while their model is selected. Save, including
+autosave, sends only confirmed or manually drawn annotations. In compact layouts,
+Save is available under **More actions** and through its configured shortcut.
+The former prelabel acceptance/deletion shortcuts remain compatible aliases for
+the selected pending object.
+
+Edited pending objects and local decisions use the existing account- and
+assignment-scoped browser draft recovery. They remain separate from annotations
+until confirmed. Turning prelabels off hides pending objects without accepting
+them; selecting the same model again retains matching local edits. Refreshed
+signed evidence is required before a retained pending object can be confirmed.
 
 Before display, the shared filtering policy combines the current candidate set
 and compares it with current persisted and draft boxes. Existing nondeleted
@@ -186,7 +208,9 @@ suggestion-ID ties. A hint is suppressed only when IoU is **greater than** the
 configured threshold against a kept hint or existing box in the same image,
 class, and workflow. The default threshold is **0.5**. Different classes and
 workflows may overlap. Editing or deleting a draft box immediately refilters
-the retained candidates. Changing model or processing configuration invalidates
+the retained candidates. Pending object edits also participate in hint suppression;
+the original prediction must still pass the acceptance filter against annotations.
+Changing model or processing configuration invalidates
 the generation identity and requires refreshed hints.
 
 ## Dataset generation and removal
