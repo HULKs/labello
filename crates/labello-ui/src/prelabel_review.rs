@@ -38,7 +38,12 @@ pub(crate) enum PrelabelPrimaryAction {
 
 impl LabelloApp {
     pub(crate) fn prelabel_primary_action(&self) -> PrelabelPrimaryAction {
-        if self.work.annotations.iter().any(|annotation| self.companion_needs_box(annotation)) {
+        if self
+            .work
+            .annotations
+            .iter()
+            .any(|annotation| self.companion_needs_box(annotation))
+        {
             PrelabelPrimaryAction::Guide
         } else if self.selected_prelabel_object().is_some() {
             PrelabelPrimaryAction::Confirm

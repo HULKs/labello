@@ -552,6 +552,18 @@ fn next_guide_saves_and_refocuses_without_submitting_until_last_box() {
         canvas.center(),
         canvas.center() + canvas.size() * 0.4,
     );
+    harness.run();
+    assert_eq!(
+        harness
+            .state()
+            .work
+            .annotations
+            .iter()
+            .find(|annotation| annotation.annotation_id == second_id)
+            .unwrap()
+            .version,
+        2,
+    );
     harness.get_by_label("Submit & next").click();
     step_until(&mut harness, 20, |app| {
         api.counts().complete_assignment == 1
