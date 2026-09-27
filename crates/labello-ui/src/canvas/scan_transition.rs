@@ -1,6 +1,6 @@
 use egui::{Context, Id, Rect};
 
-const DURATION: f64 = 0.45;
+const DURATION: f64 = 0.1;
 
 /// Presentation only: never changes the stored zoom, pan, or annotation geometry.
 #[derive(Clone, Debug, Default)]
