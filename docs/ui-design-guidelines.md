@@ -189,7 +189,7 @@ has been recorded.
   errors, and keyboard focus. It follows workflow phase rather than zoom and
   adds no visible text. Hide it without an image preview. On phase entry, briefly
   brighten the frame and contract the image and overlays together by about eight
-  percent, with one rebound and a small settle within 450 ms. Keep the animation
+  percent, with one rebound and a small settle within 100 ms. Keep the animation
   inside the image bounds and out of persisted view preferences. User input stops
   it; zooming within the phase does not restart it. Respect reduced motion, with
   the static frame as the default when no platform preference adapter is present.
