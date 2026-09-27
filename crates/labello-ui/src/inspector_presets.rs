@@ -34,6 +34,7 @@ pub enum InspectorPreset {
     About,
     BuildMismatch,
     BuildUnavailable,
+    BuildUpdateFailed,
     Review,
     ReviewCorrection,
     ReviewInitialLoad,
@@ -92,7 +93,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 65] = [
+    pub const ALL: [Self; 66] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -103,6 +104,7 @@ impl InspectorPreset {
         Self::About,
         Self::BuildMismatch,
         Self::BuildUnavailable,
+        Self::BuildUpdateFailed,
         Self::Review,
         Self::ReviewCorrection,
         Self::ReviewInitialLoad,
@@ -172,6 +174,7 @@ impl InspectorPreset {
             Self::About => "about",
             Self::BuildMismatch => "build-mismatch",
             Self::BuildUnavailable => "build-unavailable",
+            Self::BuildUpdateFailed => "build-update-failed",
             Self::Review => "review",
             Self::ReviewCorrection => "review-correction",
             Self::ReviewInitialLoad => "review-initial-load",
@@ -384,6 +387,25 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
                 labello_client::BuildIdentity::from_metadata(Some("v1.2.3"), Some(&"a".repeat(40)));
             app.builds.server = (preset == InspectorPreset::About).then(|| app.builds.web.clone());
             app.builds.checked = true;
+            app
+        }
+        InspectorPreset::BuildUpdateFailed => {
+            let mut app = setup_preset();
+            app.setup.section = SetupSection::About;
+            app.builds.web =
+                labello_client::BuildIdentity::from_metadata(Some("v1.2.3"), Some(&"a".repeat(40)));
+            app.builds.server = Some(labello_client::BuildIdentity::from_metadata(
+                Some("v1.2.4"),
+                Some(&"b".repeat(40)),
+            ));
+            app.builds.checked = true;
+            app.set_build_reload_adapter(crate::BuildReloadAdapter {
+                prepare: std::rc::Rc::new(|_, _| Box::pin(async { Err("The builds still differ after an update attempt. Retry when deployment is complete.".into()) })),
+                navigate: std::rc::Rc::new(|| Ok(())),
+            });
+            app.builds.reload.target = app.builds.server.clone();
+            app.builds.reload.phase = crate::build_information::ReloadPhase::Failed(
+                "The builds still differ after an update attempt. Retry when deployment is complete.".into());
             app
         }
         InspectorPreset::BuildMismatch => {

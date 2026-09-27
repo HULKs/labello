@@ -41,6 +41,6 @@ pub use import_flow::{RawImportChunkRequest, RawImportChunkResponse, RawImportCh
 pub use queue::{ImageQueue, QueuedImage};
 
 mod build_information;
-pub use build_information::BuildClipboardWriter;
+pub use build_information::{BuildClipboardWriter, BuildReloadAdapter};
 
 mod workflow_reasons;

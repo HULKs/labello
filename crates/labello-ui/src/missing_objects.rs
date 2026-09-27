@@ -98,10 +98,10 @@ impl LabelloApp {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn browser_unload_guard(_: bool) {}
+pub(crate) fn browser_unload_guard(_: bool) {}
 
 #[cfg(target_arch = "wasm32")]
-fn browser_unload_guard(dirty: bool) {
+pub(crate) fn browser_unload_guard(dirty: bool) {
     use std::cell::Cell;
     use wasm_bindgen::{JsCast, closure::Closure};
     thread_local! {

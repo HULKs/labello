@@ -562,3 +562,19 @@ fn about_identity_states_reflow_without_horizontal_overflow() {
         }
     }
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn build_update_failure_is_wrapped_accessible_and_retryable() {
+    for size in [egui::vec2(320.0, 568.0), egui::vec2(390.0, 844.0), egui::vec2(1440.0, 1000.0)] {
+        let app = crate::inspector_presets::build(crate::inspector_presets::InspectorPreset::BuildUpdateFailed, &egui::Context::default());
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.run();
+        let retry = harness.get_by_label("Retry app update");
+        assert!(retry.rect().width() >= 44.0);
+        assert!(retry.rect().right() <= size.x);
+        let status = harness.get_by_label("The builds still differ after an update attempt. Retry when deployment is complete.");
+        assert_eq!(status.accesskit_node().live(), egui::accesskit::Live::Polite);
+        assert!(status.rect().right() <= size.x);
+    }
+}

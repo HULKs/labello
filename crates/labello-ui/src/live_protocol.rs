@@ -188,6 +188,10 @@ pub(crate) enum UiMessage {
         result: Result<crate::dataset_inspector::InspectorReply, UiRequestError>,
     },
     BuildRefreshRequested,
+    BuildReloadPrepared {
+        generation: u64,
+        result: Result<(), String>,
+    },
     BuildInformationLoaded {
         request: RequestIdentity,
         result: Result<labello_client::BuildIdentity, UiRequestError>,
@@ -1043,6 +1047,7 @@ impl UiMessage {
             | Self::MigrationFinished { request, .. }
             | Self::RequestFailed { request, .. } => Some(request),
             Self::BuildRefreshRequested
+            | Self::BuildReloadPrepared { .. }
             | Self::PresenceVisibilityRegained
             | Self::PersistenceFinished(_)
             | Self::FolderUploadProgress { .. }

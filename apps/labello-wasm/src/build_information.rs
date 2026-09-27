@@ -7,6 +7,7 @@ pub(super) fn install(app: &mut labello_ui::LabelloApp, ctx: &eframe::egui::Cont
         option_env!("LABELLO_RELEASE_TAG"),
         option_env!("LABELLO_SOURCE_COMMIT"),
     );
+    install_reload(app);
     app.set_build_clipboard_writer(Rc::new(|text| {
         let promise = web_sys::window().and_then(|window| {
             js_sys::Reflect::get(window.navigator().as_ref(), &"clipboard".into())
@@ -56,4 +57,46 @@ pub(super) fn install(app: &mut labello_ui::LabelloApp, ctx: &eframe::egui::Cont
             listener.forget();
         }
     }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/build_reload.js")]
+extern "C" {
+    #[wasm_bindgen::prelude::wasm_bindgen(catch, js_name = prepareBuildReload)]
+    async fn prepare_build_reload(
+        target: String,
+        manual: bool,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
+}
+
+fn install_reload(app: &mut labello_ui::LabelloApp) {
+    let destination = Rc::new(std::cell::RefCell::new(None::<String>));
+    let prepared = destination.clone();
+    app.set_build_reload_adapter(labello_ui::BuildReloadAdapter {
+        prepare: Rc::new(move |target, manual| {
+            let prepared = prepared.clone();
+            Box::pin(async move {
+                *prepared.borrow_mut() = None;
+                let result = prepare_build_reload(target, manual)
+                    .await
+                    .map_err(|error| {
+                        js_sys::Reflect::get(&error, &"message".into())
+                            .ok()
+                            .and_then(|value| value.as_string())
+                            .unwrap_or_else(|| "The app update failed. Retry the update.".into())
+                    })?;
+                *prepared.borrow_mut() = result.as_string();
+                Ok(())
+            })
+        }),
+        navigate: Rc::new(move || {
+            let destination = destination.borrow_mut().take().ok_or_else(|| {
+                "The app update has no prepared destination. Retry the update.".to_string()
+            })?;
+            web_sys::window()
+                .ok_or_else(|| "Browser navigation is unavailable.".to_string())?
+                .location()
+                .replace(&destination)
+                .map_err(|_| "The browser could not reload. Retry the update.".to_string())
+        }),
+    });
 }
