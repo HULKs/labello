@@ -36,6 +36,7 @@ impl LabelloApp {
             section: SetupSection::default(),
         };
         let work = WorkState {
+            score_feedback: Default::default(),
             image_transfers: Default::default(),
             classes,
             tasks,

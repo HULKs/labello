@@ -148,8 +148,11 @@ activity; an absent field means contributor statistics are unavailable.
 row adds a defaultable `score` object: `labels` is a count, and `labeling`,
 `reviewing`, `deductions`, and `corrections` are integer hundredths of a point.
 Net points are labeling + reviewing + corrections - deductions. Optional
-`scoringFocus` contains `startsAt`, `endsAt`, and nullable `taskId`; an expired
-selection must not be advertised as active. Missing scoring support is distinct
+`scoringFocus` (annotation) and `reviewScoringFocus` (review) independently contain
+`startsAt`, `endsAt`, and nullable `taskId`. Their selections and timers are
+independent; an expired selection must not be advertised as active. An absent
+`reviewScoringFocus` means no reviewer-focus support is advertised, not permission
+to substitute annotation focus. Missing scoring support is distinct
 from zero points. Policy and historical credit are defined in
 [Contribution scoring](scoring.md). These fields use the existing authenticated,
 dataset-authorized statistics endpoint.
@@ -316,6 +319,7 @@ inside the existing optional submission reason and retain its 2000-byte limit.
 | `POST /datasets/{dataset_id}/assignments/complete` | Assigned annotator | `AssignmentActionRequest` → `Assignment` |
 | `POST /datasets/{dataset_id}/assignments/reopen` | Owner of exact prior annotation or eligible review assignment | `AssignmentActionRequest` → `Assignment` |
 | `GET /datasets/{dataset_id}/images/{image_id}` | Any role | No input → `ImageState` |
+| `GET /datasets/{dataset_id}/images/{image_id}/score` | Any role | Required unsigned `afterSequence` (exclusive) and `throughSequence` (inclusive) query → `ImageScore { hundredths }` for the authenticated user only; `Cache-Control: no-store` |
 | `GET /datasets/{dataset_id}/images/{image_id}/review-submitters` | Any role | No input → `ReviewSubmitter[]`: image/task/user IDs and optional public GitHub login/account ID for current review-round or migration-confirmation authors; no private account fields or history mutation |
 | `GET /datasets/{dataset_id}/images/{image_id}/reasons` | Any role | No input → `WorkflowReasonEntry[]`; see [saved reasons](#saved-workflow-reasons) |
 | `POST /datasets/{dataset_id}/images/{image_id}/return-to-review` | Reviewer or data admin | `ReturnToReviewRequest` → `ImageState`; exact sequence, atomic selected workflows |
@@ -335,6 +339,22 @@ inside the existing optional submission reason and retain its 2000-byte limit.
 | `POST /datasets/{dataset_id}/images/{image_id}/corrections` | Assigned reviewer | `AssignmentActionRequest` query plus `CorrectionRequest` → `EventLogEntry` |
 | `GET /datasets/{dataset_id}/offline-bundle` | Annotator | `OfflineBundleRequest` query → `OfflineBundle` |
 | `POST /datasets/{dataset_id}/offline-sync` | Annotator; same authenticated user and dataset | versioned `OfflineSyncRequest` → `OfflineSyncResult` |
+
+Image score receipts use the same current-policy projection as dataset statistics,
+including the dataset-wide daily multiplier and durable focus windows. They sum
+signed integer hundredths attributed to scoring events on the requested image
+inside the supplied sequence window, not changes to the user's global total.
+Object review rewards therefore require a window starting before those reviews,
+not just before the final task-wide check. Prior rewards and rewards belonging to
+other images or users are excluded. Repeating the query does not create rewards;
+clients must consume completion feedback only once. Empty or uncredited windows
+return zero. Reversed bounds return 400; if the derived scan has not reached
+`throughSequence` or was invalidated by a concurrent write, the endpoint returns
+409 rather than an unconfirmed reward.
+Missing images return 404. Receipts are derived alongside cached statistics,
+not persisted as a new ledger; replay or later effective review revisions can
+change current-policy historical attribution. Clients of older servers must
+suppress feedback on an unavailable endpoint rather than estimate points.
 
 The assignment ID, image ID, task ID, actor, kind, current sequence, and live
 state are validated at the transaction boundary. Possessing an ID is not

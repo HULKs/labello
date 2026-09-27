@@ -92,7 +92,19 @@ fn scores(events: &[EventLogEntry], focus: &[FocusWindow]) -> BTreeMap<UserId, C
     let mut projection = ScoringProjection::default();
     projection.record_image(&state, events);
     let mut contributors = BTreeMap::new();
-    projection.finish(&mut contributors, focus);
+    let attribution = projection.finish(&mut contributors, focus, &[]);
+    for (user, contributor) in &contributors {
+        assert_eq!(
+            attribution.score(&state.image_id, user, 0, state.current_sequence),
+            Some(
+                contributor
+                    .history
+                    .iter()
+                    .map(|day| day.score.total())
+                    .sum()
+            ),
+        );
+    }
     contributors
 }
 
@@ -123,9 +135,11 @@ fn geometry_weights_and_daily_tiers_have_exact_boundaries() {
     ] {
         assert_eq!(daily_multiplier(count), expected);
     }
-    assert_eq!(displayed_score(10_000), 100);
-    assert_eq!(displayed_score(100_000), 316);
-    assert_eq!(displayed_score(-10_000), -100);
+    assert_eq!(displayed_score(10_000), 100.0);
+    assert_eq!(displayed_score(100_000), 1000.0);
+    assert_eq!(displayed_score(-10_000), -100.0);
+    assert_eq!(displayed_score(2_025), 20.25);
+    assert_eq!(displayed_score(100_000_000), 1_000_000.0);
 }
 
 #[test]
@@ -181,7 +195,7 @@ fn prelabel_provenance_survives_edits_and_focus_expires_at_exact_boundary() {
     let result = scores(&events, &[focus]);
     let day = &result[&UserId::from("author")].history[0].score;
     assert_eq!(day.labels, 2);
-    assert_eq!(day.labeling, 2500 + 2200);
+    assert_eq!(day.labeling, 3000 + 2200);
 }
 
 #[test]
@@ -220,13 +234,13 @@ fn rejected_then_corrected_keeps_penalty_and_rewards_corrector_once() {
     let author = &result[&UserId::from("author")].history[0].score;
     assert_eq!(
         (author.labels, author.labeling, author.deductions),
-        (1, 2200, 1000)
+        (1, 2200, 1600)
     );
     assert_eq!(
         result[&UserId::from("corrector")].history[0]
             .score
             .corrections,
-        400
+        1600
     );
     assert_eq!(
         result[&UserId::from("corrector")].history[0].score.labels,
@@ -234,7 +248,7 @@ fn rejected_then_corrected_keeps_penalty_and_rewards_corrector_once() {
     );
     assert_eq!(
         result[&UserId::from("reviewer")].history[0].score.reviewing,
-        600
+        1600
     );
 }
 
@@ -308,10 +322,10 @@ fn historical_reviewer_correction_keeps_immediate_reward() {
     let author = &result[&UserId::from("author")].history[0].score;
     assert_eq!(
         (author.labels, author.labeling, author.deductions),
-        (1, 2200, 1000)
+        (1, 2200, 1600)
     );
     let reviewer = &result[&reviewer].history[0].score;
-    assert_eq!((reviewer.reviewing, reviewer.corrections), (600, 400));
+    assert_eq!((reviewer.reviewing, reviewer.corrections), (1600, 1600));
 }
 
 #[test]
@@ -325,7 +339,7 @@ fn withdrawn_rejection_and_task_rejection_do_not_penalize_valid_labels() {
     let mut projection = ScoringProjection::default();
     projection.record_image(&state, &events);
     let mut result = BTreeMap::new();
-    projection.finish(&mut result, &[]);
+    projection.finish(&mut result, &[], &[]);
     assert_eq!(
         result[&UserId::from("author")].history[0].score.deductions,
         0
@@ -364,3 +378,5 @@ fn unsent_deleted_and_imported_geometry_do_not_earn_labels() {
     submit(&mut events, time());
     assert!(scores(&events, &[]).is_empty());
 }
+
+mod attribution;

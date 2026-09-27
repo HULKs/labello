@@ -307,16 +307,16 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
     let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|ctx| {
         let mut app = inspector_presets::build(InspectorPreset::Annotation, &ctx.egui_ctx);
         app.datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
-            starts_at: labello_domain::now(), ends_at: labello_domain::now() + chrono::Duration::minutes(20),
+            starts_at: labello_domain::now(), ends_at: labello_domain::now() + chrono::Duration::minutes(10),
             task_id: app.work.selected_task_id.clone(),
         });
         app
     });
     harness.run_steps(4);
-    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_some());
+    assert!(harness.query_by_label("Focus · ×1.5 · 10 min left").is_some());
     harness.state_mut().datasets.stats.scoring_focus.as_mut().unwrap().ends_at = labello_domain::now();
     harness.run_steps(3);
-    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
+    assert!(harness.query_by_label("Focus · ×1.5 · 10 min left").is_none());
 }
 
 #[cfg(feature = "inspector-presets")]
@@ -1135,7 +1135,7 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
         assert!(harness.get_by_label("Highest score").rect().top()
             - harness.get_by_label("Contributor leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
             "score chart must lead without expanding a disclosure at {size:?}");
-        let score_bar = harness.get_by_label("Score: rank 1, Taylor, 1627").rect();
+        let score_bar = harness.get_by_label("Score: rank 1, Taylor, 27040 points").rect();
         assert!(score_bar.width() > (size.x.min(1050.0) - 100.0) / 4.0,
             "score chart must use the full content width at {size:?}: {score_bar:?}");
         let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, size);

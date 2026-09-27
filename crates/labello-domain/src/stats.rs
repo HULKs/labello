@@ -20,6 +20,8 @@ pub struct DatasetStats {
     pub scoring_version: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scoring_focus: Option<FocusWindow>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_scoring_focus: Option<FocusWindow>,
     pub total_images: usize,
     pub completed_tasks: usize,
     pub pending_tasks: usize,

@@ -14,6 +14,20 @@ impl StatsApi for DemoLabelloApi {
         })
     }
 
+    fn get_image_score<'a>(
+        &'a self,
+        _dataset_id: &'a DatasetId,
+        _image_id: &'a ImageId,
+        _after_sequence: u64,
+        _through_sequence: u64,
+    ) -> crate::ApiFuture<'a, crate::ImageScore> {
+        Box::pin(async {
+            Err(crate::ClientError::Demo(
+                "Image score attribution requires an authenticated server session.".into(),
+            ))
+        })
+    }
+
     fn dataset_stats<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

@@ -2232,6 +2232,10 @@ impl OfflineApi for SpyApi {
 }
 
 impl StatsApi for SpyApi {
+    fn get_image_score<'a>(&'a self, _dataset_id: &'a DatasetId, _image_id: &'a ImageId, _after_sequence: u64, _through_sequence: u64) -> ApiFuture<'a, labello_client::ImageScore> {
+        ready(Ok(labello_client::ImageScore { hundredths: 0 }))
+    }
+
     fn server_presence(&self) -> ApiFuture<'_, labello_client::ServerPresence> { ready(Ok(labello_client::ServerPresence { users: Vec::new() })) }
 
     fn current_user_activity<'a>(&'a self, dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_client::CurrentUserActivity> {

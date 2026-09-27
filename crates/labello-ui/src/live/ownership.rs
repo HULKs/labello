@@ -275,6 +275,10 @@ impl LabelloApp {
                 self.runtime.presence.failed(error.to_string());
                 return;
             }
+            UiCommand::ImageScore { .. } => {
+                self.cancel_score_request();
+                return;
+            }
             UiCommand::Stats { .. } => {
                 self.loading.stats = false;
                 self.datasets.active_stats_request = None;
@@ -453,6 +457,7 @@ impl LabelloApp {
             Some(*request_id) == build_request
         });
         self.work.image_transfers.cancel_all();
+        self.work.score_feedback = Default::default();
         self.auth.active_session_request_id = None;
         self.datasets.active_stats_request = None;
         self.datasets.refresh_stats_after_load = false;

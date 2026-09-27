@@ -411,6 +411,7 @@ pub(crate) struct AutomaticWorkflowChange {
 }
 
 pub struct WorkState {
+    pub(crate) score_feedback: crate::score_feedback::ScoreFeedback,
     pub(crate) image_transfers: crate::image_transfer::ImageTransfers,
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,

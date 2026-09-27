@@ -112,7 +112,7 @@ counts, assignment balance, task/class breakdowns, and throughput. Period and
 history controls compare contributors. Empty or unavailable data is distinct
 from zero activity. Acceptance percentages accompany review counts.
 [Scoring](scoring.md) defines per-object rewards, daily tiers, focus bonuses,
-rejections, and the compressed displayed score.
+rejections, and the compact raw-point score display.
 
 Daily streaks require 20 distinct image/task submissions or 30 reviews per dataset
 per UTC day. Flames and day counts appear beside contributors in the leaderboard

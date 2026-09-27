@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub const SCORING_VERSION: u32 = 1;
-pub const FOCUS_SECONDS: i64 = 20 * 60;
+pub const FOCUS_SECONDS: i64 = 10 * 60;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -57,9 +57,9 @@ pub fn daily_multiplier(previous_labels: u64) -> i64 {
     100 + (previous_labels / 100).min(5) as i64 * 10
 }
 
-/// Signed for period deltas: a period containing only penalties remains visible.
-pub fn displayed_score(hundredths: i64) -> i64 {
-    (hundredths.unsigned_abs() as f64).sqrt().floor() as i64 * hundredths.signum()
+/// Raw points for display; ranking and accounting retain exact integer hundredths.
+pub fn displayed_score(hundredths: i64) -> f64 {
+    hundredths as f64 / 100.0
 }
 
 fn base_value(geometry: &AnnotationGeometry) -> i64 {
@@ -82,10 +82,71 @@ struct LabelAward {
     manual: bool,
 }
 
+struct ReviewAward {
+    timestamp: Timestamp,
+    image: ImageId,
+    sequence: u64,
+    user: UserId,
+    task: TaskId,
+    base: i64,
+}
+
+/// Derived event attribution from the same replay that produces contributor totals.
+#[derive(Debug, Default)]
+pub struct ImageScores {
+    images: BTreeMap<ImageId, ImageScoreHistory>,
+}
+
+#[derive(Debug, Default)]
+struct ImageScoreHistory {
+    through_sequence: u64,
+    users: BTreeMap<UserId, BTreeMap<u64, i64>>,
+}
+
+impl ImageScores {
+    /// Sums `(after_sequence, through_sequence]`; `None` means the replay cannot
+    /// confirm the requested event window.
+    pub fn score(
+        &self,
+        image: &ImageId,
+        user: &UserId,
+        after_sequence: u64,
+        through_sequence: u64,
+    ) -> Option<i64> {
+        let history = self.images.get(image)?;
+        if after_sequence > through_sequence || through_sequence > history.through_sequence {
+            return None;
+        }
+        Some(history.users.get(user).map_or(0, |awards| {
+            awards
+                .range((
+                    std::ops::Bound::Excluded(after_sequence),
+                    std::ops::Bound::Included(through_sequence),
+                ))
+                .map(|(_, hundredths)| hundredths)
+                .sum()
+        }))
+    }
+
+    fn credit(&mut self, image: &ImageId, sequence: u64, user: &UserId, hundredths: i64) {
+        *self
+            .images
+            .entry(image.clone())
+            .or_default()
+            .users
+            .entry(user.clone())
+            .or_default()
+            .entry(sequence)
+            .or_default() += hundredths;
+    }
+}
+
 #[derive(Default)]
 pub struct ScoringProjection {
     labels: Vec<LabelAward>,
+    reviews: Vec<ReviewAward>,
     days: BTreeMap<UserId, BTreeMap<String, ScoreDay>>,
+    image_scores: ImageScores,
 }
 
 impl ScoringProjection {
@@ -98,6 +159,11 @@ impl ScoringProjection {
     }
 
     pub fn record_image(&mut self, state: &ImageState, events: &[EventLogEntry]) {
+        self.image_scores
+            .images
+            .entry(state.image_id.clone())
+            .or_default()
+            .through_sequence = events.last().map_or(0, |event| event.event_sequence);
         let mut current = BTreeMap::<AnnotationId, &AnnotationVersion>::new();
         let mut prelabels = BTreeSet::new();
         let mut credited = BTreeMap::<AnnotationId, (UserId, i64)>::new();
@@ -310,8 +376,14 @@ impl ScoringProjection {
             };
             // Decision revisions still represent one piece of review work per person/object.
             if reviewed.insert((review.reviewer_user_id.clone(), annotation_id.clone())) {
-                self.day(&review.reviewer_user_id, *timestamp).reviewing +=
-                    base_value(&annotation.geometry) * 30 / 100;
+                self.reviews.push(ReviewAward {
+                    timestamp: *timestamp,
+                    image: state.image_id.clone(),
+                    sequence: *sequence,
+                    user: review.reviewer_user_id.clone(),
+                    task: annotation.task_id.clone(),
+                    base: base_value(&annotation.geometry) * 80 / 100,
+                });
             }
             if review.decision == ReviewDecision::Rejected
                 && !state.superseded_review_ids.contains(&review.review_id)
@@ -324,7 +396,10 @@ impl ScoringProjection {
                     .get(annotation_id)
                     .map_or_else(|| base_value(&annotation.geometry), |(_, base)| *base);
                 if let Some((author, _)) = credited.get(annotation_id) {
-                    self.day(author, *timestamp).deductions += base * 50 / 100;
+                    let deduction = base * 80 / 100;
+                    self.day(author, *timestamp).deductions += deduction;
+                    self.image_scores
+                        .credit(&state.image_id, *sequence, author, -deduction);
                 }
                 rejected.insert(annotation_id.clone(), (annotation, *sequence, base));
             }
@@ -393,7 +468,14 @@ impl ScoringProjection {
             {
                 continue;
             }
-            self.day(&annotation.author_user_id, *timestamp).corrections += base * 20 / 100;
+            let reward = base * 80 / 100;
+            self.day(&annotation.author_user_id, *timestamp).corrections += reward;
+            self.image_scores.credit(
+                &state.image_id,
+                *sequence,
+                &annotation.author_user_id,
+                reward,
+            );
         }
         // Historical correction events accepted their replacement atomically.
         // Current correction submissions instead require a fresh approval above.
@@ -405,7 +487,14 @@ impl ScoringProjection {
                 && annotation.geometry != rejection.geometry
                 && corrected.insert(annotation.annotation_id.clone())
             {
-                self.day(&annotation.author_user_id, timestamp).corrections += base * 20 / 100;
+                let reward = base * 80 / 100;
+                self.day(&annotation.author_user_id, timestamp).corrections += reward;
+                self.image_scores.credit(
+                    &state.image_id,
+                    sequence,
+                    &annotation.author_user_id,
+                    reward,
+                );
             }
         }
     }
@@ -414,7 +503,21 @@ impl ScoringProjection {
         mut self,
         contributors: &mut BTreeMap<UserId, ContributorStats>,
         focus: &[FocusWindow],
-    ) {
+        review_focus: &[FocusWindow],
+    ) -> ImageScores {
+        for review in std::mem::take(&mut self.reviews) {
+            let focused = review_focus
+                [..review_focus.partition_point(|window| window.starts_at <= review.timestamp)]
+                .last()
+                .is_some_and(|window| {
+                    window.task_id.as_ref() == Some(&review.task)
+                        && window.contains(review.timestamp)
+                });
+            let reward = review.base * if focused { 150 } else { 100 } / 100;
+            self.day(&review.user, review.timestamp).reviewing += reward;
+            self.image_scores
+                .credit(&review.image, review.sequence, &review.user, reward);
+        }
         self.labels.sort_by(|a, b| {
             (a.timestamp, &a.image, a.sequence, &a.annotation).cmp(&(
                 b.timestamp,
@@ -431,9 +534,12 @@ impl ScoringProjection {
                     window.task_id.as_ref() == Some(&label.task) && window.contains(label.timestamp)
                 });
             let day = self.day(&label.user, label.timestamp);
-            let bonus = 100 + if label.manual { 10 } else { 0 } + if focused { 25 } else { 0 };
-            day.labeling += label.base * bonus * daily_multiplier(day.labels) / 10_000;
+            let bonus = 100 + if label.manual { 10 } else { 0 } + if focused { 50 } else { 0 };
+            let reward = label.base * bonus * daily_multiplier(day.labels) / 10_000;
+            day.labeling += reward;
             day.labels += 1;
+            self.image_scores
+                .credit(&label.image, label.sequence, &label.user, reward);
         }
         for (user, days) in self.days {
             let contributor =
@@ -456,6 +562,7 @@ impl ScoringProjection {
             }
             contributor.history.sort_by(|a, b| a.day.cmp(&b.day));
         }
+        self.image_scores
     }
 }
 

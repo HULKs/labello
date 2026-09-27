@@ -27,6 +27,9 @@ impl LabelloApp {
                                     assignment.status
                                         == labello_domain::AssignmentStatus::Completed
                                 });
+                            if completed_assignment.is_some() {
+                                self.request_image_score(ctx, result.image_state.current_sequence);
+                            }
                             self.apply_state(result.image_state);
                             self.work.migration.cursor = result.cursor;
                             let pending_activate_target =

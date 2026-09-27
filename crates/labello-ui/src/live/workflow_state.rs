@@ -173,6 +173,7 @@ impl LabelloApp {
             assignment.assignment_id == loaded.assignment.assignment_id
         });
         self.work.assignment_touched = same_assignment && self.assignment_has_work();
+        self.work.score_feedback.loaded(&loaded.assignment, loaded.state.current_sequence, ctx.input(|input| input.time));
         self.work.migration = Default::default();
         self.work.assignment = Some(loaded.assignment);
         self.work.current = Some(loaded.queued);

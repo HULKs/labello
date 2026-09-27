@@ -319,6 +319,47 @@ pub(crate) async fn get_image_state(
     Ok(Json(repo.load_image_state(&image_id).await?))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ImageScoreQuery {
+    after_sequence: u64,
+    through_sequence: u64,
+}
+
+pub(crate) async fn get_image_score(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+    Query(query): Query<ImageScoreQuery>,
+) -> ApiResult<impl IntoResponse> {
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_any_dataset_role(&metadata, &actor)?;
+    repo.load_image_record(&image_id).await?;
+    if query.after_sequence > query.through_sequence {
+        return Err(ApiError::BadRequest(
+            "Invalid image score event window.".into(),
+        ));
+    }
+    let hundredths = repo
+        .image_score(
+            &image_id,
+            &actor.user_id,
+            query.after_sequence,
+            query.through_sequence,
+        )
+        .await?
+        .ok_or_else(|| {
+            ApiError::Conflict("Image score has not reached the requested sequence; retry.".into())
+        })?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(labello_client::ImageScore { hundredths }),
+    ))
+}
+
 pub(crate) async fn get_review_submitters(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,

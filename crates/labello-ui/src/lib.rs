@@ -25,6 +25,7 @@ mod review_context;
 mod review_corrections;
 mod review_revision;
 mod review_sequence;
+mod score_feedback;
 pub mod setup;
 mod statistics;
 pub use statistics::set_reduced_motion;

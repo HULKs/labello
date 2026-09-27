@@ -177,6 +177,10 @@ pub fn router(state: ApiState) -> Router {
             get(workflow::get_image_state),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/score",
+            get(workflow::get_image_score),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/reasons",
             get(workflow::get_image_reasons),
         )
