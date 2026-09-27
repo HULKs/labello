@@ -42,7 +42,7 @@ impl LabelloApp {
         if self.saving_blocks_interaction() {
             return Some(M::Saving);
         }
-        if self.loading.image {
+        if self.loading.image && self.work.current.is_none() && self.initial_workspace_load() {
             return Some(M::ImageLoading);
         }
         if self.work.pending_transition.is_some() {
@@ -69,7 +69,7 @@ impl LabelloApp {
                     .unwrap_or(labello_domain::WorkflowUnavailableReason::Unavailable),
             ));
         }
-        availability.loading.then_some(M::Checking)
+        (availability.loading && self.work.current.is_none() && !availability.resolved && self.initial_workspace_load()).then_some(M::Checking)
     }
 }
 

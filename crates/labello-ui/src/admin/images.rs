@@ -248,13 +248,9 @@ impl LabelloApp {
                 {
                     self.request_images();
                 }
-                if self.loading.images {
+                if self.loading.images && self.admin.images.is_none() {
                     ui.spinner();
-                    ui.small(if self.admin.images.is_some() {
-                        "Refreshing images..."
-                    } else {
-                        "Loading images..."
-                    });
+                    ui.small("Loading images...");
                 }
             };
             if compact_filters {

@@ -163,7 +163,7 @@ impl LabelloApp {
     pub(crate) fn refresh_assignment_availability_if_due(&mut self) {
         if self.work.availability.loading
             || self.work.migration.busy
-            || self.manual_migration_active()
+            || (self.manual_migration_active() && !self.work.retired_image)
         {
             return;
         }

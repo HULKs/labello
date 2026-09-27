@@ -45,6 +45,7 @@ impl LabelloApp {
             reason_notice: None,
             tool: Tool::BoundingBox,
             assignment: None,
+            retired_image: false,
             previous_assignment: None,
             previous_prelabel_decisions: None,
             current,

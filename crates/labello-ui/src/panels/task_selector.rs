@@ -46,7 +46,6 @@ impl LabelloApp {
                 Some(crate::queue::QueueWaitReason::ImbalanceLimit) => " (imbalance limit)",
                 Some(crate::queue::QueueWaitReason::NoAvailableWork) => " (no available work)",
                 Some(crate::queue::QueueWaitReason::Failed) => " (refill failed; retrying)",
-                None if self.work.queue.is_loading() => "; loading",
                 None => "",
             };
             format!("{status}{suffix}")
@@ -80,6 +79,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn task_panel(&mut self, ui: &mut egui::Ui) {
+        if self.workspace_bars_loading() { ui.disable(); }
         let workflows = self.workflow_choices();
         if workflows.is_empty() {
             theme::inline_message(

@@ -357,55 +357,11 @@ fn workflow_availability_disables_cards_skips_keyboard_cycles_and_retries_failur
     harness.state_mut().work.availability.tasks.clear();
     harness.state_mut().work.availability.loading = true;
     harness.step();
-    assert!(
-        harness
-            .query_by_role_and_label(
-                egui::accesskit::Role::ProgressIndicator,
-                "Loading workflow assignment availability",
-            )
-            .is_some(),
-        "the initial availability check should retain its spinner"
-    );
-    let availability_spinner = harness
-        .get_by_role_and_label(
-            egui::accesskit::Role::ProgressIndicator,
-            "Loading workflow assignment availability",
-        )
-        .rect();
-    let context_bar = harness.get_by_label("Workspace context bar").rect();
-    let workflow_pill = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
-        .rect();
-    assert!(
-        context_bar.contains_rect(availability_spinner),
-        "availability spinner should live in the workspace context bar: \
-         spinner={availability_spinner:?} context={context_bar:?}"
-    );
-    assert!(
-        harness.get_by_label_contains("Annotation details:").rect().contains_rect(availability_spinner),
-        "availability spinner should remain in the centered summary: \
-         spinner={availability_spinner:?} context={context_bar:?}"
-    );
-    assert!(
-        availability_spinner.left() > workflow_pill.right(),
-        "availability spinner should no longer live in the workflow panel: \
-         spinner={availability_spinner:?} pill={workflow_pill:?}"
-    );
+    assert!(harness.query_by_label("Loading workflow assignment availability").is_none());
+    assert!(harness.query_by_label("Annotation canvas").is_some());
     harness.set_size(egui::vec2(390.0, 844.0));
     harness.step();
-    let compact_spinner = harness
-        .get_by_role_and_label(
-            egui::accesskit::Role::ProgressIndicator,
-            "Loading workflow assignment availability",
-        )
-        .rect();
-    let compact_context = harness.get_by_label("Workspace context bar").rect();
-    assert!(compact_context.contains_rect(compact_spinner));
-    assert!(
-        harness.get_by_label_contains("Annotation details:").rect().contains_rect(compact_spinner),
-        "compact availability spinner should remain in the centered summary: \
-         spinner={compact_spinner:?} context={compact_context:?}"
-    );
+    assert!(harness.query_by_label("Loading workflow assignment availability").is_none());
     harness.set_size(egui::vec2(1500.0, 780.0));
     harness.step();
     harness
@@ -1239,7 +1195,7 @@ fn failed_review_revalidation_clears_old_image_and_releases_claimed_assignment()
 }
 
 #[test]
-fn empty_prepared_queue_falls_back_to_blocking_load() {
+fn empty_prepared_queue_retains_display_until_replacement_is_ready() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     step_until(&mut harness, 12, |app| app.work.queue.len() == 2);
@@ -1249,8 +1205,12 @@ fn empty_prepared_queue_falls_back_to_blocking_load() {
     harness.step();
     assert!(harness.state().work.availability.loading);
     assert!(!harness.state().loading.image);
-    assert!(harness.state().work.current.is_none());
-    step_until(&mut harness, 8, |app| app.work.current.is_some());
+    assert!(harness.state().work.current.is_some());
+    assert!(harness.state().work.retired_image);
+    assert!(harness.state().work.assignment.is_none());
+    let previous = harness.state().work.current.as_ref().unwrap().image.image_id.clone();
+    step_until(&mut harness, 8, |app| app.work.assignment.is_some() && !app.work.retired_image);
+    assert_ne!(harness.state().work.current.as_ref().unwrap().image.image_id, previous);
 }
 
 #[test]
@@ -4545,7 +4505,7 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     app.loading.saving = true;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Saving changes");
     app.loading.saving = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Loading image");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
     app.loading.image = false;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
     app.work.pending_transition = None;
@@ -4553,7 +4513,7 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Other workflows need to catch up");
     app.work.availability.tasks.clear();
     app.work.availability.resolved = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Checking for available work");
+    assert!(app.workflow_marker_reason(&task).is_none());
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.error = Some("failed".into());
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown. You can still try selecting this workflow");

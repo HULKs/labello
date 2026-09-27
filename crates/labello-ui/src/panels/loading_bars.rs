@@ -3,6 +3,7 @@
 pub(crate) struct WorkspaceBars {
     scope: Option<BarScope>,
     presentation: Option<BarPresentation>,
+    settled: bool,
 }
 
 #[derive(PartialEq, Eq)]
@@ -17,6 +18,7 @@ struct BarScope {
 #[derive(Clone)]
 struct BarPresentation {
     summary: WorkspaceSummary,
+    inspector: Option<crate::review_context::ReviewContext>,
     migration: Option<crate::manual_migration::MigrationBarPresentation>,
     previous_image: bool,
     availability_loading: bool,
@@ -33,7 +35,7 @@ impl LabelloApp {
             || self.loading.dataset
             || self.loading.image
             || self.loading.logout
-            || (self.work.current.is_none()
+            || ((self.work.current.is_none() || self.work.retired_image)
                 && self.work.availability.loading
                 && self.work.availability.load_after_resolution)
     }
@@ -46,7 +48,13 @@ impl LabelloApp {
             dataset: self.config.dataset_id.clone(),
             task: self.work.selected_task_id.clone(),
         };
-        if self.navigation.workspace_bars.scope.as_ref() != Some(&scope)
+        let scope_changed = self.navigation.workspace_bars.scope.as_ref() != Some(&scope);
+        if self.work.retired_image && (scope_changed || !self.work_view()
+            || self.loading.session || self.loading.logout || self.loading.dataset
+            || !self.workspace_bars_loading()) {
+            self.clear_current_image();
+        }
+        if scope_changed
             || !self.work_view()
             || self.loading.session
             || self.loading.logout
@@ -54,10 +62,15 @@ impl LabelloApp {
             self.navigation.workspace_bars = WorkspaceBars {
                 scope: Some(scope),
                 presentation: None,
+                settled: false,
             };
         }
         if self.workspace_bars_loading() {
             return;
+        }
+        if !(self.work.current.is_none() && self.work.availability.loading
+            && !self.work.availability.resolved) {
+            self.navigation.workspace_bars.settled = true;
         }
         self.navigation.workspace_bars.presentation = self
             .work
@@ -68,12 +81,13 @@ impl LabelloApp {
                 prelabel_progress: self.prelabel_progress(),
                 annotation_primary: self.prelabel_primary_action(),
                 summary: WorkspaceSummary::from_app(self),
+                inspector: self.review_context(),
                 migration: self
                     .manual_migration_active()
                     .then(|| self.migration_bar_presentation()),
                 previous_image: self.work.previous_assignment.is_some(),
-                availability_loading: self.work.availability.loading
-                    && self.work.availability.tasks.is_empty(),
+                availability_loading: self.navigation.workspace_bars.presentation.is_none()
+                    && self.work.availability.loading && self.work.availability.tasks.is_empty(),
                 review_removable: self.migration_review_removal().is_some(),
                 review_primary: if self.focused_review_changed() {
                     crate::glossary::SUBMIT_CORRECTION
@@ -86,6 +100,18 @@ impl LabelloApp {
                     crate::glossary::NEXT_OBJECT
                 },
             });
+    }
+
+    pub(crate) fn initial_workspace_load(&self) -> bool {
+        !self.navigation.workspace_bars.settled
+    }
+
+    pub(crate) fn displayed_inspector_context(&self) -> Option<crate::review_context::ReviewContext> {
+        if self.workspace_bars_loading() {
+            self.navigation.workspace_bars.presentation.as_ref().and_then(|bar| bar.inspector.clone())
+        } else {
+            self.review_context()
+        }
     }
 
     pub(crate) fn workspace_bars_blank(&self) -> bool {

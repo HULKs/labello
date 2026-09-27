@@ -39,7 +39,7 @@ inspector. See the [product glossary](glossary.md).
 | --- | --- |
 | `setup.rs` | Login, advanced connection, pre-authentication About, dataset setup and schema-copy preview |
 | `panels/app_bar.rs` | Measured global navigation, utilities, account controls, drawer collapse; remains visible during loading |
-| `panels/loading_bars.rs` | Transient blank or retained view-specific bars during image loads |
+| `panels/loading_bars.rs` | Scoped retained bars and validated inspector context during image loads |
 | `app/shell.rs` | Layout, persistent bottom action panel, resize repaint |
 | `panels/workspace.rs` | Canvas area, second-bar context, canvas controls |
 | `panels/workspace_actions.rs` | Workflow commands at every width, Previous image/object |
@@ -67,6 +67,19 @@ Shell rendering refreshes it after accepted responses and navigation. Loading
 disables retained controls and keyboard actions. Empty/error completion and
 scope changes discard the presentation. The global app bar is outside this
 blank/retained policy.
+
+Same-view next/previous navigation retires assignment and request ownership while
+retaining the image fields for display. `work.retired_image` marks those fields
+as non-actionable. It never retains an active assignment. Work synchronization,
+hint polling, canvas edits, panel actions and shortcuts cannot use retired work.
+The accepted image response replaces the display together; an empty result,
+failure, or scope change clears it. A settled-view marker keeps retries and later
+availability checks silent even after an empty or failed result. Scope changes
+reset that marker. Inspector loading presentation uses the last
+validated `ReviewContext`, while live target validation remains unchanged.
+Statistics, Setup lists, admin image/backup catalogs and incremental inspection
+pages retain loaded data without routine refresh indicators. Errors, retries,
+explicit filter changes and operation progress keep their existing feedback.
 
 `canvas.rs` keeps public entry points; rendering, painting, interaction,
 hit-testing, and viewport geometry remain separate internal concerns. Painting

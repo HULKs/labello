@@ -401,14 +401,10 @@ impl LabelloApp {
                 });
             }
         });
-        if self.loading.dataset || (self.loading.datasets && has_datasets) {
+        if self.loading.dataset {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.small(if self.loading.dataset {
-                    "Opening dataset..."
-                } else {
-                    "Refreshing..."
-                });
+                ui.small("Opening dataset...");
             });
         }
 

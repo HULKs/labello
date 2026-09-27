@@ -151,8 +151,6 @@ impl LabelloApp {
                 description(streak, "Your streak"),
                 if self.datasets.stats_error.is_some() {
                     " Last refresh failed; progress may be stale."
-                } else if self.loading.stats {
-                    " Refreshing progress…"
                 } else {
                     ""
                 }

@@ -234,7 +234,7 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.state_mut().admin.section = AdminSection::Images;
     harness.state_mut().loading.images = true;
     harness.step();
-    assert!(harness.query_by_label("Refreshing images...").is_some());
+    assert!(harness.query_by_label("Refreshing images...").is_none());
     harness.state_mut().loading.images = false;
     harness.state_mut().admin.images_error = Some("offline".to_string());
     harness.step();
@@ -249,14 +249,14 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.state_mut().admin.images_error = None;
     harness.state_mut().loading.images = true;
     harness.step();
-    assert!(harness.query_by_label("Refreshing images...").is_some());
+    assert!(harness.query_by_label("Refreshing images...").is_none());
     assert!(harness.query_by_label("No matching images").is_none());
     harness.state_mut().loading.images = false;
 
     harness.state_mut().admin.section = AdminSection::Backups;
     harness.state_mut().loading.snapshots = true;
     harness.step();
-    assert!(harness.query_by_label("Refreshing snapshots...").is_some());
+    assert!(harness.query_by_label("Refreshing snapshots...").is_none());
     harness.state_mut().loading.snapshots = false;
     harness.state_mut().admin.snapshots_error = Some("offline".to_string());
     harness.step();

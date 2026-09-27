@@ -50,6 +50,96 @@ mod loading_bars {
     }
 
     #[test]
+    fn open_inspector_drawer_keeps_disabled_controls_during_image_load() {
+        let mut h = harness(InspectorPreset::Review, egui::vec2(390., 844.));
+        h.state_mut().work.drawer = Some(Drawer::Inspector);
+        h.run_steps(4);
+        let reset = h.get_by_label("Reset item").rect();
+        h.state_mut().retire_current_image();
+        h.state_mut().loading.image = true;
+        h.run_steps(4);
+        assert_eq!(h.get_by_label("Reset item").rect(), reset);
+        assert!(h.get_by_label("Reset item").accesskit_node().is_disabled());
+        assert!(h.query_by_label("Loading review target…").is_none());
+        h.key_press(egui::Key::Escape);
+        h.run_steps(3);
+        assert!(h.state().work.drawer.is_none());
+    }
+
+    #[test]
+    fn retired_image_stays_visible_without_assignment_ownership() {
+        for preset in presets() {
+            let mut h = harness(preset, egui::vec2(1440., 1000.));
+            h.state_mut().work.inspector_panel_collapsed = false;
+            h.state_mut().work.workflow_panel_collapsed = false;
+            h.run_steps(4);
+            let image = h.state().work.current.as_ref().unwrap().image.image_id.clone();
+            let canvas = h.get_by_label("Annotation canvas").rect();
+            let inspector_controls: Vec<_> = controls(&h).into_iter().filter(|(_, rect)| rect.left() > canvas.right()).collect();
+            h.state_mut().retire_current_image();
+            h.state_mut().loading.image = true;
+            h.run_steps(4);
+            assert!(h.state().work.retired_image, "{preset:?}");
+            assert!(h.state().work.assignment.is_none(), "{preset:?}");
+            assert_eq!(h.state().work.current.as_ref().unwrap().image.image_id, image);
+            assert_eq!(h.get_by_label("Annotation canvas").rect(), canvas, "{preset:?}");
+            let retained_controls: Vec<_> = controls(&h).into_iter().filter(|(_, rect)| rect.left() > canvas.right()).collect();
+            assert_eq!(retained_controls, inspector_controls, "inspector controls for {preset:?}");
+            assert!(h.query_by_label_contains("Loading review target").is_none(), "{preset:?}");
+            assert!(h.query_by_label("Loading assignment image").is_none(), "{preset:?}");
+            let commands = h.state().runtime.commands.len();
+            for action in [labello_domain::UserAction::NextImage, labello_domain::UserAction::PreviousImage,
+                labello_domain::UserAction::SaveAnnotations, labello_domain::UserAction::DeleteAnnotation] {
+                h.state_mut().trigger_user_action(action);
+            }
+            assert_eq!(h.state().runtime.commands.len(), commands);
+            h.state_mut().loading.image = false;
+            h.state_mut().runtime.error = Some("Synthetic image failure".into());
+            h.run_steps(4);
+            assert!(!h.state().work.retired_image);
+            assert!(h.state().work.current.is_none());
+            assert!(h.query_by_label("Annotation canvas").is_none());
+        }
+    }
+
+    #[test]
+    fn retained_image_is_cleared_on_scope_change_and_empty_result() {
+        for change in 0..9 {
+            let mut h = harness(InspectorPreset::Review, egui::vec2(390., 844.));
+            h.run_steps(4);
+            h.state_mut().retire_current_image();
+            h.state_mut().loading.image = true;
+            h.run_steps(3);
+            match change {
+                0 => h.state_mut().view = AppView::Annotate,
+                1 => h.state_mut().work.selected_task_id = Some(TaskId::from("other")),
+                2 => h.state_mut().config.dataset_id = DatasetId::from("other"),
+                3 => h.state_mut().auth_epoch += 1,
+                4 => h.state_mut().workspace_epoch += 1,
+                5 => h.state_mut().loading.session = true,
+                6 => h.state_mut().loading.logout = true,
+                7 => h.state_mut().loading.dataset = true,
+                _ => h.state_mut().loading.image = false,
+            }
+            h.run_steps(3);
+            assert!(h.state().work.current.is_none(), "scope {change}");
+            assert!(!h.state().work.retired_image);
+        }
+    }
+
+    #[test]
+    fn subsequent_image_load_keeps_inspector_context_visible() {
+        let mut h = harness(InspectorPreset::Review, egui::vec2(1440., 1000.));
+        h.state_mut().work.inspector_panel_collapsed = false;
+        h.run_steps(4);
+        let context = h.get_by_label_contains("Active review context:").accesskit_node().label().unwrap().to_owned();
+        h.state_mut().loading.image = true;
+        h.run_steps(4);
+        assert!(h.query_by_label("Loading review target…").is_none());
+        assert!(h.query_by_label(&context).is_some());
+    }
+
+    #[test]
     fn global_header_stays_visible_and_stable_during_loads() {
         for preset in [
             InspectorPreset::Annotation,
@@ -255,6 +345,9 @@ mod loading_bars {
             h.state_mut().loading.image = true;
             h.run_steps(3);
             assert!(controls(&h).is_empty());
+            assert!(h.query_by_label("Loading assignment image").is_none());
+            let task = h.state().work.selected_task_id.as_ref().unwrap();
+            assert_ne!(h.state().workflow_marker_reason(task), Some(crate::panels::WorkflowMarkerReason::ImageLoading));
         }
     }
 }

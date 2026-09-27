@@ -26,6 +26,12 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_canvas(&mut self, ui: &mut egui::Ui) {
+        if self.workspace_bars_loading() {
+            let opacity = ui.opacity();
+            ui.disable();
+            // Block input without fading the retained image into the canvas background.
+            ui.set_opacity(opacity);
+        }
         self.work
             .canvas
             .set_pan_drag_modifier(self.work.keybindings.pan_drag_modifier);
@@ -82,8 +88,9 @@ impl LabelloApp {
                 })
                 .unwrap_or_default();
             let prelabels = Vec::new();
-            let annotator_editable =
-                self.view == AppView::Annotate && self.work.pending_transition.is_none();
+            let annotator_editable = self.view == AppView::Annotate
+                && self.work.pending_transition.is_none()
+                && !self.workspace_bars_loading();
             let correction_interaction = self.work.correction_draft.as_ref().map(|draft| {
                 let mut interaction = CanvasInteraction::correction(draft.selected_keypoint);
                 interaction.allow_selection =
@@ -194,6 +201,9 @@ impl LabelloApp {
                 }),
                 &mut missing_action,
             );
+            if self.workspace_bars_loading() {
+                return;
+            }
             if let Some(action) = missing_action {
                 self.apply_missing_object_action(action);
             }
@@ -290,19 +300,23 @@ impl LabelloApp {
                                     );
                                 });
                             } else if self.loading.image {
-                                theme::inset_frame().show(ui, |ui| {
-                                    ui.set_min_width(ui.available_width());
-                                    ui.horizontal(|ui| {
-                                        ui.spinner();
+                                if self.initial_workspace_load() {
+                                    theme::inset_frame().show(ui, |ui| {
+                                        ui.set_min_width(ui.available_width());
+                                        ui.horizontal(|ui| {
+                                            ui.spinner();
+                                            ui.label(
+                                                RichText::new("Loading assignment image").strong(),
+                                            );
+                                        });
                                         ui.label(
-                                            RichText::new("Loading assignment image").strong(),
+                                            RichText::new(
+                                                "Decoding the image preview for the canvas.",
+                                            )
+                                            .color(theme::TEXT_MUTED),
                                         );
                                     });
-                                    ui.label(
-                                        RichText::new("Decoding the image preview for the canvas.")
-                                            .color(theme::TEXT_MUTED),
-                                    );
-                                });
+                                }
                             } else if let Some(error) = self.runtime.error.clone() {
                                 let claimed = self.work.assignment.is_some();
                                 let (title, retry) = if claimed {
@@ -329,22 +343,24 @@ impl LabelloApp {
                                     self.retry_assignment_load();
                                 }
                             } else if checking_availability {
-                                theme::inset_frame().show(ui, |ui| {
-                                    ui.set_min_width(ui.available_width());
-                                    ui.horizontal(|ui| {
-                                        ui.spinner();
+                                if self.initial_workspace_load() {
+                                    theme::inset_frame().show(ui, |ui| {
+                                        ui.set_min_width(ui.available_width());
+                                        ui.horizontal(|ui| {
+                                            ui.spinner();
+                                            ui.label(
+                                                RichText::new("Checking assignment availability")
+                                                    .strong(),
+                                            );
+                                        });
                                         ui.label(
-                                            RichText::new("Checking assignment availability")
-                                                .strong(),
+                                            RichText::new(
+                                                "Looking for work in the selected workflows.",
+                                            )
+                                            .color(theme::TEXT_MUTED),
                                         );
                                     });
-                                    ui.label(
-                                        RichText::new(
-                                            "Looking for work in the selected workflows.",
-                                        )
-                                        .color(theme::TEXT_MUTED),
-                                    );
-                                });
+                                }
                             } else if let Some(error) = availability_error {
                                 if theme::empty_state(
                                     ui,

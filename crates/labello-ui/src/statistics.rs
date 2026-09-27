@@ -199,9 +199,6 @@ impl LabelloApp {
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            if self.loading.stats {
-                ui.label(RichText::new("Refreshing statistics").color(theme::TEXT_MUTED));
-            }
             if let Some(completed) = self.datasets.last_stats_completion {
                 let seconds = completed.elapsed().as_secs();
                 ui.small(match seconds {

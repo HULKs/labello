@@ -59,7 +59,7 @@ impl LabelloApp {
             }
             PendingTransition::NextAssignment => {
                 if self.runtime.api.is_some() {
-                    self.clear_current_image();
+                    self.retire_current_image();
                     self.request_next_image();
                 } else {
                     self.advance_current_image();
@@ -67,7 +67,7 @@ impl LabelloApp {
             }
             PendingTransition::PreviousAssignment(assignment) => {
                 self.work.previous_assignment = Some(assignment.clone());
-                self.clear_current_image();
+                self.retire_current_image();
                 self.request_reopen_assignment(assignment);
             }
             PendingTransition::Workflow(task_id) => {

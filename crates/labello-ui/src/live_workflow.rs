@@ -19,6 +19,15 @@ use crate::{
 
 impl LabelloApp {
     pub(crate) fn clear_current_image(&mut self) {
+        self.reset_current_image(false);
+    }
+
+    pub(crate) fn retire_current_image(&mut self) {
+        self.reset_current_image(self.work.current.is_some());
+    }
+
+    fn reset_current_image(&mut self, retain_display: bool) {
+        self.cancel_prelabel_load();
         self.work.image_transfers.cancel_all();
         self.release_prepared_assignments();
         if let Some(request_id) = self.work.active_load_id {
@@ -31,32 +40,35 @@ impl LabelloApp {
             self.runtime.active_requests.remove(&request_id);
         }
         self.work.assignment = None;
-        self.work.current = None;
-        self.work.current_state = None;
-        self.work.reason_notice = None;
-        self.work.current_texture = None;
-        self.work.annotations.clear();
+        self.work.retired_image = retain_display;
+        if !retain_display {
+            self.work.current = None;
+            self.work.current_state = None;
+            self.work.reason_notice = None;
+            self.work.current_texture = None;
+            self.work.annotations.clear();
+            self.work.staged_review_decisions.clear();
+            self.work.prelabel_evidence.clear();
+            self.work.prelabel_review = Default::default();
+            self.work.selected_annotation = None;
+            self.work.active_skeleton = None;
+            self.work.skeleton_keypoint_index = 0;
+            self.work.next_keypoint_hidden = false;
+            self.work.review_index = 0;
+            self.work.review_rejected = false;
+            self.work.missing_objects = Default::default();
+            self.work.correction_draft = None;
+            self.work.review_corrections = Default::default();
+            self.work.migration = Default::default();
+            self.work.canvas.fit_view();
+        }
         self.work.persisted_annotations.clear();
         self.work.modified_annotations.clear();
         self.work.accepted_prelabels.clear();
-        self.work.prelabel_evidence.clear();
-        self.work.prelabel_review = Default::default();
-        self.work.selected_annotation = None;
-        self.work.active_skeleton = None;
-        self.work.skeleton_keypoint_index = 0;
-        self.work.next_keypoint_hidden = false;
         self.work.save_status = SaveStatus::Idle;
         self.work.edit_generation = 0;
         self.work.assignment_touched = false;
-        self.work.review_index = 0;
-        self.work.review_rejected = false;
-        self.work.missing_objects = Default::default();
-        self.work.staged_review_decisions.clear();
         self.work.review_revision_commit = None;
-        self.work.correction_draft = None;
-        self.work.review_corrections = Default::default();
-        self.work.migration = Default::default();
-        self.work.canvas.fit_view();
         self.work.active_load_id = None;
         self.work.active_prefetch_id = None;
         self.work.active_operation_id = None;
