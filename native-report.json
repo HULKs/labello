@@ -1,0 +1,43 @@
+{
+  "base": "0b23982f46eb00c64a606db924b5385f108918cc plus source-files.json diff",
+  "preset": "setup",
+  "scale": 1,
+  "viewports": [
+    [
+      1440,
+      1000
+    ],
+    [
+      1288,
+      820
+    ],
+    [
+      600,
+      800
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      320,
+      568
+    ],
+    [
+      320,
+      320
+    ]
+  ],
+  "observations": [
+    "Names/descriptions and controls no longer overlap",
+    "Narrow rows stack and footer controls stay adjacent",
+    "Next guide search locates Confirm / submit",
+    "Expanded button names explain annotation/review/migration variants",
+    "Recording selected state and Escape cancellation work",
+    "Ctrl+Z binding conflict names Undo/Confirm / submit and workspace context",
+    "Show conflicting shortcuts filters to conflict; Save changes semantically disabled",
+    "Escape with edits opens discard decision; Keep editing retains draft",
+    "Restore all defaults returns to baseline; Escape then closes settings"
+  ],
+  "limits": "Native shared renderer only. Short viewport list/footer reachability also exercised with deterministic scroll_to_me regression."
+}

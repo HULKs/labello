@@ -1,0 +1,17 @@
+{
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "saved_key": "F9",
+      "outcome": "503 error retains draft; screenshots show saving, error and discard",
+      "input": "search via typing; Tab + Enter begins recording, F9 captured, Save clicked, Escape opens discard"
+    }
+  ],
+  "limits": "No live authentication/persistence, OS text scaling or platform screen reader exercised."
+}

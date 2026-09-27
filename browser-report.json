@@ -1,0 +1,149 @@
+{
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "zoom": 1,
+      "page_errors": [],
+      "keyboard": "Tab twice then Escape",
+      "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
+    }
+  ],
+  "limits": "No live authentication/persistence, OS text scaling or platform screen reader exercised."
+}
