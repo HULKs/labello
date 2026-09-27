@@ -468,6 +468,17 @@ impl LabelloApp {
         // pixels or changes the canvas transform when the workflow advances.
         let scan_for_missing = (overview && self.work.migration.inspected_group_id.is_none())
             || (self.view == AppView::Review && self.review_overview());
+        self.work
+            .canvas
+            .set_scan_phase((scan_for_missing && texture.is_some()).then(|| {
+                egui::Id::new((
+                    "migration-scan",
+                    self.workspace_epoch,
+                    &current.image.image_id,
+                    &self.work.selected_task_id,
+                    self.view == AppView::Review,
+                ))
+            }));
         let framed = egui::Frame::new().inner_margin(8).show(ui, |ui| {
             show_canvas_colored(
                 ui,
@@ -487,8 +498,10 @@ impl LabelloApp {
         });
         if scan_for_missing && texture.is_some() {
             let bounds = framed.response.rect;
+            let emphasis = self.work.canvas.scan_emphasis();
+            let color = theme::INFO.lerp_to_gamma(theme::TEXT, emphasis);
             for (inset, radius, width, color) in
-                [(0.0, 26, 4.0, theme::INFO), (6.0, 20, 1.0, theme::TEXT)]
+                [(0.0, 26, 4.0, color), (6.0, 20, 1.0, theme::TEXT)]
             {
                 ui.painter().rect_stroke(
                     bounds.shrink(inset),

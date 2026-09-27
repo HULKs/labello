@@ -2676,6 +2676,76 @@ fn migration_scan_cue_does_not_treat_fit_as_workflow_completion() {
 
 #[cfg(feature = "inspector-presets")]
 #[test]
+fn migration_scan_cue_settles_once_and_respects_motion_and_input() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    fn image_rect(harness: &Harness<'_, LabelloApp>) -> egui::Rect {
+        let texture = harness.state().work.current_texture.as_ref().unwrap().id();
+        harness.output().shapes.iter().find_map(|shape| {
+            if let egui::Shape::Mesh(mesh) = &shape.shape {
+                (mesh.texture_id == texture).then(|| mesh.calc_bounds())
+            } else { None }
+        }).expect("painted image")
+    }
+    let mut harness = Harness::builder().with_size(egui::vec2(1288.0, 820.0))
+        .build_eframe(|ctx| inspector_presets::build(InspectorPreset::MigrationFullImage, &ctx.egui_ctx));
+    harness.step();
+    let full = image_rect(&harness);
+    crate::set_reduced_motion(&harness.ctx, false);
+    harness.state_mut().work.migration.inspected_group_id = Some("group-left".into());
+    harness.step();
+    harness.state_mut().work.migration.inspected_group_id = None;
+    harness.input_mut().time = Some(10.0);
+    harness.step();
+    let transform = harness.state().work.canvas.stored_transform();
+    assert!(harness.state().work.canvas.scan_emphasis() > 0.9);
+    harness.input_mut().time = Some(10.1);
+    harness.step();
+    let contracted = image_rect(&harness);
+    assert!(contracted.width() < full.width() * 0.93, "phase entry must visibly contract");
+    assert!(contracted.center().distance(full.center()) < 0.01);
+    assert_eq!(harness.state().work.canvas.stored_transform(), transform, "motion must not enter persisted view preferences");
+    harness.input_mut().time = Some(10.225);
+    harness.step();
+    assert!((image_rect(&harness).width() - full.width()).abs() < 0.1, "rebound");
+    harness.input_mut().time = Some(10.34);
+    harness.step();
+    assert!(image_rect(&harness).width() > contracted.width());
+    assert!(image_rect(&harness).width() < full.width());
+    harness.input_mut().time = Some(10.46);
+    harness.step();
+    assert_eq!(image_rect(&harness), full);
+    assert_eq!(harness.state().work.canvas.scan_emphasis(), 0.0);
+    assert_eq!(missing_object_scan_frames(&harness).len(), 1);
+    harness.state_mut().work.canvas.fit_view();
+    harness.step();
+    assert_eq!(image_rect(&harness), full, "manual fit must not replay motion");
+
+    // A preference change stops active motion and never restarts it mid-phase.
+    harness.state_mut().work.migration.inspected_group_id = Some("group-left".into());
+    harness.step();
+    harness.state_mut().work.migration.inspected_group_id = None;
+    harness.step();
+    assert!(harness.state().work.canvas.scan_emphasis() > 0.0);
+    crate::set_reduced_motion(&harness.ctx, true);
+    harness.step();
+    assert_eq!(image_rect(&harness), full);
+    assert_eq!(missing_object_scan_frames(&harness).len(), 1);
+    crate::set_reduced_motion(&harness.ctx, false);
+    harness.step();
+    assert_eq!(harness.state().work.canvas.scan_emphasis(), 0.0);
+
+    harness.state_mut().work.migration.inspected_group_id = Some("group-left".into());
+    harness.step();
+    harness.state_mut().work.migration.inspected_group_id = None;
+    harness.step();
+    assert!(harness.state().work.canvas.scan_emphasis() > 0.0);
+    click_at(&mut harness, full.center());
+    assert_eq!(harness.state().work.canvas.scan_emphasis(), 0.0);
+    assert_eq!(image_rect(&harness), full);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
 fn deleting_unsaved_missing_migration_object_returns_to_overview() {
     use crate::inspector_presets::{self, InspectorPreset};
 
