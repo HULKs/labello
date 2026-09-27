@@ -1,0 +1,341 @@
+{
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "schema_points": 1,
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 1,
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "schema_points": 2,
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "zoom": 2,
+      "schema_points": 1,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "zoom": 2,
+      "schema_points": 2,
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "browser_input": "passed",
+      "transport": "mocked responses; no backend claim",
+      "accessibility": "Canvas node present"
+    }
+  ]
+}

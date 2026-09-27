@@ -1,0 +1,56 @@
+[
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  },
+  {
+    "viewport": [
+      1288,
+      820
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  },
+  {
+    "viewport": [
+      600,
+      800
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  },
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  },
+  {
+    "viewport": [
+      320,
+      568
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  },
+  {
+    "viewport": [
+      320,
+      320
+    ],
+    "native_scale": 1,
+    "placement_and_delete": "passed",
+    "submit": "visible"
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "crates/labello-ui/src/app/shortcuts.rs": "d764fc1502ebddece0d9f9abe62eb1f1632d8d857ee5b1a01b31b3e6ba610d25",
+  "crates/labello-ui/src/manual_migration.rs": "1b24bb3e64b5a65ebd6dd29923f539a982a6bd334bae1af844210bdd46982326",
+  "crates/labello-ui/src/ui_tests/suites/accessibility.rs": "279830d8d6b1c95cb0a27eb720821cbc3b0d0f03c4e494dac50f11d6abc8bfec",
+  "crates/labello-ui/src/ui_tests/suites/migration.rs": "c080f29edc91101d336cd6a633abd90d9fe25d9cea6c2ebc423df8269f8d67d2",
+  "crates/labello-ui/src/ui_tests/suites/pen_editing.rs": "2b0596614169d23d5b27d3d1747365d6f59caecfc36808af8d9284405776b197",
+  "crates/labello-ui/src/ui_tests/suites/review_context_bar.rs": "945063a35263f8cc28997c4ec5321337710e15073d7f7c28753e015f9470c24c",
+  "crates/labello-ui/src/ui_tests/suites/workspace_overflow.rs": "bf244bcb7b1a6631267881bffaa22a000f5469ac33cc99c1b958376715c4bb0a",
+  "crates/labello-ui/src/ui_tests/support/api_fake.rs": "ad8d7a5482d0dd8f44b9e0eb35657fb6303c7b1431972f1b034bfc0591a70fba",
+  "docs/migration.md": "85430bead4db9537f6c917a0a79024d6fb3507ce219e7d1cd86d8e7e27b6a7ca"
+}
