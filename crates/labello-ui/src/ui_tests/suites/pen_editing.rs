@@ -235,7 +235,8 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         let first_draft = harness.state().work.migration.draft.clone().unwrap();
         assert_eq!(first_draft.keypoints[0].state, KeypointState::Hidden);
         api.state.borrow_mut().fail_next_migration = fail_first_save;
-        let second = first + egui::vec2(100.0, 80.0);
+        // Stay in the gap between the imported guides as the canvas size changes.
+        let second = first + egui::vec2(0.0, 80.0);
         click_at(&mut harness, second);
         step_until(&mut harness, 12, |app| !app.work.migration.busy);
         if fail_first_save {
