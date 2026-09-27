@@ -39,11 +39,20 @@ In the full-image view, tap blank image space to start a skeleton for an object
 without an imported guide. Creation and editing need no mode buttons: existing
 objects take selection priority, and clicking one opens it for editing. After the
 last keypoint, the draft remains editable: drag points or use Visible/Occluded
-controls when permitted by the task. Click empty canvas again to save that complete
-object and start another. Selecting another object also saves the current valid
-changes first. Incomplete objects must be finished or discarded before switching.
-Failed saves preserve the current draft and resume the clicked action after a
-successful retry. Saving objects does not confirm or finish the image.
+controls when permitted by the task. For a one-keypoint schema, clicking empty
+canvas again confirms the current object and starts another at the clicked
+location. For schemas with multiple keypoints, explicitly save the completed
+skeleton before starting another object or selecting a different one. Unchanged
+previously saved objects can be left without another confirmation. Failed saves
+preserve the draft; a pending one-keypoint placement resumes after successful
+retry. Saving objects does not confirm or finish the image. Use Submit at the
+bottom right to complete full-image confirmation, including images without guides.
+
+Delete or Remove added object removes the whole selected added skeleton. An
+unsaved addition is discarded locally and immediately returns to the overview.
+A saved addition returns to the overview after the server accepts its deletion;
+failed deletion keeps the editor available for retry. Successful deletion needs
+no separate discard step. Undo last keypoint still removes one keypoint at a time.
 
 The overview keeps its canvas view when selecting added objects. Refocus remains
 available explicitly. The same visibility controls apply to placed points in

@@ -816,6 +816,9 @@ impl ImportApi for SpyApi {
     ) -> ApiFuture<'a, labello_client::ManualMigrationCommandResult> {
         let mut state = self.state.borrow_mut();
         state.counts.migration_commands += 1;
+        if std::mem::take(&mut state.fail_next_migration) {
+            return ready(Err(labello_client::ClientError::Demo("migration command failed".into())));
+        }
         let image_state = state.states.get_mut(image_id).unwrap();
         let annotation = image_state
             .annotations

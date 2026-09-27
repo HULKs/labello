@@ -196,6 +196,10 @@ impl LabelloApp {
                     self.trigger_missing_migration_object_action();
                     return;
                 }
+                UserAction::DeleteAnnotation if self.work.migration.adding_missing_object => {
+                    self.delete_missing_migration_object();
+                    return;
+                }
                 UserAction::UndoEdit | UserAction::DeleteAnnotation => {
                     if self.work.migration.inspected_group_id.is_none() {
                         self.remove_last_migration_keypoint();

@@ -36,8 +36,8 @@ fn migration_primary_actions_are_bottom_right_through_placement_and_confirmation
                     (InspectorPreset::MigrationObject, _, false) => "Save skeleton & advance",
                     (_, true, true) => "Save object",
                     (_, true, false) => "Save missing object",
-                    (_, false, true) => "Confirm & finish",
-                    (_, false, false) => "Confirm all guides & finish",
+                    (_, false, true) => "Submit",
+                    (_, false, false) => "Submit",
                 };
                 let primary = harness.get_by_label(label).rect();
                 if size.x == 1440.0 {

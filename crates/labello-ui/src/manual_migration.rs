@@ -23,12 +23,13 @@ enum MigrationPrimaryAction {
     AddSkeleton,
     EditSkeleton(AnnotationId),
     KeepDisposition(ObjectGroupId),
-    Confirm { no_guides: bool },
+    Submit,
 }
 
 impl MigrationPrimaryAction {
     fn label(&self, compact: bool) -> &'static str {
         match (self, compact) {
+            (Self::Submit, _) => "Submit",
             (Self::SaveSkeleton(_), true) => "Save & next",
             (Self::SaveSkeleton(_), false) => "Save skeleton & advance",
             (Self::AddSkeleton, true) => "Save object",
@@ -37,10 +38,6 @@ impl MigrationPrimaryAction {
             (Self::EditSkeleton(_), false) => "Save object changes",
             (Self::KeepDisposition(_), true) => "Keep & next",
             (Self::KeepDisposition(_), false) => "Keep current & advance",
-            (Self::Confirm { no_guides: true }, true) => "Confirm & finish",
-            (Self::Confirm { no_guides: true }, false) => "Confirm no guides & finish",
-            (Self::Confirm { no_guides: false }, true) => "Confirm & finish",
-            (Self::Confirm { no_guides: false }, false) => "Confirm all guides & finish",
         }
     }
 }
@@ -1046,7 +1043,7 @@ impl LabelloApp {
                 if discovered == 1 { "object" } else { "objects" }
             ));
         }
-        let confirmation = if expected == 0 {
+        let confirmation = if expected == 0 && discovered == 0 {
             "Confirm that this image has no canonical guides and needs no skeletons."
         } else {
             "Confirm that every imported guide is resolved and that any objects missing from the import were added."
@@ -1297,9 +1294,7 @@ impl LabelloApp {
             return;
         }
         let bar = self.displayed_migration_bar();
-        let extra_actions = usize::from(bar.adding_missing_object)
-            + usize::from(bar.editing_missing_annotation_id.is_some())
-            + usize::from(bar.keypoint_undo);
+        let extra_actions = usize::from(bar.adding_missing_object) + usize::from(bar.keypoint_undo);
         let count = (3 + extra_actions + usize::from(self.bar_has_previous_image())) as f32;
         let width = ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
             .floor()
@@ -1315,31 +1310,15 @@ impl LabelloApp {
                         && workspace_toolbar_button(
                             ui,
                             !self.work.migration.busy,
-                            "Discard object changes",
-                            WorkspaceActionIcon::Discard,
-                            width,
-                            theme::Intent::Neutral,
-                        )
-                        .on_hover_text("Discard the current unsaved object changes.")
-                        .clicked()
-                    {
-                        self.cancel_missing_migration_object();
-                    }
-                    if let Some(annotation_id) = bar.editing_missing_annotation_id.clone()
-                        && workspace_toolbar_button(
-                            ui,
-                            !self.work.migration.busy,
                             "Remove added object",
                             WorkspaceActionIcon::Remove,
                             width,
                             theme::Intent::Error,
                         )
-                        .on_hover_text(
-                            "Remove this added missing-object skeleton. You can add it again if needed.",
-                        )
+                        .on_hover_text("Remove this added missing-object skeleton.")
                         .clicked()
                     {
-                        self.request_delete_migration_skeleton(annotation_id);
+                        self.delete_missing_migration_object();
                     }
                     if bar.keypoint_undo {
                         let response = workspace_toolbar_button(
@@ -1666,7 +1645,7 @@ impl LabelloApp {
             enabled,
             label,
             match &action {
-                MigrationPrimaryAction::Confirm { .. } => WorkspaceActionIcon::Approve,
+                MigrationPrimaryAction::Submit => WorkspaceActionIcon::Approve,
                 MigrationPrimaryAction::KeepDisposition(_) => WorkspaceActionIcon::Next,
                 _ => WorkspaceActionIcon::Save,
             },
@@ -1745,13 +1724,7 @@ impl LabelloApp {
                         !self.work.migration.busy && self.migration_draft_valid(),
                     ));
                 }
-                let (expected, ..) = self.migration_counts();
-                Some((
-                    MigrationPrimaryAction::Confirm {
-                        no_guides: expected == 0,
-                    },
-                    !self.work.migration.busy,
-                ))
+                Some((MigrationPrimaryAction::Submit, !self.work.migration.busy))
             }
         }
     }
@@ -1768,7 +1741,7 @@ impl LabelloApp {
             MigrationPrimaryAction::KeepDisposition(group_id) => {
                 self.request_keep_migration_target(group_id)
             }
-            MigrationPrimaryAction::Confirm { .. } => self.request_confirm_migration(),
+            MigrationPrimaryAction::Submit => self.request_confirm_migration(),
         }
     }
 
@@ -2167,6 +2140,18 @@ impl LabelloApp {
         if let MigrationOverviewIntent::Select(id, _) = &intent
             && self.editable_migration_draft_annotation_id().as_ref() == Some(id)
         {
+            return;
+        }
+        if self.work.migration.adding_missing_object
+            && (self.work.migration.editing_missing_annotation_id.is_none()
+                || self.work.migration.draft_dirty)
+            && self
+                .selected_task()
+                .and_then(|task| task.skeleton.as_ref())
+                .is_some_and(|spec| spec.keypoints.len() > 1)
+        {
+            self.work.migration.error =
+                Some("Confirm the current skeleton before starting another object.".into());
             return;
         }
         if self.work.migration.adding_missing_object && self.work.migration.draft_dirty {
@@ -2646,6 +2631,25 @@ impl LabelloApp {
             self.work.migration.draft_dirty = true;
             self.work.assignment_touched = true;
             self.work.migration.next_hidden = false;
+        }
+    }
+
+    pub(crate) fn delete_missing_migration_object(&mut self) {
+        if self.view != AppView::Annotate
+            || self.work.migration.busy
+            || self.loading.image
+            || self.loading.saving
+            || self.work.pending_transition.is_some()
+            || self.work.migration.inspected_group_id.is_some()
+            || !matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+            || !self.work.migration.adding_missing_object
+        {
+            return;
+        }
+        if let Some(annotation_id) = self.work.migration.editing_missing_annotation_id.clone() {
+            self.request_delete_migration_skeleton(annotation_id);
+        } else {
+            self.cancel_missing_migration_object();
         }
     }
 
@@ -3338,7 +3342,6 @@ mod tests {
 #[derive(Clone)]
 pub(crate) struct MigrationBarPresentation {
     adding_missing_object: bool,
-    editing_missing_annotation_id: Option<AnnotationId>,
     keypoint_undo: bool,
     inspected_group_id: Option<ObjectGroupId>,
     next_returns_to_current: bool,
@@ -3350,11 +3353,6 @@ impl LabelloApp {
     pub(crate) fn migration_bar_presentation(&self) -> MigrationBarPresentation {
         MigrationBarPresentation {
             adding_missing_object: self.work.migration.adding_missing_object,
-            editing_missing_annotation_id: self
-                .work
-                .migration
-                .editing_missing_annotation_id
-                .clone(),
             keypoint_undo: self.migration_keypoint_undo_available(),
             inspected_group_id: self.work.migration.inspected_group_id.clone(),
             next_returns_to_current: self.inspection_next_returns_to_current(),

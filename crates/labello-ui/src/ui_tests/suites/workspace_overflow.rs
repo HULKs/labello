@@ -275,7 +275,7 @@ fn migration_final_overflow_preserves_primary_confirmation_and_short_canvas() {
     assert!(canvas.height() >= 44.0, "{canvas:?}");
     assert!(
         egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0))
-            .contains_rect(harness.get_by_label_contains("Confirm & finish").rect())
+            .contains_rect(harness.get_by_label_contains("Submit").rect())
     );
     let previous = harness.get_by_label("Previous object").rect();
     assert!(previous.top() >= canvas.bottom());
@@ -473,7 +473,7 @@ fn workspace_idle_resize_does_not_repaint_forever_when_actions_cannot_fit() {
     harness.run();
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.run();
-    let confirm = harness.get_by_label_contains("Confirm & finish").rect();
+    let confirm = harness.get_by_label_contains("Submit").rect();
     assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(320.0, 320.0)).contains_rect(confirm));
 }
 
