@@ -217,7 +217,7 @@ no avatar requests. Hover and activation expose the GitHub handle and dataset
 names. Photos and initials are static. Browser avatar networking requires Chromium.
 
 The `workflow-reasons` preset shows a synthetic rejection comment and earlier approval
-feedback alongside a workflow-change notice. Use it to inspect event headings,
+feedback independently of workflow-change acknowledgment. Use it to inspect event headings,
 message-first ordering, scrolling, dismissal and the short-viewport feedback window; it does not prove history loading or browser
 behavior.
 
@@ -231,3 +231,8 @@ transition.
 The `workflow-availability` preset shows all ten server restriction icons,
 including a selected unavailable workflow, without image or annotation content.
 Use it to inspect disabled tooltips, marker alignment, and the workflow drawer.
+
+The `workflow-change` preset shows the blocking automatic workflow-change dialog
+without image content. Check the explanation, keyboard acknowledgment, Escape and
+outside-click behavior, and short-screen scrolling. It uses the shared production
+modal; live availability fallback and browser behavior require separate checks.

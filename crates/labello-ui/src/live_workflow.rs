@@ -478,12 +478,7 @@ impl LabelloApp {
 
     pub(crate) fn request_next_image(&mut self) {
         self.clear_workflow_change_outside_scope();
-        if self
-            .work
-            .automatic_workflow_change
-            .as_ref()
-            .is_some_and(|notice| !notice.presented)
-        {
+        if self.work.automatic_workflow_change.is_some() {
             return;
         }
         let Some(kind) = self.assignment_kind() else {
@@ -553,11 +548,10 @@ impl LabelloApp {
                 current,
                 dataset_id: self.config.dataset_id.clone(),
                 view: self.view,
-                presented: false,
-                presented_pass: None,
+                focus_pending: true,
             });
             self.runtime.persistence.expected_assignment = None;
-            // Present the changed identity before the next assignment can accept input.
+            // Only explicit acknowledgment may start work in the new workflow.
             return;
         };
         self.work.availability.load_after_resolution = false;

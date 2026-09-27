@@ -93,6 +93,7 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
+        if self.work.automatic_workflow_change.is_some() { return; }
         if self.workspace_bars_loading() && action != UserAction::OpenSettings { return; }
         if action == UserAction::NextImage && self.view == AppView::Review {
             self.confirm_review_item();
@@ -383,6 +384,7 @@ impl LabelloApp {
         if !self.work_view()
             || ctx.text_edit_focused()
             || self.work.pending_transition.is_some()
+            || self.work.automatic_workflow_change.is_some()
             || self.work.migration.pending_companion_reconciliation.is_some()
             || self.work.migration.pending_reload_discard
             || self.work.show_settings

@@ -9,6 +9,7 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
+        self.clear_workflow_change_outside_scope();
         if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
             // Navigation is asynchronous. Do not accept edits after the final
             // persistence check while the browser replaces this document.
@@ -61,7 +62,8 @@ impl eframe::App for LabelloApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.navigation.statistics.open || self.work.pending_transition.is_some() {
+        if self.navigation.statistics.open || self.work.pending_transition.is_some()
+            || self.work.automatic_workflow_change.is_some() {
             ui.disable();
         }
         crate::pointer_input::set_canvas_rect(ui.ctx(), egui::Rect::NOTHING, ui.layer_id());
@@ -173,11 +175,7 @@ impl eframe::App for LabelloApp {
         let central_frame = if self.work_view() {
             theme::central_frame()
                 .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(if self.workflow_change_needs_inline_slot(ui.ctx()) {
-                    egui::Margin::symmetric(theme::SPACE_2 as i8, 0)
-                } else {
-                    egui::Margin::same(theme::SPACE_2 as i8)
-                })
+                .inner_margin(egui::Margin::same(theme::SPACE_2 as i8))
         } else {
             theme::central_frame()
         };
