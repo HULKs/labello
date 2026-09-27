@@ -428,3 +428,14 @@ accompanied by textual status in its accessible name and details.
 Check one and many users, overflow, long handles and dataset names, missing and
 failed photos, initial loading, connection loss/recovery, saving/unsaved work,
 application errors, and keyboard activation.
+
+## Shortcut editor
+
+Group each shortcut category once. Match ordinary button vocabulary and expose
+context-dependent button names in searchable help. Keep current binding and reset
+controls visually separate from bounded, wrapping text; stack them below text
+when columns would crowd. Long key combinations must wrap without obscuring names
+or descriptions. Keep compact footer decisions adjacent rather than distributing
+them through the available height. Conflict feedback names the other action and
+workspace context, with a filter to locate the affected rows. Verify text/control
+non-intersection and scroll reachability as well as viewport containment.
