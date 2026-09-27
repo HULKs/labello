@@ -214,6 +214,18 @@ impl LabelloApp {
                 ui.style().interact(&response).fg_stroke.color,
             );
         }
+        if drawer == Drawer::Inspector && self.view == AppView::Review {
+            if self.work.drawer.is_none()
+                && self.work.review_details_focus_return == Some(response.id)
+                && !self.work.show_settings && self.work.pending_transition.is_none()
+            {
+                if ui.ctx().memory(|memory| memory.top_modal_layer().is_none()) {
+                    response.request_focus();
+                    self.work.review_details_focus_return = None;
+                } else { ui.ctx().request_repaint(); }
+            }
+            if response.clicked() { self.work.review_details_focus_return = Some(response.id); }
+        }
         if response.clicked() {
             self.trigger_user_action(action);
         }

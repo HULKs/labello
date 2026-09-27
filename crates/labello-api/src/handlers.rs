@@ -181,6 +181,10 @@ pub fn router(state: ApiState) -> Router {
             get(workflow::get_image_reasons),
         )
         .route(
+            "/datasets/{dataset_id}/images/{image_id}/review-submitters",
+            get(workflow::get_review_submitters),
+        )
+        .route(
             "/datasets/{dataset_id}/images/{image_id}/record",
             get(workflow::get_image_record),
         )

@@ -1086,6 +1086,7 @@ pub(crate) struct LoadedAdmin {
 pub(crate) struct LoadedImage {
     pub prepared_until: Option<web_time::Instant>,
     pub reasons: Vec<labello_client::WorkflowReasonEntry>,
+    pub review_submitters: Vec<labello_client::ReviewSubmitter>,
     pub assignment: Assignment,
     pub queued: QueuedImage,
     pub annotations: Vec<labello_domain::AnnotationVersion>,

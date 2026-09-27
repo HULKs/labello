@@ -43,6 +43,7 @@ fn assignment_reload_discards_stale_manual_cursor_pass_and_local_draft() {
         inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
     let loaded = LoadedImage {
             prepared_until: None,
+            review_submitters: Vec::new(),
             reasons: Vec::new(),
         assignment: app.work.assignment.clone().unwrap(),
         queued: app.work.current.clone().unwrap(),

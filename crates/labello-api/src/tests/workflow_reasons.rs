@@ -73,3 +73,47 @@ async fn workflow_reasons_attach_only_public_author_identity_and_allow_unknown_a
     let old_entry: labello_client::WorkflowReasonEntry = serde_json::from_value(old_wire).unwrap();
     assert!(old_entry.author.is_none());
 }
+
+#[tokio::test]
+async fn review_submitters_are_image_scoped_authorized_public_and_read_only() {
+    let fixture = api_review_revision_fixture(Some("approved")).await;
+    let before = fixture.repository.load_events(&fixture.image_id).await.unwrap();
+    for (user, expected) in [(None, StatusCode::UNAUTHORIZED), (Some("stranger"), StatusCode::UNAUTHORIZED), (Some("reviewer_2"), StatusCode::OK)] {
+        let mut request = Request::builder().uri(format!("/datasets/ds/images/{}/review-submitters", fixture.image_id));
+        if let Some(user) = user { request = request.header("x-test-user-id", user); }
+        let response = fixture.app.clone().oneshot(request.body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            let entries: Vec<labello_client::ReviewSubmitter> = serde_json::from_value(response_json(response).await).unwrap();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].user_id, UserId::from("admin"));
+            assert_eq!(entries[0].image_id, fixture.image_id);
+            assert_eq!(entries[0].task_id.as_str(), fixture.task_id);
+            assert!(entries[0].github_user_id.is_none());
+        }
+    }
+    let state = ApiState::new(fixture._temp.path());
+    state.server_store.upsert_user(UserAccount {
+        user_id: UserId::from("admin"), display_name: "Not exposed".into(),
+        github_login: Some("example-author".into()), github_user_id: Some("12345".into()),
+        created_at: now(), updated_at: now(),
+    }).unwrap();
+    let session = state.create_session(UserId::from("reviewer_2")).unwrap();
+    let app = production_router(state);
+    for (path, expected) in [
+        (format!("/datasets/ds/images/{}/review-submitters", fixture.image_id), StatusCode::OK),
+        ("/datasets/ds/images/missing/review-submitters".into(), StatusCode::NOT_FOUND),
+    ] {
+        let response = app.clone().oneshot(Request::builder().uri(path)
+            .header(header::COOKIE, format!("labello_session={}", session.cookie))
+            .body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            assert_eq!(response_json(response).await, json!([{
+                "imageId": fixture.image_id, "taskId": fixture.task_id, "userId":"admin",
+                "githubLogin":"example-author", "githubUserId":"12345"
+            }]));
+        }
+    }
+    assert_eq!(fixture.repository.load_events(&fixture.image_id).await.unwrap(), before);
+}

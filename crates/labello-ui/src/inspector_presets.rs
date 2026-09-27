@@ -618,10 +618,37 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
                     },
                 );
             }
+            let submitter = labello_domain::UserId::from("synthetic-submitter");
+            if let Some(confirmation) = state.migration_confirmations.get_mut(&task.task_id) {
+                confirmation.actor_user_id = submitter.clone();
+            }
+            app.work.review_submitters = vec![labello_client::ReviewSubmitter {
+                image_id: assignment.image_id.clone(),
+                task_id: task.task_id.clone(),
+                user_id: submitter.clone(),
+                github_login: Some("example-submitter".into()),
+                github_user_id: Some("42".into()),
+            }];
+            let avatar = ctx.load_texture(
+                "review-submitter-fixture",
+                egui::ColorImage::new(
+                    [2, 2],
+                    vec![
+                        theme::ACCENT,
+                        theme::TEXT_MUTED,
+                        theme::TEXT_MUTED,
+                        theme::ACCENT,
+                    ],
+                ),
+                Default::default(),
+            );
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new(("github-avatar", 42_u64)), Some(avatar))
+            });
             let round = labello_domain::ReviewRound {
                 event_id: "inspector-submission".into(),
                 event_sequence: state.current_sequence,
-                submitted_by: app.config.user_id.clone(),
+                submitted_by: submitter,
             };
             state
                 .review_rounds

@@ -73,7 +73,7 @@ impl eframe::App for LabelloApp {
                 .frame(
                     theme::top_bar_frame()
                         .fill(theme::PANEL)
-                        .inner_margin(egui::Margin::symmetric(14, 6)),
+                        .inner_margin(egui::Margin::symmetric(14, if self.view == AppView::Review && layout == LayoutMode::Compact { 0 } else { 6 })),
                 )
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }

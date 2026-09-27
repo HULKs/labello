@@ -298,3 +298,14 @@ mod assignment_response_tests {
         assert!(blocked.into_assignment().is_none());
     }
 }
+
+/// Public presentation for a submission author, scoped to one image and workflow.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewSubmitter {
+    pub image_id: ImageId,
+    pub task_id: TaskId,
+    pub user_id: UserId,
+    pub github_login: Option<String>,
+    pub github_user_id: Option<String>,
+}

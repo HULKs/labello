@@ -911,6 +911,7 @@ fn migration_confirmation_promotes_prepared_assignment_without_blocking_reload()
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
             prepared_until: None,
+            review_submitters: Vec::new(),
             reasons: Vec::new(),
         assignment: next_assignment,
         queued: QueuedImage {
@@ -986,6 +987,7 @@ fn migration_review_approval_promotes_cached_work_without_refetching_image_data(
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(LoadedImage {
             prepared_until: None,
+            review_submitters: Vec::new(),
             reasons: Vec::new(),
         assignment: next_assignment,
         queued: QueuedImage {
@@ -1668,6 +1670,7 @@ fn final_migration_review_approval_preserves_overview_while_next_review_revalida
     app.work.queue.clear();
     assert!(app.work.queue.push_prepared(crate::app::LoadedImage {
             prepared_until: None,
+            review_submitters: Vec::new(),
             reasons: Vec::new(),
         assignment: next_assignment,
         queued: next_image,
@@ -1988,6 +1991,7 @@ fn discovery_conflict_reload_retains_draft_and_refuses_changed_source_version() 
         }
         let loaded = crate::live_protocol::LoadedImage {
             prepared_until: None,
+            review_submitters: Vec::new(),
             reasons: Vec::new(),
             assignment: app.work.assignment.clone().unwrap(),
             queued: app.work.current.clone().unwrap(),

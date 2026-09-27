@@ -219,9 +219,12 @@ has been recorded.
   Final checks say "Final check / Full image" and omit object-only fields; excluded
   migration targets use disposition versions. Actual edits show base version and
   unsaved input. Opening an item alone is not a correction.
-  The second-bar indicator leads with position or Image overview and toggles
-  Inspector, which starts closed. Size it to measured text/icon width; truncate
-  identity with full accessible details, but wrap type and phase. The shell
+  The passive second-bar summary leads with position or Image overview and the
+  submission author's profile avatar. Inspector starts closed and has its own
+  toggle beside Workflow. Reuse cached avatars with initials or unknown-author
+  fallback, and expose submitter identity in hover and accessible text. Size the
+  summary to measured text/avatar width. Lead its second line with annotation
+  type and truncate long workflow identity with full accessible details. The shell
   reserves their actual height. Same-view image loads retain the complete
   previous bar presentation, including control placement and summary dimensions.
   Identity, phase and actions update together when the next image is ready.
@@ -231,7 +234,10 @@ has been recorded.
   new phase. The global header keeps its navigation, utilities and layout during
   loads. The dataset inspector reserves its context row during initial gallery
   loading and retains fixed controls across image loads.
-  On Compact, keep Inspector, Refocus, Fit, and Workflow in one top row. Keep
+  On Compact, put the summary above one row containing Refocus, Fit, Workflow,
+  and Inspector. Keep this region compact enough to retain usable canvas height
+  on short screens. The passive summary is not a keyboard focus stop; Inspector
+  receives focus back after its drawer closes. Keep
   Previous image, Previous object, Discard changes, and Skip visible above the
   bottom row, with Next object/Overview on the left and the decision on the right. Added migration objects also expose
   Remove item. Icon fallback retains full names/tooltips. Short empty states scroll.

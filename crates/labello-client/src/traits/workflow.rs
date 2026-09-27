@@ -84,6 +84,12 @@ pub trait ImageApi {
             ))
         })
     }
+    fn get_review_submitters<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+    ) -> ApiFuture<'a, Vec<crate::ReviewSubmitter>>;
+
     fn get_image_reasons<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

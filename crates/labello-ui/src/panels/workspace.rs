@@ -440,7 +440,7 @@ impl LabelloApp {
 
             if layout == LayoutMode::Wide {
                 self.workflow_panel_toggle(ui);
-                if self.view != AppView::Review { self.inspector_panel_toggle(ui); }
+                self.inspector_panel_toggle(ui);
             }
         });
     }

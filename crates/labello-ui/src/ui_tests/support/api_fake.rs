@@ -245,6 +245,7 @@ pub(super) struct CallCounts {
 pub(super) struct SpyState {
     pub(super) retained_prelabels: BTreeMap<(ImageId, TaskId), labello_domain::RetainedPrelabels>,
     pub(super) prelabel_available: bool,
+    pub(super) review_submitters: Vec<labello_client::ReviewSubmitter>,
     pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
     pub(super) fail_reasons_for: Option<ImageId>,
     pub(super) metadata: DatasetMetadata,
@@ -379,6 +380,7 @@ impl SpyState {
             prelabel_available: true,
             metadata,
             states,
+            review_submitters: Vec::new(),
             workflow_reasons: BTreeMap::new(),
             fail_reasons_for: None,
             counts: CallCounts::default(),
@@ -1450,6 +1452,11 @@ impl TaskApi for SpyApi {
 }
 
 impl ImageApi for SpyApi {
+    fn get_review_submitters<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId)
+        -> labello_client::ApiFuture<'a, Vec<labello_client::ReviewSubmitter>> {
+        ready(Ok(self.state.borrow().review_submitters.iter().filter(|entry| &entry.image_id == image_id).cloned().collect()))
+    }
+
     fn get_image_reasons<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId)
         -> labello_client::ApiFuture<'a, Vec<labello_client::WorkflowReasonEntry>> {
         let mut state = self.state.borrow_mut();
