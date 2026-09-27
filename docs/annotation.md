@@ -76,7 +76,7 @@ A press while an action is unavailable does not queue a later submission.
 | Pan in annotation | `P` toggles Pan mode, then primary-button drag; `Escape` exits it |
 | Pan while editing | `Ctrl` plus primary-button drag, or middle-button drag; the modifier is configurable |
 | Refocus active object | `R`, or Refocus in review, migration, prelabel review, and selected migration companions |
-| Submit and next | `Space`; in review this acts on the focused item or final overview |
+| Confirm / submit | `Space`; in review this acts on the focused item or final overview |
 | Previous image | Left arrow; subject to the previous-assignment eligibility rules |
 | Delete annotation | `Delete`; also discards a selected locally added review object |
 | Pen annotation | Primary-tip drag creates/moves/resizes boxes; tap places keypoints and drag moves them. See the [stylus contract](stylus-input.md) for tested event streams and pending device coverage. |
@@ -187,3 +187,68 @@ and advances; **Delete** or the Delete key removes it. The last object returns t
 the full image for **Submit & next**. Pending objects are never accepted by autosave.
 Hints load independently of the image. Model failures leave manual annotation
 available; confirmed objects follow the same submission and review workflow.
+
+## Shortcut settings and button names
+
+Settings groups actions by Assignment, Annotation, Prelabels, Canvas, Workspace,
+and Review. Search accepts button names, descriptions, categories and key names,
+including modifiers and `conflict`. Expand **Button names and contexts** for
+context-dependent controls. A conflict names the other action and the overlapping
+workspace context; **Show conflicting shortcuts** filters the list to those rows.
+
+Click the current binding to record a replacement; Escape cancels recording.
+Reset restores one default, while Restore all defaults stages a complete reset.
+Save changes publishes the draft. Cancel or Escape with unsaved changes opens a
+discard decision; a failed save retains the draft. Pan drag records a modifier
+for left-drag; middle-drag remains available independently.
+
+Names describe the UI; persisted action identifiers and default keys are unchanged.
+The following inventory maps every active action to its controls. The button column
+also serves as the reverse lookup from a control to its setting. Visibility and
+eligibility still depend on the selected task, assignment and loading state.
+
+| Setting (persisted action) | Buttons or other controls and current context |
+| --- | --- |
+| Confirm / submit (`next_image`) | Annotation: Submit & next; Confirm & next for pending model objects; Next object to focus pending work; Next guide for companion boxes. Review: Approve or Submit correction. Migration: Save skeleton & advance / Save & next; Save missing object / Save object; Save object changes / Save changes; Keep current & advance / Keep & next; Confirm all guides & finish or Confirm no guides & finish / Confirm & finish. Object actions and final image submission retain their different semantics. |
+| Previous image (`previous_image`) | Previous image in annotation, review and migration; returns to the preceding eligible assignment. |
+| Undo (`undo_edit`) | Undo in annotation; Undo last keypoint in migration. Review correction uses fixed Ctrl/Cmd+Z, not this binding. |
+| Redo (`redo_edit`) | Redo in annotation. No migration or review redo. |
+| Save (`save_annotations`) | Save, inline or in More, in annotation. Migration object saves use Confirm / submit. |
+| Skip (`skip_assignment`) | Skip in work views; release and claim another assignment. |
+| Delete (`delete_annotation`) | Delete in annotation, including pending model objects. Migration deletes a missing object being added, or removes the last guide keypoint. In review this shortcut only removes a selected new addition; Reset item is a different action. |
+| Previous workflow (`select_previous_workflow`) | Shortcut-only cycling; the Workflow panel also permits direct workflow selection. Annotation only. |
+| Next workflow (`select_next_workflow`) | Shortcut-only cycling of enabled workflows in annotation. |
+| Previous object (`select_previous_object`) | Previous object in annotation and migration; migration also revisits earlier guides. Review has a Previous object button, but its keyboard context currently excludes this binding. |
+| Next object (`select_next_object`) | Next object in migration and shortcut-only annotation selection. The prelabel primary Next object uses Confirm / submit. Review's Next object button is not dispatched by this binding. |
+| Visible / Occluded (`toggle_keypoint_hidden`) | Visible and Occluded controls for the editing target or next placement; only where the task allows occlusion. |
+| Not present (`mark_keypoint_absent`) | Mark a named keypoint as not present in annotation; Not present in migration. Requires an eligible optional point. |
+| Add or cancel missing migration object (`add_missing_object`) | Shortcut-only start/cancel in migration's full-image phase. Blank-canvas creation and Discard object changes are related contextual interactions, not universal aliases. |
+| Previous prelabel (`select_previous_prelabel`) | Shortcut-only previous pending model object in ordinary annotation. |
+| Next prelabel (`select_next_prelabel`) | Shortcut-only next pending model object in ordinary annotation. |
+| Confirm selected model object (`accept_prelabel`) | Shortcut-only confirmation of the selected pending model object. The primary Confirm & next uses Confirm / submit; both can reach model-object confirmation under its eligibility guards. |
+| Delete selected model object (`discard_prelabel`) | Shortcut-only deletion of a pending model object; deleted model boxes still need Confirm / submit. Delete also reaches that operation for a pending selection, but is the broader Delete binding. |
+| Pan (`toggle_pan_mode`) | Pan, with a selected state, in eligible work views. Review enforces pan mode. |
+| Zoom in (`zoom_in`) | Shortcut-only zoom; wheel, touchpad and pinch remain separate gestures. |
+| Zoom out (`zoom_out`) | Shortcut-only zoom; no explicit zoom buttons. |
+| Fit (`fit_image`) | Fit; double-clicking the canvas also fits. |
+| Refocus (`refocus_object`) | Refocus for the active review/migration object or companion box. |
+| Tutorial (`open_tutorial`) | Tutorial / Open tutorial; toggles workflow instructions. |
+| Workflow panel (`toggle_workflow_panel`) | Workflow panel/drawer open and close controls. |
+| Inspector panel (`toggle_inspector_panel`) | Inspector panel/drawer open and close controls. |
+| Settings (`open_settings`) | Settings / Open settings. The configured shortcut is handled in work views; the global button is also available from Setup. |
+| Retry image load (`retry_image_load`) | Retry assignment loading when annotation has no current image. Other Retry buttons are separate actions. |
+| Approve directly (`accept_review_object`) | Shortcut-only direct review approval; distinct from the primary Approve button's Confirm / submit binding. |
+| Reject directly (`reject_review_object`) | Shortcut-only review rejection through the existing correction/rejection flow. Not an alias for Submit correction. |
+| Pan drag (modifier, not an action ID) | Hold the configured modifier and left-drag the canvas. Middle-drag is fixed. |
+
+Buttons without their own configurable action include settings Search, Reset,
+Restore all defaults, Save changes, Cancel and discard confirmation; work More,
+Overview, Reset item, Back to overview, Discard changes/corrections, migration
+exclusion and reason controls, and direct workflow/object selection. Global
+Setup/Home, Admin, Statistics and Sign out, and administration/import/export
+forms likewise have no configurable action in this catalog. Tab, Enter and
+Escape retain their contextual widget/modal behavior. Legacy tool-selection and
+offline action IDs are excluded from settings.
+
+This inventory describes current behavior, including existing review/migration
+shortcut differences; it does not promise uniform undo or deletion semantics.

@@ -634,7 +634,7 @@ fn keybindings_are_editable_and_persisted() {
     assert!(harness.query_by_label("Keyboard shortcuts").is_none());
     click_application_menu_item(&mut harness, "Settings");
     assert!(harness.query_by_label("Keyboard shortcuts").is_some());
-    assert!(harness.query_by_label("Refocus active object").is_some());
+    assert!(harness.query_by_label("Refocus").is_some());
     assert_eq!(
         harness
             .state()
@@ -646,7 +646,7 @@ fn keybindings_are_editable_and_persisted() {
             .bindings[&labello_domain::UserAction::RefocusObject],
         labello_domain::KeyChord::new("R")
     );
-    click_accesskit_button(&mut harness, "Record shortcut for Submit and next");
+    click_accesskit_button(&mut harness, "Record shortcut for Confirm / submit");
     assert_eq!(
         harness.state().work.shortcut_settings.recording,
         Some(labello_domain::UserAction::NextImage),
@@ -708,33 +708,14 @@ fn pan_drag_shortcut_is_listed_and_persists() {
         .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
         .expect("Pan drag recorder")
         .rect();
-    let left_drag_hint = harness
-        .query_all_by_value("+ left-click drag")
+    let hint = harness
+        .query_all_by_value("Hold the modifier and left-drag. Middle-drag also pans.")
         .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
-        .expect("implicit left-click drag hint")
-        .rect();
-    let middle_drag_hint = harness
-        .query_all_by_value("· middle-drag also pans")
-        .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
-        .expect("fixed middle-drag hint")
-        .rect();
-    let reset_control = harness
-        .query_all_by_role_and_label(egui::accesskit::Role::Button, "Reset Pan drag shortcut")
-        .next()
-        .expect("Pan drag reset")
-        .rect();
-    assert!(
-        pan_drag_control.top() < left_drag_hint.bottom()
-            && left_drag_hint.top() < pan_drag_control.bottom()
-            && pan_drag_name.top() < middle_drag_hint.bottom()
-            && middle_drag_hint.top() < pan_drag_name.bottom()
-            && pan_drag_name.right() <= middle_drag_hint.left()
-            && middle_drag_hint.right() < pan_drag_control.left()
-            && pan_drag_control.right() < reset_control.right(),
-        "Pan drag name and hint should lead the right-aligned controls: \
-         name={pan_drag_name:?} middle={middle_drag_hint:?} \
-         control={pan_drag_control:?} left={left_drag_hint:?} reset={reset_control:?}"
-    );
+        .expect("pan gesture hint").rect();
+    let reset = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Reset Pan drag shortcut").rect();
+    assert!(pan_drag_name.bottom() <= hint.top());
+    assert!(hint.bottom() <= pan_drag_control.top());
+    assert!(!pan_drag_control.intersects(reset));
 
     click_accesskit_button(&mut harness, "Record shortcut for Pan drag: Ctrl");
     assert!(harness.state().work.shortcut_settings.recording_pan_drag);
@@ -781,12 +762,12 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Toggle Pan mode")
+            .query_by_label_contains("Record shortcut for Pan:")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_none()
     );
 
@@ -794,12 +775,12 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Toggle Pan mode")
+            .query_by_label_contains("Record shortcut for Pan:")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_none()
     );
 
@@ -807,12 +788,12 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Undo annotation edit")
+            .query_by_label_contains("Record shortcut for Undo")
             .is_none()
     );
 
@@ -820,12 +801,12 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Undo annotation edit")
+            .query_by_label_contains("Record shortcut for Undo")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_none()
     );
 
@@ -845,17 +826,17 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Mark keypoint as not present")
+            .query_by_label_contains("Record shortcut for Not present")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Undo annotation edit")
+            .query_by_label_contains("Record shortcut for Undo")
             .is_none()
     );
 
@@ -872,12 +853,12 @@ fn shortcut_search_includes_assigned_keys_modifiers_and_status() {
     harness.step();
     assert!(
         harness
-            .query_by_label("Record shortcut for Fit image: Unassigned")
+            .query_by_label("Record shortcut for Fit: Unassigned")
             .is_some()
     );
     assert!(
         harness
-            .query_by_label_contains("Record shortcut for Submit and next")
+            .query_by_label_contains("Record shortcut for Confirm / submit")
             .is_none()
     );
 
@@ -943,13 +924,13 @@ fn shortcut_settings_cancel_discards_the_draft() {
     let baseline =
         harness.state().work.keybindings.bindings[&labello_domain::UserAction::NextImage].clone();
     click_application_menu_item(&mut harness, "Settings");
-    click_accesskit_button(&mut harness, "Record shortcut for Submit and next");
+    click_accesskit_button(&mut harness, "Record shortcut for Confirm / submit");
     harness.key_press(egui::Key::Escape);
     harness.step();
     assert!(harness.state().work.show_settings);
     assert_eq!(harness.state().work.shortcut_settings.recording, None);
     assert!(!harness.state().work.shortcut_settings.confirm_discard);
-    click_accesskit_button(&mut harness, "Record shortcut for Submit and next");
+    click_accesskit_button(&mut harness, "Record shortcut for Confirm / submit");
     harness.key_press(egui::Key::Enter);
     harness.step();
     click(&mut harness, "Cancel");
@@ -979,8 +960,8 @@ fn shortcut_settings_lock_editing_while_saving() {
     assert!(harness.query_by_label("Close window").is_none());
 
     for label in [
-        "Record shortcut for Submit and next",
-        "Reset Submit and next",
+        "Record shortcut for Confirm / submit",
+        "Reset Confirm / submit",
         "Restore all defaults",
         "Cancel",
     ] {
@@ -2099,8 +2080,8 @@ fn zoom_help_shows_configured_keys_and_gestures_without_workspace_widgets() {
         assert!(!button.accesskit_node().is_disabled());
         assert!(button.rect().bottom() < 700.0);
     }
-    assert!(harness.query_by_label("Zoom in with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
-    assert!(harness.query_by_label("Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch.").is_some());
+    assert!(harness.query_by_label("Increase canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom.").is_some());
+    assert!(harness.query_by_label("Decrease canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom.").is_some());
 }
 
 #[test]
@@ -2138,7 +2119,7 @@ fn mouse_binding_records_saves_and_dispatches_only_on_canvas() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api.clone());
     click_application_menu_item(&mut harness, "Settings");
-    click_accesskit_button(&mut harness, "Record shortcut for Submit and next");
+    click_accesskit_button(&mut harness, "Record shortcut for Confirm / submit");
     let position = egui::pos2(750.0, 150.0);
     for pressed in [true, false] {
         harness.event(egui::Event::PointerButton {
@@ -2217,7 +2198,7 @@ fn mouse_delete_obeys_annotation_loading_and_settings_guards() {
 fn compact_mouse_binding_rows_keep_labels_above_controls() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     harness.state_mut().open_shortcut_settings();
-    harness.state_mut().work.shortcut_settings.search = "delete annotation".to_string();
+    harness.state_mut().work.shortcut_settings.search = "delete".to_string();
     let mut chord = labello_domain::KeyChord::primary("MouseExtra2");
     chord.shift = true;
     chord.alt = true;
@@ -2227,10 +2208,10 @@ fn compact_mouse_binding_rows_keep_labels_above_controls() {
     for size in [egui::vec2(320.0, 568.0), egui::vec2(390.0, 844.0)] {
         harness.set_size(size);
         harness.run_steps(3);
-        let label = harness.query_all_by_value("Delete annotation")
+        let label = harness.query_all_by_value("Delete")
             .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
             .unwrap().rect();
-        let control = harness.query_all_by_label_contains("Record shortcut for Delete annotation")
+        let control = harness.query_all_by_label_contains("Record shortcut for Delete")
             .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
             .unwrap().rect();
         assert!(label.bottom() <= control.top(), "action label overlaps mouse binding");
@@ -2239,4 +2220,106 @@ fn compact_mouse_binding_rows_keep_labels_above_controls() {
         assert_visible_controls_clamped(&harness, size.x, size.y);
         assert_label_inside(&harness, "Keyboard shortcuts", size.x, size.y);
     }
+}
+
+#[test]
+fn shortcut_button_names_find_primary_action_and_previous_image() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().open_shortcut_settings();
+    for name in ["Next guide", "Confirm & next", "Submit correction", "Save missing object", "Save & next", "Confirm all guides & finish"] {
+        harness.state_mut().work.shortcut_settings.search = name.into();
+        harness.step();
+        assert!(harness.query_by_label_contains("Record shortcut for Confirm / submit:").is_some(), "{name}");
+    }
+    harness.state_mut().work.shortcut_settings.search = "Previous image".into();
+    harness.step();
+    assert!(harness.query_by_label_contains("Record shortcut for Previous image:").is_some());
+    assert!(harness.query_by_label_contains("Record shortcut for Previous object:").is_none());
+}
+
+#[test]
+fn shortcut_rows_keep_text_outside_controls_at_every_viewport() {
+    use egui::accesskit::Role;
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().open_shortcut_settings();
+    for (width, height) in viewport_sizes() {
+        harness.set_size(egui::vec2(width, height));
+        for query in ["Next guide", "pan drag", "Undo", "Previous image"] {
+            harness.state_mut().work.shortcut_settings.search = query.into();
+            if let Some(draft) = harness.state_mut().work.shortcut_settings.draft.as_mut() {
+                draft.bindings.insert(labello_domain::UserAction::NextImage, labello_domain::KeyChord {
+                    key: "ArrowRight".into(), ctrl: true, shift: true, alt: true, command: true,
+                });
+            }
+            harness.step();
+            harness.step();
+            for text in harness.query_all_by_role(Role::Label).filter(|node| {
+                let value = node.accesskit_node().value().unwrap_or_default();
+                ["Confirm / submit", "The primary work button:", "Pan", "Hold the modifier", "Use primary drag", "Undo", "Return to the last", "Previous image"]
+                    .iter().any(|prefix| value.starts_with(prefix))
+            }) {
+                let rect = text.rect();
+                // Compare sibling text against shortcut controls, including scrollable rows
+                // outside the viewport. Viewport clamping alone cannot detect this overlap.
+                for control in harness.query_all_by_role(Role::Button).filter(|node| {
+                    let label = node.accesskit_node().label().unwrap_or_default();
+                    label.starts_with("Record shortcut for ") || label.starts_with("Reset ")
+                }) {
+                    assert!(!rect.intersects(control.rect()), "{width}x{height} {query}: {text:?} overlaps {control:?}");
+                }
+            }
+            assert_visible_controls_clamped(&harness, width, height);
+        }
+    }
+}
+
+#[test]
+fn shortcut_conflicts_name_the_other_action_and_offer_a_filter() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().open_shortcut_settings();
+    let draft = harness.state_mut().work.shortcut_settings.draft.as_mut().unwrap();
+    draft.bindings.insert(labello_domain::UserAction::RedoEdit, draft.bindings[&labello_domain::UserAction::UndoEdit].clone());
+    harness.state_mut().work.shortcut_settings.search = "Redo".into();
+    harness.step();
+    assert!(harness.query_by_label("Conflicts with Undo in annotation / migration.").is_some());
+    click_accesskit_button(&mut harness, "Show conflicting shortcuts");
+    harness.step();
+    assert_eq!(harness.state().work.shortcut_settings.search, "conflict");
+    assert!(harness.query_by_label_contains("Record shortcut for Undo:").is_some());
+    assert!(harness.query_by_label_contains("Record shortcut for Redo:").is_some());
+    assert!(harness.query_by_label_contains("Record shortcut for Previous image:").is_none());
+}
+
+#[test]
+fn shortcut_last_action_and_footer_remain_reachable_by_scrolling() {
+    use egui::accesskit::Role;
+    for (width, height) in [(320.0, 320.0), (320.0, 568.0), (390.0, 844.0), (600.0, 800.0), (1440.0, 1000.0)] {
+        let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+        harness.set_size(egui::vec2(width, height));
+        harness.state_mut().open_shortcut_settings();
+        harness.step();
+        harness.step();
+        let last = "Record shortcut for Reject directly: N";
+        harness.get_by_role_and_label(Role::Button, last).scroll_to_me();
+        harness.run();
+        assert_control_inside(&harness, last, Role::Button, width, height);
+        for label in ["Restore all defaults", "Cancel", "Save changes"] {
+            harness.get_by_role_and_label(Role::Button, label).scroll_to_me();
+            harness.run();
+            assert_control_inside(&harness, label, Role::Button, width, height);
+        }
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn shortcut_search_accepts_the_actual_keypoint_button_name() {
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|cc| crate::inspector_presets::build(
+            crate::inspector_presets::InspectorPreset::MigrationObject, &cc.egui_ctx));
+    let name = harness.state().selected_task().unwrap().skeleton.as_ref().unwrap().keypoints[0].name.clone();
+    harness.state_mut().open_shortcut_settings();
+    harness.state_mut().work.shortcut_settings.search = format!("Mark {name} as not present");
+    harness.step();
+    assert!(harness.query_by_label_contains("Record shortcut for Not present:").is_some());
 }

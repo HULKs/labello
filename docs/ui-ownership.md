@@ -432,3 +432,10 @@ assignment completion still requires explicit confirmation. Existing objects
 retain selection priority. Completed drafts remain editable before
 explicit confirmation, with placed-point visibility controls for both guided and
 missing-object drafts. These controls preserve migration dirty-state ownership.
+
+Shortcut display names, button-name aliases, category ordering and conflict-context
+copy live in `panels.rs`; the settings renderer in `panels/overlays.rs` uses that
+catalog for display and search. This presentation catalog does not change domain
+action IDs, conflict eligibility, dispatch or persisted bindings. Row text receives
+bounded width before controls, with stacked controls below 600 content points.
+The existing shortcut draft/save/reducer owner remains authoritative for settings.

@@ -455,6 +455,7 @@ impl LabelloApp {
         let mut save = false;
         let mut cancel = false;
         let mut reset_all = false;
+        let mut show_conflicts = false;
         let response = theme::modal(ctx, egui::Id::new("settings-modal")).show(ctx, |ui| {
             ui.set_width(width);
             ui.set_max_height(max_height);
@@ -499,16 +500,20 @@ impl LabelloApp {
                     .to_ascii_lowercase();
                 let compact_footer = ui.available_width() < 420.0;
                 let scroll_height = if compact_footer {
-                    (screen.height() - 400.0).clamp(120.0, 520.0)
+                    (screen.height() - 360.0).clamp(64.0, 520.0)
                 } else if screen.height() < 700.0 {
                     (screen.height() - 380.0).clamp(120.0, 520.0)
                 } else {
                     (screen.height() - 300.0).clamp(180.0, 520.0)
                 };
+                let scroll_height = (scroll_height
+                    - if conflicts.is_empty() { 0.0 } else { 120.0 }
+                    - if self.work.shortcut_settings.error.is_some() { 100.0 } else { 0.0 })
+                    .max(64.0);
                 let mut visible_action_count = 0;
                 let mut action_list = |ui: &mut egui::Ui| {
                     let mut current_category = "";
-                    for action in labello_domain::UserAction::ACTIVE {
+                    for action in ordered_shortcut_actions() {
                         if !self.auth.prelabel_available
                             && matches!(
                                 action,
@@ -539,6 +544,12 @@ impl LabelloApp {
                             .map(|draft| draft.pan_drag_modifier);
                         let recording = self.work.shortcut_settings.recording == Some(action);
                         let conflict = conflicting_actions.contains(&action);
+                        let named_buttons = if action == labello_domain::UserAction::MarkKeypointAbsent {
+                            self.selected_task().and_then(|task| task.skeleton.as_ref())
+                                .map(|spec| spec.keypoints.iter().map(|point| format!("Mark {} as not present", point.name))
+                                    .collect::<Vec<_>>().join(" "))
+                                .unwrap_or_default()
+                        } else { String::new() };
                         if !shortcut_matches_query(
                             ctx,
                             action,
@@ -546,6 +557,7 @@ impl LabelloApp {
                             pan_drag_modifier,
                             conflict,
                             &query,
+                            &named_buttons,
                         ) {
                             continue;
                         }
@@ -558,156 +570,97 @@ impl LabelloApp {
                             ui.heading(RichText::new(category).size(16.0));
                         }
                         theme::card_frame().show(ui, |ui| {
-                            let name_and_hint = |ui: &mut egui::Ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(RichText::new(label).strong());
-                                    ui.small(RichText::new(description).color(theme::MUTED));
-                                });
-                            };
-                            let mut controls = |ui: &mut egui::Ui| {
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        let reset_response = ui.add_enabled(
-                                            !self.loading.keybindings,
-                                            egui::Button::new("Reset")
-                                                .min_size(egui::vec2(64.0, 44.0)),
-                                        );
-                                        reset_response.widget_info(|| {
-                                            egui::WidgetInfo::labeled(
-                                                egui::WidgetType::Button,
-                                                !self.loading.keybindings,
-                                                format!("Reset {label}"),
-                                            )
-                                        });
-                                        if reset_response.clicked() {
-                                            reset_binding = Some(action);
-                                        }
+                            ui.set_min_width(ui.available_width());
+                            ui.push_id(action, |ui| {
+                                let mut controls = |ui: &mut egui::Ui| {
+                                    ui.horizontal_wrapped(|ui| {
                                         let text = if recording {
                                             "Press shortcut…".to_string()
                                         } else {
-                                            chord
-                                                .as_ref()
-                                                .map(|chord| format_chord(ctx, chord))
+                                            chord.as_ref().map(|chord| format_chord(ctx, chord))
                                                 .unwrap_or_else(|| "Unassigned".to_string())
                                         };
-                                        let record_response = ui
-                                            .add_enabled(
-                                                !self.loading.keybindings,
-                                                egui::Button::new(&text)
-                                                    .wrap()
-                                                    .selected(recording)
-                                                    .min_size(egui::vec2(140.0, 44.0)),
-                                            )
-                                            .on_hover_text(format!("Record shortcut for {label}"));
-                                        record_response.widget_info(|| {
-                                            egui::WidgetInfo::selected(
-                                                egui::WidgetType::Button,
-                                                !self.loading.keybindings,
-                                                recording,
-                                                format!("Record shortcut for {label}: {text}"),
-                                            )
-                                        });
-                                        if record_response.clicked() {
-                                            record = Some(action);
-                                        }
-                                    },
-                                );
-                            };
-                            if compact_footer {
-                                name_and_hint(ui);
-                                ui.horizontal(|ui| controls(ui));
-                            } else {
-                                ui.horizontal_wrapped(|ui| {
-                                    name_and_hint(ui);
-                                    controls(ui);
-                                });
-                            }
-                            if let Some(pan_drag_modifier) = pan_drag_modifier {
-                                let name_and_hint = |ui: &mut egui::Ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label("Pan drag");
-                                        ui.small(
-                                            RichText::new("· middle-drag also pans")
-                                                .color(theme::MUTED),
-                                        );
+                                        let response = ui.add_enabled(
+                                            !self.loading.keybindings,
+                                            egui::Button::new(&text).selected(recording)
+                                                .wrap().min_size(egui::vec2(140.0, 44.0)),
+                                        ).on_hover_text(format!("Record shortcut for {label}. Escape cancels recording."));
+                                        response.widget_info(|| egui::WidgetInfo::selected(
+                                            egui::WidgetType::Button, !self.loading.keybindings, recording,
+                                            format!("Record shortcut for {label}: {text}"),
+                                        ));
+                                        if response.clicked() { record = Some(action); }
+                                        let response = ui.add_enabled(!self.loading.keybindings,
+                                            egui::Button::new("Reset").min_size(egui::vec2(64.0, 44.0)));
+                                        response.widget_info(|| egui::WidgetInfo::labeled(
+                                            egui::WidgetType::Button, !self.loading.keybindings, format!("Reset {label}")));
+                                        if response.clicked() { reset_binding = Some(action); }
                                     });
                                 };
-                                let mut controls = |ui: &mut egui::Ui| {
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            let reset_response = ui.add_enabled(
-                                                !self.loading.keybindings,
-                                                egui::Button::new("Reset")
-                                                    .min_size(egui::vec2(64.0, 44.0)),
-                                            );
-                                            reset_response.widget_info(|| {
-                                                egui::WidgetInfo::labeled(
-                                                    egui::WidgetType::Button,
-                                                    !self.loading.keybindings,
-                                                    "Reset Pan drag shortcut",
-                                                )
-                                            });
-                                            if reset_response.clicked() {
-                                                reset_pan_drag = true;
-                                            }
-                                            ui.label(
-                                                RichText::new("+ left-click drag")
-                                                    .color(theme::MUTED),
-                                            );
-                                            let recording =
-                                                self.work.shortcut_settings.recording_pan_drag;
-                                            let text = if recording {
-                                                if compact_footer {
-                                                    "Press…".to_string()
-                                                } else {
-                                                    "Press shortcut…".to_string()
-                                                }
-                                            } else {
-                                                pan_drag_modifier.to_string()
-                                            };
-                                            let record_response = ui
-                                                .add_enabled(
-                                                    !self.loading.keybindings,
-                                                    egui::Button::new(&text)
-                                                        .selected(recording)
-                                                        .min_size(egui::vec2(
-                                                            if compact_footer { 64.0 } else { 140.0 },
-                                                            44.0,
-                                                        )),
-                                                )
-                                                .on_hover_text("Record shortcut for Pan drag");
-                                            record_response.widget_info(|| {
-                                                egui::WidgetInfo::selected(
-                                                    egui::WidgetType::Button,
-                                                    !self.loading.keybindings,
-                                                    recording,
-                                                    format!(
-                                                        "Record shortcut for Pan drag: {text}"
-                                                    ),
-                                                )
-                                            });
-                                            if record_response.clicked() {
-                                                record_pan_drag = true;
-                                            }
-                                        },
-                                    );
+                                let name_and_description = |ui: &mut egui::Ui| {
+                                    ui.label(RichText::new(label).strong());
+                                    ui.add(egui::Label::new(RichText::new(description).small().color(theme::MUTED)).wrap());
                                 };
-                                if compact_footer {
-                                    name_and_hint(ui);
-                                    ui.horizontal(|ui| controls(ui));
-                                } else {
-                                    ui.horizontal_wrapped(|ui| {
-                                        name_and_hint(ui);
+                                // Allocate the text column before laying out controls. A nested vertical
+                                // UI in horizontal_wrapped otherwise takes the entire row width.
+                                if ui.available_width() >= 600.0 {
+                                    let text_width = ui.available_width() - 256.0 - ui.spacing().item_spacing.x;
+                                    ui.horizontal_top(|ui| {
+                                        ui.allocate_ui_with_layout(egui::vec2(text_width, 0.0),
+                                            egui::Layout::top_down(egui::Align::Min), |ui| {
+                                                ui.set_width(text_width);
+                                                name_and_description(ui);
+                                            });
                                         controls(ui);
                                     });
+                                } else {
+                                    name_and_description(ui);
+                                    ui.add_space(6.0);
+                                    controls(ui);
+                                }
+                                if recording {
+                                    ui.small("Press a key, right-click, or mouse button 4/5. Escape cancels recording.");
+                                }
+                                let names = action_button_names(action);
+                                if !names.is_empty() {
+                                    egui::CollapsingHeader::new("Button names and contexts")
+                                        .id_salt("button-names")
+                                        .show(ui, |ui| { ui.add(egui::Label::new(names).wrap()); });
+                                }
+                            });
+                            if let Some(pan_drag_modifier) = pan_drag_modifier {
+                                ui.separator();
+                                ui.label(RichText::new("Pan drag").strong());
+                                ui.small("Hold the modifier and left-drag. Middle-drag also pans.");
+                                ui.horizontal_wrapped(|ui| {
+                                    let recording = self.work.shortcut_settings.recording_pan_drag;
+                                    let text = if recording { "Press modifier…".to_string() } else { pan_drag_modifier.to_string() };
+                                    let response = ui.add_enabled(!self.loading.keybindings,
+                                        egui::Button::new(&text).selected(recording).wrap().min_size(egui::vec2(140.0, 44.0)));
+                                    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button,
+                                        !self.loading.keybindings, recording, format!("Record shortcut for Pan drag: {text}")));
+                                    if response.clicked() { record_pan_drag = true; }
+                                    let response = ui.add_enabled(!self.loading.keybindings,
+                                        egui::Button::new("Reset").min_size(egui::vec2(64.0, 44.0)));
+                                    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button,
+                                        !self.loading.keybindings, "Reset Pan drag shortcut"));
+                                    if response.clicked() { reset_pan_drag = true; }
+                                });
+                                if self.work.shortcut_settings.recording_pan_drag {
+                                    ui.small("Press a modifier. Escape cancels recording.");
                                 }
                             }
                             if conflict {
-                                ui.label(
-                                    RichText::new("Conflicts in this context").color(theme::DANGER),
-                                );
+                                let peers = conflicts.iter()
+                                    .filter(|(_, actions)| actions.contains(&action))
+                                    .flat_map(|(_, actions)| actions.iter().copied())
+                                    .filter(|other| *other != action && action.can_conflict_with(*other))
+                                    .collect::<std::collections::BTreeSet<_>>();
+                                for other in peers {
+                                    ui.add(egui::Label::new(RichText::new(format!(
+                                        "Conflicts with {} in {}.", action_label(&other), shortcut_conflict_context(action, other)
+                                    )).color(theme::DANGER)).wrap());
+                                }
                             }
                         });
                         ui.add_space(4.0);
@@ -732,6 +685,9 @@ impl LabelloApp {
                             conflicts.len()
                         ),
                     );
+                }
+                if !conflicts.is_empty() && query != "conflict" {
+                    show_conflicts = ui.button("Show conflicting shortcuts").clicked();
                 }
                 let dirty =
                     self.work.shortcut_settings.draft != self.work.shortcut_settings.baseline;
@@ -793,18 +749,17 @@ impl LabelloApp {
                     }
                 });
             };
-            if short {
-                egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
-                    .id_salt("settings-modal-scroll")
-                    .max_height(max_height)
-                    .show(ui, |ui| contents(ui));
-            } else {
-                contents(ui);
-            }
+            egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+                .id_salt("settings-modal-scroll")
+                .max_height(max_height)
+                .show(ui, |ui| contents(ui));
         });
         response
             .response
             .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Settings"));
+        if show_conflicts {
+            self.work.shortcut_settings.search = "conflict".to_string();
+        }
         if let Some(action) = record {
             self.work.shortcut_settings.recording = Some(action);
             self.work.shortcut_settings.recording_pan_drag = false;

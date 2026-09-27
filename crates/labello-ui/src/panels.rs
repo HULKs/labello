@@ -214,13 +214,13 @@ impl LabelloApp {
 fn action_label(action: &labello_domain::UserAction) -> &'static str {
     use labello_domain::UserAction;
     match action {
-        UserAction::NextImage => "Submit and next",
-        UserAction::UndoEdit => "Undo annotation edit",
-        UserAction::RedoEdit => "Redo annotation edit",
-        UserAction::SkipAssignment => "Skip assignment",
-        UserAction::ToggleWorkflowPanel => "Toggle Workflow panel",
-        UserAction::ToggleInspectorPanel => "Toggle Inspector panel",
-        UserAction::OpenSettings => "Open shortcut settings",
+        UserAction::NextImage => "Confirm / submit",
+        UserAction::UndoEdit => "Undo",
+        UserAction::RedoEdit => "Redo",
+        UserAction::SkipAssignment => "Skip",
+        UserAction::ToggleWorkflowPanel => "Workflow panel",
+        UserAction::ToggleInspectorPanel => "Inspector panel",
+        UserAction::OpenSettings => "Settings",
         UserAction::SelectPreviousWorkflow => "Previous workflow",
         UserAction::SelectNextWorkflow => "Next workflow",
         UserAction::SelectPreviousObject => "Previous object",
@@ -229,24 +229,86 @@ fn action_label(action: &labello_domain::UserAction) -> &'static str {
         UserAction::SelectNextPrelabel => "Next prelabel",
         UserAction::AcceptPrelabel => "Confirm selected model object",
         UserAction::DiscardPrelabel => "Delete selected model object",
-        UserAction::ToggleKeypointHidden => "Toggle keypoint occlusion",
-        UserAction::MarkKeypointAbsent => "Mark keypoint as not present",
+        UserAction::ToggleKeypointHidden => "Visible / Occluded",
+        UserAction::MarkKeypointAbsent => "Not present",
         UserAction::AddMissingObject => "Add or cancel missing migration object",
         UserAction::RetryImageLoad => "Retry image load",
-        UserAction::TogglePanMode => "Toggle Pan mode",
+        UserAction::TogglePanMode => "Pan",
         UserAction::ZoomIn => "Zoom in",
         UserAction::ZoomOut => "Zoom out",
-        UserAction::FitImage => "Fit image",
-        UserAction::RefocusObject => "Refocus active object",
-        UserAction::PreviousImage => "Previous assignment",
-        UserAction::SaveAnnotations => "Save annotations",
-        UserAction::DeleteAnnotation => "Delete annotation",
+        UserAction::FitImage => "Fit",
+        UserAction::RefocusObject => "Refocus",
+        UserAction::PreviousImage => "Previous image",
+        UserAction::SaveAnnotations => "Save",
+        UserAction::DeleteAnnotation => "Delete",
         UserAction::SelectBoundingBoxTool => "Bounding-box tool",
         UserAction::SelectKeypointTool => "Keypoint tool",
-        UserAction::AcceptReviewObject => "Approve review object",
-        UserAction::RejectReviewObject => "Reject review object",
-        UserAction::OpenTutorial => "Open tutorial",
+        UserAction::AcceptReviewObject => "Approve directly",
+        UserAction::RejectReviewObject => "Reject directly",
+        UserAction::OpenTutorial => "Tutorial",
         UserAction::ToggleOfflineMode => "Offline mode",
+    }
+}
+
+/// Context-dependent button labels for the same configured action. Persisted IDs stay unchanged.
+fn action_button_names(action: labello_domain::UserAction) -> &'static str {
+    use labello_domain::UserAction;
+    match action {
+        UserAction::NextImage => {
+            "Annotation: Submit & next, Confirm & next, Next object, Next guide. Review: Approve, Submit correction. Migration: Save skeleton & advance (Save & next), Save missing object (Save object), Save object changes (Save changes), Keep current & advance (Keep & next), Confirm all guides & finish, Confirm no guides & finish (Confirm & finish)."
+        }
+        UserAction::UndoEdit => "Undo; Undo last keypoint (migration).",
+        UserAction::ToggleKeypointHidden => {
+            "Visible; Occluded. Toggles the current edit or next placement mode."
+        }
+        UserAction::MarkKeypointAbsent => {
+            "Mark keypoint as not present; Mark <keypoint name> as not present; Not present."
+        }
+        UserAction::OpenSettings => "Settings; Open settings; Open shortcut settings.",
+        UserAction::ToggleWorkflowPanel => {
+            "Workflow; Open Workflow; Close Workflow; Toggle Workflow panel."
+        }
+        UserAction::ToggleInspectorPanel => {
+            "Inspector; Open Inspector; Close Inspector; Toggle Inspector panel."
+        }
+        _ => "",
+    }
+}
+
+const SHORTCUT_CATEGORIES: [&str; 6] = [
+    "Assignment",
+    "Annotation",
+    "Prelabels",
+    "Canvas",
+    "Workspace",
+    "Review",
+];
+
+fn ordered_shortcut_actions() -> Vec<labello_domain::UserAction> {
+    let mut actions = labello_domain::UserAction::ACTIVE.to_vec();
+    actions.sort_by_key(|action| {
+        SHORTCUT_CATEGORIES
+            .iter()
+            .position(|category| *category == action_category(*action))
+    });
+    actions
+}
+
+fn shortcut_conflict_context(
+    first: labello_domain::UserAction,
+    second: labello_domain::UserAction,
+) -> &'static str {
+    use labello_domain::ActionContext;
+    match (first.context(), second.context()) {
+        (ActionContext::Review, _) | (_, ActionContext::Review) => "review",
+        (ActionContext::AnnotateNoImage, _) | (_, ActionContext::AnnotateNoImage) => {
+            "annotation without an image"
+        }
+        (ActionContext::AnnotateImage | ActionContext::AnnotateWorkspace, _)
+        | (_, ActionContext::AnnotateImage | ActionContext::AnnotateWorkspace) => {
+            "annotation / migration"
+        }
+        _ => "annotation / review workspaces",
     }
 }
 
@@ -292,28 +354,40 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
     use labello_domain::UserAction;
     match action {
         UserAction::NextImage => {
-            "Confirm the current review item or submit the overview; in annotation, save, complete, and claim another image."
+            "The primary work button: confirm the current object or submit the image. Its label and effect depend on the workflow; see button names below."
         }
-        UserAction::UndoEdit => "Reverse the last annotation edit.",
-        UserAction::RedoEdit => "Restore the last undone edit.",
-        UserAction::SaveAnnotations => "Save without leaving the assignment.",
+        UserAction::UndoEdit => {
+            "Undo the last annotation edit. In migration, Undo last keypoint removes the last draft point. Review correction currently uses fixed Ctrl/Cmd+Z instead."
+        }
+        UserAction::RedoEdit => {
+            "Redo the last undone annotation edit. Not available in migration or review."
+        }
+        UserAction::SaveAnnotations => {
+            "Save annotations without leaving the image. Migration saves use Confirm / submit instead."
+        }
         UserAction::SkipAssignment => "Release this image and claim another.",
-        UserAction::DeleteAnnotation => "Delete the selected object.",
+        UserAction::DeleteAnnotation => {
+            "Delete the selected annotation or pending model object. In migration, delete a missing object being added or remove the last guide keypoint. In review, only a selected new addition can be removed."
+        }
         UserAction::OpenTutorial => "Show or hide workflow instructions.",
         UserAction::ToggleWorkflowPanel => "Open or close workflow navigation.",
         UserAction::ToggleInspectorPanel => "Open or close object controls.",
         UserAction::OpenSettings => "Open this keyboard shortcut editor.",
         UserAction::SelectPreviousWorkflow => "Cycle to the previous enabled workflow.",
         UserAction::SelectNextWorkflow => "Cycle to the next enabled workflow.",
-        UserAction::SelectPreviousObject => "Select the previous annotation.",
-        UserAction::SelectNextObject => "Select the next annotation.",
+        UserAction::SelectPreviousObject => {
+            "Select the previous annotation or migration object. In review, use the Previous object button; this shortcut is unavailable there."
+        }
+        UserAction::SelectNextObject => {
+            "Select the next annotation or migration object. This shortcut is unavailable in review."
+        }
         UserAction::SelectPreviousPrelabel => "Highlight the previous suggestion.",
         UserAction::SelectNextPrelabel => "Highlight the next suggestion.",
         UserAction::AcceptPrelabel => {
             "Confirm the selected model object with its current edits, then focus the next one."
         }
         UserAction::DiscardPrelabel => {
-            "Delete the selected pending model object and focus the next one."
+            "Delete the selected pending model object. Model boxes stay selected until Confirm / submit confirms the deletion."
         }
         UserAction::ToggleKeypointHidden => {
             "Toggle occlusion for the keypoint being edited, or for the next placement."
@@ -325,17 +399,21 @@ fn action_description(action: labello_domain::UserAction) -> &'static str {
         UserAction::RetryImageLoad => "Try to claim and load an image again.",
         UserAction::TogglePanMode => "Use primary drag to move a zoomed image.",
         UserAction::ZoomIn => {
-            "Zoom in with the mouse wheel, two-finger touchpad scrolling, or pinch."
+            "Increase canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom."
         }
         UserAction::ZoomOut => {
-            "Zoom out with the mouse wheel, two-finger touchpad scrolling, or pinch."
+            "Decrease canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom."
         }
         UserAction::FitImage => "Fit and center the image.",
         UserAction::RefocusObject => {
             "Center and zoom to the active review object, migration object, or companion box."
         }
-        UserAction::AcceptReviewObject => "Approve the current review object.",
-        UserAction::RejectReviewObject => "Reject the current review object.",
+        UserAction::AcceptReviewObject => {
+            "Shortcut-only direct approval of the current review target. The visible Approve / Submit correction button uses Confirm / submit and confirms the current item or submits the overview."
+        }
+        UserAction::RejectReviewObject => {
+            "Shortcut-only rejection of the current review target through the existing correction/rejection flow. It is not the primary Submit correction button."
+        }
         UserAction::PreviousImage => "Return to the last skipped or submitted assignment.",
         UserAction::SelectBoundingBoxTool
         | UserAction::SelectKeypointTool
@@ -442,6 +520,7 @@ fn shortcut_matches_query(
     pan_drag_modifier: Option<labello_domain::PanDragModifier>,
     conflict: bool,
     query: &str,
+    named_buttons: &str,
 ) -> bool {
     let query = query.trim().to_ascii_lowercase();
     if query.is_empty() {
@@ -451,7 +530,9 @@ fn shortcut_matches_query(
     let label = action_label(&action);
     let category = action_category(action);
     let description = action_description(action);
-    let mut searchable = format!("{label} {category} {description}").to_ascii_lowercase();
+    let names = action_button_names(action);
+    let mut searchable =
+        format!("{label} {category} {description} {names} {named_buttons}").to_ascii_lowercase();
     if let Some(chord) = chord {
         let normalized = chord.normalized();
         searchable.push(' ');
@@ -578,4 +659,33 @@ pub(crate) fn placed_keypoint_visibility(
         });
     }
     change
+}
+
+#[cfg(test)]
+mod shortcut_catalog_tests {
+    use super::*;
+
+    #[test]
+    fn shortcut_categories_are_contiguous_and_preserve_all_actions() {
+        let actions = ordered_shortcut_actions();
+        let mut groups = Vec::new();
+        for action in &actions {
+            let category = action_category(*action);
+            if groups.last() != Some(&category) {
+                assert!(!groups.contains(&category), "repeated category {category}");
+                groups.push(category);
+            }
+        }
+        assert_eq!(groups, SHORTCUT_CATEGORIES);
+        assert_eq!(actions.len(), labello_domain::UserAction::ACTIVE.len());
+        for action in labello_domain::UserAction::ACTIVE {
+            assert_eq!(
+                actions
+                    .iter()
+                    .filter(|candidate| **candidate == action)
+                    .count(),
+                1
+            );
+        }
+    }
 }
