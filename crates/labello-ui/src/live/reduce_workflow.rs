@@ -275,6 +275,9 @@ impl LabelloApp {
                     self.loading.saving = false;
                     match *result {
                         Ok(state) => {
+                            if completed && matches!(self.work.pending_transition, Some(crate::app::PendingTransition::NextAssignment)) {
+                                self.request_image_score(ctx, state.current_sequence);
+                            }
                             if self.work.edit_generation == edit_generation {
                                 if (!self.work.prelabel_review.changed || completed)
                                     && let Some(assignment) = self.work.assignment.as_ref() {
@@ -399,6 +402,9 @@ impl LabelloApp {
                     self.loading.saving = false;
                     match *result {
                         Ok(state) => {
+                            if phase == crate::app::ReviewPhase::FullImage {
+                                self.request_image_score(ctx, state.current_sequence);
+                            }
                             let completed_assignment = self.work.assignment.clone();
                             self.runtime.error = None;
                             self.apply_state(state);
@@ -463,7 +469,8 @@ impl LabelloApp {
                     self.work.active_operation_id = None;
                     self.loading.saving = false;
                     match result {
-                        Ok(()) => {
+                        Ok(sequence) => {
+                            self.request_image_score(ctx, sequence);
                             if let Some(assignment) = self.work.assignment.clone() {
                                 self.clear_current_work_draft(&assignment);
                                 let mut assignment = assignment;

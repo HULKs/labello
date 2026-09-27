@@ -8,6 +8,7 @@ impl LabelloApp {
             UiMessage::Inspected { request, result } => self.accept_inspection(ctx, request, result),
             UiMessage::PresenceLoaded { request, result } => self.accept_presence(request, result),
             UiMessage::PresenceVisibilityRegained => self.request_presence(),
+            UiMessage::ImageScoreLoaded { request, result } => self.accept_image_score(ctx, request, result),
                 UiMessage::StatsLoaded { request, result } => {
                     let dataset_id = request.dataset_id?;
                     if !self.datasets.active_stats_request.as_ref().is_some_and(
@@ -26,6 +27,7 @@ impl LabelloApp {
                             self.datasets.stats = stats;
                             self.datasets.last_stats_completion = Some(Instant::now());
                             self.datasets.stats_error = None;
+                            self.observe_scoring_focus(ctx);
                         }
                         Err(error) => self.datasets.stats_error = Some(error.to_string()),
                     }
@@ -83,6 +85,7 @@ impl LabelloApp {
                             self.work.availability.resolved = true;
                             self.work.availability.checked_at = Some(checked_at);
                             self.work.availability.error = None;
+                            self.refresh_blocked_focus();
                             if self.work.availability.load_after_resolution {
                                 self.request_next_image();
                             }

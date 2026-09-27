@@ -371,7 +371,7 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         operation_id: u64,
         assignment_id: AssignmentId,
-        result: Result<(), UiRequestError>,
+        result: Result<u64, UiRequestError>,
     },
     PersistenceFinished(Box<crate::persistence::PersistenceCompletion>),
     IngestJobLoaded {
@@ -386,6 +386,10 @@ pub(crate) enum UiMessage {
     StatsLoaded {
         request: RequestIdentity,
         result: Result<DatasetStats, UiRequestError>,
+    },
+    ImageScoreLoaded {
+        request: RequestIdentity,
+        result: Result<labello_client::ImageScore, UiRequestError>,
     },
     AssignmentAvailabilityLoaded {
         request: RequestIdentity,
@@ -600,6 +604,13 @@ pub(crate) enum UiCommand {
         request: RequestIdentity,
         dataset_id: DatasetId,
     },
+    ImageScore {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+        image_id: ImageId,
+        after_sequence: u64,
+        through_sequence: u64,
+    },
     AssignmentAvailability {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -747,6 +758,7 @@ impl UiCommand {
             | Self::PollIngest { request, .. }
             | Self::Presence { request }
             | Self::Stats { request, .. }
+            | Self::ImageScore { request, .. }
             | Self::AssignmentAvailability { request, .. }
             | Self::SaveKeybindings { request, .. }
             | Self::ClaimAssignment { request, .. }
@@ -971,6 +983,10 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
+            Self::ImageScoreLoaded { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
             Self::StatsLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -1038,6 +1054,7 @@ impl UiMessage {
             | Self::IngestJobLoaded { request, .. }
             | Self::PresenceLoaded { request, .. }
             | Self::StatsLoaded { request, .. }
+            | Self::ImageScoreLoaded { request, .. }
             | Self::AssignmentAvailabilityLoaded { request, .. }
             | Self::KeybindingsSaved { request, .. }
             | Self::MigrationFinished { request, .. }

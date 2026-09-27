@@ -451,7 +451,7 @@ impl LabelloApp {
                         correction,
                     )
                     .await
-                    .map(|_| ())
+                    .map(|state| state.current_sequence)
                     .map_err(UiRequestError::from);
                 UiMessage::CorrectionFinished {
                     request,

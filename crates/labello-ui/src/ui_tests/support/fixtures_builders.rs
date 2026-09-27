@@ -373,6 +373,7 @@ pub(super) fn stats(total_images: usize) -> DatasetStats {
     DatasetStats {
         scoring_version: None,
         scoring_focus: None,
+        review_scoring_focus: None,
         total_images,
         completed_tasks: 1,
         pending_tasks: 1,

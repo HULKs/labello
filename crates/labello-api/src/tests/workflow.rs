@@ -778,9 +778,9 @@ async fn reviewer_bbox_correction_resubmits_idempotent_and_cancels_competitors()
         for day in &person.history { total.add(&day.score); }
     }
     assert_eq!(total.labels, 1);
-    assert_eq!(total.labeling, 2700); // Manual box plus the first focus window.
-    assert_eq!(total.reviewing, 600);
-    assert_eq!(total.deductions, 1000);
+    assert_eq!(total.labeling, 3200); // Manual box plus the first focus window.
+    assert_eq!(total.reviewing, 2400);
+    assert_eq!(total.deductions, 1600);
     assert_eq!(total.corrections, 0);
     // Rebuilding every repository/cache after deployment must preserve exact credit.
     let restarted = router(ApiState::new(temp.path()));
@@ -792,9 +792,9 @@ async fn reviewer_bbox_correction_resubmits_idempotent_and_cancels_competitors()
         for day in &person.history { after_approval.add(&day.score); }
     }
     assert_eq!(after_approval.labels, 1);
-    assert_eq!(after_approval.reviewing, 600);
-    assert_eq!(after_approval.deductions, 1000);
-    assert_eq!(after_approval.corrections, 400);
+    assert_eq!(after_approval.reviewing, 2400);
+    assert_eq!(after_approval.deductions, 1600);
+    assert_eq!(after_approval.corrections, 1600);
 }
 
 #[tokio::test]

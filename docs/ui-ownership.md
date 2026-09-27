@@ -52,6 +52,7 @@ dataset, import, and pending ownership before new requests start.
 | `workspace_canvas.rs` | Adapter from app state to reusable canvas |
 | `statistics.rs`, `statistics/leaderboard.rs` | Statistics modal, periods/ranks, podium, history and activity |
 | `statistics/streak.rs` | Daily flames and reduced-motion-aware goal animation from domain streak projections |
+| `score_feedback.rs` | Assignment event-window ownership, confirmed image-score receipts, and transient right-edge feedback |
 | `avatar.rs`, `statistics/avatar.rs` | Shared bounded public-avatar cache and contributor rows |
 | `dataset_inspector` | Gallery, filters, preview scheduling, read-only canvas, return-to-review draft |
 
@@ -81,7 +82,16 @@ creation time, workflow, and annotation type from persisted state before compari
 drafts and rebasing versions. This also applies to Undo/Redo and browser recovery,
 so a snapshot taken before prelabel acceptance cannot replace server provenance.
 Routine saves use periodic statistics refresh; completion
-requests an immediate refresh.
+requests an immediate refresh. Score feedback records the first loaded sequence
+for an assignment, retaining it through autosaves and intermediate reviews. A
+successful completion requests the server's current-user image receipt through
+the returned sequence. The popup waits for both that receipt and the next image;
+request/epoch ownership rejects obsolete responses. Feedback is ephemeral,
+click-through, reduced-motion-aware, and never blocks saving or navigation.
+The same renderer announces new focus windows, choosing annotation or reviewer
+focus from dataset statistics according to the current workspace. Each window
+announces once; a current-stage imbalance block hides the old bonus and coalesces
+an immediate statistics refresh. The UI never selects the next focus category.
 
 ## Browser input
 

@@ -10,6 +10,7 @@ use crate::{
 
 mod avatar;
 mod leaderboard;
+pub(crate) mod score;
 mod streak;
 pub(crate) use leaderboard::LeaderboardState;
 pub use streak::set_reduced_motion;
@@ -529,7 +530,12 @@ fn stats_name_cell(ui: &mut egui::Ui, value: &str, width: f32, header: bool) {
     );
 }
 
-fn stats_number_cell(ui: &mut egui::Ui, value: impl ToString, width: f32, header: bool) {
+fn stats_number_cell(
+    ui: &mut egui::Ui,
+    value: impl ToString,
+    width: f32,
+    header: bool,
+) -> egui::Response {
     let text = if header {
         RichText::new(value.to_string())
             .strong()
@@ -542,7 +548,7 @@ fn stats_number_cell(ui: &mut egui::Ui, value: impl ToString, width: f32, header
     ui.add_sized(
         [width, 44.0],
         egui::Label::new(text).truncate().halign(egui::Align::Max),
-    );
+    )
 }
 
 fn stats_throughput_chart(ui: &mut egui::Ui, points: &[labello_domain::ThroughputPoint]) {

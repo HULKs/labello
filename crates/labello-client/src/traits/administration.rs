@@ -5,6 +5,13 @@ pub trait StatsApi {
         dataset_id: &'a DatasetId,
     ) -> ApiFuture<'a, crate::CurrentUserActivity>;
     fn dataset_stats<'a>(&'a self, dataset_id: &'a DatasetId) -> ApiFuture<'a, DatasetStats>;
+    fn get_image_score<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        after_sequence: u64,
+        through_sequence: u64,
+    ) -> ApiFuture<'a, crate::ImageScore>;
 }
 
 pub trait KeybindingApi {

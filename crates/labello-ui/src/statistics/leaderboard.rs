@@ -95,7 +95,7 @@ fn add(total: &mut ContributorDay, day: &ContributorDay) {
 
 fn value(day: &ContributorDay, metric: usize) -> Option<f64> {
     match metric {
-        3 => Some(labello_domain::displayed_score(day.score.total()) as f64),
+        3 => Some(labello_domain::displayed_score(day.score.total())),
         0 => Some(day.labeled as f64),
         1 => Some(day.reviewed as f64),
         _ => (day.accepted + day.rejected > 0)
@@ -105,7 +105,7 @@ fn value(day: &ContributorDay, metric: usize) -> Option<f64> {
 
 fn display(day: &ContributorDay, metric: usize) -> String {
     match metric {
-        3 => labello_domain::displayed_score(day.score.total()).to_string(),
+        3 => super::score::compact(day.score.total()),
         0 => day.labeled.to_string(),
         1 => day.reviewed.to_string(),
         _ => value(day, metric).map_or_else(
@@ -118,6 +118,14 @@ fn display(day: &ContributorDay, metric: usize) -> String {
                 )
             },
         ),
+    }
+}
+
+fn detail(day: &ContributorDay, metric: usize) -> String {
+    if metric == 3 {
+        format!("{} points", super::score::exact(day.score.total()))
+    } else {
+        display(day, metric)
     }
 }
 
@@ -619,12 +627,22 @@ impl LeaderboardState {
                                 );
                                 ui.horizontal(|ui| super::streak::badge(ui, row.streak, row.name));
                                 for &metric in metrics {
-                                    super::stats_number_cell(
+                                    let response = super::stats_number_cell(
                                         ui,
                                         display(&row.total, metric),
                                         METRIC_WIDTHS[metric],
                                         false,
-                                    );
+                                    )
+                                    .on_hover_text(detail(&row.total, metric));
+                                    if metric == 3 {
+                                        response.widget_info(|| {
+                                            egui::WidgetInfo::labeled(
+                                                egui::WidgetType::Label,
+                                                true,
+                                                format!("Score: {}", detail(&row.total, metric)),
+                                            )
+                                        });
+                                    }
                                 }
                                 ui.end_row();
                             }
@@ -665,11 +683,22 @@ impl LeaderboardState {
                                         METRICS[metric],
                                         display(&row.total, metric),
                                     ));
-                                    ui.label(if metric == 3 {
-                                        label.strong()
-                                    } else {
-                                        label.color(theme::TEXT_MUTED)
-                                    });
+                                    let response = ui
+                                        .label(if metric == 3 {
+                                            label.strong()
+                                        } else {
+                                            label.color(theme::TEXT_MUTED)
+                                        })
+                                        .on_hover_text(detail(&row.total, metric));
+                                    if metric == 3 {
+                                        response.widget_info(|| {
+                                            egui::WidgetInfo::labeled(
+                                                egui::WidgetType::Label,
+                                                true,
+                                                format!("Score: {}", detail(&row.total, metric)),
+                                            )
+                                        });
+                                    }
                                 }
                             });
                         });
@@ -695,9 +724,9 @@ impl LeaderboardState {
         }
         ui.collapsing(if ui.available_width() < 230.0 { "Score rules" } else { "How scores are counted" }, |ui| {
             if scoring {
-                ui.label("Points: one keypoint 10, each additional keypoint +5; bounding box 20. Submission earns points once per label. Manual +10%, focus workflow +25%; bonuses add together. Every 100 labels today increases subsequent label points by 10%, up to ×1.50 after 500. Days use UTC.");
-                ui.label("Reviewing a label earns 30% of its base value once per reviewer. Rejection deducts 50% once per label; an accepted geometry correction earns its author 20% once. Correction never refunds the rejection. Review and correction points receive no bonuses or daily-tier progress.");
-                ui.label("Score = 10 × square root of total points, rounded down. Rankings use exact points. Periods include deductions made during that period, so period scores can be negative. Historical work earns points; focus bonuses begin when scoring is activated.");
+                ui.label("Points: one keypoint 10, each additional keypoint +5; bounding box 20. Submission earns points once per label. Manual +10%, focus workflow +50%; bonuses add together. Every 100 labels today increases subsequent label points by 10%, up to ×1.50 after 500. Days use UTC.");
+                ui.label("Reviewing a label earns 80% of its base value once per reviewer; reviewer focus multiplies that reward by ×1.5. Annotation and review have separate 10-minute focus selections that switch when imbalance-blocked. Rejection deducts 80% once per label; an accepted geometry correction earns its author 80% once, without bonuses or a refund. Reviews and corrections do not advance daily tiers.");
+                ui.label("Score is total points, abbreviated with k for thousands and m for millions. Hover for exact points. Rankings use exact points. Periods include deductions made during that period, so period scores can be negative. Historical work earns points; focus bonuses begin when scoring is activated.");
             }
             ui.label("Streak: reach 20 labeled submissions or 30 reviews per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
             ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
@@ -1058,7 +1087,7 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                             "{}: rank {rank}, {}, {}",
                             METRICS[metric],
                             row.name,
-                            display(&row.total, metric)
+                            detail(&row.total, metric)
                         );
                         response.widget_info(|| {
                             egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &label)
@@ -1090,7 +1119,7 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                                     )
                                     .truncate(),
                                 )
-                                .on_hover_text(score);
+                                .on_hover_text(detail(&row.total, metric));
                             let caption = if metric == 2 {
                                 format!(
                                     "{}/{}",
@@ -1213,7 +1242,13 @@ fn history_chart(
         painter.text(
             egui::pos2(plot.left() - 4.0, y),
             egui::Align2::RIGHT_CENTER,
-            format!("{:.0}", minimum + (maximum - minimum) * fraction as f64),
+            if metric == 3 {
+                super::score::compact(
+                    ((minimum + (maximum - minimum) * fraction as f64) * 100.0).round() as i64,
+                )
+            } else {
+                format!("{:.0}", minimum + (maximum - minimum) * fraction as f64)
+            },
             font.clone(),
             theme::TEXT_MUTED,
         );
@@ -1281,7 +1316,7 @@ fn history_chart(
         response.on_hover_ui(|ui| {
             ui.label(date.to_string());
             for (name, days) in &series {
-                ui.label(format!("{name}: {}", display(&days[index], metric)));
+                ui.label(format!("{name}: {}", detail(&days[index], metric)));
             }
         });
     }
@@ -1291,7 +1326,7 @@ fn history_chart(
             .chain(
                 series
                     .iter()
-                    .map(|(name, days)| format!("{name}: {}", display(&days[index], metric))),
+                    .map(|(name, days)| format!("{name}: {}", detail(&days[index], metric))),
             )
             .collect::<Vec<_>>()
             .join("\n");
@@ -1314,7 +1349,7 @@ mod tests {
     #[test]
     fn score_aggregation_ranks_exact_points_even_when_display_rounds_to_a_tie() {
         let mut first = ContributorDay::default();
-        first.score.labeling = 10_000;
+        first.score.labeling = 100_000;
         let mut second = first.clone();
         second.score.labeling += 1;
         assert_eq!(display(&first, 3), display(&second, 3));
@@ -1322,8 +1357,9 @@ mod tests {
         let mut deduction = ContributorDay::default();
         deduction.score.deductions = 1_000;
         add(&mut first, &deduction);
-        assert_eq!(first.score.total(), 9_000);
-        assert_eq!(display(&deduction, 3), "-31");
+        assert_eq!(first.score.total(), 99_000);
+        assert_eq!(display(&deduction, 3), "-10");
+        assert_eq!(detail(&second, 3), "1000.01 points");
     }
 
     #[test]

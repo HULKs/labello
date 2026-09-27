@@ -63,7 +63,7 @@ or external integrations.
 | `.labello/migrations/...` | Durable migration journal and staged generation | Recovery state until migration completion; do not remove during an interrupted migration |
 | `.labello/snapshots/` | Derived point-in-time annotation/audit packages | Downloadable but not directly restorable; retain according to operator policy |
 | Statistics and process caches | Derived | Recompute or invalidate after authoritative writes |
-| `.labello/scoring/focus-v1.json` | Authoritative versioned 20-minute focus selections | Preserve in full backups and snapshots; score totals rebuild from events plus this file. Never discard as a cache |
+| `.labello/scoring/focus-v1.json` | Authoritative versioned focus selections (current rolling 10-minute periods and preserved historical periods) | Preserve in full backups and snapshots; score totals rebuild from events plus this file. Never discard as a cache |
 
 Browser IndexedDB/local-storage drafts and availability caches are recoverable
 client conveniences. They are outside the server root and never authoritative
@@ -149,6 +149,33 @@ last event sequence. The current review projection generation must also match,
 so a same-sequence cache from before review-round tracking is rebuilt. Missing or stale state is replayed from `events.jsonl` and
 written back when appropriate. A malformed authoritative event prevents replay
 and requires backup restore or maintainer-led forensic repair.
+
+### Scoring focus history
+
+The legacy `focus-v1.json` path is retained; its internal format version is now 2,
+independent of dataset schema and scoring-policy versions. Version 1 histories
+with UTC-aligned 20-minute ends remain readable. The first selection under the
+new policy upgrades the file atomically to version 2. An active legacy period is
+truncated at that request's timestamp and replaced with a full rolling 10-minute
+selection; elapsed historical coverage is preserved. Requests at or before the
+latest period's start do not rewrite that history or create zero-length periods.
+
+Version 2 accepts positive, non-overlapping periods up to 20 minutes to preserve
+legacy coverage; newly selected periods always run for 10 minutes from selection.
+Annotation `windows` and defaultable `reviewWindows` record independent selections
+and timers. Missing `reviewWindows` loads as empty: historical reviewer focus is
+never inferred. Review selections consider enabled approval tasks with submitted
+backlog and use review-stage completion counts for imbalance eligibility. Durable
+review focus is published before review-bearing workflow events, including
+corrections and decision revisions; review bonuses rebuild from their event
+timestamps and the recorded review periods. Snapshots retain both arrays.
+
+Dataset-wide stage-specific imbalance can end an active period early and start a
+new eligible selection. The prior period is truncated at the switch timestamp so
+past focus eligibility remains unambiguous. Disabled tasks are not eligible for
+new or continued active selection. Unknown versions, overlapping or invalid
+periods fail closed; never delete this authoritative file as a cache. Old servers
+cannot read version 2: rollback requires the matching pre-upgrade backup.
 
 ### Artifact migration
 

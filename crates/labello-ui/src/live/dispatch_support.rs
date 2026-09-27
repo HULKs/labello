@@ -20,6 +20,10 @@ impl LabelloApp {
                     .map_err(UiRequestError::from);
                 UiMessage::StatsLoaded { request, result }
             }),
+            UiCommand::ImageScore { request, dataset_id, image_id, after_sequence, through_sequence } => self.spawn_message(request.clone(), async move {
+                let result = api.get_image_score(&dataset_id, &image_id, after_sequence, through_sequence).await.map_err(UiRequestError::from);
+                UiMessage::ImageScoreLoaded { request, result }
+            }),
             UiCommand::AssignmentAvailability {
                 request,
                 dataset_id,

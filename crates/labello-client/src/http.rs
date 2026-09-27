@@ -763,6 +763,31 @@ mod tests {
 
     #[cfg(not(target_arch = "wasm32"))]
     #[tokio::test]
+    async fn image_score_preserves_api_prefix_and_exact_event_bounds() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let request = read_request(&mut reader);
+            write_json_response(&mut stream, r#"{"hundredths":-1000}"#);
+            request
+        });
+        let api = HttpLabelloApi::new(format!("http://{address}/api/")).unwrap();
+        let value = api
+            .get_image_score(&DatasetId::from("ds"), &ImageId::from("image"), 12, 34)
+            .await
+            .unwrap();
+        assert_eq!(value.hundredths, -1000);
+        let (headers, body) = server.join().unwrap();
+        assert!(headers.starts_with(
+            "GET /api/datasets/ds/images/image/score?afterSequence=12&throughSequence=34 HTTP/1.1"
+        ));
+        assert!(body.is_empty());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
     async fn current_user_activity_preserves_api_prefix_and_decodes_window_and_counts() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();

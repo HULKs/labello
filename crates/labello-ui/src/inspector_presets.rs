@@ -53,6 +53,7 @@ pub enum InspectorPreset {
     ExportSuccess,
     ExportRequestFailure,
     Statistics,
+    ScoreGain,
     StreakLit,
     DialogSettings,
     DialogTransition,
@@ -92,7 +93,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 65] = [
+    pub const ALL: [Self; 66] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -122,6 +123,7 @@ impl InspectorPreset {
         Self::ExportSuccess,
         Self::ExportRequestFailure,
         Self::Statistics,
+        Self::ScoreGain,
         Self::StreakLit,
         Self::DialogSettings,
         Self::DialogTransition,
@@ -192,6 +194,7 @@ impl InspectorPreset {
             Self::ExportRequestFailure => "export-request-failure",
 
             Self::Statistics => "statistics",
+            Self::ScoreGain => "score-gain",
             Self::StreakLit => "streak-lit",
             Self::DialogSettings => "dialog-settings",
             Self::DialogTransition => "dialog-transition",
@@ -497,6 +500,20 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::ExportRequestFailure => export_preset(preset),
 
         InspectorPreset::Statistics => statistics_preset(),
+        InspectorPreset::ScoreGain => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            crate::set_reduced_motion(ctx, false);
+            app.work.score_feedback =
+                crate::score_feedback::ScoreFeedback::preview(ctx.input(|input| input.time));
+            let now = labello_domain::now();
+            app.datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
+                starts_at: now,
+                ends_at: now + chrono::Duration::minutes(10),
+                task_id: app.work.selected_task_id.clone(),
+            });
+            app.observe_scoring_focus(ctx);
+            app
+        }
         InspectorPreset::StreakLit => {
             let mut app = statistics_preset();
             let people = app.datasets.stats.contributors.as_mut().unwrap();
@@ -1506,6 +1523,7 @@ fn statistics_preset() -> LabelloApp {
     app.datasets.stats = DatasetStats {
         scoring_version: Some(1),
         scoring_focus: None,
+        review_scoring_focus: None,
         total_images: 24,
         completed_tasks: 18,
         pending_tasks: 0,
@@ -1566,8 +1584,8 @@ fn statistics_preset() -> LabelloApp {
                                 score: labello_domain::ScoreDay {
                                     labels: ((index + 1) * 6 * activity) as u64,
                                     labeling: ((index + 1) * 6 * activity * 2200) as i64,
-                                    reviewing: ((5 - index) * 2 * activity * 600) as i64,
-                                    deductions: (usize::from(index > 0) * activity * 1000) as i64,
+                                    reviewing: ((5 - index) * 2 * activity * 1600) as i64,
+                                    deductions: (usize::from(index > 0) * activity * 1600) as i64,
                                     corrections: 0,
                                 },
                                 day: (labello_domain::now().date_naive()

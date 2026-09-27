@@ -79,6 +79,7 @@ include!("suites/build_information.rs");
 include!("suites/data_saver.rs");
 
 include!("suites/statistics_overlay.rs");
+include!("suites/score_feedback.rs");
 include!("suites/review_context.rs");
 
 include!("suites/review_context_bar.rs");

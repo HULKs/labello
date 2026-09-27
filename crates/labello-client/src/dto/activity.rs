@@ -8,6 +8,13 @@ pub struct CurrentUserActivity {
     pub counts: labello_domain::DailyActivityCounts,
 }
 
+/// Current-policy points for the authenticated user in an image event window.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageScore {
+    pub hundredths: i64,
+}
+
 /// Server-wide presence. Contains no assignment, image, or session identifiers.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

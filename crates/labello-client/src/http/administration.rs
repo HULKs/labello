@@ -26,6 +26,31 @@ impl StatsApi for HttpLabelloApi {
         })
     }
 
+    fn get_image_score<'a>(
+        &'a self,
+        dataset_id: &'a DatasetId,
+        image_id: &'a ImageId,
+        after_sequence: u64,
+        through_sequence: u64,
+    ) -> crate::ApiFuture<'a, crate::ImageScore> {
+        Box::pin(async move {
+            Self::json(
+                self.request(
+                    Method::GET,
+                    &format!("/datasets/{dataset_id}/images/{image_id}/score"),
+                )?
+                .query(&[
+                    ("afterSequence", after_sequence),
+                    ("throughSequence", through_sequence),
+                ])
+                .timeout(STATS_REQUEST_TIMEOUT)
+                .send()
+                .await?,
+            )
+            .await
+        })
+    }
+
     fn dataset_stats<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

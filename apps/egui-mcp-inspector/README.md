@@ -150,7 +150,7 @@ Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `pr
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
-`statistics-failure`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
+`statistics-failure`, `score-gain`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
 `import-preflight`, `import-ready`, `import-running`, `import-failure`,
 `import-success`, `import-multiple-descriptors`, `import-yolo-splits`,
 `export-selection`, `export-loading`, `export-ready`, `export-blocked`,
@@ -168,6 +168,11 @@ are intentionally local and deterministic; restart with another preset for a
 clean inspection context. The `statistics` and `statistics-failure` presets open
 an accessible, scrollable statistics modal above Setup; Escape or Close returns
 to that underlying view.
+The `score-gain` preset plays a synthetic +27.25-point acknowledgement for 1.1
+seconds alongside a two-second annotation-focus ×1.5 notice at the right edge.
+Attach immediately to capture their pop, upward drift, and fade; restart the
+preset to replay them. It exercises rendering,
+not backend attribution. Crop evidence to the feedback region.
 The `streak-lit` preset shows a four-day labeling streak with today's goal met
 in both the leaderboard and the underlying application bar.
 

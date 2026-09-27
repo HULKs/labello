@@ -3,11 +3,13 @@ use super::*;
 const MAX_STATS_SCAN_WORKERS: usize = 32;
 
 impl DatasetRepository {
-    pub(super) async fn compute_dataset_stats(&self) -> StorageResult<DatasetStats> {
+    pub(super) async fn compute_dataset_stats(
+        &self,
+    ) -> StorageResult<(DatasetStats, labello_domain::stats::scoring::ImageScores)> {
         let metadata = self.load_dataset().await?;
         let mut aggregation = StatsAggregation::new(&metadata);
         let mut scoring = labello_domain::ScoringProjection::default();
-        let focus = self.scoring_focus(labello_domain::now()).await?;
+        self.review_scoring_focus(labello_domain::now()).await?;
 
         let mut image_ids = metadata.images.keys().cloned();
         let mut workers = tokio::task::JoinSet::new();
@@ -32,13 +34,23 @@ impl DatasetRepository {
             }
         }
 
+        // Every scanned reward event published its focus first. Capture after the scan
+        // so concurrent submissions cannot be credited with an older focus snapshot.
+        let focus = self
+            .scoring
+            .lock()
+            .await
+            .clone()
+            .expect("focus initialized");
         let mut stats = aggregation.finish();
-        scoring.finish(
+        let image_scores = scoring.finish(
             stats.contributors.as_mut().expect("contributors supported"),
-            &focus,
+            &focus.windows,
+            &focus.review_windows,
         );
         stats.scoring_version = Some(labello_domain::stats::scoring::SCORING_VERSION);
-        stats.scoring_focus = focus.last().cloned();
-        Ok(stats)
+        stats.scoring_focus = focus.windows.last().cloned();
+        stats.review_scoring_focus = focus.review_windows.last().cloned();
+        Ok((stats, image_scores))
     }
 }

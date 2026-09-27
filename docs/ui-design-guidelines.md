@@ -313,6 +313,14 @@ has been recorded.
   labels. Compact rankings use a bounded sort picker, a 44-point direction
   button, and wrapping score-first summaries. Keep flame and day count beside each contributor. Keep history
   comparison controls below the metric choices and selected names in bounded rows.
+  Display score as compact raw points (`k`/`m`), with exact points on hover and
+  in accessibility details. Successful scored image completion can acknowledge
+  confirmed gains with a brief, click-through popup at the right edge, outside
+  the central focal area. Use a small pop, upward drift and fade; reduced motion
+  uses static feedback. Focus changes use the same brief right-edge treatment,
+  showing the current stage's category and ×1.5 multiplier without covering score feedback.
+  Annotation and review selectors show their independent remaining focus times.
+  Never add sound, screen shake, or continuous repainting.
   Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
   fallback, and preserve keyboard access and full accessible names when truncating.

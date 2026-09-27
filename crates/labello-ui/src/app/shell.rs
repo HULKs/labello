@@ -196,6 +196,7 @@ impl eframe::App for LabelloApp {
                 }
             });
         self.overlays(ui.ctx(), layout);
+        self.score_feedback(ui.ctx());
         self.queue_current_drafts();
         self.persist_workspace_preference();
         self.start_next_command();

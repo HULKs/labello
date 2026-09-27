@@ -3,9 +3,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-#[cfg(test)]
-use std::sync::Arc;
-
 use labello_domain::{
     ClassStats, DatasetStats, ImageState, ImportCoverage, MigrationDispositionStatus,
     RevisionSource, TaskId, TaskStats, TaskStatus,
@@ -77,6 +74,7 @@ mod tests {
         let expected = DatasetStats {
             scoring_version: Some(1),
             scoring_focus: first.as_ref().unwrap().scoring_focus.clone(),
+            review_scoring_focus: first.as_ref().unwrap().review_scoring_focus.clone(),
             contributors: Some(BTreeMap::new()),
             ..Default::default()
         };
@@ -230,6 +228,66 @@ mod tests {
         assert_eq!(repository.stats_scan_count(), 3);
         // Importing geometry does not award the uploader human contribution credit.
         assert!(stats.contributors.unwrap().is_empty());
+        let image = ImageId::from("img_1");
+        let author = UserId::from("annotator");
+        assert_eq!(
+            repository.image_score(&image, &author, 0, 2).await.unwrap(),
+            Some(0)
+        );
+        assert_eq!(repository.stats_scan_count(), 3);
+
+        // A scan started before completion cannot confirm that completion's window.
+        repository.stats_cache.invalidate();
+        let pause = repository.stats_cache.pause_after_next_scan().await;
+        let pending = tokio::spawn({
+            let repository = repository.clone();
+            let image = image.clone();
+            let author = author.clone();
+            async move { repository.image_score(&image, &author, 2, 3).await }
+        });
+        pause.started.notified().await;
+        let mut task_state = TaskState::new(TaskId::from("boxes"), now());
+        task_state.status = TaskStatus::Submitted;
+        task_state.completed_by = Some(author.clone());
+        repository
+            .append_payload(
+                &image,
+                &Actor {
+                    user_id: author.clone(),
+                    role: DatasetRole::Annotator,
+                },
+                EventPayload::TaskStateChanged { task_state },
+            )
+            .await
+            .unwrap();
+        pause.resume.notify_one();
+        assert_eq!(pending.await.unwrap().unwrap(), None);
+        assert_eq!(repository.stats_scan_count(), 4);
+        assert_eq!(
+            repository.image_score(&image, &author, 2, 3).await.unwrap(),
+            Some(2200)
+        );
+        assert_eq!(repository.stats_scan_count(), 5);
+        let stats = repository.dataset_stats().await.unwrap();
+        assert_eq!(
+            stats.contributors.unwrap()[&author].history[0]
+                .score
+                .total(),
+            2200
+        );
+        assert_eq!(repository.stats_scan_count(), 5);
+        assert_eq!(
+            repository.image_score(&image, &author, 0, 4).await.unwrap(),
+            None
+        );
+        assert_eq!(
+            repository
+                .image_score(&image, &UserId::from("admin"), 0, 3)
+                .await
+                .unwrap(),
+            Some(0)
+        );
+        assert_eq!(repository.stats_scan_count(), 5);
     }
 
     #[tokio::test]

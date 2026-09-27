@@ -1,9 +1,11 @@
 use super::*;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub(super) struct CachedStats {
     pub(super) generation: u64,
     stats: DatasetStats,
+    image_scores: labello_domain::stats::scoring::ImageScores,
 }
 
 #[cfg(test)]
@@ -16,7 +18,7 @@ pub(super) struct StatsScanPause {
 #[derive(Debug, Default)]
 pub(crate) struct StatsCache {
     pub(super) generation: AtomicU64,
-    pub(super) value: Mutex<Option<CachedStats>>,
+    pub(super) value: Mutex<Option<Arc<CachedStats>>>,
     pub(super) activity: Mutex<Option<super::activity::CachedActivity>>,
     pub(super) activity_refresh: Mutex<()>,
     refresh: Mutex<()>,
@@ -56,18 +58,43 @@ impl StatsCache {
 
 impl DatasetRepository {
     pub async fn dataset_stats(&self) -> StorageResult<DatasetStats> {
+        Ok(self.cached_dataset_stats().await?.stats.clone())
+    }
+
+    pub async fn image_score(
+        &self,
+        image_id: &labello_domain::ImageId,
+        user_id: &labello_domain::UserId,
+        after_sequence: u64,
+        through_sequence: u64,
+    ) -> StorageResult<Option<i64>> {
+        let cached = self.cached_dataset_stats().await?;
+        if cached.generation != self.stats_cache.generation.load(Ordering::Acquire) {
+            return Ok(None);
+        }
+        Ok(cached
+            .image_scores
+            .score(image_id, user_id, after_sequence, through_sequence))
+    }
+
+    async fn cached_dataset_stats(&self) -> StorageResult<Arc<CachedStats>> {
         let requested_generation = self.stats_cache.generation.load(Ordering::Acquire);
         {
             let cached = self.stats_cache.value.lock().await;
             if let Some(cached) = cached.as_ref()
                 && cached.generation == requested_generation
-                && cached
-                    .stats
-                    .scoring_focus
-                    .as_ref()
-                    .is_some_and(|focus| focus.contains(labello_domain::now()))
+                && [
+                    &cached.stats.scoring_focus,
+                    &cached.stats.review_scoring_focus,
+                ]
+                .iter()
+                .all(|focus| {
+                    focus
+                        .as_ref()
+                        .is_some_and(|focus| focus.contains(labello_domain::now()))
+                })
             {
-                return Ok(cached.stats.clone());
+                return Ok(cached.clone());
             }
         }
 
@@ -86,33 +113,39 @@ impl DatasetRepository {
             let cached = self.stats_cache.value.lock().await;
             if let Some(cached) = cached.as_ref()
                 && cached.generation == generation
-                && cached
-                    .stats
-                    .scoring_focus
-                    .as_ref()
-                    .is_some_and(|focus| focus.contains(labello_domain::now()))
+                && [
+                    &cached.stats.scoring_focus,
+                    &cached.stats.review_scoring_focus,
+                ]
+                .iter()
+                .all(|focus| {
+                    focus
+                        .as_ref()
+                        .is_some_and(|focus| focus.contains(labello_domain::now()))
+                })
             {
-                return Ok(cached.stats.clone());
+                return Ok(cached.clone());
             }
         }
 
         #[cfg(test)]
         self.stats_cache.scans.fetch_add(1, Ordering::Relaxed);
 
-        let stats = self.compute_dataset_stats().await?;
+        let (stats, image_scores) = self.compute_dataset_stats().await?;
         #[cfg(test)]
         if let Some(pause) = self.stats_cache.scan_pause.lock().await.take() {
             pause.started.notify_one();
             pause.resume.notified().await;
         }
-        let mut cached = self.stats_cache.value.lock().await;
-        *cached = Some(CachedStats {
+        let result = Arc::new(CachedStats {
             generation,
-            stats: stats.clone(),
+            stats,
+            image_scores,
         });
+        *self.stats_cache.value.lock().await = Some(result.clone());
         // A concurrent write may make this snapshot stale, but returning it bounds request
         // completion. The next request observes the generation mismatch and refreshes it.
-        Ok(stats)
+        Ok(result)
     }
 
     #[cfg(test)]
