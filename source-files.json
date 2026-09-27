@@ -1,8 +1,8 @@
 {
-  "crates/labello-ui/src/panels.rs": "c239b8f6a778505a7a42b7171b1a082759fcac8d270f4f8ccb3c500c8a84a2d4",
-  "crates/labello-ui/src/panels/overlays.rs": "dbc942fd55a92b4036d0f95222e09a45c387b9398374861937a2775a583f076c",
-  "crates/labello-ui/src/ui_tests/suites/persistence.rs": "45a24b9a3fb8e318a28168a027923772022244d8fd8a94b41e00212ded355f72",
-  "docs/annotation.md": "48a75e60503601fa63f4c0125ede1efab150db03a1ca1992d219c33312f585a1",
-  "docs/ui-design-guidelines.md": "e186cdade3192bd7cebf3e6e05eb230b0285d586081fc38152a372a6f85ed153",
-  "docs/ui-ownership.md": "64e12192edbabb0a5f79c91a6d6ca103fc35acd2fb3fb0da4dbf3a9d8e01659f"
+  "crates/labello-ui/src/panels.rs": "1b9db029b732f9532b85229db982a2ef3dc73a0880cfa7dbe2d3d223c2e9d938",
+  "crates/labello-ui/src/panels/overlays.rs": "2f06039db64b726e06a74917d4112bb6df7d77d1aa00678ff15a48423d11f648",
+  "crates/labello-ui/src/ui_tests/suites/persistence.rs": "a222a5648d3d4373d55bad2f65d54194a3a4415d736a7f4cfd6243aa813f7eac",
+  "docs/annotation.md": "8c80d2240e2a25f64c4890dd2f2a26ad81e9c2135961f31d83f5b8631d46eab0",
+  "docs/ui-design-guidelines.md": "8e3a230ef5020aae1b0d2c56951d7a6970556001378656e25a1c734bacaa9115",
+  "docs/ui-ownership.md": "e684903bda6a4b51034e7c4f95139f79b2bf51f294c0b8fd1c7f4e5810176f82"
 }

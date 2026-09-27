@@ -1,13 +1,14 @@
 # Shortcut settings evidence for issue 190
 
-Production change: `016d0dd88753f3fcdf9e47d0b9d5fba3f50eb835`.
-Comparison base: `0b23982f46eb00c64a606db924b5385f108918cc`.
+Production change: `120f9cdef1a74c39217f9cc7da2f57147a322538`.
+Comparison base: PR #191, `88c079e9d502f3e41c3c0a19bb0b771213f01baa`.
+Stack: main → #184 → #185 → #186 → #187 → #191 → #192.
 Captures were taken from the working diff subsequently published as that commit.
 `source-files.json` records the final six source/document file hashes.
 
 ## Before and after
 
-- `before-1440.png`, `before-390.png`: native Setup preset at the comparison base,
+- `before-1440.png`, `before-390.png`: native Setup preset at the original main base `0b23982f`,
   1440x1000 and 390x844 logical points, scale 1. Descriptions and names run under buttons.
 - `native-1440x1000.png`, `native-1288x820.png`, `native-600x800.png`,
   `native-390x844.png`, `native-320x568.png`, `native-320x320.png`: shared production
@@ -20,9 +21,7 @@ Captures were taken from the working diff subsequently published as that commit.
 - `native-conflict-390.png`: peer name/context, conflict filter and disabled Save,
   390x844, scale 1.
 
-The final schema-specific keypoint-name search addition followed native capture;
-it does not affect the depicted Setup states. The final production release WASM
-captures below include that addition. Native evidence proves shared rendering
+Native and browser captures were refreshed after rebasing onto #191. Native evidence proves shared rendering
 and AccessKit semantics, not browser behavior.
 
 ## Chromium
@@ -57,9 +56,9 @@ request bodies or browser traces are included.
 
 ## Checks
 
-- `./scripts/verify.sh changed origin/main`: passed on final change; selected UI
+- `./scripts/verify.sh changed 88c079e9d502f3e41c3c0a19bb0b771213f01baa`: passed on final change; selected UI
   and browser profiles, complete locked baseline and release Trunk build.
-- UI suite: 615 passed, one existing ignored test.
+- UI suite: 638 passed, one existing ignored test.
 - Focused tests cover aliases (including actual schema keypoint names), category
   continuity, text/control non-intersection with long chords, peer conflicts and
   filtering, final-row/footer scroll reachability, existing save/reset/cancel/error

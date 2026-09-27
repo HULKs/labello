@@ -1,5 +1,5 @@
 {
-  "base": "0b23982f46eb00c64a606db924b5385f108918cc plus source-files.json diff",
+  "base": "88c079e9d502f3e41c3c0a19bb0b771213f01baa",
   "preset": "setup",
   "scale": 1,
   "viewports": [
@@ -39,5 +39,6 @@
     "Escape with edits opens discard decision; Keep editing retains draft",
     "Restore all defaults returns to baseline; Escape then closes settings"
   ],
-  "limits": "Native shared renderer only. Short viewport list/footer reachability also exercised with deterministic scroll_to_me regression."
+  "limits": "Native shared renderer only. Short viewport list/footer reachability also exercised with deterministic scroll_to_me regression.",
+  "head": "120f9cdef1a74c39217f9cc7da2f57147a322538"
 }
