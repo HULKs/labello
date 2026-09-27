@@ -1,6 +1,6 @@
 use super::*;
 use crate::prelabel_flow::{HintStatus, PrelabelAction, PrelabelReply};
-use labello_domain::{PrelabelGeneration, PrelabelResponse};
+use labello_domain::{PrelabelGeneration, PrelabelResponse, UserAction};
 
 #[test]
 fn model_check_replies_cannot_replace_a_changed_filename_or_removed_configuration() {
@@ -591,6 +591,20 @@ fn prelabel_actions_support_keyboard_confirmation_and_delete() {
         harness.step();
         harness.key_press(egui::Key::Enter);
         harness.step();
+        if !confirm {
+            assert!(
+                harness
+                    .state()
+                    .selected_prelabel_object()
+                    .unwrap()
+                    .annotation
+                    .deleted
+            );
+            harness.get_by_label("Confirm & next").focus();
+            harness.step();
+            harness.key_press(egui::Key::Enter);
+            harness.step();
+        }
         assert!(harness.state().visible_prelabels().is_empty());
         assert_eq!(harness.state().work.annotations.len(), usize::from(confirm));
         assert!(harness.query_by_label("Submit & next").is_some());
@@ -607,6 +621,7 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
             harness.step();
         }
         click(&mut harness, "Delete");
+        click(&mut harness, "Confirm & next");
         harness.step();
         assert!(harness.state().visible_prelabels().is_empty());
         harness.state_mut().undo();
@@ -630,6 +645,7 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
             app.sync_prelabel_review();
             app.advance_prelabel_object();
             app.delete_selected();
+            app.confirm_prelabel_object();
         }
         click(&mut harness, "Previous image");
         if submit_on_return {
@@ -760,6 +776,16 @@ fn model_objects_are_editable_before_confirmation_and_advance_without_submitting
     assert_eq!(api.counts().complete_assignment, 0);
     harness.key_press(egui::Key::Delete);
     harness.run_steps(3);
+    assert!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .deleted
+    );
+    harness.key_press(egui::Key::Space);
+    harness.run_steps(3);
     assert!(harness.state().pending_prelabel_objects().is_empty());
     assert_eq!(harness.state().work.annotations.len(), 1);
     assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
@@ -778,29 +804,209 @@ fn model_objects_are_editable_before_confirmation_and_advance_without_submitting
 }
 
 #[test]
-fn pending_object_deletion_confirmation_and_edits_share_undo_history() {
+fn pending_box_deletion_waits_for_confirmation_and_shares_undo_history() {
+    for multiple in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = loaded_prelabel_work_harness(api.clone());
+        if multiple {
+            add_second_prelabel(harness.state_mut());
+        }
+        harness.run_steps(3);
+        let first = harness.state().selected_prelabel_object().unwrap().clone();
+        let transform = harness.state().work.canvas.stored_transform();
+        click(&mut harness, "Delete");
+        harness.run_steps(3);
+        assert_eq!(
+            harness.state().work.selected_annotation.as_ref(),
+            Some(&first.annotation.annotation_id)
+        );
+        assert_eq!(harness.state().work.canvas.stored_transform(), transform);
+        assert!(
+            harness
+                .state()
+                .selected_prelabel_object()
+                .unwrap()
+                .annotation
+                .deleted
+        );
+        assert!(
+            harness
+                .get_by_label("Delete")
+                .accesskit_node()
+                .is_disabled()
+        );
+        assert!(harness.query_by_label("Confirm & next").is_some());
+        assert!(harness.query_by_label("Submit & next").is_none());
+        assert!(harness.state().work.accepted_prelabels.is_empty());
+        harness.state_mut().request_save(true);
+        assert!(!harness.state().loading.saving);
+        assert_eq!(api.counts().complete_assignment, 0);
+        harness.state_mut().runtime.error = None;
+        harness.state_mut().request_save(false);
+        step_until(&mut harness, 12, |app| !app.loading.saving);
+        assert!(api.events().is_empty());
+        harness.state_mut().undo();
+        harness.step();
+        assert!(
+            !harness
+                .state()
+                .selected_prelabel_object()
+                .unwrap()
+                .annotation
+                .deleted
+        );
+        harness.state_mut().redo();
+        harness.step();
+        assert!(
+            harness
+                .state()
+                .selected_prelabel_object()
+                .unwrap()
+                .annotation
+                .deleted
+        );
+        click(&mut harness, "Confirm & next");
+        harness.run_steps(3);
+        assert!(harness.state().work.annotations.is_empty());
+        assert!(harness.state().work.prelabel_evidence.is_empty());
+        assert_eq!(
+            harness.state().pending_prelabel_objects().len(),
+            usize::from(multiple)
+        );
+        if multiple {
+            assert_eq!(
+                harness
+                    .state()
+                    .selected_prelabel_object()
+                    .unwrap()
+                    .suggestion
+                    .suggestion_id,
+                "second-object"
+            );
+        } else {
+            assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
+            assert!(harness.query_by_label("Submit & next").is_some());
+        }
+        harness.state_mut().undo();
+        harness.step();
+        assert!(
+            harness
+                .state()
+                .selected_prelabel_object()
+                .unwrap()
+                .annotation
+                .deleted
+        );
+        assert!(harness.state().work.accepted_prelabels.is_empty());
+        harness.state_mut().redo();
+        harness.step();
+        assert!(harness.state().work.annotations.is_empty());
+        assert_eq!(api.counts().complete_assignment, 0);
+    }
+}
+
+#[test]
+fn pending_skeleton_deletion_still_advances_immediately() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
-    add_second_prelabel(harness.state_mut());
-    let first = harness.state().selected_prelabel_object().unwrap().clone();
-    click(&mut harness, "Delete");
-    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
-    harness.state_mut().undo();
+    let app = harness.state_mut();
+    let item = &mut app.work.prelabel_review.objects[0];
+    item.annotation.geometry = AnnotationGeometry::Skeleton(SkeletonGeometry { keypoints: vec![] });
+    item.annotation.annotation_type = AnnotationType::Skeleton;
+    assert!(app.delete_prelabel_object());
+    assert!(app.pending_prelabel_objects().is_empty());
+    assert!(app.work.annotations.is_empty());
+    assert!(app.work.selected_annotation.is_none());
+}
+
+#[test]
+fn pending_deleted_box_keeps_confirmation_reachable_at_every_workspace_size() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().work.inspector_panel_collapsed = true;
+    harness
+        .state_mut()
+        .trigger_user_action(UserAction::DiscardPrelabel);
+    let id = harness.state().work.selected_annotation.clone();
+    harness
+        .state_mut()
+        .trigger_user_action(UserAction::DiscardPrelabel);
+    for (width, height) in [
+        (320.0, 320.0),
+        (320.0, 568.0),
+        (390.0, 844.0),
+        (600.0, 800.0),
+        (1288.0, 820.0),
+        (1440.0, 1000.0),
+    ] {
+        harness.set_size(egui::vec2(width, height));
+        harness.run_steps(4);
+        assert_control_inside(
+            &harness,
+            "Confirm & next",
+            egui::accesskit::Role::Button,
+            width,
+            height,
+        );
+        assert_eq!(harness.state().work.selected_annotation, id);
+        assert!(
+            harness
+                .get_by_label("Delete")
+                .accesskit_node()
+                .is_disabled()
+        );
+        assert!(harness.query_by_label("Submit & next").is_none());
+    }
+    harness.state_mut().loading.saving = true;
     harness.step();
-    assert_eq!(harness.state().pending_prelabel_objects().len(), 2);
-    assert_eq!(
-        harness.state().work.selected_annotation.as_ref(),
-        Some(&first.annotation.annotation_id)
+    assert!(
+        harness
+            .get_by_label("Confirm & next")
+            .accesskit_node()
+            .is_disabled()
     );
-    harness.state_mut().redo();
+    harness.key_press(egui::Key::Space);
     harness.step();
-    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
-    click(&mut harness, "Confirm & next");
-    assert_eq!(harness.state().work.annotations.len(), 1);
-    harness.state_mut().undo();
+    assert!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .deleted
+    );
+    harness.state_mut().loading.saving = false;
+    harness
+        .state_mut()
+        .trigger_user_action(UserAction::AcceptPrelabel);
     harness.step();
+    assert!(harness.state().pending_prelabel_objects().is_empty());
     assert!(harness.state().work.annotations.is_empty());
-    assert_eq!(harness.state().pending_prelabel_objects().len(), 1);
-    assert!(harness.state().selected_prelabel_object().is_some());
+}
+
+#[test]
+fn pending_box_deletion_recovers_as_an_unconfirmed_decision() {
+    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
+    let id = harness.state().work.selected_annotation.clone();
+    click(&mut harness, "Delete");
+    harness.state_mut().queue_current_drafts();
+    harness.run_steps(10);
+    harness.state_mut().work.prelabel_review = Default::default();
+    harness.state_mut().work.selected_annotation = None;
+    harness.state_mut().runtime.notice = None;
+    harness.state_mut().request_work_draft_load();
+    step_until(&mut harness, 12, |app| {
+        app.runtime.notice.as_deref() == Some("Recovered the validated browser draft.")
+    });
+    assert_eq!(harness.state().work.selected_annotation, id);
+    assert!(
+        harness
+            .state()
+            .selected_prelabel_object()
+            .unwrap()
+            .annotation
+            .deleted
+    );
+    assert!(harness.state().work.annotations.is_empty());
+    assert!(harness.query_by_label("Confirm & next").is_some());
 }
 
 #[test]

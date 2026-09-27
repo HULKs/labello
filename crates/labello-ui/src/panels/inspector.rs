@@ -68,12 +68,14 @@ impl LabelloApp {
             .annotation_objects()
             .iter()
             .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
+                self.annotation_matches_selected_workflow(annotation)
             })
             .enumerate()
             .map(|(index, annotation)| {
                 let class_name = self.class_name(&annotation.class_id);
-                let geometry = if self.companion_needs_box(annotation) {
+                let geometry = if annotation.deleted {
+                    "Box deleted. Confirm & next to continue, or Undo to restore it.".to_string()
+                } else if self.companion_needs_box(annotation) {
                     "Read-only source keypoints. Draw a bounding box for this object.".to_string()
                 } else { match &annotation.geometry {
                     AnnotationGeometry::BoundingBox(bbox) => format!(

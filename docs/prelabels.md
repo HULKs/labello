@@ -219,8 +219,13 @@ Long object labels truncate with an ellipsis and retain their full accessible na
 
 Use **Confirm & next** in the lower bar, or Space with default shortcuts, to keep
 the current geometry and focus the next pending object. **Delete** in the same bar
-or the Delete key removes the selected object and advances. Previous/next object
-navigation can revisit objects; editing, confirmation, and deletion share Undo/Redo.
+or the Delete key removes a pending box from the canvas while preserving the current
+view. Use **Confirm & next** to confirm the deletion before advancing, or Undo to
+restore the box. The deleted box remains a pending local decision and blocks
+submission until confirmed while its model is selected; save and autosave never
+turn it into an annotation. Deleting a pending skeleton still advances immediately.
+Previous/next object navigation can revisit pending deletions; editing, confirmation,
+and deletion share Undo/Redo.
 These actions work with the Inspector closed. Fit shows the whole image; Refocus
 returns to the selected object. Editing or autosaving does not repeatedly recenter it.
 

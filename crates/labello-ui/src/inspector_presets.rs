@@ -27,6 +27,7 @@ pub enum InspectorPreset {
     DatasetGallery,
     DatasetInspection,
     Annotation,
+    PrelabelBoxes,
     Presence,
     PresenceFallback,
     Setup,
@@ -91,10 +92,11 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 64] = [
+    pub const ALL: [Self; 65] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
+        Self::PrelabelBoxes,
         Self::Presence,
         Self::PresenceFallback,
         Self::Setup,
@@ -163,6 +165,7 @@ impl InspectorPreset {
             Self::DatasetGallery => "dataset-gallery",
             Self::DatasetInspection => "dataset-inspection",
             Self::Annotation => "annotation",
+            Self::PrelabelBoxes => "prelabel-boxes",
             Self::Presence => "presence",
             Self::PresenceFallback => "presence-fallback",
             Self::Setup => "setup",
@@ -265,6 +268,32 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::PrelabelBoxes => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            let annotation = app.work.annotations.remove(0);
+            app.work.persisted_annotations.clear();
+            app.work.selected_annotation = None;
+            app.work.current.as_mut().unwrap().prelabels = [0.2, 0.7]
+                .into_iter()
+                .enumerate()
+                .map(|(index, x)| labello_domain::PrelabelSuggestion {
+                    evidence: None,
+                    suggestion_id: format!("synthetic-box-{index}"),
+                    config_id: "synthetic-box-model".into(),
+                    task_id: annotation.task_id.clone(),
+                    class_id: annotation.class_id.clone(),
+                    confidence: 0.9 - index as f32 * 0.1,
+                    geometry: AnnotationGeometry::BoundingBox(BoundingBox {
+                        x,
+                        y: 0.3,
+                        width: 0.15,
+                        height: 0.25,
+                    }),
+                })
+                .collect();
+            app.sync_prelabel_review();
+            app
+        }
         InspectorPreset::WorkflowAvailability => {
             use labello_domain::WorkflowUnavailableReason as R;
             let mut app = work_preset(AssignmentKind::Annotation, ctx);

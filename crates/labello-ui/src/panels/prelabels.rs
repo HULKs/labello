@@ -133,7 +133,7 @@ impl LabelloApp {
         }
         if !prelabels.is_empty() {
             ui.label(format!("{} objects need confirmation", prelabels.len()));
-            ui.label("Edit the selected object on the canvas, then Confirm & next. Delete removes it.");
+            ui.label("Edit the selected object on the canvas, then Confirm & next. After deleting a model box, confirm its deletion to continue.");
         }
     }
 }
