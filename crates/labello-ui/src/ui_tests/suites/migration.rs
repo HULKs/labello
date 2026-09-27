@@ -353,8 +353,10 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
             .count(),
         1
     );
+    assert!(harness.query_by_label("Submit").is_some());
     harness.set_size(egui::vec2(390.0, 667.0));
     harness.step();
+    assert!(harness.query_by_label("Submit").is_some());
     assert!(harness.query_by_label("Edit added").is_none());
     let center = harness.get_by_label("Annotation canvas").rect().center();
     click_at(&mut harness, center);
@@ -415,11 +417,13 @@ fn migration_full_image_can_add_an_object_missing_from_the_import() {
     click_at(&mut harness, center);
     harness.step();
     assert!(harness.query_by_label("Remove added object").is_some());
-    click_accesskit_button(&mut harness, "Remove added object");
+    harness.key_press(egui::Key::Delete);
     harness.step();
     step_until(&mut harness, 8, |app| !app.work.migration.busy);
     assert_eq!(api.counts().migration_commands, 3);
     assert!(!harness.state().work.migration.adding_missing_object);
+    assert!(harness.state().work.migration.draft.is_none());
+    assert!(harness.query_by_label("Discard object changes").is_none());
     assert!(
         harness
             .state()
@@ -1242,7 +1246,7 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
     full_image.step();
     assert!(
         full_image
-            .query_by_label_contains("Confirm & finish")
+            .query_by_label_contains("Submit")
             .is_some()
     );
     assert!(
@@ -1264,7 +1268,7 @@ fn migration_primary_actions_stay_visible_without_the_inspector_drawer() {
             app
         });
     wide_full_image.step();
-    let action = wide_full_image.get_by_label_contains("Confirm all guides & finish").rect();
+    let action = wide_full_image.get_by_label_contains("Submit").rect();
     assert!(
         action.right() <= 1318.0 && action.bottom() <= 900.0,
         "confirmation must remain fully visible at the narrowest wide desktop size: {action:?}"
@@ -2311,7 +2315,7 @@ fn direct_revisit_returns_focus_to_primary_action_when_overview_is_closed() {
         app.work.migration.restore_revisit_focus = true;
         let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
         harness.step();
-        assert!(harness.get_by_label_contains("Confirm").is_focused());
+        assert!(harness.get_by_label("Submit").is_focused());
     }
 }
 
@@ -2335,11 +2339,8 @@ fn migration_full_image_has_direct_controls_without_a_global_pass_start() {
         assert!(harness.query_by_label("Start correction pass").is_none());
         assert!(
             harness
-                .query_by_label_contains("Confirm & finish")
+                .query_by_label_contains("Submit")
                 .is_some()
-                || harness
-                    .query_by_label_contains("Confirm all guides & finish")
-                    .is_some()
         );
         if size.x < 1318.0 {
             harness.state_mut().work.drawer = Some(Drawer::Inspector);
@@ -2441,11 +2442,7 @@ fn historical_migration_pass_reloads_and_resolves_through_normal_controls() {
         );
         assert!(
             harness
-                .query_by_label_contains(if size.x < 1318.0 {
-                    "Confirm & finish"
-                } else {
-                    "Confirm all guides & finish"
-                })
+                .query_by_label_contains("Submit")
                 .is_some()
         );
         assert_eq!(api.counts().migration_commands, 2);
@@ -2591,5 +2588,128 @@ fn migration_review_button_and_space_approve_after_retaining_a_correction() {
             harness.state().runtime.error,
             harness.state().work.migration.error
         );
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn deleting_unsaved_missing_migration_object_returns_to_overview() {
+    use crate::inspector_presets::{self, InspectorPreset};
+
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .build_eframe(|ctx| inspector_presets::build(InspectorPreset::MigrationFullImage, &ctx.egui_ctx));
+    harness.step();
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, center);
+    assert!(harness.state().work.migration.adding_missing_object);
+    harness.key_press(egui::Key::Delete);
+    harness.step();
+    assert!(!harness.state().work.migration.adding_missing_object);
+    assert!(harness.state().work.migration.draft.is_none());
+    assert!(!harness.state().work.migration.draft_dirty);
+    assert!(harness.query_by_label("Discard object changes").is_none());
+    click_at(&mut harness, center);
+    assert!(harness.state().work.migration.adding_missing_object);
+    assert_eq!(harness.state().work.migration.keypoint_index, 1);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_with_added_object_and_no_guides_offers_submit() {
+    use crate::inspector_presets::{self, InspectorPreset};
+
+    let mut app = inspector_presets::build(InspectorPreset::MigrationDiscovery, &egui::Context::default());
+    let task_id = app.work.selected_task_id.clone().unwrap();
+    let state = app.work.current_state.as_mut().unwrap();
+    state.migration_target_sets.get_mut(&task_id).unwrap().targets.clear();
+    state.migration_dispositions.get_mut(&task_id).unwrap().clear();
+    app.work.migration.progress = None;
+    app.work.migration.cursor = Some(labello_domain::MigrationCursor::FullImage);
+    app.work.inspector_panel_collapsed = false;
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .build_eframe(|_| app);
+    for size in [egui::vec2(1440.0, 900.0), egui::vec2(390.0, 844.0)] {
+        harness.set_size(size);
+        harness.step();
+        assert!(harness.query_by_label("Submit").is_some());
+        assert!(harness.query_by_label_contains("Confirm no guides").is_none());
+        assert!(harness.query_by_label_contains("needs no skeletons").is_none());
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_multi_keypoint_object_requires_confirmation_before_next_object() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let api = Rc::new(SpyApi::new());
+    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+    let task_id = app.work.selected_task_id.clone().unwrap();
+    app.work.tasks.iter_mut().find(|task| task.task_id == task_id).unwrap().skeleton = Some(SkeletonSpec {
+        keypoints: vec![KeypointSpec { name: "first".into(), required: true }, KeypointSpec { name: "second".into(), required: true }],
+        edges: vec![], allow_hidden: true, allow_absent: false,
+    });
+    api.set_image_state(app.work.current_state.clone().unwrap());
+    app.runtime.api = Some(api.clone());
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+    harness.run_steps(3);
+    let first = harness.get_by_label("Annotation canvas").rect().center();
+    click_at(&mut harness, first);
+    assert_eq!(harness.state().work.migration.keypoint_index, 1);
+    harness.step();
+    assert!(harness.get_by_label("Save missing object").accesskit_node().is_disabled());
+    click_at(&mut harness, first + egui::vec2(70.0, 0.0));
+    assert_eq!(harness.state().work.migration.keypoint_index, 2);
+    let draft = harness.state().work.migration.draft.clone();
+    let next = first + egui::vec2(-90.0, 100.0);
+    click_at(&mut harness, next);
+    assert_eq!(api.counts().migration_commands, 0);
+    assert_eq!(harness.state().work.migration.draft, draft);
+    assert!(harness.state().work.migration.pending_overview_intent.is_none());
+    click_accesskit_button(&mut harness, "Save missing object");
+    step_until(&mut harness, 12, |app| !app.work.migration.busy);
+    assert_eq!(api.counts().migration_commands, 1);
+    assert!(!harness.state().work.migration.adding_missing_object);
+    click_at(&mut harness, next);
+    assert_eq!(harness.state().work.migration.keypoint_index, 1);
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_added_object_deletion_button_and_key_retry_and_exit_editor() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for button in [false, true] {
+        let api = Rc::new(SpyApi::new());
+        let mut app = inspector_presets::build(InspectorPreset::MigrationDiscovery, &egui::Context::default());
+        let id = labello_domain::AnnotationId::from("discovered-object-1");
+        api.set_image_state(app.work.current_state.clone().unwrap());
+        app.runtime.api = Some(api.clone());
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+        harness.run_steps(3);
+        harness.state_mut().resume_migration_overview_intent(crate::manual_migration::MigrationOverviewIntent::Select(id.clone(), None));
+        harness.step();
+        let draft = harness.state().work.migration.draft.clone();
+        assert!(draft.is_some());
+        api.fail_next_migration();
+        for attempt in 0..2 {
+            if button { click_accesskit_button(&mut harness, "Remove added object"); }
+            else { harness.key_press(egui::Key::Delete); }
+            harness.step();
+            step_until(&mut harness, 12, |app| !app.work.migration.busy);
+            assert_eq!(api.counts().migration_commands, attempt + 1);
+            if attempt == 0 {
+                assert!(harness.state().work.migration.error.is_some());
+                assert_eq!(harness.state().work.migration.draft, draft);
+                assert!(harness.state().work.migration.adding_missing_object);
+                assert!(!harness.state().work.current_state.as_ref().unwrap().current_annotation(&id).unwrap().deleted);
+            }
+        }
+        assert!(harness.state().work.current_state.as_ref().unwrap().current_annotation(&id).unwrap().deleted);
+        assert!(!harness.state().work.migration.adding_missing_object);
+        assert!(harness.state().work.migration.draft.is_none());
+        assert!(harness.query_by_label("Remove added object").is_none());
+        assert!(harness.query_by_label("Discard object changes").is_none());
+        assert!(harness.query_by_label("Submit").is_some());
     }
 }

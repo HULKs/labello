@@ -548,7 +548,7 @@ fn mobile_annotation_and_migration_toolbars_keep_large_text_controls_inline() {
             let primary = harness.get_by_label_contains(match preset {
                 InspectorPreset::Annotation => "Submit & next",
                 InspectorPreset::MigrationObject => "Save & next",
-                _ => "Confirm & finish",
+                _ => "Submit",
             }).rect();
             assert!(primary.left() >= 0.0 && primary.right() <= 320.0, "{preset:?}: {primary:?}");
             assert!(primary.height() >= 44.0 && primary.height() < 60.0);
