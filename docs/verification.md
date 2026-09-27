@@ -143,6 +143,15 @@ inspector evidence proves shared egui behavior only; use Chromium for browser
 layout, zoom, input, accessibility-tree, networking, cookie, or IndexedDB
 claims. Shared-rendering changes require the locked release Trunk build.
 
+For completion input, build the server and release browser distribution and use
+the isolated Python environment from the [browser input procedure](stylus-input.md#automated-browser-procedure).
+Run `python apps/labello-wasm/tests/completion_input.py --kind bounding_box` and
+repeat with `--kind skeleton`. Optional `--width`, `--height`, and `--dpr` select
+the browser matrix. This creates disposable synthetic work and checks that
+trusted repeated Space keydowns cannot complete successive images, while release
+and repress can. It reports only browser settings and aggregate counts; shared
+UI tests cover custom shortcuts, focused buttons, review, and migration.
+
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
 It includes headless startup, MCP readiness checks, independent parallel

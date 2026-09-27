@@ -123,6 +123,15 @@ bar presentation includes the current confirmation action and object progress.
 
 ## Assignment navigation and review
 
+`app/support.rs` consumes completion shortcuts including their repeat events,
+but dispatches only fresh key presses. `app/shortcuts.rs` applies this to
+NextImage, review approval/rejection, and prelabel acceptance/discard. The egui
+held-key state survives item changes, loading, errors, and modal guards; no
+per-item cooldown or rearming is used. After shortcut dispatch, `app/shell.rs`
+removes repeated Space/Enter events before focused controls render, including
+dialogs and overflow menus. Text editing retains repeat input, as do unrelated
+shortcuts. Pointer controls retain their normal single-click activation.
+
 `app/transitions.rs` gates view, About, and workflow changes. Untouched work releases
 before navigation; failure keeps the workspace. Pending navigation blocks edits
 and further transitions. `work.assignment_touched` records edits, decisions,

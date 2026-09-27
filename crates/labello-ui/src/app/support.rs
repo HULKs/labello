@@ -32,6 +32,32 @@ fn consume_keyboard_shortcut(ctx: &egui::Context, chord: &labello_domain::KeyCho
     false
 }
 
+fn consume_completion_shortcut(ctx: &egui::Context, chord: &labello_domain::KeyChord) -> bool {
+    let Some(shortcut) = keyboard_shortcut(chord) else {
+        return false;
+    };
+    let mut ctrl_modifiers = shortcut.modifiers;
+    ctrl_modifiers.command = false;
+    ctrl_modifiers.ctrl = true;
+    ctx.input_mut(|input| {
+        let mut fresh_press = false;
+        input.events.retain(|event| {
+            if let egui::Event::Key { key, modifiers, pressed: true, repeat, .. } = event
+                && *key == shortcut.logical_key
+                && (modifiers.matches_logically(shortcut.modifiers)
+                    || (chord.ctrl || chord.command) && modifiers.matches_logically(ctrl_modifiers))
+            {
+                fresh_press |= !repeat;
+                // Consume repeats too: they must not fall through to a focused button.
+                false
+            } else {
+                true
+            }
+        });
+        fresh_press
+    })
+}
+
 pub(crate) fn parse_key(key: &str) -> Option<egui::Key> {
     egui::Key::from_name(key)
 }

@@ -515,7 +515,7 @@ fn next_guide_saves_and_refocuses_without_submitting_until_last_box() {
         } else { None };
         harness.step();
         assert!(!harness.get_by_label("Next guide").accesskit_node().is_disabled());
-        click_accesskit_button(&mut harness, "Next guide");
+        completion_key(&mut harness, egui::Key::Space, true);
         if let Some(command) = held_save {
             assert_eq!(harness.state().work.selected_annotation.as_ref(), Some(&second_id));
             assert!(harness.state().loading.saving);
@@ -579,7 +579,10 @@ fn next_guide_saves_and_refocuses_without_submitting_until_last_box() {
                 .version,
             2,
         );
-        harness.get_by_label("Submit & next").click();
+        completion_key(&mut harness, egui::Key::Space, true);
+        assert_eq!(api.counts().complete_assignment, 0, "holding Next guide must not submit the image");
+        completion_key(&mut harness, egui::Key::Space, false);
+        completion_key(&mut harness, egui::Key::Space, true);
         step_until(&mut harness, 20, |app| {
             api.counts().complete_assignment == 1
                 && app.work.pending_transition.is_none()

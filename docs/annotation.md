@@ -52,6 +52,13 @@ Open Settings with `Ctrl+,` on Windows/Linux or `Cmd+,` on macOS. Search actions
 record bindings, resolve contextual conflicts, and choose **Save changes**.
 Settings are staged until saved and can be restored to defaults.
 
+Submission and completion actions require a fresh press. Holding a shortcut or
+the activation key of a focused button acts on at most one item, even if saving
+finishes or another object or image loads while the key is held. Release and
+press again to continue. This includes prelabel decisions, companion processing,
+review approvals/corrections, and migration save-and-advance/final confirmation.
+A press while an action is unavailable does not queue a later submission.
+
 | Action | Default interaction |
 | --- | --- |
 | Zoom | Mouse wheel, two-finger touchpad scrolling, pinch, or configured zoom keys |
