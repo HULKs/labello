@@ -109,13 +109,8 @@ impl LabelloApp {
                     match result {
                         Ok(keybindings) => {
                             self.work.keybindings = keybindings;
-                            self.work.shortcut_settings.error = None;
-                            if self.work.show_settings {
-                                self.work.shortcut_settings.baseline =
-                                    Some(self.work.keybindings.clone());
-                                self.work.shortcut_settings.draft =
-                                    Some(self.work.keybindings.clone());
-                            }
+                            self.work.show_settings = false;
+                            self.work.shortcut_settings = Default::default();
                             self.runtime.notice = Some("Keyboard shortcuts saved".to_string());
                             self.runtime.error = None;
                         }

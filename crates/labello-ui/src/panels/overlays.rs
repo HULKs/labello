@@ -459,8 +459,22 @@ impl LabelloApp {
         let response = theme::modal(ctx, egui::Id::new("settings-modal")).show(ctx, |ui| {
             ui.set_width(width);
             ui.set_max_height(max_height);
+            let header = ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let close = theme::quiet_button(ui, !self.loading.keybindings,
+                        egui::Button::new("×").min_size(egui::vec2(44.0, 44.0)))
+                        .on_hover_text("Close keyboard shortcuts");
+                    close.widget_info(|| egui::WidgetInfo::labeled(
+                        egui::WidgetType::Button, !self.loading.keybindings, "Close keyboard shortcuts"));
+                    cancel = close.clicked();
+                    ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 44.0),
+                        egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.heading("Keyboard shortcuts");
+                        });
+                });
+            });
+            let content_height = (max_height - header.response.rect.height() - ui.spacing().item_spacing.y).max(64.0);
             let mut contents = |ui: &mut egui::Ui| {
-                ui.heading("Keyboard shortcuts");
                 ui.label(
                     RichText::new("Record a key, right-click, or mouse button 4/5.")
                         .color(theme::MUTED),
@@ -751,7 +765,7 @@ impl LabelloApp {
             };
             egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("settings-modal-scroll")
-                .max_height(max_height)
+                .max_height(content_height)
                 .show(ui, |ui| contents(ui));
         });
         response

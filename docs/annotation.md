@@ -198,8 +198,10 @@ workspace context; **Show conflicting shortcuts** filters the list to those rows
 
 Click the current binding to record a replacement; Escape cancels recording.
 Reset restores one default, while Restore all defaults stages a complete reset.
-Save changes publishes the draft. Cancel or Escape with unsaved changes opens a
-discard decision; a failed save retains the draft. Pan drag records a modifier
+Save changes publishes the draft and closes settings after a successful save.
+The top-right close button, Cancel, or Escape with unsaved changes opens a discard
+decision; a failed save retains the draft and keeps settings open. Closing is
+disabled while saving. Pan drag records a modifier
 for left-drag; middle-drag remains available independently.
 
 Names describe the UI; persisted action identifiers and default keys are unchanged.

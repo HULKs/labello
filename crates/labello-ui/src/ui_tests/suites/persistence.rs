@@ -682,7 +682,9 @@ fn keybindings_are_editable_and_persisted() {
         harness.state().runtime.notice.as_deref(),
         Some("Keyboard shortcuts saved")
     );
-    click(&mut harness, "Cancel");
+    assert!(!harness.state().work.show_settings);
+    assert!(harness.state().work.shortcut_settings.draft.is_none());
+    assert!(harness.query_by_label("Keyboard shortcuts").is_none());
     harness.key_press(egui::Key::Enter);
     step_until(&mut harness, 16, |_| api.counts().complete_assignment == 1);
     assert_eq!(api.counts().complete_assignment, 1);
@@ -902,6 +904,7 @@ fn failed_shortcut_save_keeps_the_draft_and_shows_the_error_in_settings() {
         .unwrap();
     app.process_messages(&egui::Context::default());
 
+    assert!(app.work.show_settings);
     assert_eq!(app.work.shortcut_settings.draft, draft);
     assert_eq!(
         app.work.shortcut_settings.error.as_deref(),
@@ -2138,7 +2141,7 @@ fn mouse_binding_records_saves_and_dispatches_only_on_canvas() {
     step_until(&mut harness, 8, |app| !app.loading.keybindings);
     assert_eq!(api.counts().save_keybindings, 1);
     assert_eq!(harness.state().shortcut_text(&harness.ctx, labello_domain::UserAction::NextImage), "Shift+Right click");
-    click(&mut harness, "Cancel");
+    assert!(!harness.state().work.show_settings);
     let center = harness.get_by_label("Annotation canvas").rect().center();
     for (pos, modifiers) in [
         (egui::pos2(5.0, 5.0), egui::Modifiers::SHIFT),
@@ -2322,4 +2325,35 @@ fn shortcut_search_accepts_the_actual_keypoint_button_name() {
     harness.state_mut().work.shortcut_settings.search = format!("Mark {name} as not present");
     harness.step();
     assert!(harness.query_by_label_contains("Record shortcut for Not present:").is_some());
+}
+
+#[test]
+fn shortcut_close_button_stays_visible_and_protects_unsaved_changes() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(390.0, 844.0), egui::vec2(320.0, 568.0), egui::vec2(320.0, 320.0)] {
+        harness.state_mut().open_shortcut_settings();
+        harness.set_size(size);
+        harness.run_steps(3);
+        let close = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Close keyboard shortcuts").rect();
+        let title = harness.query_all_by_value("Keyboard shortcuts")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Label).unwrap().rect();
+        assert!(close.width() >= 44.0 && close.height() >= 44.0);
+        assert!(close.right() <= size.x && close.bottom() <= size.y);
+        assert!(title.right() <= close.left());
+        click_accesskit_button(&mut harness, "Close keyboard shortcuts");
+        assert!(!harness.state().work.show_settings);
+    }
+    harness.state_mut().open_shortcut_settings();
+    harness.state_mut().work.shortcut_settings.draft.as_mut().unwrap().bindings.insert(
+        labello_domain::UserAction::NextImage, labello_domain::KeyChord::new("F9"));
+    harness.step();
+    click_accesskit_button(&mut harness, "Close keyboard shortcuts");
+    assert!(harness.state().work.shortcut_settings.confirm_discard);
+    harness.step();
+    click_accesskit_button(&mut harness, "Keep editing");
+    assert!(harness.state().work.show_settings);
+    assert_eq!(harness.state().work.shortcut_settings.draft.as_ref().unwrap().bindings[&labello_domain::UserAction::NextImage].key, "F9");
+    harness.state_mut().loading.keybindings = true;
+    harness.step();
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Close keyboard shortcuts").accesskit_node().is_disabled());
 }
