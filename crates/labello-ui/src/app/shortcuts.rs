@@ -450,7 +450,19 @@ impl LabelloApp {
             )
         });
         for (action, chord) in bindings {
-            if consume_keyboard_shortcut(ctx, &chord) {
+            let completion = matches!(action,
+                labello_domain::UserAction::NextImage
+                | labello_domain::UserAction::AcceptReviewObject
+                | labello_domain::UserAction::RejectReviewObject
+                | labello_domain::UserAction::AcceptPrelabel
+                | labello_domain::UserAction::DiscardPrelabel
+            );
+            let triggered = if completion {
+                consume_completion_shortcut(ctx, &chord)
+            } else {
+                consume_keyboard_shortcut(ctx, &chord)
+            };
+            if triggered {
                 self.trigger_user_action(action);
             }
         }

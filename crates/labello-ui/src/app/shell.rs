@@ -33,6 +33,15 @@ impl eframe::App for LabelloApp {
         self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
         self.handle_shortcuts(ui.ctx());
+        if !ui.ctx().text_edit_focused() {
+            // egui also activates focused controls on repeated Space/Enter. Run
+            // after shortcuts so unrelated, repeatable navigation keeps working,
+            // and before rendering any controls, including dialogs and overflow.
+            ui.ctx().input_mut(|input| input.events.retain(|event| !matches!(event,
+                egui::Event::Key { key: egui::Key::Space | egui::Key::Enter,
+                    pressed: true, repeat: true, .. }
+            )));
+        }
         self.sync_workspace_bars();
         if self.navigation.statistics.restore_focus.is_some() {
             if !self.navigation.drawer_open
