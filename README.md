@@ -31,7 +31,7 @@ Chromium 149.0.7827.55, release WASM built by Trunk. API responses are intercept
 - `browser-390x844-dpr3-zoom1.png`: compact required view, DPR 3, 100% zoom.
 - `browser-320x320-dpr2-zoom1.png`: short required view, DPR 2, 100% zoom; body scrolls, footer remains reachable.
 - `browser-escape-1288x820-dpr1-zoom2.png`: required view after Escape/Space at actual 200% Chrome tab zoom, DPR 1.
-- `browser-390x844-dpr1-zoom1-long.png` and `browser-long-explanation-scrolled.png`: a 1,728-character explanation at 390×844, DPR 1, 100% zoom. No acknowledgement until scrolling makes the image visible.
+- `browser-390x844-dpr1-zoom1-long.png` and `browser-long-explanation-scrolled.png`: a 1,792-character explanation at 390×844, DPR 1, 100% zoom. No acknowledgement until scrolling makes the image visible.
 
 `browser-report.json` covers 320×320, 320×568, 390×844, 600×800, 1288×820 and 1440×1000 at DPR 1 and 2, plus 390×844 at DPR 3. Other reports cover five-item completion, optional direct dismissal, retries, keyboard advancement, long text and 200% zoom. No browser page errors or unintended work writes were observed. Browser accessibility exposes a canvas rather than shared widget semantics; no browser screen-reader claim is made. OS-level text scaling and physical mobile devices were not exercised.
 
