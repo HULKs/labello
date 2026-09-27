@@ -1,6 +1,7 @@
 impl LabelloApp {
     pub(crate) fn autosave_if_due(&mut self) {
-        if self.work.save_status == SaveStatus::Dirty
+        if !self.feedback_blocks_input()
+            && self.work.save_status == SaveStatus::Dirty
             && !self.loading.saving
             && self.work.pending_transition.is_none()
             && !self.work.canvas.is_dragging()

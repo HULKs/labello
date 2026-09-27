@@ -4289,6 +4289,35 @@ async fn correction_add_remove_is_atomic_and_rejects_stale_or_foreign_ownership(
         reviewers[0]
     );
     assert_eq!(after.task_states[&task].status, TaskStatus::Submitted);
+    let events = repo.load_events(&image).await.unwrap();
+    let receipt = events
+        .iter()
+        .rposition(|event| {
+            matches!(
+                event.payload,
+                EventPayload::ReviewCorrectionSubmitted { .. }
+            )
+        })
+        .unwrap();
+    let feedback = labello_domain::correction_feedback(
+        &repo.load_dataset_config().await.unwrap(),
+        &events,
+        receipt,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        feedback.recipients,
+        std::collections::BTreeSet::from([annotator])
+    );
+    assert_eq!(
+        feedback.before[0].annotation_id,
+        AnnotationId::from("ann_1")
+    );
+    assert_eq!(
+        feedback.after[0].annotation_id,
+        AnnotationId::from("missing_object")
+    );
 }
 
 #[tokio::test]

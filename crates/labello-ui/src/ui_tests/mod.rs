@@ -98,3 +98,5 @@ include!("suites/companion_guides.rs");
 include!("suites/pen_editing.rs");
 
 include!("suites/completion_input.rs");
+
+include!("suites/feedback.rs");

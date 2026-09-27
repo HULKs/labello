@@ -40,6 +40,8 @@ pub enum InspectorPreset {
     ReviewNextImage,
     MigrationNextImage,
     WorkflowReasons,
+    FeedbackInbox,
+    FeedbackMandatory,
     WorkflowAvailability,
     Admin,
     PrelabelsDisabled,
@@ -92,7 +94,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 65] = [
+    pub const ALL: [Self; 67] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -109,6 +111,8 @@ impl InspectorPreset {
         Self::ReviewNextImage,
         Self::MigrationNextImage,
         Self::WorkflowReasons,
+        Self::FeedbackInbox,
+        Self::FeedbackMandatory,
         Self::WorkflowAvailability,
         Self::Admin,
         Self::PrelabelsDisabled,
@@ -178,6 +182,8 @@ impl InspectorPreset {
             Self::ReviewNextImage => "review-next-image",
             Self::MigrationNextImage => "migration-next-image",
             Self::WorkflowAvailability => "workflow-availability",
+            Self::FeedbackInbox => "feedback-inbox",
+            Self::FeedbackMandatory => "feedback-mandatory",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::PrelabelsDisabled => "prelabels-disabled",
@@ -238,6 +244,11 @@ impl InspectorPreset {
 
 pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
     let mut app = match preset {
+        InspectorPreset::FeedbackInbox | InspectorPreset::FeedbackMandatory => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.seed_feedback(ctx, preset == InspectorPreset::FeedbackMandatory);
+            app
+        }
         InspectorPreset::ReviewInitialLoad
         | InspectorPreset::ReviewNextImage
         | InspectorPreset::MigrationNextImage => {

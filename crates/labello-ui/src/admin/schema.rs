@@ -1,6 +1,7 @@
 impl LabelloApp {
     fn admin_schema(&mut self, ui: &mut egui::Ui) {
         ui.heading(crate::glossary::SCHEMA);
+        self.feedback_settings(ui);
         ui.label(
             RichText::new("Configure label classes, skeletons, and labeling workflows.")
                 .color(theme::TEXT_MUTED),

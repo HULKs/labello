@@ -270,6 +270,11 @@ impl LabelloApp {
                 self.loading.ingest_job_id = None;
             }
             UiCommand::PollIngest { .. } => self.loading.ingest_polling = false,
+            UiCommand::Feedback { .. } => {
+                self.feedback.pending = None;
+                self.feedback.error = Some(error.to_string());
+                return;
+            }
             UiCommand::Presence { .. } => {
                 self.runtime.presence.pending_request = None;
                 self.runtime.presence.failed(error.to_string());
@@ -496,6 +501,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_auth_epoch(&mut self) {
+        self.feedback = Default::default();
         self.auth.prelabel_available = false;
         self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;
@@ -509,6 +515,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_workspace_epoch(&mut self) {
+        self.feedback.pending = None;
         self.work.review_submitters.clear();
         self.workspace_epoch = self.workspace_epoch.wrapping_add(1);
         self.invalidate_async_ownership();

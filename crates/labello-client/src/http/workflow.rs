@@ -29,6 +29,23 @@ impl TaskApi for HttpLabelloApi {
 }
 
 impl ImageApi for HttpLabelloApi {
+    fn feedback_inbox(&self) -> crate::ApiFuture<'_, Vec<crate::FeedbackEntry>> {
+        Box::pin(async move { Self::json(self.request(Method::GET, "/feedback")?.send().await?).await })
+    }
+    fn feedback_detail<'a>(&'a self, event: &'a labello_domain::EventId) -> crate::ApiFuture<'a, crate::FeedbackDetail> {
+        Box::pin(async move { event.validate_path_segment().map_err(|e| ClientError::Demo(e.to_string()))?; Self::json(self.request(Method::GET, &format!("/feedback/{event}"))?.send().await?).await })
+    }
+    fn dismiss_feedback<'a>(&'a self, event: &'a labello_domain::EventId, viewed: bool) -> crate::ApiFuture<'a, ()> {
+        Box::pin(async move { event.validate_path_segment().map_err(|e| ClientError::Demo(e.to_string()))?; Self::send_json(self.request(Method::POST, &format!("/feedback/{event}/dismiss"))?, &crate::FeedbackDismissal { viewed }).await })
+    }
+    fn feedback_threshold<'a>(&'a self, dataset: &'a DatasetId, task: &'a labello_domain::TaskId, value: Option<u32>) -> crate::ApiFuture<'a, crate::FeedbackThreshold> {
+        Box::pin(async move {
+            let path = format!("/datasets/{dataset}/tasks/{task}/feedback-threshold");
+            if let Some(threshold) = value { Self::send_json(self.request(Method::PUT, &path)?, &crate::FeedbackThreshold { threshold }).await }
+            else { Self::json(self.request(Method::GET, &path)?.send().await?).await }
+        })
+    }
+
     fn return_to_review<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

@@ -664,3 +664,28 @@ and writes a human accepted/edited revision through the existing assignment
 transaction. Raw client provenance cannot substitute for evidence. Historical
 prelabel revision sources remain readable. See [Model prelabels](prelabels.md)
 for binding, reset, trust, resource limits, and failure behavior.
+
+## Personal correction feedback
+
+All feedback routes require a session. Feedback is scoped to the recipient and
+current dataset access; no assignment is claimed while viewing it.
+
+| Route | Contract |
+| --- | --- |
+| `GET /feedback` | Pending correction summaries with dataset/image/workflow, reviewer profile fallback, timestamp and mandatory flag |
+| `GET /feedback/{event}` | Authorized immutable before/after comparison, captured task definition, changes and optional explanation; confirms image preview availability before recording presentation |
+| `POST /feedback/{event}/dismiss` | `{ "viewed": true }` after successful presentation, or `false` for optional direct dismissal; idempotent per recipient |
+| `GET /datasets/{dataset_id}/tasks/{task_id}/feedback-threshold` | DataAdmin only; returns `{ "threshold": 5 }` when unset |
+| `PUT /datasets/{dataset_id}/tasks/{task_id}/feedback-threshold` | DataAdmin only; accepts a positive integer threshold |
+
+Mutation routes retain ordinary CSRF enforcement. Mandatory dismissal rejects
+requests without prior successful detail/preview access; a client assertion
+alone cannot authorize it. Presentation records prove delivery, not human
+attention. Failed preview loading records neither presentation nor dismissal.
+
+At a workflow's threshold the server latches mandatory feedback for that user.
+Annotation/review claims, mutations, completion, migration and offline sync are
+rejected with 409 across all datasets until required feedback is cleared.
+Assignment release/revalidation and cache rebuilding remain available. The root
+admission guard spans workflow request handling, serializing correction commits
+with subsequent admission and feedback acknowledgements.

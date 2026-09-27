@@ -8,6 +8,11 @@ pub trait TaskApi {
 }
 
 pub trait ImageApi {
+    fn feedback_inbox(&self) -> ApiFuture<'_, Vec<crate::FeedbackEntry>> { Box::pin(async { Ok(Vec::new()) }) }
+    fn feedback_detail<'a>(&'a self, _event: &'a labello_domain::EventId) -> ApiFuture<'a, crate::FeedbackDetail> { Box::pin(async { Err(ClientError::Demo("Feedback unavailable".into())) }) }
+    fn dismiss_feedback<'a>(&'a self, _event: &'a labello_domain::EventId, _viewed: bool) -> ApiFuture<'a, ()> { Box::pin(async { Ok(()) }) }
+    fn feedback_threshold<'a>(&'a self, _dataset: &'a DatasetId, _task: &'a labello_domain::TaskId, _value: Option<u32>) -> ApiFuture<'a, crate::FeedbackThreshold> { Box::pin(async { Ok(crate::FeedbackThreshold { threshold: 5 }) }) }
+
     fn return_to_review<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

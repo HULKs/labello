@@ -468,3 +468,19 @@ catalog for display and search. This presentation catalog does not change domain
 action IDs, conflict eligibility, dispatch or persisted bindings. Row text receives
 bounded width before controls, with stacked controls below 600 content points.
 The existing shortcut draft/save/reducer owner remains authoritative for settings.
+
+## Personal correction feedback
+
+`feedback.rs` owns the account-scoped inbox, detail preview/texture, independent
+read-only canvas, request state and threshold controls. Commands and responses
+use the central request/epoch gate. Auth changes clear all feedback state;
+workspace changes cancel stale request ownership without clearing the server's
+mandatory requirement. The browser and native inspector share this renderer.
+
+The app bar owns the always-visible feedback trigger and its bounded anchored
+popup. The detail view uses a native modal and suppresses workspace shortcuts,
+autosave and background input while preserving assignment/draft state. Mandatory
+feedback opens automatically in work views and ignores Escape/outside dismissal
+until the server reports no required entries. An entry is acknowledged only
+after its comparison and texture have rendered. The displayed comparison stays
+open after acknowledgement; Next feedback deliberately advances the user.

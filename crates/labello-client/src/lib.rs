@@ -22,3 +22,6 @@ pub use traits::*;
 
 mod build_information;
 pub use build_information::{BuildIdentity, BuildInformationApi};
+
+pub mod feedback;
+pub use feedback::*;

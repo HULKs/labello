@@ -228,3 +228,10 @@ transition.
 The `workflow-availability` preset shows all ten server restriction icons,
 including a selected unavailable workflow, without image or annotation content.
 Use it to inspect disabled tooltips, marker alignment, and the workflow drawer.
+
+`feedback-inbox` and `feedback-mandatory` show synthetic personal correction
+feedback through the shared production renderer. The inbox is anchored to the
+top-bar trigger; the mandatory preset freezes five required entries and a
+before/after comparison. These presets prove layout and input blocking, not
+server acknowledgement or threshold enforcement. Use live/browser API evidence
+for those contracts.

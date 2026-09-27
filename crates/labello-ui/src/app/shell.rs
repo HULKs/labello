@@ -9,6 +9,7 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
+        self.refresh_feedback(ui.ctx());
         if self.view != AppView::Review {
             self.work.review_details_focus_return = None;
         }
@@ -32,7 +33,7 @@ impl eframe::App for LabelloApp {
         self.refresh_export_if_due(ui.ctx());
         self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
-        self.handle_shortcuts(ui.ctx());
+        if !self.feedback_blocks_input() { self.handle_shortcuts(ui.ctx()); }
         if !ui.ctx().text_edit_focused() {
             // egui also activates focused controls on repeated Space/Enter. Run
             // after shortcuts so unrelated, repeatable navigation keeps working,
@@ -53,7 +54,7 @@ impl eframe::App for LabelloApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.navigation.statistics.open || self.work.pending_transition.is_some() {
+        if self.navigation.statistics.open || self.work.pending_transition.is_some() || self.feedback.open || self.work_view() && self.feedback_required() {
             ui.disable();
         }
         crate::pointer_input::set_canvas_rect(ui.ctx(), egui::Rect::NOTHING, ui.layer_id());
@@ -237,5 +238,6 @@ impl eframe::App for LabelloApp {
             };
             ui.ctx().request_repaint_after(until_refresh);
         }
+        self.feedback_overlay(ui.ctx());
     }
 }
