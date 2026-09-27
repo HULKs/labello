@@ -53,6 +53,8 @@ pub(crate) use events::stats_relevant_event;
 
 #[derive(Clone, Debug)]
 pub struct DatasetRepository {
+    pub(crate) feedback_cache:
+        Arc<Mutex<BTreeMap<ImageId, Arc<Vec<labello_domain::CorrectionFeedback>>>>>,
     root: Arc<PathBuf>,
     explorer_cache: Arc<Mutex<BTreeMap<ImageId, explorer::ImageExplorerSummary>>>,
     pub(crate) review_history_cache: Arc<crate::review_history::ReviewHistoryCache>,
@@ -95,6 +97,7 @@ impl DatasetRepository {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: Arc::new(root.into()),
+            feedback_cache: Arc::default(),
             explorer_cache: Arc::default(),
             review_history_cache: Arc::default(),
             locks: Arc::new(Mutex::new(BTreeMap::new())),

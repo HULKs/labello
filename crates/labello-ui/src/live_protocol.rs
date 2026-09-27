@@ -179,6 +179,10 @@ impl std::fmt::Display for UiRequestError {
 
 #[derive(Debug)]
 pub(crate) enum UiMessage {
+    Feedback {
+        request: RequestIdentity,
+        result: Box<Result<crate::feedback::FeedbackReply, UiRequestError>>,
+    },
     PrelabelFinished {
         request: RequestIdentity,
         result: Box<Result<crate::prelabel_flow::PrelabelReply, String>>,
@@ -423,6 +427,10 @@ pub(crate) enum UiMessage {
 }
 
 pub(crate) enum UiCommand {
+    Feedback {
+        request: RequestIdentity,
+        action: crate::feedback::FeedbackAction,
+    },
     Prelabel {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -723,7 +731,8 @@ impl UiCommand {
             | Self::ImportDiagnostics { .. }
             | Self::CommitImport { .. }
             | Self::CancelImport { .. } => panic!("import commands use import_request"),
-            Self::Inspect { request, .. }
+            Self::Feedback { request, .. }
+            | Self::Inspect { request, .. }
             | Self::BuildInformation { request }
             | Self::Export { request, .. }
             | Self::Prelabel { request, .. }
@@ -967,6 +976,11 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
+            Self::Feedback { result, .. } => result
+                .as_ref()
+                .as_ref()
+                .err()
+                .is_some_and(|e| e.unauthorized),
             Self::PresenceLoaded { result, .. } => result
                 .as_ref()
                 .err()
@@ -1006,7 +1020,8 @@ impl UiMessage {
             | Self::ImportCancelled { .. } => None,
             #[cfg(target_arch = "wasm32")]
             Self::ImportBrowserFilesSelected { .. } => None,
-            Self::Inspected { request, .. }
+            Self::Feedback { request, .. }
+            | Self::Inspected { request, .. }
             | Self::BuildInformationLoaded { request, .. }
             | Self::BuildInformationCopied { request, .. }
             | Self::ExportFinished { request, .. }

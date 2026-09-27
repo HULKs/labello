@@ -211,3 +211,16 @@ Server prediction execution may be `server_cpu`, `server_cuda`, or `server_web_g
 All three retain server-generated trust through accepted origin, replay, snapshots
 and offline wire data. Browser submissions cannot claim any server execution kind.
 Historical CPU and browser execution values keep their existing meaning.
+
+## Correction feedback projections
+
+Personal feedback derives from `ReviewCorrectionSubmitted` receipts. Each
+receipt produces one entry per affected recipient. Before/after states replay
+the captured submitted round and the receipt boundary respectively. Subsequent
+changes cannot alter these historical comparisons. The latest human annotation
+version supplies authorship for edits/removals; additions and migration
+replacement/exclusion use the original human submission, following earlier
+correction rounds rather than assigning original credit to a reviewer.
+Feedback adds no event type or persisted image-state field and does not rewrite
+version-2 or version-3 histories. Dismissal belongs to private per-user feedback
+control state, not the annotation event log.

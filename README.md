@@ -15,6 +15,8 @@ images, annotations, reviews, and audit history on the filesystem.
   prepared image queues, and account-scoped browser draft recovery.
 - Review each object and the full image. Reviewers can correct geometry or add
   missing objects; one reviewer approves the resulting round to complete it.
+- View reviewer corrections in a personal feedback inbox. Required feedback blocks
+  further labeling until the affected workflows are cleared.
 - Browse datasets without claiming work, inspect overlays, and return completed
   workflows to review with an audited reason.
 - Manage classes, workflows, instructions, roles, images, and assignment balance.

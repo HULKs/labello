@@ -44,3 +44,5 @@ mod build_information;
 pub use build_information::BuildClipboardWriter;
 
 mod workflow_reasons;
+
+mod feedback;

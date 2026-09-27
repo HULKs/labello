@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use labello_client::IngestJob;
@@ -15,6 +15,7 @@ use crate::{GithubOAuthConfig, error::ApiResult, session::ServerStore};
 
 #[derive(Clone)]
 pub struct ApiState {
+    pub(crate) feedback: labello_storage::feedback::FeedbackStore,
     datasets_root: Arc<PathBuf>,
     bootstrap_admins: Arc<BTreeSet<UserId>>,
     local_admin_user_id: Option<Arc<UserId>>,
@@ -22,7 +23,6 @@ pub struct ApiState {
     session_cookie_secure: bool,
     pub(crate) server_store: ServerStore,
     ingest_jobs: Arc<RwLock<BTreeMap<String, IngestJob>>>,
-    repositories: Arc<Mutex<BTreeMap<DatasetId, Arc<DatasetRepository>>>>,
     import_service: Option<Arc<ImportService>>,
     pub(crate) previews: labello_storage::PreviewCache,
     export_service: Option<Arc<labello_storage::export::ExportService>>,
@@ -82,6 +82,7 @@ impl ApiState {
         let datasets_root = datasets_root.into();
         Self {
             server_store: ServerStore::new(&datasets_root),
+            feedback: labello_storage::feedback::FeedbackStore::new(datasets_root.clone()),
             previews: labello_storage::PreviewCache::new(
                 datasets_root.join(".labello-server/previews"),
                 Default::default(),
@@ -93,7 +94,6 @@ impl ApiState {
             browser_origins: Arc::new(Vec::new()),
             session_cookie_secure: true,
             ingest_jobs: Arc::new(RwLock::new(BTreeMap::new())),
-            repositories: Arc::new(Mutex::new(BTreeMap::new())),
             import_service: None,
             export_service: None,
             prelabel_service: None,
@@ -254,22 +254,7 @@ impl ApiState {
         &self,
         dataset_id: &DatasetId,
     ) -> Result<Arc<DatasetRepository>, IdValidationError> {
-        dataset_id.validate_path_segment()?;
-        let mut repositories = self.repositories.lock().unwrap_or_else(|poisoned| {
-            tracing::error!(
-                event = "repository.lock_poisoned",
-                "repository cache lock recovered after panic"
-            );
-            poisoned.into_inner()
-        });
-        Ok(repositories
-            .entry(dataset_id.clone())
-            .or_insert_with(|| {
-                Arc::new(DatasetRepository::new(
-                    self.datasets_root.join(dataset_id.as_str()),
-                ))
-            })
-            .clone())
+        self.feedback.repository(dataset_id)
     }
 
     pub async fn put_ingest_job(&self, job: IngestJob) {

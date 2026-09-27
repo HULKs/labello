@@ -264,3 +264,27 @@ Hover information and accessible text identify the submitter; unavailable photos
 use initials, and missing submission identity uses an unknown-author fallback.
 The submitter is the author of the current submission or migration confirmation,
 not the current reviewer or an annotation's latest editor.
+
+## Correction feedback inbox
+
+The feedback button in the top application bar opens a bounded inbox anchored
+at the button. It lists corrections to your work across accessible datasets.
+View opens a read-only overlay with the image, before/after annotations,
+reviewer identity and any explanation. Select a changed object to focus it.
+Viewing an item acknowledges it after its image and comparison have rendered;
+optional items can also be dismissed directly. Dismissal persists across sessions.
+
+Each workflow has a mandatory-feedback threshold, initially five pending
+correction submissions. Data administrators configure it in Admin > Schema >
+Mandatory feedback. When any workflow reaches its threshold, all further
+labeling is blocked across datasets. In annotation/review the feedback overlay
+opens automatically. It cannot close until every required item is viewed;
+falling below five does not release the block. Next feedback advances through
+required items, including other workflows that reached their threshold.
+The underlying assignment and draft remain intact. Failed loads or
+acknowledgements offer retry and do not acknowledge unseen feedback.
+
+Feedback starts with corrections committed after the feature's first
+activation on the server. Existing historical corrections are not backfilled.
+Removed images/workflows and revoked dataset access do not trap users behind
+inaccessible feedback. Correction history itself is never deleted by dismissal.

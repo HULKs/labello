@@ -4515,6 +4515,32 @@ async fn review_corrections_cover_exclusions_canonical_skeletons_and_discovery_c
             .load_events(&fixture.image_id)
             .await
             .unwrap();
+        let receipt = events
+            .iter()
+            .rposition(|event| {
+                matches!(
+                    event.payload,
+                    EventPayload::ReviewCorrectionSubmitted { .. }
+                )
+            })
+            .unwrap();
+        let feedback = labello_domain::correction_feedback(
+            &fixture.repository.load_dataset_config().await.unwrap(),
+            &events,
+            receipt,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(feedback.recipients.contains(&fixture.annotator));
+        assert!(!feedback.recipients.contains(&fixture.reviewers[0]));
+        assert_eq!(
+            feedback.before_dispositions,
+            before.migration_dispositions[&fixture.task_id]
+        );
+        assert_eq!(
+            feedback.after_dispositions,
+            after.migration_dispositions[&fixture.task_id]
+        );
         for boundary in 0..=events.len() {
             rebuild_state(fixture.image_id.clone(), &events[..boundary]).unwrap();
         }

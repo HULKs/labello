@@ -99,6 +99,7 @@ impl LabelloApp {
         Self {
             runtime: RuntimeState::new(),
             builds: Default::default(),
+            feedback: Default::default(),
             inspection: Default::default(),
             loading: LoadingState::default(),
             setup,

@@ -396,3 +396,30 @@ explicit model-to-dataset mappings and model digest to dataset configuration.
 Historical positional mappings remain readable without rewriting their meaning.
 The private hint index records the successful server provider; historical index
 entries without that field default to server CPU. Neither change rewrites events.
+
+## Correction feedback acknowledgement
+
+`.labello-server/feedback-v1.json` is authoritative, versioned private control
+state. It contains the first-activation event-sequence baseline per image,
+per-user presentation and dismissal records, workflow thresholds and latched
+mandatory-workflow sets. Include it in full-root backups. Dataset snapshots
+omit it, like authentication and private import/export control state. Missing
+configuration uses five pending correction batches; thresholds must be positive.
+Do not delete or edit this file to repair a blocked inbox.
+
+The storage feedback owner shares canonical repository instances with the API.
+A root-wide process-local guard serializes feedback acknowledgement and workflow
+HTTP mutations through their existing per-image transactions. Lock order is
+feedback admission, existing configuration guards, then image locks. Reads
+project immutable correction receipts from authoritative event history. The
+first admission captures current event sequences before permitting writes, so
+historical corrections do not become new feedback. Later correction commits
+remain discoverable after interruption, even without a client polling the inbox.
+
+Comparisons are disposable per-image projections cached under the image lock.
+Event publication and explicit repair invalidate them before publication. Restart
+rebuilds them from events. Acknowledgements and mandatory latches use synced
+atomic JSON replacement. Falling below a threshold retains its latch until the
+workflow has no pending accessible items. Image removal, workflow removal or
+role revocation removes inaccessible items from admission decisions without
+changing their authoritative correction history.

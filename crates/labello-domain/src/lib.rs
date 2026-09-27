@@ -59,3 +59,6 @@ pub fn now() -> Timestamp {
 mod v2_contract_tests;
 #[cfg(test)]
 mod v3_import_tests;
+
+pub mod feedback;
+pub use feedback::*;

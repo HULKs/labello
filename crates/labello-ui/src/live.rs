@@ -59,6 +59,14 @@ impl LabelloApp {
             processed += 1;
             let message = match message {
                 UiMessage::RequestFailed { request, error }
+                    if self.feedback.pending == Some(request.request_id) =>
+                {
+                    UiMessage::Feedback {
+                        request,
+                        result: Box::new(Err(error.into())),
+                    }
+                }
+                UiMessage::RequestFailed { request, error }
                     if self.inspection_request_pending(request.request_id) =>
                 {
                     UiMessage::Inspected {
@@ -156,6 +164,10 @@ impl LabelloApp {
     }
 
     fn reduce_message(&mut self, ctx: &egui::Context, message: UiMessage) {
+        let message = match self.reduce_feedback(ctx, message) {
+            None => return,
+            Some(message) => message,
+        };
         let message = match self.reduce_prelabel_message(message) {
             None => return,
             Some(message) => message,
@@ -203,6 +215,10 @@ impl LabelloApp {
         let Some(api) = self.runtime.api.clone() else {
             self.rollback_command(&command, "API is not configured");
             return;
+        };
+        let command = match self.dispatch_feedback(api.clone(), command) {
+            None => return,
+            Some(command) => command,
         };
         let command = match self.dispatch_prelabel_command(api.clone(), command) {
             None => return,

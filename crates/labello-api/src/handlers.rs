@@ -33,6 +33,7 @@ use crate::{
 
 mod deployment;
 mod exports;
+mod feedback;
 mod imports;
 mod ingest;
 mod oauth_routes;
@@ -93,6 +94,13 @@ pub fn router(state: ApiState) -> Router {
     let app = Router::new()
         .route("/health", get(health))
         .route("/presence", get(presence::server_presence))
+        .route("/feedback", get(feedback::inbox))
+        .route("/feedback/{event}", get(feedback::detail))
+        .route("/feedback/{event}/dismiss", post(feedback::dismiss))
+        .route(
+            "/datasets/{dataset_id}/tasks/{task_id}/feedback-threshold",
+            get(feedback::threshold).put(feedback::set_threshold),
+        )
         .route("/deployment/readiness", get(deployment::readiness))
         .route("/build-information", get(deployment::build_information))
         .route("/me", get(me))
@@ -333,6 +341,10 @@ pub fn router(state: ApiState) -> Router {
             "/datasets/{dataset_id}/prelabel-management",
             get(prelabels::admin_state).post(prelabels::admin_command),
         )
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            feedback::workflow_gate,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             crate::csrf::enforce,

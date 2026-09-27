@@ -497,3 +497,14 @@ the included Tract backend is single-threaded. Idle processes expire within the
 configured interval plus at most 30 seconds, or earlier under capacity pressure.
 Interactive requests have priority between batch items. Up to 64 wait for admission
 for at most 30 seconds; saturation returns busy without disabling manual work.
+
+## Mandatory correction feedback
+
+Data administrators configure the positive integer pending-feedback threshold
+per dataset/workflow in Admin > Schema > Mandatory feedback. The default is 5.
+This setting and per-user acknowledgement/latch state are stored in the private
+root feedback control record described in [persistence](persistence.md#correction-feedback-acknowledgement).
+It is independent of annotation schema copies and dataset snapshots. Lowering a
+threshold can require existing pending feedback; raising it does not clear an
+already latched requirement. Users must clear every mandatory workflow before
+continuing labeling in any dataset.

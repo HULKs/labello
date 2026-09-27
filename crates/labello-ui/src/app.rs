@@ -531,6 +531,7 @@ impl WorkflowChoice {
 }
 
 pub struct LabelloApp {
+    pub(crate) feedback: crate::feedback::FeedbackState,
     pub(crate) config: AppConfig,
     pub(crate) inspection: crate::dataset_inspector::InspectorState,
     pub(crate) builds: crate::build_information::BuildInformationState,
