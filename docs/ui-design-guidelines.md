@@ -181,6 +181,13 @@ has been recorded.
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
+- **Migration scan phase:** mark full-image annotation and review with a static
+  four-point information-blue outer frame and one-point light inner frame. Keep
+  a dark gap and an eight-point gutter outside the canvas in both focused and
+  overview phases, so the cue adds no image occlusion or phase-dependent layout
+  shift. The double-frame shape distinguishes it from object selection, warnings,
+  errors, and keyboard focus. It follows workflow phase rather than zoom and
+  adds no visible text. Hide it without an image preview.
 - **Image overlays:** use filled circles for visible keypoints and hollow
   diamonds for occluded keypoints in saved annotations, active drafts, reviewer
   corrections, and migration. Not-present keypoints have no image marker or

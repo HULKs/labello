@@ -464,21 +464,41 @@ impl LabelloApp {
             );
         }
         self.style_review_correction_previews(&annotations, &mut annotation_styles);
-        let action = show_canvas_colored(
-            ui,
-            &mut self.work.canvas,
-            texture.as_ref(),
-            &annotations,
-            [current.image.width, current.image.height],
-            false,
-            selected.as_ref(),
-            interaction,
-            &edges,
-            &[],
-            theme::ANNOTATION,
-            &annotation_styles,
-            Some(&selectable_annotations),
-        );
+        // Reserve the same gutter in both phases so the cue never covers image
+        // pixels or changes the canvas transform when the workflow advances.
+        let scan_for_missing = (overview && self.work.migration.inspected_group_id.is_none())
+            || (self.view == AppView::Review && self.review_overview());
+        let framed = egui::Frame::new().inner_margin(8).show(ui, |ui| {
+            show_canvas_colored(
+                ui,
+                &mut self.work.canvas,
+                texture.as_ref(),
+                &annotations,
+                [current.image.width, current.image.height],
+                false,
+                selected.as_ref(),
+                interaction,
+                &edges,
+                &[],
+                theme::ANNOTATION,
+                &annotation_styles,
+                Some(&selectable_annotations),
+            )
+        });
+        if scan_for_missing && texture.is_some() {
+            let bounds = framed.response.rect;
+            for (inset, radius, width, color) in
+                [(0.0, 26, 4.0, theme::INFO), (6.0, 20, 1.0, theme::TEXT)]
+            {
+                ui.painter().rect_stroke(
+                    bounds.shrink(inset),
+                    egui::CornerRadius::same(radius),
+                    egui::Stroke::new(width, color),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+        let action = framed.inner;
         if self.work.correction_draft.is_some() {
             match action {
                 Some(CanvasAction::PlaceKeypoint(point)) => {

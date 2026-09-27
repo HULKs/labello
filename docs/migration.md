@@ -35,6 +35,14 @@ older passes stay historical.
 
 ## Add a missing object
 
+A prominent blue double frame around the canvas marks the full-image scan phase
+in migration annotation and review. It appears after the last object advances to
+full-image confirmation, including workflows with no imported guides. Scan for
+missing objects before finishing. Zooming or panning within this phase keeps the
+frame visible; fitting an unfinished object to the image does not activate it.
+Returning to a focused guide or review item clears it. The frame remains outside
+the image and is hidden when the preview is unavailable.
+
 In the full-image view, tap blank image space to start a skeleton for an object
 without an imported guide. Creation and editing need no mode buttons: existing
 objects take selection priority, and clicking one opens it for editing. After the

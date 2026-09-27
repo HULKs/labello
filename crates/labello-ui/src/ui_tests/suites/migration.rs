@@ -2445,6 +2445,9 @@ fn historical_migration_pass_reloads_and_resolves_through_normal_controls() {
                 .query_by_label_contains("Submit")
                 .is_some()
         );
+        harness.step();
+        assert_eq!(missing_object_scan_frames(&harness).len(), 1,
+            "advancing past the final guide activates the scan cue");
         assert_eq!(api.counts().migration_commands, 2);
         harness.state_mut().trigger_migration_primary_action();
         assert!(
@@ -2588,6 +2591,86 @@ fn migration_review_button_and_space_approve_after_retaining_a_correction() {
             harness.state().runtime.error,
             harness.state().work.migration.error
         );
+        assert_eq!(missing_object_scan_frames(&harness).len(), 1,
+            "migration review uses the same overview cue");
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+fn missing_object_scan_frames(harness: &Harness<'_, LabelloApp>) -> Vec<egui::Rect> {
+    fn collect(shape: &egui::Shape, frames: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Rect(rect)
+                if rect.stroke == egui::Stroke::new(4.0, crate::theme::INFO) =>
+            {
+                frames.push(rect.rect);
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    collect(shape, frames);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut frames = Vec::new();
+    for shape in &harness.output().shapes {
+        collect(&shape.shape, &mut frames);
+    }
+    frames
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_scan_cue_tracks_phase_without_covering_the_canvas() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [
+        egui::vec2(320.0, 320.0),
+        egui::vec2(320.0, 568.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(600.0, 800.0),
+        egui::vec2(1288.0, 820.0),
+        egui::vec2(1440.0, 1000.0),
+    ] {
+        for preset in [InspectorPreset::MigrationFullImage, InspectorPreset::MigrationDiscovery] {
+            let app = inspector_presets::build(preset, &egui::Context::default());
+            let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+            harness.step();
+            let frames = missing_object_scan_frames(&harness);
+            assert_eq!(frames.len(), 1, "missing overview cue at {size:?}");
+            let canvas = harness.get_by_label("Annotation canvas").rect();
+            assert!(frames[0].shrink(7.0).contains_rect(canvas));
+            assert!(egui::Rect::from_min_size(egui::Pos2::ZERO, size).contains_rect(frames[0]));
+            harness.state_mut().work.canvas.zoom_in();
+            harness.step();
+            assert_eq!(missing_object_scan_frames(&harness), frames, "scan phase survives zoom");
+            if matches!(preset, InspectorPreset::MigrationFullImage) {
+                harness.state_mut().work.migration.inspected_group_id =
+                    Some(labello_domain::ObjectGroupId::from("group-left"));
+                harness.step();
+                assert!(missing_object_scan_frames(&harness).is_empty(), "focused guide clears cue");
+                harness.state_mut().work.migration.inspected_group_id = None;
+                harness.step();
+                assert_eq!(missing_object_scan_frames(&harness), frames);
+            }
+            harness.state_mut().work.current_texture = None;
+            harness.step();
+            assert!(missing_object_scan_frames(&harness).is_empty(), "no scan cue without an image");
+        }
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_scan_cue_does_not_treat_fit_as_workflow_completion() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationPass, InspectorPreset::MigrationReview, InspectorPreset::MigrationDiscoveryReview] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
+        harness.step();
+        harness.state_mut().work.canvas.fit_view();
+        harness.step();
+        assert!(missing_object_scan_frames(&harness).is_empty(), "fit must not complete {preset:?}");
     }
 }
 
