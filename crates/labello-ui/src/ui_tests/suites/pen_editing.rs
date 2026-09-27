@@ -229,7 +229,7 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         assert!(harness.query_by_label_contains("Add missing object").is_none());
         assert!(harness.query_by_label_contains("Edit added").is_none());
         let first = harness.get_by_label("Annotation canvas").rect().center();
-        click_at(&mut harness, first);
+        drag_at(&mut harness, first - egui::vec2(0.0, 25.0), first);
         harness.key_press(egui::Key::H);
         harness.step();
         let first_draft = harness.state().work.migration.draft.clone().unwrap();
@@ -237,7 +237,7 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         api.state.borrow_mut().fail_next_migration = fail_first_save;
         // Stay in the gap between the imported guides as the canvas size changes.
         let second = first + egui::vec2(0.0, 80.0);
-        click_at(&mut harness, second);
+        drag_at(&mut harness, second - egui::vec2(0.0, 25.0), second);
         step_until(&mut harness, 12, |app| !app.work.migration.busy);
         if fail_first_save {
             assert!(harness.state().work.migration.error.is_some());

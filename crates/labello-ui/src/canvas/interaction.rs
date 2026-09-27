@@ -34,6 +34,7 @@ fn canvas_hover_cursor(
                 egui::CursorIcon::Grabbing
             }
             DragOperation::Create { .. } => egui::CursorIcon::Crosshair,
+            DragOperation::PlaceKeypoint { .. } => egui::CursorIcon::Grabbing,
         });
     }
 
@@ -294,6 +295,30 @@ fn handle_annotation_pointer(
 
         if state.drag.is_none()
             && interaction.allow_create
+            && !bounding_box_tool
+            && let Some(placement) = interaction.keypoint_placement
+            && image_rect.contains(pointer)
+            && (!interaction.allow_selection || annotation_at_selectable(
+                pointer, image_rect, annotations, selectable_annotations,
+            ).is_none())
+        {
+            let replacement = selected_annotation.and_then(|id| {
+                let index = placement.replace_selected?;
+                let annotation = annotations.iter().find(|annotation| &annotation.annotation_id == id)?;
+                let AnnotationGeometry::Skeleton(skeleton) = &annotation.geometry else { return None; };
+                let original = skeleton.keypoints.get(index)?.point?;
+                Some((id.clone(), index, original))
+            });
+            state.drag = Some(if let Some((annotation_id, keypoint_index, original)) = replacement {
+                state.select_keypoint(Some(KeypointSelection { annotation_id: annotation_id.clone(), keypoint_index }));
+                DragOperation::Keypoint { annotation_id, keypoint_index, original }
+            } else {
+                DragOperation::PlaceKeypoint { hidden: placement.hidden }
+            });
+        }
+
+        if state.drag.is_none()
+            && interaction.allow_create
             && bounding_box_tool
             && image_rect.contains(pointer)
             && annotation_at_selectable(pointer, image_rect, annotations, selectable_annotations)
@@ -321,6 +346,10 @@ fn handle_annotation_pointer(
         let bbox = state.draft_box.take();
         let keypoint = state.draft_keypoint.take();
         match (drag, bbox, keypoint) {
+            (Some(DragOperation::PlaceKeypoint { .. }), _, Some(point)) => {
+                state.select_keypoint(None);
+                return Some(CanvasAction::PlaceKeypoint(point));
+            }
             (Some(DragOperation::Create { .. }), Some(bbox), _)
                 if bbox.width * image_rect.width() >= MIN_CREATE_BOX_POINTS
                     && bbox.height * image_rect.height() >= MIN_CREATE_BOX_POINTS =>
@@ -389,7 +418,7 @@ fn handle_annotation_pointer(
                 }));
             return Some(CanvasAction::Select(annotation.annotation_id.clone()));
         }
-        if interaction.allow_create && !bounding_box_tool && image_rect.contains(pointer) {
+        if interaction.allow_create && interaction.keypoint_placement.is_none() && !bounding_box_tool && image_rect.contains(pointer) {
             let point = screen_to_normalized(image_rect, pointer);
             state.select_keypoint(None);
             return Some(CanvasAction::PlaceKeypoint(NormalizedPoint {
@@ -414,7 +443,7 @@ fn update_drag_preview(state: &mut CanvasState, image_rect: Rect, pointer: Pos2)
         DragOperation::Resize {
             original, handle, ..
         } => Some(resize_bbox(*original, *handle, current)),
-        DragOperation::Keypoint { .. } => {
+        DragOperation::Keypoint { .. } | DragOperation::PlaceKeypoint { .. } => {
             state.draft_keypoint = Some(NormalizedPoint {
                 x: current.x.clamp(0.0, 1.0),
                 y: current.y.clamp(0.0, 1.0),

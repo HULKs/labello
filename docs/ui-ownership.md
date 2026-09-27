@@ -432,13 +432,23 @@ Review overview box additions retain their correction editor after staging,
 matching skeleton additions. Further edits remain local until review submission.
 Blank-canvas placement can start another object after retaining the current one.
 
+Migration annotation previews keypoint placement from primary press through drag,
+then sends the final clamped position to the workflow on release. Escape, lost
+pointer input, read-only state, and view gestures cancel the preview. A guided
+one-keypoint object's blank-canvas press repositions its existing point while
+preserving its visibility and object identity. Multi-keypoint placement order
+and explicit guide confirmation remain unchanged.
+
 Migration full-image confirmation starts a missing-object skeleton on a blank
-canvas click and selects existing objects directly. No Add missing object or
-Edit added object buttons are shown. After a complete draft, the next blank click
-saves it through the existing migration command and starts the next object only
+canvas press and release and selects existing objects directly. No Add missing
+object or Edit added object buttons are shown. After a complete one-keypoint
+draft, the next blank placement saves it through the existing migration command
+and starts the next object only
 after success. Selecting another object uses the same save-before-switch path.
-The reducer retains the pending canvas action and draft on failure for retry;
-assignment completion still requires explicit confirmation. Existing objects
+The reducer retains the final dragged position in the pending canvas action and
+the current draft on failure for retry. Multi-keypoint drafts require explicit
+object confirmation before starting another object. Assignment completion still
+requires explicit confirmation. Existing objects
 retain selection priority. Completed drafts remain editable before
 explicit confirmation, with placed-point visibility controls for both guided and
 missing-object drafts. These controls preserve migration dirty-state ownership.

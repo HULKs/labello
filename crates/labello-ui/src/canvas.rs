@@ -105,6 +105,13 @@ pub(crate) struct MissingObjectOverlay<'a> {
     pub placing: bool,
 }
 
+/// Optional press-and-drag placement policy supplied by the workflow owner.
+#[derive(Clone, Copy, Debug)]
+pub struct KeypointPlacement {
+    pub hidden: bool,
+    pub replace_selected: Option<usize>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CanvasInteraction {
     pub editable: bool,
@@ -112,6 +119,7 @@ pub struct CanvasInteraction {
     pub allow_selection: bool,
     pub edit_keypoints: bool,
     pub selected_keypoint: Option<usize>,
+    pub keypoint_placement: Option<KeypointPlacement>,
 }
 
 impl CanvasInteraction {
@@ -122,6 +130,7 @@ impl CanvasInteraction {
             allow_selection: editable,
             edit_keypoints: false,
             selected_keypoint: None,
+            keypoint_placement: None,
         }
     }
 
@@ -132,6 +141,7 @@ impl CanvasInteraction {
             allow_selection: false,
             edit_keypoints: true,
             selected_keypoint,
+            keypoint_placement: None,
         }
     }
 }
@@ -426,6 +436,9 @@ impl CanvasState {
 
 #[derive(Clone, Debug)]
 enum DragOperation {
+    PlaceKeypoint {
+        hidden: bool,
+    },
     Create {
         start: Pos2,
     },
@@ -1871,6 +1884,76 @@ mod tests {
             blank - vec2(50.0, 30.0),
         );
         assert!(harness.state().actions.is_empty());
+    }
+
+    #[test]
+    fn keypoint_placement_previews_held_press_and_commits_clamped_release() {
+        let mut harness = Harness::builder()
+            .with_size(vec2(400.0, 300.0))
+            .build_ui_state(
+                |ui, test: &mut InteractiveTestState| {
+                    let mut interaction = CanvasInteraction::annotations(test.editable);
+                    interaction.keypoint_placement = Some(KeypointPlacement {
+                        hidden: true,
+                        replace_selected: None,
+                    });
+                    if let Some(action) = show_canvas_configured(
+                        ui,
+                        &mut test.canvas,
+                        None,
+                        &[],
+                        [400, 200],
+                        false,
+                        None,
+                        interaction,
+                        &[],
+                        &[],
+                    ) {
+                        test.actions.push(action);
+                    }
+                },
+                InteractiveTestState::default(),
+            );
+        let center = harness.get_by_label("Annotation canvas").rect().center();
+        harness.event(Event::PointerMoved(center));
+        harness.event(Event::PointerButton {
+            pos: center,
+            button: PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        });
+        harness.step();
+        assert!(harness.state().canvas.is_dragging());
+        let initial = harness.state().canvas.draft_keypoint.unwrap();
+        assert!(harness.state().actions.is_empty());
+        let end = center + vec2(40.0, -25.0);
+        harness.event(Event::PointerMoved(end));
+        harness.step();
+        let preview = harness.state().canvas.draft_keypoint.unwrap();
+        assert!(preview.x > initial.x && preview.y < initial.y);
+        assert!(harness.state().actions.is_empty());
+        let outside = center + vec2(500.0, -500.0);
+        harness.event(Event::PointerMoved(outside));
+        harness.step();
+        assert_eq!(
+            harness.state().canvas.draft_keypoint,
+            Some(NormalizedPoint { x: 1.0, y: 0.0 })
+        );
+        harness.event(Event::PointerButton {
+            pos: outside,
+            button: PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        });
+        harness.step();
+        assert!(matches!(
+            harness.state().actions.as_slice(),
+            [CanvasAction::PlaceKeypoint(NormalizedPoint {
+                x: 1.0,
+                y: 0.0
+            })]
+        ));
+        assert!(!harness.state().canvas.is_dragging());
     }
 
     #[test]
