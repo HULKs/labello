@@ -224,8 +224,12 @@ has been recorded.
   migration targets use disposition versions. Actual edits show base version and
   unsaved input. Opening an item alone is not a correction.
   The passive second-bar summary leads with position or Image overview and the
-  submission author's profile avatar. Inspector starts closed and has its own
-  toggle beside Workflow. Reuse cached avatars with initials or unknown-author
+  submission author's profile avatar. Inspector starts closed. The second bar places Workflow at its left edge
+  and Inspector at its right edge, matching the sides where their panels open.
+  Center the remaining summary and canvas controls between these toggles in
+  both Annotation and Review. Annotation uses the same two-line hierarchy:
+  current-image progress or phase, then annotation type and workflow/class.
+  Image identity and dimensions remain available in hover and accessible details. Reuse cached avatars with initials or unknown-author
   fallback, and expose submitter identity in hover and accessible text. Size the
   summary to measured text/avatar width. Lead its second line with annotation
   type and truncate long workflow identity with full accessible details. The shell
@@ -238,8 +242,9 @@ has been recorded.
   new phase. The global header keeps its navigation, utilities and layout during
   loads. The dataset inspector reserves its context row during initial gallery
   loading and retains fixed controls across image loads.
-  On Compact, put the summary above one row containing Refocus, Fit, Workflow,
-  and Inspector. Keep this region compact enough to retain usable canvas height
+  On Compact, center the summary above a control row with Workflow at the
+  left edge, canvas controls centered, and Inspector at the right edge. Apply
+  this ordering to both Annotation and Review. Keep this region compact enough to retain usable canvas height
   on short screens. The passive summary is not a keyboard focus stop; Inspector
   receives focus back after its drawer closes. Keep
   Previous image, Previous object, Discard changes, and Skip visible above the

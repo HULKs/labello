@@ -16,8 +16,7 @@ struct BarScope {
 
 #[derive(Clone)]
 struct BarPresentation {
-    image: labello_domain::ImageRecord,
-    review: ReviewBarContent,
+    summary: WorkspaceSummary,
     migration: Option<crate::manual_migration::MigrationBarPresentation>,
     previous_image: bool,
     availability_loading: bool,
@@ -65,11 +64,10 @@ impl LabelloApp {
             .current
             .as_ref()
             .filter(|_| self.runtime.api.is_none() || self.work.assignment.is_some())
-            .map(|current| BarPresentation {
-                image: current.image.clone(),
+            .map(|_| BarPresentation {
                 prelabel_progress: self.prelabel_progress(),
                 annotation_primary: self.prelabel_primary_action(),
-                review: ReviewBarContent::from_app(self),
+                summary: WorkspaceSummary::from_app(self),
                 migration: self
                     .manual_migration_active()
                     .then(|| self.migration_bar_presentation()),
@@ -110,31 +108,24 @@ impl LabelloApp {
             .is_some_and(|bar| bar.availability_loading)
     }
 
-    fn displayed_bar_image(&self) -> Option<labello_domain::ImageRecord> {
+    fn displayed_workspace_summary(&self) -> WorkspaceSummary {
         self.navigation
             .workspace_bars
             .presentation
             .as_ref()
-            .map(|bar| bar.image.clone())
-    }
-
-    fn displayed_review_bar(&self) -> ReviewBarContent {
-        self.navigation
-            .workspace_bars
-            .presentation
-            .as_ref()
-            .map(|bar| bar.review.clone())
+            .map(|bar| bar.summary.clone())
             .unwrap_or_else(|| {
                 if self.workspace_bars_blank() {
-                    // Reserve the normal two-line review summary without showing a placeholder.
-                    ReviewBarContent {
-                        identity: " ".into(),
-                        type_and_phase: Some((" ".into(), " ".into())),
+                    // Reserve the normal two-line workspace summary without showing a placeholder.
+                    WorkspaceSummary {
+                        progress: " ".into(),
+                        identity_and_type: Some((" ".into(), " ".into())),
                         accessible: String::new(),
                         submitter: None,
+                        show_avatar: self.view == AppView::Review,
                     }
                 } else {
-                    ReviewBarContent::from_app(self)
+                    WorkspaceSummary::from_app(self)
                 }
             })
     }

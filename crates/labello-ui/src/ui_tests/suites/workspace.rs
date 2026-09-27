@@ -120,7 +120,7 @@ fn image_load_failure_shows_retry_and_loads_image() {
             .get_by_label("Workspace context bar")
             .rect()
             .height()
-            <= 44.0
+            <= 90.0
     );
     assert_visible_controls_clamped(&harness, 320.0, 568.0);
     click(&mut harness, "Retry image load");
@@ -228,7 +228,7 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
 }
 
 #[test]
-fn wide_workflow_panel_keeps_its_toggle_beside_fit() {
+fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     harness.set_size(egui::vec2(1500.0, 780.0));
@@ -244,8 +244,8 @@ fn wide_workflow_panel_keeps_its_toggle_beside_fit() {
         .get_by_role_and_label(egui::accesskit::Role::Button, "Collapse workflow panel")
         .rect();
     assert!(
-        collapse.left() >= fit.right() && collapse.left() - fit.right() <= 12.0,
-        "the collapse control should sit beside Fit: fit={fit:?} collapse={collapse:?}"
+        collapse.left() <= 15.0 && collapse.right() < fit.left(),
+        "the workflow control should sit at the left edge: fit={fit:?} collapse={collapse:?}"
     );
     assert_eq!(collapse.top(), fit.top());
     assert_eq!(collapse.bottom(), fit.bottom());
@@ -302,8 +302,8 @@ fn wide_workflow_panel_keeps_its_toggle_beside_fit() {
         .get_by_role_and_label(egui::accesskit::Role::Button, "Expand workflow panel")
         .rect();
     assert!(
-        expand.left() >= fit.right() && expand.left() - fit.right() <= 12.0,
-        "the expand control should sit beside Fit: fit={fit:?} expand={expand:?}"
+        expand.left() <= 15.0 && expand.right() < fit.left(),
+        "the expand control should stay at the left edge: fit={fit:?} expand={expand:?}"
     );
     assert_eq!(expand.top(), fit.top());
     assert_eq!(expand.bottom(), fit.bottom());
@@ -382,8 +382,8 @@ fn workflow_availability_disables_cards_skips_keyboard_cycles_and_retries_failur
          spinner={availability_spinner:?} context={context_bar:?}"
     );
     assert!(
-        context_bar.right() - availability_spinner.right() <= 16.0,
-        "availability spinner should be right aligned: \
+        harness.get_by_label_contains("Annotation details:").rect().contains_rect(availability_spinner),
+        "availability spinner should remain in the centered summary: \
          spinner={availability_spinner:?} context={context_bar:?}"
     );
     assert!(
@@ -402,8 +402,8 @@ fn workflow_availability_disables_cards_skips_keyboard_cycles_and_retries_failur
     let compact_context = harness.get_by_label("Workspace context bar").rect();
     assert!(compact_context.contains_rect(compact_spinner));
     assert!(
-        compact_context.right() - compact_spinner.right() <= 16.0,
-        "compact availability spinner should be right aligned: \
+        harness.get_by_label_contains("Annotation details:").rect().contains_rect(compact_spinner),
+        "compact availability spinner should remain in the centered summary: \
          spinner={compact_spinner:?} context={compact_context:?}"
     );
     harness.set_size(egui::vec2(1500.0, 780.0));
