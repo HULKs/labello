@@ -316,6 +316,7 @@ inside the existing optional submission reason and retain its 2000-byte limit.
 | `POST /datasets/{dataset_id}/assignments/complete` | Assigned annotator | `AssignmentActionRequest` → `Assignment` |
 | `POST /datasets/{dataset_id}/assignments/reopen` | Owner of exact prior annotation or eligible review assignment | `AssignmentActionRequest` → `Assignment` |
 | `GET /datasets/{dataset_id}/images/{image_id}` | Any role | No input → `ImageState` |
+| `GET /datasets/{dataset_id}/images/{image_id}/review-submitters` | Any role | No input → `ReviewSubmitter[]`: image/task/user IDs and optional public GitHub login/account ID for current review-round or migration-confirmation authors; no private account fields or history mutation |
 | `GET /datasets/{dataset_id}/images/{image_id}/reasons` | Any role | No input → `WorkflowReasonEntry[]`; see [saved reasons](#saved-workflow-reasons) |
 | `POST /datasets/{dataset_id}/images/{image_id}/return-to-review` | Reviewer or data admin | `ReturnToReviewRequest` → `ImageState`; exact sequence, atomic selected workflows |
 | `GET /datasets/{dataset_id}/images/{image_id}/record` | Any role | No input → `ImageRecord` |

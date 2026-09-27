@@ -1088,11 +1088,21 @@ async fn load_image_data(
     prelabel_config_ids: Vec<PrelabelConfigId>,
     fetch_prelabels: bool,
 ) -> labello_client::ClientResult<LoadedImage> {
-    let (image, state, preview, reasons) = futures::try_join!(
+    let (image, state, preview, reasons, review_submitters) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
         load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id,),
         api.get_image_reasons(&dataset_id, &assignment.image_id),
+        async {
+            // Profile presentation must not block otherwise valid review work.
+            Ok::<_, labello_client::ClientError>(if assignment.kind == AssignmentKind::Review {
+                api.get_review_submitters(&dataset_id, &assignment.image_id)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            })
+        },
     )?;
     let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
         [preview.width as usize, preview.height as usize],
@@ -1106,6 +1116,7 @@ async fn load_image_data(
     Ok(LoadedImage {
         prepared_until: None,
         reasons,
+        review_submitters,
         assignment,
         queued: QueuedImage { image, prelabels },
         annotations,

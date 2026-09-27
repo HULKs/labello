@@ -499,6 +499,7 @@ impl LabelloApp {
         self.auth.prelabel_available = false;
         self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;
+        self.work.review_submitters.clear();
         self.auth_epoch = self.auth_epoch.wrapping_add(1);
         self.workspace_epoch = self.workspace_epoch.wrapping_add(1);
         self.invalidate_async_ownership();
@@ -508,6 +509,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_workspace_epoch(&mut self) {
+        self.work.review_submitters.clear();
         self.workspace_epoch = self.workspace_epoch.wrapping_add(1);
         self.invalidate_async_ownership();
         self.reset_assignment_availability_for_workspace();

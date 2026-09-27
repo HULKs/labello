@@ -55,7 +55,7 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
                 .contains_rect(rect),
             "details={rect:?}"
         );
-        assert!(rect.height() >= 44.0);
+        assert!(rect.height() >= 32.0);
         let bar = harness.get_by_label("Workspace context bar").rect();
         assert!(bar.contains_rect(rect));
         let canvas = harness.get_by_label("Annotation canvas").rect();
@@ -80,8 +80,9 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
         if width < 1100.0 {
             let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
             let refocus = harness.get_by_label_contains("Refocus object").rect();
-            assert!((fit.center().y - rect.center().y).abs() < 1.0);
-            assert!((refocus.center().y - rect.center().y).abs() < 1.0);
+            assert!((fit.center().y - refocus.center().y).abs() < 1.0);
+            if width < 600.0 { assert!(fit.top() >= rect.bottom()); }
+            else { assert!((fit.center().y - rect.center().y).abs() < 8.0); }
             assert_control_inside(
                 &harness,
                 "Workflow",
@@ -124,7 +125,7 @@ fn review_bar_details_opens_by_keyboard_and_contains_complete_long_identity() {
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.run_steps(4);
     harness
-        .get_by_label_contains("Review details: Workflow:")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Inspector")
         .focus();
     harness.key_press(egui::Key::Enter);
     harness.run_steps(4);
@@ -156,14 +157,14 @@ fn review_bar_details_opens_by_keyboard_and_contains_complete_long_identity() {
     );
     assert!(
         harness
-            .get_by_label_contains("Review details: Workflow:")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Inspector")
             .is_focused()
     );
     harness.state_mut().work.review_index = 1;
     harness.state_mut().sync_review_selection();
     harness.run_steps(3);
     harness
-        .get_by_label_contains("Review details: Workflow:")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Inspector")
         .focus();
     harness.key_press(egui::Key::Enter);
     harness.run_steps(3);
@@ -173,7 +174,7 @@ fn review_bar_details_opens_by_keyboard_and_contains_complete_long_identity() {
     harness.run_steps(3);
     assert!(
         harness
-            .get_by_label_contains("Review details: Workflow:")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Inspector")
             .is_focused(),
         "final details must restore focus after Tab and Escape"
     );
@@ -460,7 +461,7 @@ fn review_bar_distinguishes_duplicate_workflow_types_and_rejects_stale_task_data
 }
 
 #[test]
-fn review_details_indicator_toggles_the_wide_inspector_and_reflects_its_state() {
+fn review_summary_is_passive_and_separate_wide_inspector_toggles() {
     let api = Rc::new(SpyApi::new());
     seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
     let mut harness = loaded_review_harness(api);
@@ -468,11 +469,14 @@ fn review_details_indicator_toggles_the_wide_inspector_and_reflects_its_state() 
     harness.run_steps(3);
     assert!(harness.state().work.inspector_panel_collapsed);
     for collapsed in [false, true, false, true] {
-        harness.get_by_label_contains("Review details: Workflow:").click();
+        let summary = harness.get_by_label_contains("Review details: Workflow:");
+        assert_eq!(summary.accesskit_node().role(), egui::accesskit::Role::Label);
+        summary.click();
+        harness.run_steps(3);
+        assert_eq!(harness.state().work.inspector_panel_collapsed, !collapsed);
+        harness.get_by_label(if collapsed { "Collapse inspector panel" } else { "Expand inspector panel" }).click();
         harness.run_steps(3);
         assert_eq!(harness.state().work.inspector_panel_collapsed, collapsed);
-        let node = harness.get_by_label_contains("Review details: Workflow:");
-        assert_eq!(node.accesskit_node().toggled(), Some(if collapsed { egui::accesskit::Toggled::False } else { egui::accesskit::Toggled::True }));
         assert_review_bar_paints(&harness, "Item 1 / 1");
     }
 }
@@ -502,7 +506,8 @@ fn mobile_review_footer_stays_visible_across_review_kinds_and_phases() {
                 }
                 let indicator = harness.get_by_label_contains("Review details:").rect();
                 let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
-                assert!((indicator.center().y - fit.center().y).abs() < 1.0);
+                if width < 600.0 { assert!(fit.top() >= indicator.bottom()); }
+                else { assert!((indicator.center().y - fit.center().y).abs() < 8.0); }
             }
         }
     }
@@ -588,4 +593,82 @@ fn added_migration_review_item_removal_lives_in_the_footer() {
     }
     let app = inspector_presets::build(InspectorPreset::MigrationReview, &egui::Context::default());
     assert!(app.migration_review_removal().is_none());
+}
+
+#[test]
+fn review_summary_uses_submission_author_and_rejects_mismatched_profiles() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+    let mut harness = loaded_review_harness(api);
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    let user = harness.state().work.current_state.as_ref().unwrap().review_rounds[&assignment.task_id].submitted_by.clone();
+    assert_ne!(user, harness.state().config.user_id);
+    let profile = labello_client::ReviewSubmitter {
+        image_id: assignment.image_id.clone(), task_id: assignment.task_id.clone(), user_id: user.clone(),
+        github_login: Some("submission-author".into()), github_user_id: Some("42".into()),
+    };
+    let texture = harness.ctx.load_texture("synthetic-submitter", egui::ColorImage::filled([8,8], egui::Color32::LIGHT_BLUE), Default::default());
+    let texture_id = texture.id();
+    harness.ctx.data_mut(|data| data.insert_temp(egui::Id::new(("github-avatar", 42_u64)), Some(texture)));
+    harness.state_mut().work.review_submitters = vec![profile.clone()];
+    harness.run_steps(3);
+    assert!(harness.get_by_label_contains("Review details:").accesskit_node().label().unwrap().contains("Submitted by @submission-author"));
+    assert!(harness.output().shapes.iter().any(|shape| shape.shape.texture_id() == texture_id));
+    for mismatch in 0..3 {
+        let mut stale = profile.clone();
+        match mismatch {
+            0 => stale.image_id = "other-image".into(),
+            1 => stale.task_id = "other-task".into(),
+            _ => stale.user_id = harness.state().config.user_id.clone(),
+        }
+        harness.state_mut().work.review_submitters = vec![stale];
+        harness.run_steps(3);
+        let label = harness.get_by_label_contains("Review details:").accesskit_node().label().unwrap().to_string();
+        assert!(label.contains(&format!("Submitted by {user}.")));
+        assert!(!label.contains("@submission-author"));
+        assert!(!harness.output().shapes.iter().any(|shape| shape.shape.texture_id() == texture_id));
+    }
+    harness.state_mut().work.review_submitters = vec![profile];
+    harness.ctx.data_mut(|data| data.insert_temp(egui::Id::new(("github-avatar", 42_u64)), None::<egui::TextureHandle>));
+    harness.run_steps(3);
+    assert!(harness.get_by_label_contains("Review details:").accesskit_node().label().unwrap().contains("@submission-author"));
+    assert!(!harness.output().shapes.iter().any(|shape| shape.shape.texture_id() == texture_id));
+}
+
+#[test]
+fn migration_review_summary_uses_confirmation_author() {
+    let ctx = egui::Context::default();
+    let mut app = crate::inspector_presets::build(crate::inspector_presets::InspectorPreset::MigrationReview, &ctx);
+    let task = app.work.selected_task_id.clone().unwrap();
+    app.work.current_state.as_mut().unwrap().migration_confirmations.get_mut(&task).unwrap().actor_user_id = "migration-submitter".into();
+    let mut harness = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
+    harness.run_steps(4);
+    assert!(harness.get_by_label_contains("Review details:").accesskit_node().label().unwrap().contains("Submitted by migration-submitter"));
+}
+
+#[test]
+fn review_submitter_profile_loads_through_the_assignment_request() {
+    let api = Rc::new(SpyApi::new());
+    seed_review_annotation(&api, AnnotationGeometry::BoundingBox(BoundingBox { x: 0.2, y: 0.2, width: 0.3, height: 0.3 }), true);
+    {
+        let mut spy = api.state.borrow_mut();
+        let image_id = spy.metadata.images.keys().next().unwrap().clone();
+        let task_id = spy.metadata.tasks[0].task_id.clone();
+        spy.review_submitters.push(labello_client::ReviewSubmitter {
+            image_id, task_id, user_id: "annotator".into(),
+            github_login: Some("loaded-submitter".into()), github_user_id: None,
+        });
+    }
+    let mut harness = loaded_review_harness(api);
+    harness.run_steps(3);
+    assert!(harness.get_by_label_contains("Review details:").accesskit_node().label().unwrap().contains("Submitted by @loaded-submitter"));
+    harness.state_mut().loading.image = true;
+    harness.run_steps(3);
+    let summary = harness.get_by_label_contains("Review details:");
+    assert!(summary.accesskit_node().is_disabled());
+    assert!(summary.accesskit_node().label().unwrap().contains("@loaded-submitter"));
+    harness.state_mut().begin_auth_epoch();
+    harness.run_steps(3);
+    assert!(harness.state().work.review_submitters.is_empty());
+    assert!(harness.query_by_label_contains("@loaded-submitter").is_none());
 }

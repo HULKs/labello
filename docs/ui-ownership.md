@@ -125,6 +125,16 @@ bar presentation includes the current confirmation action and object progress.
 
 ## Assignment navigation and review
 
+The review context bar is passive text and a submitter avatar. Panel toggles own
+Inspector opening and focus return. Profile presentation loads with review images
+through `get_review_submitters` and the existing request/epoch gate. It matches
+image, workflow and authoritative submitter ID before using public profile data.
+Ordinary review uses `ReviewRound.submitted_by`; migration review uses the current
+confirmation author. Profile-request failure falls back to the known submitter ID
+without blocking review. Missing submission provenance reads Submitter unavailable.
+Retained image-loading presentation includes the avatar and attribution, and is
+cleared with the same view/workflow/account scope as the rest of the bar.
+
 `app/support.rs` consumes completion shortcuts including their repeat events,
 but dispatches only fresh key presses. `app/shortcuts.rs` applies this to
 NextImage, review approval/rejection, and prelabel acceptance/discard. The egui

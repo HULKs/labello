@@ -319,6 +319,44 @@ pub(crate) async fn get_image_state(
     Ok(Json(repo.load_image_state(&image_id).await?))
 }
 
+pub(crate) async fn get_review_submitters(
+    State(state): State<ApiState>,
+    Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,
+    headers: HeaderMap,
+) -> ApiResult<Json<Vec<labello_client::ReviewSubmitter>>> {
+    image_id.validate_path_segment()?;
+    let actor = actor_from_headers(&state, &headers)?;
+    let repo = state.repo(&dataset_id)?;
+    let metadata = repo.load_dataset_config().await?;
+    ensure_any_dataset_role(&metadata, &actor)?;
+    repo.load_image_record(&image_id).await?;
+    let image_state = repo.load_image_state(&image_id).await?;
+    let accounts = state.server_store.users()?;
+    let mut submitters: std::collections::BTreeMap<_, _> = image_state
+        .review_rounds
+        .iter()
+        .map(|(task, round)| (task.clone(), round.submitted_by.clone()))
+        .collect();
+    for (task, confirmation) in &image_state.migration_confirmations {
+        submitters.insert(task.clone(), confirmation.actor_user_id.clone());
+    }
+    Ok(Json(
+        submitters
+            .into_iter()
+            .map(|(task_id, user_id)| {
+                let account = accounts.iter().find(|account| account.user_id == user_id);
+                labello_client::ReviewSubmitter {
+                    image_id: image_id.clone(),
+                    task_id,
+                    user_id,
+                    github_login: account.and_then(|account| account.github_login.clone()),
+                    github_user_id: account.and_then(|account| account.github_user_id.clone()),
+                }
+            })
+            .collect(),
+    ))
+}
+
 pub(crate) async fn get_image_reasons(
     State(state): State<ApiState>,
     Path((dataset_id, image_id)): Path<(DatasetId, ImageId)>,

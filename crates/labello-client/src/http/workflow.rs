@@ -160,6 +160,15 @@ impl ImageApi for HttpLabelloApi {
         })
     }
 
+    fn get_review_submitters<'a>(
+        &'a self, dataset_id: &'a DatasetId, image_id: &'a ImageId,
+    ) -> crate::ApiFuture<'a, Vec<crate::ReviewSubmitter>> {
+        Box::pin(async move {
+            Self::json(self.request(Method::GET,
+                &format!("/datasets/{dataset_id}/images/{image_id}/review-submitters"))?.send().await?).await
+        })
+    }
+
     fn get_image_reasons<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

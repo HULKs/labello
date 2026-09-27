@@ -3,6 +3,7 @@ pub(crate) struct ReviewBarContent {
     identity: String,
     type_and_phase: Option<(String, String)>,
     accessible: String,
+    submitter: Option<(String, Option<String>)>,
 }
 
 impl ReviewBarContent {
@@ -23,10 +24,14 @@ impl ReviewBarContent {
                 crate::review_context::ReviewContextPhase::FullImage { .. } => "Image overview".to_string(),
             };
             let phase = if context.unsaved_corrections > 0 { format!("{phase} · {} {}", context.unsaved_corrections, if context.unsaved_corrections == 1 { "correction" } else { "corrections" }) } else { phase };
+            let submitter = app.review_submitter();
+            let attribution = submitter.as_ref().map(|(name, _)| format!(" Submitted by {name}."))
+                .unwrap_or_else(|| " Submitter unavailable.".into());
             Self {
+                submitter,
                 identity: phase,
                 type_and_phase: Some((identity, context.type_label().to_string())),
-                accessible: format!("Review details: {}. Toggle Inspector.", context.accessible_summary()),
+                accessible: format!("Review details: {}.{attribution}", context.accessible_summary()),
             }
         } else {
             let message = if app.work.assignment.is_none() {
@@ -35,6 +40,7 @@ impl ReviewBarContent {
                 "Review target unavailable"
             };
             Self {
+                submitter: None,
                 identity: message.to_string(),
                 type_and_phase: None,
                 accessible: message.to_string(),
@@ -73,9 +79,9 @@ impl ReviewBarText {
         let mut lines = vec![layout(content.identity.clone(), true)];
         if let Some((kind, phase)) = &content.type_and_phase {
             // Full identity remains available through the tooltip and inspector.
-            lines.push(layout(format!("{kind} · {phase}"), false));
+            lines.push(layout(format!("{phase} · {kind}"), false));
         }
-        let height = (lines.iter().map(|line| line.size().y).sum::<f32>() + 8.0).max(44.0);
+        let height = lines.iter().map(|line| line.size().y).sum::<f32>().max(32.0);
         let content_width = lines.iter().enumerate().map(|(index, line)| {
             line.size().x + if index == 0 && availability_loading { 24.0 } else { 0.0 }
         }).fold(0.0_f32, f32::max);
@@ -91,11 +97,13 @@ impl ReviewBarText {
 
 impl LabelloApp {
     fn review_summary_width(&self, ctx: &egui::Context, layout: LayoutMode, available: f32) -> f32 {
-        if layout == LayoutMode::Wide {
+        if layout == LayoutMode::Compact {
+            available
+        } else if layout == LayoutMode::Wide {
             available.min(380.0)
         } else {
             let spacing = ctx.global_style().spacing.item_spacing.x;
-            available - 3.0 * (44.0 + spacing)
+            available - 4.0 * (44.0 + spacing)
         }
     }
 
@@ -113,7 +121,7 @@ impl LabelloApp {
         let content = self.displayed_review_bar();
         let width = self.review_summary_width(ctx, layout, viewport_width - 28.0);
         let text = ReviewBarText::measure(ctx, &content, width, self.review_inline_availability_loading(layout));
-        text.height + 14.0
+        if layout == LayoutMode::Compact { text.height + 46.0 } else { text.height.max(44.0) + 14.0 }
     }
 
     fn review_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -124,15 +132,24 @@ impl LabelloApp {
         if !valid || self.work.drawer == Some(Drawer::Workflow) {
             self.work.review_details_focus_return = None;
         }
-        let response = if layout != LayoutMode::Wide {
+        let response = if layout == LayoutMode::Compact {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                self.review_summary(ui, &content, &text);
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
+                    self.drawer_panel_buttons(ui, true);
+                });
+            })
+        } else if layout != LayoutMode::Wide {
             ui.horizontal(|ui| {
-                self.review_details_button(ui, &content, &text);
+                self.review_summary(ui, &content, &text);
                 ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
-                self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, true);
+                self.drawer_panel_buttons(ui, true);
             })
         } else {
             workspace_context_row(ui, self.bar_availability_loading(), |ui| {
-                self.review_details_button(ui, &content, &text);
+                self.review_summary(ui, &content, &text);
                 ui.horizontal_wrapped(|ui| {
                     ui.add_enabled_ui(valid, |ui| self.canvas_controls(ui, layout));
                 });
@@ -152,93 +169,55 @@ impl LabelloApp {
         });
     }
 
-    fn review_details_button(
-        &mut self,
-        ui: &mut egui::Ui,
-        content: &ReviewBarContent,
-        text: &ReviewBarText,
+    fn review_summary(
+        &self, ui: &mut egui::Ui, content: &ReviewBarContent, text: &ReviewBarText,
     ) {
-        let id = ui.id().with("review-context-details");
-        let selected = if LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Wide
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(text.width, text.height), egui::Sense::hover());
+        let avatar_rect = egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 14.0, rect.center().y), egui::Vec2::splat(24.0));
+        if content.type_and_phase.is_some() && !content.accessible.is_empty() {
+            let (name, github_id) = content.submitter.as_ref()
+                .map(|(name, id)| (name.as_str(), id.as_deref()))
+                .unwrap_or(("?", None));
+            crate::avatar::paint(ui, github_id, name, avatar_rect);
+        }
+        let mut pos = rect.min + egui::vec2(36.0, 0.0);
+        for line in &text.lines {
+            ui.painter().galley(pos, line.clone(), theme::TEXT);
+            pos.y += line.size().y;
+        }
         {
-            !self.work.inspector_panel_collapsed
-        } else {
-            self.work.drawer == Some(Drawer::Inspector)
-        };
-        let choice = ui
-            .scope(|ui| {
-                ui.spacing_mut().button_padding = egui::vec2(6.0, 4.0);
-                egui::Button::new(egui::Atom::custom(
-                    id,
-                    egui::vec2(text.width - 12.0, text.height - 8.0),
-                ))
-                .selected(selected)
-                .min_size(egui::vec2(text.width, text.height))
-                .atom_ui(ui)
-            })
-            .inner;
-        if let Some(rect) = choice.rect(id) {
-            let mut pos = rect.min + egui::vec2(2.0, 2.0);
-            let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.right() - 12.0, rect.center().y), egui::vec2(18.0, 18.0));
-            paint_side_panel_toggle_icon(ui, icon_rect, !selected, true, theme::TEXT_MUTED);
-            for line in &text.lines {
-                ui.painter().galley(pos, line.clone(), theme::TEXT);
-                pos.y += line.size().y;
-            }
-            {
-                let line_height = text.lines[0].size().y;
-                let side = 16.0_f32.min(line_height);
-                let spinner_rect = egui::Rect::from_min_size(
-                    egui::pos2(rect.right() - 28.0 - side, rect.top() + (line_height - side) / 2.0),
-                    egui::vec2(side, side),
-                );
-                // The identity line already reserves this slot; do not advance the row cursor.
-                let mut spinner_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .id_salt("review-context-availability")
-                        .max_rect(spinner_rect)
-                        .layout(egui::Layout::top_down(egui::Align::Min)),
-                );
-                // Creating the child unconditionally keeps following controls
-                // on the same automatic IDs across loading transitions.
-                if text.availability_loading {
-                    let spinner = spinner_ui.add(egui::Spinner::new().size(side));
-                    Self::describe_assignment_availability_spinner(spinner);
-                }
+            let line_height = text.lines[0].size().y;
+            let side = 16.0_f32.min(line_height);
+            let spinner_rect = egui::Rect::from_min_size(
+                egui::pos2(rect.right() - side, rect.top()), egui::Vec2::splat(side));
+            let mut spinner_ui = ui.new_child(egui::UiBuilder::new()
+                .id_salt("review-context-availability").max_rect(spinner_rect));
+            // Keep following controls on the same IDs when availability completes.
+            if text.availability_loading {
+                Self::describe_assignment_availability_spinner(spinner_ui.add(egui::Spinner::new().size(side)));
             }
         }
-        let response = choice.response.on_hover_text(&content.accessible);
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::WidgetType::Button,
-                true,
-                selected,
-                &content.accessible,
-            )
+        ui.ctx().accesskit_node_builder(response.id, |node| node.set_label(content.accessible.clone()));
+        response.on_hover_text(&content.accessible).widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &content.accessible)
         });
-        if self.work.drawer.is_none()
-            && self.work.review_details_focus_return == Some(response.id)
-            && !self.work.show_settings
-            && self.work.pending_transition.is_none()
-        {
-            // The modal layer persists for one frame after dismissal. Returning
-            // focus before it retires leaves a pending Tab traversal active.
-            if ui.ctx().memory(|memory| memory.top_modal_layer().is_none()) {
-                response.request_focus();
-                self.work.review_details_focus_return = None;
-            } else {
-                ui.ctx().request_repaint();
-            }
-        }
-        if response.clicked() {
-            self.work.show_tutorial = false;
-            ui.ctx().request_repaint();
-            if LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Wide {
-                self.work.inspector_panel_collapsed = selected;
-            } else {
-                self.work.drawer = (!selected).then_some(Drawer::Inspector);
-                self.work.review_details_focus_return = Some(response.id);
-            }
-        }
+    }
+
+    fn review_submitter(&self) -> Option<(String, Option<String>)> {
+        let assignment = self.work.assignment.as_ref()?;
+        let state = self.work.current_state.as_ref()?;
+        let task = self.selected_task()?;
+        let user = if task.manual_box_guide_migration.is_some() {
+            &state.migration_confirmations.get(&task.task_id)?.actor_user_id
+        } else {
+            &state.review_rounds.get(&task.task_id)?.submitted_by
+        };
+        let profile = self.work.review_submitters.iter().find(|entry|
+            entry.image_id == assignment.image_id && entry.task_id == task.task_id && entry.user_id == *user);
+        let name = profile.and_then(|entry| entry.github_login.as_deref())
+            .filter(|login| !login.is_empty()).map(|login| format!("@{login}"))
+            .unwrap_or_else(|| user.to_string());
+        Some((name, profile.and_then(|entry| entry.github_user_id.clone())))
     }
 }

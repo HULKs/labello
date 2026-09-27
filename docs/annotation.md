@@ -254,3 +254,13 @@ offline action IDs are excluded from settings.
 
 This inventory describes current behavior, including existing review/migration
 shortcut differences; it does not promise uniform undo or deletion semantics.
+
+### Review summary and submitter
+
+The review context summary shows the workflow, review position and submitter's
+avatar. It is informational. Use the separate Inspector toggle beside Workflow
+to open full review details. Narrow layouts put the summary above those controls.
+Hover information and accessible text identify the submitter; unavailable photos
+use initials, and missing submission identity uses an unknown-author fallback.
+The submitter is the author of the current submission or migration confirmation,
+not the current reviewer or an annotation's latest editor.

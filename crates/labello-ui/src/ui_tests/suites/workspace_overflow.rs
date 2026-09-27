@@ -304,7 +304,7 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     let identity = if context.workflow_name == context.class_name {
         context.workflow_name.clone()
     } else { format!("{} · {}", context.workflow_name, context.class_name) };
-    assert_review_bar_paints(&harness, &format!("Revising · {identity} · Bounding boxes"));
+    assert_review_bar_paints(&harness, &format!("Bounding boxes · Revising · {identity}"));
     assert_review_bar_paints(&harness, "Item 1 / 1");
     let details = harness.get_by_label_contains("Review details: Workflow:");
     assert!(details.accesskit_node().label().unwrap().contains("Review revision mode"));
@@ -346,7 +346,7 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
         assert!(details.contains_rect(spinner), "loading feedback shares the identity line: {spinner:?} in {details:?}");
         assert!(spinner.bottom() <= details.top() + details.height() / 2.0);
         assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment);
-        harness.get_by_label_contains("Review details: Workflow:").focus();
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Inspector").focus();
         harness.key_press(egui::Key::Enter);
         harness.run_steps(4);
         assert_eq!(harness.state().work.drawer, Some(Drawer::Inspector));

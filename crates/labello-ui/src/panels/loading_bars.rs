@@ -131,6 +131,7 @@ impl LabelloApp {
                         identity: " ".into(),
                         type_and_phase: Some((" ".into(), " ".into())),
                         accessible: String::new(),
+                        submitter: None,
                     }
                 } else {
                     ReviewBarContent::from_app(self)
