@@ -1,0 +1,23 @@
+{
+  "viewport": [
+    1288,
+    820
+  ],
+  "dpr": 1,
+  "zoom": 2,
+  "counts": {
+    "submitters": 1,
+    "avatar": 1,
+    "state": 1
+  },
+  "page_errors": [],
+  "ax_roles": [
+    "Canvas",
+    "RootWebArea",
+    "generic",
+    "none",
+    "textbox"
+  ],
+  "avatar_failed": false,
+  "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+}

@@ -1,0 +1,327 @@
+{
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": false,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "zoom": 1,
+      "counts": {
+        "submitters": 1,
+        "avatar": 1,
+        "state": 1
+      },
+      "page_errors": [],
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "avatar_failed": true,
+      "transport": "intercepted synthetic review responses; public avatar request excludes cookies"
+    }
+  ]
+}
