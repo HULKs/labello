@@ -30,6 +30,11 @@ dataset, import, and pending ownership before new requests start.
 
 ## Rendering boundaries
 
+`glossary.rs` owns canonical presentation names and definitions;
+`glossary/shortcuts.rs` maps persisted action IDs to those names and their
+contextual help. Renderers share that catalog in both WASM and the native
+inspector. See the [product glossary](glossary.md).
+
 | Module | Responsibility |
 | --- | --- |
 | `setup.rs` | Login, advanced connection, pre-authentication About, dataset setup and schema-copy preview |
@@ -42,7 +47,7 @@ dataset, import, and pending ownership before new requests start.
 | `panels/task_selector.rs` | Task selection; `workflow_marker.rs` owns reason icons and the committed-workflow marker |
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
 | `prelabel_flow.rs`, `live/prelabels.rs` | Explicit model choice, item-scoped retained-hint defaults, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
-| `prelabel_review.rs` | Pending editable model objects, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
+| `prelabel_review.rs` | Pending editable prelabels, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
 | `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
 | `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
@@ -209,7 +214,7 @@ not enlarged when rendered, hit-tested, or edited at deep zoom. Workspace
 preferences are not overwritten while dataset/assignment loading or restoration
 is pending, so a restored deep view survives asynchronous browser startup.
 
-Automatic annotation focus is limited to pending/accepted model objects and
+Automatic annotation focus is limited to pending/accepted prelabels and
 migration companions. Manually drawn boxes keep the current zoom and pan even
 after prelabel review has started; existing explicit Refocus remains available
 during prelabel review.

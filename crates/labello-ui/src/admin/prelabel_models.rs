@@ -226,7 +226,7 @@ fn edit_model_profile(
     ui.add_space(8.0);
     ui.label(RichText::new("Class mapping").strong());
     ui.small(
-        "Choose the model output IDs for each dataset class. Unmapped outputs produce no hints.",
+        "Choose the model output IDs for each dataset class. Unmapped outputs produce no prelabels.",
     );
     for label in labels {
         let label_response = ui.label(format!("{} · {}", label.name, label.class_id));

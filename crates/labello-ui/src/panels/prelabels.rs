@@ -128,7 +128,7 @@ impl LabelloApp {
                 } else {
                     "Objects have been confirmed, deleted, or suppressed by overlapping boxes."
                 };
-                theme::empty_state(ui, "No remaining suggestions", message, None);
+                theme::empty_state(ui, "No remaining prelabels", message, None);
             }
         }
         if !prelabels.is_empty() {

@@ -203,8 +203,8 @@ impl LabelloApp {
         let status = match self.work.save_status {
             SaveStatus::Idle => "Idle",
             SaveStatus::Dirty => "Unsaved edits",
-            SaveStatus::Saved => "Saved",
-            SaveStatus::Saving => "Saving",
+            SaveStatus::Saved => crate::glossary::SAVED,
+            SaveStatus::Saving => crate::glossary::SAVING,
             SaveStatus::Retry => "Save failed. Retry saving.",
         };
         let mut detail = format!("{connection}\n{status}");

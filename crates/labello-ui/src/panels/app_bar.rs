@@ -336,7 +336,7 @@ impl LabelloApp {
                 ui.heading("Navigation");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let button =
-                        ui.add(egui::Button::new("Close").min_size(egui::vec2(64.0, 44.0)));
+                        ui.add(egui::Button::new(crate::glossary::CLOSE).min_size(egui::vec2(64.0, 44.0)));
                     button.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::Button,

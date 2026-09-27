@@ -6,6 +6,10 @@ the user workflow.
 
 ## Product rules
 
+Use the [product glossary](glossary.md) for every application-provided action
+and concept. Reuse catalog labels in visible and accessible text. Context may
+qualify a term; compact synonyms must be listed in the glossary.
+
 - Keep the image and current task central. The canvas stays dark, low-noise, and
   shadow-free; metadata and secondary panels yield space first.
 - Build hierarchy with typography and spacing. Use teal for primary intent,
@@ -288,7 +292,7 @@ has been recorded.
   tooltip. Show it only when the existing Admin access check allows the view;
   keep a labeled Admin action in the collapsed drawer.
   Organize by Overview, People, Images, Schema, Automation, and
-  Backups, and Export; preserve staged edits between destinations; use wide rows and compact
+  Snapshots, and Export; preserve staged edits between destinations; use wide rows and compact
   cards; retain validation and role protections.
 - **Statistics:** use a bar-chart icon in the app bar's right-side utility group,
   with a 44-point target, an `Open statistics` accessible name, and a tooltip.

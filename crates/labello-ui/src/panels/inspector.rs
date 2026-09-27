@@ -26,7 +26,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn right_panel(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
-        ui.heading(RichText::new("Inspector").color(theme::TEXT));
+        ui.heading(RichText::new(crate::glossary::INSPECTOR).color(theme::TEXT));
         if self.view == AppView::Review && !self.review_context_section(ui) {
             return;
         }
@@ -299,7 +299,7 @@ impl LabelloApp {
         } else {
             (
                 "Final check",
-                "Full image".to_string(),
+                crate::glossary::FULL_IMAGE.to_string(),
                 "Check for missed objects before completing this review.",
             )
         }
@@ -345,7 +345,7 @@ impl LabelloApp {
     pub(crate) fn correction_actions(&mut self, ui: &mut egui::Ui, ready: bool) {
         ui.separator();
         ui.horizontal_wrapped(|ui| {
-            if ui.add_enabled(ready, egui::Button::new("Reset item")).clicked() { self.reset_review_item(); }
+            if ui.add_enabled(ready, egui::Button::new(crate::glossary::RESET_ITEM)).clicked() { self.reset_review_item(); }
             if self.review_overview() && ui.add_enabled(ready && self.review_editor_valid(), egui::Button::new("Back to overview")).clicked() { self.retain_review_editor(); }
         });
         ui.label("Edit the highlighted item directly on the canvas.");
@@ -364,7 +364,7 @@ impl LabelloApp {
             )
         });
         ui.add_space(theme::SPACE_2);
-        ui.label(RichText::new("Object").strong().color(theme::TEXT_MUTED));
+        ui.label(RichText::new(crate::glossary::OBJECT).strong().color(theme::TEXT_MUTED));
         if let Some(keypoints) = skeleton_keypoints {
             ui.label("Edit only the highlighted skeleton on the canvas.");
             ui.add_space(theme::SPACE_2);
@@ -448,7 +448,7 @@ impl LabelloApp {
             if ui
                 .add_enabled(
                     ready && has_point,
-                    egui::Button::selectable(current == KeypointState::Visible, "Visible"),
+                    egui::Button::selectable(current == KeypointState::Visible, crate::glossary::VISIBLE),
                 )
                 .clicked()
             {

@@ -234,11 +234,11 @@ fn prelabel_admin_removal_requires_confirmation_and_controls_fit_narrow_and_shor
     harness.step();
     assert!(
         harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Remove hints and pause")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Remove prelabels and pause")
             .accesskit_node()
             .is_disabled()
     );
-    click(&mut harness, "Confirm hint removal");
+    click(&mut harness, "Confirm prelabel removal");
     assert!(
         harness.state().admin.prelabels.confirm_reset,
         "confirmation did not toggle; pending: {:?}",
@@ -250,7 +250,7 @@ fn prelabel_admin_removal_requires_confirmation_and_controls_fit_narrow_and_shor
     harness.step();
     assert!(
         !harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Remove hints and pause")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Remove prelabels and pause")
             .accesskit_node()
             .is_disabled()
     );
@@ -286,10 +286,10 @@ fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
     harness.step();
     assert!(
         harness
-            .query_by_label("Preparing hints… You can annotate while they load.")
+            .query_by_label("Preparing prelabels… You can annotate while they load.")
             .is_some()
     );
-    assert!(harness.query_by_label("No remaining suggestions").is_none());
+    assert!(harness.query_by_label("No remaining prelabels").is_none());
     harness.state_mut().work.prelabels.hints.insert(
         key.clone(),
         HintStatus {
@@ -306,7 +306,7 @@ fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
             .query_by_label("Inference failed; manual annotation is available")
             .is_some()
     );
-    assert!(harness.query_by_label("No remaining suggestions").is_none());
+    assert!(harness.query_by_label("No remaining prelabels").is_none());
     let status = harness
         .state_mut()
         .work
@@ -321,7 +321,7 @@ fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
         paused: false,
     });
     harness.step();
-    assert!(harness.query_by_label("No remaining suggestions").is_some());
+    assert!(harness.query_by_label("No remaining prelabels").is_some());
 }
 
 #[test]
@@ -372,8 +372,8 @@ fn disabled_server_hides_annotation_hints_and_never_requests_them() {
     );
     for label in [
         "No prelabels",
-        "Refresh hints",
-        "Preparing hints… You can annotate while they load.",
+        "Refresh prelabels",
+        "Preparing prelabels… You can annotate while they load.",
         "Approve",
         "Discard",
     ] {
@@ -439,10 +439,10 @@ fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration()
     );
     for label in [
         "Add browser prelabel config",
-        "Dataset hints",
+        "Dataset prelabels",
         "Check remaining workflows",
-        "Remove hints and pause",
-        "Confirm hint removal",
+        "Remove prelabels and pause",
+        "Confirm prelabel removal",
     ] {
         assert!(harness.query_by_label(label).is_none(), "{label}");
     }
@@ -456,7 +456,7 @@ fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration()
     harness.step();
     click_accesskit_button(
         &mut harness,
-        "Person boxes | bounding_box | Person | Enabled",
+        "Person boxes | Bounding box | Person | Enabled",
     );
     assert!(harness.query_by_label("Prelabel sources").is_none());
     assert!(
@@ -506,7 +506,7 @@ fn pending_object_summaries_truncate_long_names_and_keep_confidence_visible() {
 #[test]
 fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    let refresh = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Refresh hints");
+    let refresh = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Refresh prelabels");
     assert!(refresh.accesskit_node().is_disabled());
     let selector = harness
         .query_all_by_role(egui::accesskit::Role::ComboBox)
@@ -531,7 +531,7 @@ fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
     for width in [260.0, 280.0, 320.0] {
         harness.set_size(egui::vec2(width, 1000.0));
         harness.run_steps(3);
-        let refresh = harness.get_by_label("Refresh hints").rect();
+        let refresh = harness.get_by_label("Refresh prelabels").rect();
         let selector = harness
             .query_all_by_role(egui::accesskit::Role::ComboBox)
             .find(|node| {
@@ -547,7 +547,7 @@ fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
     }
     assert!(
         !harness
-            .get_by_label("Refresh hints")
+            .get_by_label("Refresh prelabels")
             .accesskit_node()
             .is_disabled()
     );
@@ -561,13 +561,13 @@ fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
     harness.step();
     assert!(
         harness
-            .get_by_label("Refresh hints")
+            .get_by_label("Refresh prelabels")
             .accesskit_node()
             .is_disabled()
     );
     harness.state_mut().cancel_prelabel_load();
     harness.step();
-    harness.get_by_label("Refresh hints").focus();
+    harness.get_by_label("Refresh prelabels").focus();
     harness.step();
     harness.key_press(egui::Key::Enter);
     harness.step();
@@ -575,7 +575,7 @@ fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
     harness.step();
     assert!(
         harness
-            .get_by_label("Refresh hints")
+            .get_by_label("Refresh prelabels")
             .accesskit_node()
             .is_disabled()
     );
@@ -1394,7 +1394,7 @@ fn retained_prelabels_select_an_item_default_without_generating_or_persisting_a_
         0,
         "discovery must not start inference, including queued items"
     );
-    assert!(harness.query_by_label("Using dataset hints").is_some());
+    assert!(harness.query_by_label("Using dataset prelabels").is_some());
     let current = harness.state_mut().work.current.as_mut().unwrap();
     current.image.image_id = "another-image".into();
     assert_eq!(

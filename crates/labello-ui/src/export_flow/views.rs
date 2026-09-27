@@ -113,7 +113,7 @@ impl LabelloApp {
                         }
                     }).response.labelled_by(label.id);
                 ui.small("Existing unambiguous train/val/test membership is preserved. Conflicts require an explicit image choice during preflight.");
-                ui.label(egui::RichText::new("Tasks and classes").strong());
+                ui.label(egui::RichText::new("Workflows and classes").strong());
                 let mut compatible = false;
                 for task in &metadata.tasks {
                     if task.annotation_type != self.admin.export.options.profile.annotation_type() { continue; }
@@ -123,14 +123,14 @@ impl LabelloApp {
                         let selection = labello_domain::ExportClassSelection { task_id: task.task_id.clone(), class_id: class.class_id.clone() };
                         let mut selected = self.admin.export.options.classes.contains(&selection);
                         let label = format!("{} / {} [{} · {}]", task.name, class.name, task.task_id, class.class_id);
-                        let response = ui.checkbox(&mut selected, &label).on_hover_text(format!("Task {} · Class {}", task.task_id, class.class_id));
+                        let response = ui.checkbox(&mut selected, &label).on_hover_text(format!("Workflow {} · Class {}", task.task_id, class.class_id));
                         if response.changed() {
                             if selected { self.admin.export.options.classes.insert(selection); }
                             else { self.admin.export.options.classes.remove(&selection); }
                         }
                     }
                 }
-                if !compatible { ui.label("No tasks match this export profile. Choose another profile or configure compatible tasks."); }
+                if !compatible { ui.label("No workflows match this export profile. Choose another profile or configure compatible workflows."); }
             });
             if before != self.admin.export.options {
                 self.admin.export.reviewed = false;
@@ -171,7 +171,7 @@ impl LabelloApp {
                 self.export_job_view(ui, &job, busy, &mut action);
             } else if self.admin.export.jobs.is_empty() {
                 ui.label(
-                    "No exports yet. Choose a profile and task/class mappings, then run preflight.",
+                    "No exports yet. Choose a profile and workflow/class mappings, then run preflight.",
                 );
             }
             if !self.admin.export.jobs.is_empty() {
@@ -262,7 +262,7 @@ impl LabelloApp {
             }
             egui::CollapsingHeader::new("Class mapping and omissions").show(ui, |ui| {
                 for class in &summary.classes {
-                    ui.label(format!("{}: {} · task {} · class {}", class.index, class.name, class.selection.task_id, class.selection.class_id));
+                    ui.label(format!("{}: {} · workflow {} · class {}", class.index, class.name, class.selection.task_id, class.selection.class_id));
                     if let Some(spec) = &class.skeleton { ui.label(format!("Keypoint order: {}", spec.keypoints.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", "))); }
                 }
                 for (reason, count) in &summary.omission_counts { ui.label(format!("{count}: {}", omission_label(*reason))); }
@@ -374,7 +374,7 @@ fn omission_label(reason: labello_domain::ExportOmissionReason) -> &'static str 
     use labello_domain::ExportOmissionReason::*;
     match reason {
         UnselectedSplit => "split not selected",
-        Unfinished => "unfinished task",
+        Unfinished => "unfinished workflow",
         ExcludedCoverage => "excluded coverage",
         IncompleteCoverage => "incomplete coverage",
         UnverifiedAnnotations => "unverified annotations",

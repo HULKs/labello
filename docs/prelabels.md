@@ -1,5 +1,8 @@
 # Model prelabels
 
+The UI uses the [glossary](glossary.md) term **prelabel** for model predictions.
+Retained prelabels are cached predictions awaiting confirmation.
+
 Prelabels are editable suggestions. They do not claim work, complete a workflow,
 or enter ground-truth export until an annotator accepts them and completes the
 normal annotation and review workflow.
@@ -269,7 +272,7 @@ the generation identity and requires refreshed hints.
 
 ## Dataset generation and removal
 
-In **Admin > Automation > Dataset hints**, check remaining box workflows,
+In **Admin > Automation > Dataset prelabels**, check remaining box workflows,
 choose a compatible server model for each ambiguous workflow, then start the
 prepared run. A workflow with one compatible server model is mapped
 automatically. Missing mappings or unavailable files block start. Preflight
@@ -294,13 +297,13 @@ a fresh preflight. There is one active batch per dataset, sharing the global
 worker limit with interactive requests.
 
 Removal can target a workflow, a configuration, their intersection, or the whole
-dataset. Confirm **Remove hints and pause** to remove retained results, cancel
+dataset. Confirm **Remove prelabels and pause** to remove retained results, cancel
 affected runs, and advance durable generation markers. Repeating a removal is
 idempotent. Affected browser caches and in-flight results cannot authorize a new
 acceptance. Clients check generation status while annotating. Annotation history,
 accepted annotations, user edits, drafts, and model configuration remain intact.
 Unsaved acceptances from an old generation fail on save and require refreshed
-hints. **Resume hints in this scope**, or explicitly starting/retrying a run,
+hints. **Resume prelabels in this scope**, or explicitly starting/retrying a run,
 reenables generation. Ordinary polling cannot resume it.
 
 Private state lives below `.labello-server/prelabels/<dataset-id>/`.

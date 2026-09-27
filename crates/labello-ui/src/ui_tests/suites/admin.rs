@@ -263,7 +263,7 @@ fn admin_image_explorer_pages_and_snapshots_use_async_api_commands() {
     });
     assert_eq!(api.last_image_query().unwrap().page, 2);
 
-    select_admin_section(&mut harness, "Backups");
+    select_admin_section(&mut harness, "Snapshots");
     click_accesskit_button(&mut harness, "Create snapshot");
     step_until(&mut harness, 8, |app| !app.loading.creating_snapshot);
     assert_eq!(api.counts().create_snapshot, 1);
@@ -340,8 +340,8 @@ fn admin_classes_and_workflows_use_compact_desktop_editors() {
             class_name_fields[index].rect()
         );
     }
-    let person_workflow = "Person boxes | bounding_box | Person | Enabled";
-    let vehicle_workflow = "Vehicle boxes | bounding_box | Vehicle | Enabled";
+    let person_workflow = "Person boxes | Bounding box | Person | Enabled";
+    let vehicle_workflow = "Vehicle boxes | Bounding box | Vehicle | Enabled";
     let person = harness.get_by_label(person_workflow).rect();
     let vehicle = harness.get_by_label(vehicle_workflow).rect();
     assert!(vehicle.top() - person.top() <= 70.0);
@@ -351,7 +351,7 @@ fn admin_classes_and_workflows_use_compact_desktop_editors() {
     assert!(harness.query_by_label("Annotator instructions").is_some());
     assert!(
         harness
-            .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Task ID")
+            .query_all_by_role_and_label(egui::accesskit::Role::TextInput, "Workflow ID")
             .next()
             .is_some()
     );
@@ -872,7 +872,7 @@ fn setup_describes_a_data_admin_recommendation_as_statistics() {
             .query_by_label("Open the suggested work queue for this dataset.")
             .is_none()
     );
-    assert!(harness.query_by_label("Stats Demo Dataset").is_some());
+    assert!(harness.query_by_label("Statistics Demo Dataset").is_some());
     assert!(harness.query_by_label("Admin Demo Dataset").is_some());
 }
 

@@ -367,7 +367,7 @@ fn contributor_periods_and_history_preserve_statistics_workspace() {
     );
     assert!(
         harness.get_by_label("Daily activity").rect().bottom()
-            < harness.get_by_label("Per Task").rect().top()
+            < harness.get_by_label("Per workflow").rect().top()
     );
     assert!(
         harness.get_by_label("Throughput").rect().top()
@@ -864,7 +864,7 @@ fn statistics_overlay_remote_states_and_close_fit_supported_viewports() {
         harness.state_mut().loading.stats = false;
         harness.state_mut().datasets.stats = DatasetStats::default();
         harness.step();
-        assert!(harness.query_by_label("No enabled tasks").is_some());
+        assert!(harness.query_by_label("No enabled workflows").is_some());
         harness.state_mut().runtime.error =
             Some("The workflow request could not complete. ".repeat(12));
         for _ in 0..4 {
@@ -1121,8 +1121,8 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
             ("Highest score", "Rankings"),
             ("Rankings", "Daily activity"),
             ("Daily activity", "Dataset totals"),
-            ("Dataset totals", "Per Task"),
-            ("Per Task", "Per Class"),
+            ("Dataset totals", "Per workflow"),
+            ("Per workflow", "Per Class"),
             ("Per Class", "Throughput"),
         ] {
             assert!(

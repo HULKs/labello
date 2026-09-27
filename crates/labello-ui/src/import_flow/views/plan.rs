@@ -36,7 +36,7 @@ impl LabelloApp {
                 );
             }
             ui.label(RichText::new("Preflight summary").strong());
-            status_row(ui, "Images", report.source.images.to_string());
+            status_row(ui, crate::glossary::IMAGES, report.source.images.to_string());
             status_row(ui, "Objects", report.source.objects.to_string());
             status_row(
                 ui,
@@ -78,8 +78,8 @@ impl LabelloApp {
                 theme::Intent::Error,
                 format!(
                     "Required outputs for the current mapping — categories: \
-                     {required_categories}, tasks: {required_tasks}. Accepted preflight outputs — \
-                     categories: {}, tasks: {}. Click “Save mappings and re-run preflight”; commit \
+                     {required_categories}, workflows: {required_tasks}. Accepted preflight outputs — \
+                     categories: {}, workflows: {}. Click “Save mappings and re-run preflight”; commit \
                      remains disabled until the refreshed plan includes every required output.",
                     plan.report.output.classes, plan.report.output.tasks
                 ),
@@ -214,7 +214,7 @@ impl LabelloApp {
     }
 
     fn import_mapping_editor(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("Category and task mapping").strong());
+        ui.label(RichText::new("Category and workflow mapping").strong());
         let validation = self.import_mapping_validation();
         let errors = validation.error_count();
         let warnings = validation.warning_count();
@@ -355,13 +355,13 @@ impl LabelloApp {
                 ]
                 .into_iter()
                 .any(|field| validation.for_field(Some(index), field).next().is_some());
-                egui::CollapsingHeader::new("Advanced task identity")
+                egui::CollapsingHeader::new("Advanced workflow identity")
                     .default_open(task_identity_invalid)
                     .show(ui, |ui| {
                         if bounding_box_task {
                             theme::labeled_text_field(
                                 ui,
-                                "Bounding-box task ID",
+                                "Bounding-box workflow ID",
                                 &mut category.bounding_box_task_id,
                                 theme::COMPACT_TEXT_FIELD_HEIGHT,
                             );
@@ -373,7 +373,7 @@ impl LabelloApp {
                             );
                             theme::labeled_text_field(
                                 ui,
-                                "Bounding-box task name",
+                                "Bounding-box workflow name",
                                 &mut category.bounding_box_task_name,
                                 theme::COMPACT_TEXT_FIELD_HEIGHT,
                             );
@@ -387,7 +387,7 @@ impl LabelloApp {
                         if skeleton_task {
                             theme::labeled_text_field(
                                 ui,
-                                "Skeleton task ID",
+                                "Skeleton workflow ID",
                                 &mut category.skeleton_task_id,
                                 theme::COMPACT_TEXT_FIELD_HEIGHT,
                             );
@@ -399,7 +399,7 @@ impl LabelloApp {
                             );
                             theme::labeled_text_field(
                                 ui,
-                                "Skeleton task name",
+                                "Skeleton workflow name",
                                 &mut category.skeleton_task_name,
                                 theme::COMPACT_TEXT_FIELD_HEIGHT,
                             );

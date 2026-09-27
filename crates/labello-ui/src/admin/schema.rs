@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn admin_schema(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Schema");
+        ui.heading(crate::glossary::SCHEMA);
         ui.label(
             RichText::new("Configure label classes, skeletons, and labeling workflows.")
                 .color(theme::TEXT_MUTED),
@@ -40,7 +40,7 @@ fn edit_quick_workflows(ui: &mut egui::Ui, config: &mut DatasetMetadata) {
     admin_card(ui, "Class Workflows card", |ui| {
         ui.heading("Class Workflows");
         ui.label(
-            RichText::new("Fast path: create a class and its worker-visible task together.")
+            RichText::new("Fast path: create a class and its worker-visible workflow together.")
                 .color(theme::MUTED),
         );
         ui.horizontal_wrapped(|ui| {
@@ -63,7 +63,7 @@ fn edit_quick_workflows(ui: &mut egui::Ui, config: &mut DatasetMetadata) {
                 let annotation_type = AnnotationType::BoundingBox;
                 let exists = has_task_for_class(config, &label.class_id, &annotation_type);
                 if ui
-                    .add_enabled(!exists, egui::Button::new("Add bounding_box task"))
+                    .add_enabled(!exists, egui::Button::new("Add bounding-box workflow"))
                     .clicked()
                 {
                     add_task_for_class(config, &label, annotation_type);
@@ -71,7 +71,7 @@ fn edit_quick_workflows(ui: &mut egui::Ui, config: &mut DatasetMetadata) {
                 let annotation_type = AnnotationType::Skeleton;
                 let exists = has_task_for_class(config, &label.class_id, &annotation_type);
                 if ui
-                    .add_enabled(!exists, egui::Button::new("Add skeleton task"))
+                    .add_enabled(!exists, egui::Button::new("Add skeleton workflow"))
                     .clicked()
                 {
                     add_task_for_class(config, &label, annotation_type);
@@ -86,7 +86,7 @@ fn add_class_workflow(config: &mut DatasetMetadata, annotation_type: AnnotationT
     let class = LabelClass {
         class_id: ClassId::from(next_class_id(config)),
         name: if index == 1 {
-            "Object".to_string()
+            crate::glossary::OBJECT.to_string()
         } else {
             format!("Object {index}")
         },
@@ -203,7 +203,7 @@ fn edit_string_list(
             )
             .labelled_by(field_label.id)
             .on_hover_text("Dataset-relative path under the dataset root.");
-            if destructive_button(ui, "Remove", format!("{label} '{value}'")) {
+            if destructive_button(ui, crate::glossary::REMOVE, format!("{label} '{value}'")) {
                 remove = Some(index);
             }
         });
@@ -288,7 +288,7 @@ fn edit_class_card(
                 egui::vec2(unit, 68.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
-                    let field_label = ui.label("Name");
+                    let field_label = ui.label(crate::glossary::NAME);
                     ui.add_sized(
                         [unit, theme::COMPACT_TEXT_FIELD_HEIGHT],
                         theme::singleline_text_edit(&mut label.name),
@@ -347,7 +347,7 @@ fn edit_class_card(
     } else {
         theme::labeled_text_field(
             ui,
-            "Name",
+            crate::glossary::NAME,
             &mut label.name,
             theme::COMPACT_TEXT_FIELD_HEIGHT,
         )
@@ -423,9 +423,9 @@ fn edit_tasks(
             let summary = format!(
                 "{} | {} | {} | {}",
                 task.name,
-                task.annotation_type,
+                crate::glossary::annotation_type_name(&task.annotation_type),
                 class_name,
-                if task.enabled { "Enabled" } else { "Disabled" }
+                if task.enabled { crate::glossary::ENABLED } else { crate::glossary::DISABLED }
             );
             ui.add_space(4.0);
             theme::inset_frame().show(ui, |ui| {
@@ -473,7 +473,7 @@ fn edit_tasks(
                     "task",
                     tasks.iter().map(|task| task.task_id.as_str()),
                 )),
-                name: "New task".to_string(),
+                name: "New workflow".to_string(),
                 annotation_type: AnnotationType::BoundingBox,
                 class_ids,
                 instructions: TutorialContent {
@@ -500,41 +500,41 @@ fn edit_workflow_basics(
     prelabels: &[PrelabelConfig],
     prelabel_available: bool,
 ) -> bool {
-    ui.label(RichText::new("Workflow").color(theme::BLUE).strong());
+    ui.label(RichText::new(crate::glossary::WORKFLOW).color(theme::BLUE).strong());
     let mut task_id = task.task_id.to_string();
     if theme::labeled_text_field(
         ui,
-        "Task ID",
+        crate::glossary::WORKFLOW_ID,
         &mut task_id,
         theme::COMPACT_TEXT_FIELD_HEIGHT,
     )
-    .on_hover_text("Stable task id used by assignments and event logs.")
+    .on_hover_text("Stable workflow id used by assignments and event logs.")
     .changed()
     {
         task.task_id = TaskId::from(task_id);
     }
-    theme::labeled_text_field(ui, "Name", &mut task.name, theme::COMPACT_TEXT_FIELD_HEIGHT)
-        .on_hover_text("Task name shown in the work panel.");
+    theme::labeled_text_field(ui, crate::glossary::NAME, &mut task.name, theme::COMPACT_TEXT_FIELD_HEIGHT)
+        .on_hover_text("Workflow name shown in the work panel.");
     ui.horizontal_wrapped(|ui| {
-        ui.checkbox(&mut task.enabled, "Enabled");
+        ui.checkbox(&mut task.enabled, crate::glossary::ENABLED);
         ui.label("Annotation type");
         let mut annotation_type = task.annotation_type.clone();
         egui::ComboBox::from_id_salt(format!("task-type-{index}"))
-            .selected_text(annotation_type.to_string())
+            .selected_text(crate::glossary::annotation_type_name(&annotation_type))
             .show_ui(ui, |ui| {
                 ui.selectable_value(
                     &mut annotation_type,
                     AnnotationType::BoundingBox,
-                    "bounding_box",
+                    crate::glossary::BOUNDING_BOX,
                 );
-                ui.selectable_value(&mut annotation_type, AnnotationType::Skeleton, "skeleton");
+                ui.selectable_value(&mut annotation_type, AnnotationType::Skeleton, crate::glossary::SKELETON);
             });
         if annotation_type != task.annotation_type {
             set_task_annotation_type(task, annotation_type);
         }
     });
     ui.horizontal_wrapped(|ui| {
-        ui.label("Class");
+        ui.label(crate::glossary::CLASS);
         if labels.is_empty() {
             ui.label(RichText::new("Add a class first.").color(theme::RED));
         } else {
@@ -668,7 +668,7 @@ fn edit_skeleton(ui: &mut egui::Ui, task_index: usize, skeleton: &mut SkeletonSp
             for (keypoint_index, keypoint) in skeleton.keypoints.iter_mut().enumerate() {
                 let previous_name = keypoint.name.clone();
                 ui.horizontal_wrapped(|ui| {
-                    ui.label("Name");
+                    ui.label(crate::glossary::NAME);
                     ui.add_sized(
                         [ui.available_width().min(280.0), 44.0],
                         theme::singleline_text_edit(&mut keypoint.name),
@@ -766,7 +766,7 @@ fn edit_skeleton(ui: &mut egui::Ui, task_index: usize, skeleton: &mut SkeletonSp
                 skeleton.edges.push(edge);
             }
 
-            show_issues(ui, &skeleton_issues(skeleton, "Skeleton"));
+            show_issues(ui, &skeleton_issues(skeleton, crate::glossary::SKELETON));
         });
 }
 
@@ -811,7 +811,7 @@ fn edit_review(ui: &mut egui::Ui, task_index: usize, task: &mut TaskDefinition) 
         .id_salt(("review-configuration", task_index))
         .show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Workflow");
+                ui.label(crate::glossary::WORKFLOW);
                 egui::ComboBox::from_id_salt(format!("review-workflow-{task_index}"))
                     .selected_text(review_workflow_name(&task.review.workflow))
                     .show_ui(ui, |ui| {
@@ -868,11 +868,11 @@ fn edit_prelabels(
                         &mut config_id,
                         theme::COMPACT_TEXT_FIELD_HEIGHT,
                     )
-                    .on_hover_text("Stable prelabel config id referenced by tasks.")
+                    .on_hover_text("Stable prelabel config id referenced by workflows.")
                     .changed();
                     theme::labeled_text_field(
                         &mut columns[1],
-                        "Name",
+                        crate::glossary::NAME,
                         &mut config.name,
                         theme::COMPACT_TEXT_FIELD_HEIGHT,
                     )
@@ -886,11 +886,11 @@ fn edit_prelabels(
                     &mut config_id,
                     theme::COMPACT_TEXT_FIELD_HEIGHT,
                 )
-                .on_hover_text("Stable prelabel config id referenced by tasks.")
+                .on_hover_text("Stable prelabel config id referenced by workflows.")
                 .changed();
                 theme::labeled_text_field(
                     ui,
-                    "Name",
+                    crate::glossary::NAME,
                     &mut config.name,
                     theme::COMPACT_TEXT_FIELD_HEIGHT,
                 )
@@ -1006,10 +1006,10 @@ fn edit_prelabels(
             if prelabel_threshold_field(ui, "Overlap IoU", &mut iou).changed() {
                 config.output_processing.suppress_overlaps_iou = Some(iou);
             }
-            ui.small("Existing boxes win. Hints compete only within the same workflow and class.");
+            ui.small("Existing boxes win. Prelabels compete only within the same workflow and class.");
             prelabel_threshold_field(
                 ui,
-                "Confidence",
+                crate::glossary::CONFIDENCE,
                 &mut config.output_processing.confidence_threshold,
             );
         }
@@ -1029,7 +1029,7 @@ fn edit_prelabels(
                 name: "New prelabel".to_string(),
                 model: ModelSpec {
                     model_id: "model".to_string(),
-                    display_name: "Model".to_string(),
+                    display_name: crate::glossary::MODEL.to_string(),
                     version: None,
                     location: "model.onnx".to_string(),
                 },
@@ -1052,7 +1052,7 @@ fn edit_imbalance(ui: &mut egui::Ui, imbalance: &mut Option<ImbalanceConfig>) {
     admin_card(ui, "Assignment Balance card", |ui| {
         ui.heading("Assignment Balance");
         ui.label(
-            RichText::new("Limit how unevenly work may be distributed across enabled tasks.")
+            RichText::new("Limit how unevenly work may be distributed across enabled workflows.")
                 .color(theme::MUTED),
         );
         let mut configured = imbalance.is_some();
@@ -1067,12 +1067,12 @@ fn edit_imbalance(ui: &mut egui::Ui, imbalance: &mut Option<ImbalanceConfig>) {
                 ui.label("Maximum completion difference");
                 ui.add(egui::DragValue::new(&mut imbalance.max_difference).range(0..=u64::MAX))
                     .on_hover_text(
-                        "Largest allowed count gap between the selected task and its least-completed enabled peer.",
+                        "Largest allowed count gap between the selected workflow and its least-completed enabled peer.",
                     );
                 ui.checkbox(&mut imbalance.enforce, "Enforce limit");
             });
             ui.small(
-                "A task is blocked only when its current count gap is above the limit. A gap equal to the limit remains eligible.",
+                "A workflow is blocked only when its current count gap is above the limit. A gap equal to the limit remains eligible.",
             );
         }
     });
@@ -1175,12 +1175,12 @@ fn task_issues(
         validate_id(&mut issues, &context, task.task_id.as_str());
         if !task_ids.insert(task.task_id.as_str()) {
             issues.push(format!(
-                "Workflows: task ID '{}' is duplicated; choose a unique ID.",
+                "Workflows: workflow ID '{}' is duplicated; choose a unique ID.",
                 task.task_id
             ));
         }
         if task.name.trim().is_empty() {
-            issues.push(format!("{context}: enter a non-empty task name."));
+            issues.push(format!("{context}: enter a non-empty workflow name."));
         }
         if task.enabled && task.class_ids.len() != 1 {
             issues.push(format!(
@@ -1197,7 +1197,7 @@ fn task_issues(
         for class_id in &task.class_ids {
             if !class_ids.contains(class_id) {
                 issues.push(format!(
-                    "{context}: task '{}' references missing class '{}'; select an existing class or remove the reference.",
+                    "{context}: workflow '{}' references missing class '{}'; select an existing class or remove the reference.",
                     task.task_id, class_id
                 ));
             }
@@ -1212,7 +1212,7 @@ fn task_issues(
         for config_id in &task.prelabel_config_ids {
             if !prelabel_ids.contains(config_id) {
                 issues.push(format!(
-                    "{context}: task '{}' references missing prelabel '{}'; select an existing source or remove the reference.",
+                    "{context}: workflow '{}' references missing prelabel '{}'; select an existing source or remove the reference.",
                     task.task_id, config_id
                 ));
             }
@@ -1239,7 +1239,7 @@ fn task_issues(
                 issues.extend(skeleton_issues(skeleton, &format!("{context} skeleton")));
             } else {
                 issues.push(format!(
-                    "{context}: skeleton task '{}' needs a skeleton specification.",
+                    "{context}: skeleton workflow '{}' needs a skeleton specification.",
                     task.task_id
                 ));
             }
@@ -1464,7 +1464,7 @@ fn destructive_button(ui: &mut egui::Ui, label: &str, item: String) -> bool {
                 confirmed = true;
                 ui.ctx().data_mut(|data| data.remove::<bool>(modal_id));
             }
-            if theme::quiet_button(ui, true, egui::Button::new("Cancel")).clicked() {
+            if theme::quiet_button(ui, true, egui::Button::new(crate::glossary::CANCEL)).clicked() {
                 ui.ctx().data_mut(|data| data.remove::<bool>(modal_id));
             }
         });

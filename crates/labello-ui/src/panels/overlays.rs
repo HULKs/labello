@@ -20,7 +20,7 @@ impl LabelloApp {
             egui::pos2(screen.right(), screen.bottom() - action_height),
         );
         let mut open = true;
-        egui::Window::new("Tutorial")
+        egui::Window::new(crate::glossary::TUTORIAL)
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -212,7 +212,7 @@ impl LabelloApp {
                     if release.clicked() {
                         self.release_pending_transition();
                     }
-                    let cancel = theme::quiet_button(ui, !self.saving_blocks_interaction() && !self.loading.image, egui::Button::new("Cancel"));
+                    let cancel = theme::quiet_button(ui, !self.saving_blocks_interaction() && !self.loading.image, egui::Button::new(crate::glossary::CANCEL));
                     if cancel.clicked() {
                         self.cancel_pending_transition();
                     }
@@ -249,7 +249,7 @@ impl LabelloApp {
                         if regenerate.clicked()
                             && let Some(annotation_id) = self.work.migration.pending_companion_reconciliation.take()
                         { self.work.migration.companion_focus_return = None; self.request_reconcile_migration_companion(annotation_id); }
-                        let cancel = theme::quiet_button(ui, true, egui::Button::new("Cancel"));
+                        let cancel = theme::quiet_button(ui, true, egui::Button::new(crate::glossary::CANCEL));
                         if cancel.has_focus() { cancel.scroll_to_me(Some(egui::Align::Center)); }
                         if cancel.clicked() { dismissed = true; }
                     });
@@ -294,7 +294,7 @@ impl LabelloApp {
                     if theme::quiet_button(
                         ui,
                         !self.work.migration.busy,
-                        egui::Button::new("Cancel"),
+                        egui::Button::new(crate::glossary::CANCEL),
                     )
                     .clicked()
                     {
@@ -321,7 +321,7 @@ impl LabelloApp {
             ui.heading("Discard staged Admin changes?");
             ui.label("All unsaved configuration and permission edits will be lost.");
             ui.horizontal_wrapped(|ui| {
-                if theme::danger_button(ui, true, egui::Button::new("Discard changes")).clicked() {
+                if theme::danger_button(ui, true, egui::Button::new(crate::glossary::DISCARD_CHANGES)).clicked() {
                     discard = true;
                 }
                 if theme::quiet_button(ui, true, egui::Button::new("Keep editing")).clicked() {
@@ -352,7 +352,7 @@ impl LabelloApp {
         match transition {
             PendingTransition::About => "Setup > About".to_string(),
             PendingTransition::Dataset(_, _) => "Another dataset".to_string(),
-            PendingTransition::Logout => "Sign out".to_string(),
+            PendingTransition::Logout => crate::glossary::SIGN_OUT.to_string(),
             PendingTransition::NextAssignment => "Next assignment".to_string(),
             PendingTransition::PreviousAssignment(_) => "Previous assignment".to_string(),
             PendingTransition::Workflow(task_id) => self
@@ -605,7 +605,7 @@ impl LabelloApp {
                                         ));
                                         if response.clicked() { record = Some(action); }
                                         let response = ui.add_enabled(!self.loading.keybindings,
-                                            egui::Button::new("Reset").min_size(egui::vec2(64.0, 44.0)));
+                                            egui::Button::new(crate::glossary::RESET).min_size(egui::vec2(64.0, 44.0)));
                                         response.widget_info(|| egui::WidgetInfo::labeled(
                                             egui::WidgetType::Button, !self.loading.keybindings, format!("Reset {label}")));
                                         if response.clicked() { reset_binding = Some(action); }
@@ -655,7 +655,7 @@ impl LabelloApp {
                                         !self.loading.keybindings, recording, format!("Record shortcut for Pan drag: {text}")));
                                     if response.clicked() { record_pan_drag = true; }
                                     let response = ui.add_enabled(!self.loading.keybindings,
-                                        egui::Button::new("Reset").min_size(egui::vec2(64.0, 44.0)));
+                                        egui::Button::new(crate::glossary::RESET).min_size(egui::vec2(64.0, 44.0)));
                                     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button,
                                         !self.loading.keybindings, "Reset Pan drag shortcut"));
                                     if response.clicked() { reset_pan_drag = true; }
@@ -723,7 +723,7 @@ impl LabelloApp {
                         egui::Button::new(if self.loading.keybindings {
                             "Saving…"
                         } else {
-                            "Save changes"
+                            crate::glossary::SAVE_CHANGES
                         }),
                     )
                     .clicked()
@@ -733,7 +733,7 @@ impl LabelloApp {
                     if theme::quiet_button(
                         ui,
                         !self.loading.keybindings,
-                        egui::Button::new("Cancel"),
+                        egui::Button::new(crate::glossary::CANCEL),
                     )
                     .clicked()
                     {
@@ -759,7 +759,7 @@ impl LabelloApp {
                 }
                 ui.horizontal_wrapped(|ui| {
                     if dirty && conflicts.is_empty() {
-                        ui.label(RichText::new("Unsaved changes").color(theme::AMBER));
+                        ui.label(RichText::new(crate::glossary::UNSAVED_CHANGES).color(theme::AMBER));
                     }
                 });
             };
@@ -770,7 +770,7 @@ impl LabelloApp {
         });
         response
             .response
-            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Settings"));
+            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Window, true, crate::glossary::SETTINGS));
         if show_conflicts {
             self.work.shortcut_settings.search = "conflict".to_string();
         }
@@ -833,7 +833,7 @@ impl LabelloApp {
                     if ui.button("Keep editing").clicked() {
                         self.work.shortcut_settings.confirm_discard = false;
                     }
-                    if ui.button("Discard changes").clicked() {
+                    if ui.button(crate::glossary::DISCARD_CHANGES).clicked() {
                         self.work.shortcut_settings.confirm_discard = false;
                         self.work.shortcut_settings.draft = None;
                         self.work.shortcut_settings.baseline = None;

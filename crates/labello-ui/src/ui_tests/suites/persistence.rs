@@ -2358,3 +2358,22 @@ fn shortcut_close_button_stays_visible_and_protects_unsaved_changes() {
     harness.step();
     assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Close keyboard shortcuts").accesskit_node().is_disabled());
 }
+
+#[test]
+fn glossary_prelabel_names_are_searchable_and_accessible_at_every_viewport() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().open_shortcut_settings();
+    for (width, height) in viewport_sizes() {
+        harness.set_size(egui::vec2(width, height));
+        for name in ["Confirm selected prelabel", "Delete selected prelabel"] {
+            harness.state_mut().work.shortcut_settings.search = name.into();
+            harness.run_steps(3);
+            let accessible_name = format!("Record shortcut for {name}:");
+            let control = harness.get_by_label_contains(&accessible_name);
+            assert!(!control.accesskit_node().is_disabled());
+            assert!(control.rect().height() >= 44.0);
+            assert!(harness.query_by_label_contains("selected model object").is_none());
+            assert_visible_controls_clamped(&harness, width, height);
+        }
+    }
+}

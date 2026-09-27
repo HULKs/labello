@@ -10,11 +10,11 @@ impl SetupSection {
     fn label(self) -> &'static str {
         match self {
             Self::Datasets => "Datasets",
-            Self::Login => "Sign in",
+            Self::Login => crate::glossary::SIGN_IN,
             Self::AdvancedConnection => "Advanced connection",
-            Self::About => "About",
-            Self::Create => "Create",
-            Self::Import => "Import",
+            Self::About => crate::glossary::ABOUT,
+            Self::Create => crate::glossary::CREATE,
+            Self::Import => crate::glossary::IMPORT,
         }
     }
 }
@@ -391,7 +391,7 @@ impl LabelloApp {
                     if theme::quiet_button(
                         ui,
                         !self.loading.datasets && !self.loading.dataset,
-                        egui::Button::new("Refresh"),
+                        egui::Button::new(crate::glossary::REFRESH),
                     )
                     .on_hover_text("Reload the accessible dataset list.")
                     .clicked()
@@ -435,7 +435,7 @@ impl LabelloApp {
             if theme::quiet_button(
                 ui,
                 !self.loading.datasets && !self.loading.dataset,
-                egui::Button::new("Retry"),
+                egui::Button::new(crate::glossary::RETRY),
             )
             .clicked()
             {
@@ -462,7 +462,7 @@ impl LabelloApp {
                 if theme::quiet_button(
                     ui,
                     !self.loading.datasets && !self.loading.dataset,
-                    egui::Button::new("Retry"),
+                    egui::Button::new(crate::glossary::RETRY),
                 )
                 .clicked()
                 {
@@ -484,8 +484,16 @@ impl LabelloApp {
                 });
                 ui.horizontal_wrapped(|ui| {
                     for (role, view, label) in [
-                        (DatasetRole::Annotator, AppView::Annotate, "Annotate"),
-                        (DatasetRole::Reviewer, AppView::Review, "Review"),
+                        (
+                            DatasetRole::Annotator,
+                            AppView::Annotate,
+                            crate::glossary::ANNOTATE,
+                        ),
+                        (
+                            DatasetRole::Reviewer,
+                            AppView::Review,
+                            crate::glossary::REVIEW,
+                        ),
                     ] {
                         if dataset.roles.contains(&role)
                             && dataset_action(ui, !self.loading.dataset, label, &dataset.name)
@@ -494,17 +502,32 @@ impl LabelloApp {
                         }
                     }
                     if dataset.roles.contains(&DatasetRole::DataAdmin)
-                        && dataset_action(ui, !self.loading.dataset, "Admin", &dataset.name)
+                        && dataset_action(
+                            ui,
+                            !self.loading.dataset,
+                            crate::glossary::ADMIN,
+                            &dataset.name,
+                        )
                     {
                         self.open_dataset(dataset.dataset_id.clone(), AppView::Admin);
                     }
                     if !dataset.roles.is_empty()
-                        && dataset_action(ui, !self.loading.dataset, "Inspect", &dataset.name)
+                        && dataset_action(
+                            ui,
+                            !self.loading.dataset,
+                            crate::glossary::INSPECT,
+                            &dataset.name,
+                        )
                     {
                         self.open_dataset(dataset.dataset_id.clone(), AppView::Inspect);
                     }
                     if !dataset.roles.is_empty()
-                        && dataset_action(ui, !self.loading.dataset, "Stats", &dataset.name)
+                        && dataset_action(
+                            ui,
+                            !self.loading.dataset,
+                            crate::glossary::STATISTICS,
+                            &dataset.name,
+                        )
                     {
                         self.open_dataset(dataset.dataset_id.clone(), AppView::Stats);
                     }
@@ -707,7 +730,7 @@ impl LabelloApp {
                     "Workflow: {} ({}) · {} · Classes: {}{}",
                     task.name,
                     task.task_id,
-                    task.annotation_type,
+                    crate::glossary::annotation_type_name(&task.annotation_type),
                     classes,
                     if task.enabled { "" } else { " · Disabled" }
                 ));
@@ -739,15 +762,23 @@ impl LabelloApp {
     pub(crate) fn primary_navigation_destinations(&self) -> Vec<(AppView, &'static str)> {
         let mut destinations = Vec::new();
         for (view, role, label) in [
-            (AppView::Annotate, DatasetRole::Annotator, "Annotate"),
-            (AppView::Review, DatasetRole::Reviewer, "Review"),
+            (
+                AppView::Annotate,
+                DatasetRole::Annotator,
+                crate::glossary::ANNOTATE,
+            ),
+            (
+                AppView::Review,
+                DatasetRole::Reviewer,
+                crate::glossary::REVIEW,
+            ),
         ] {
             if self.has_dataset_role(role) {
                 destinations.push((view, label));
             }
         }
         if self.datasets.metadata.is_some() && self.can_open_view(AppView::Inspect) {
-            destinations.push((AppView::Inspect, "Inspect"));
+            destinations.push((AppView::Inspect, crate::glossary::INSPECT));
         }
         destinations
     }
@@ -867,10 +898,10 @@ fn recommended_view(roles: &[DatasetRole]) -> AppView {
 
 fn role_badge(ui: &mut egui::Ui, role: &DatasetRole) {
     let label = match role {
-        DatasetRole::Annotator => "Annotator",
-        DatasetRole::Reviewer => "Reviewer",
+        DatasetRole::Annotator => crate::glossary::ANNOTATOR,
+        DatasetRole::Reviewer => crate::glossary::REVIEWER,
         DatasetRole::LegacyAdjudicator => "Retired role",
-        DatasetRole::DataAdmin => "Data admin",
+        DatasetRole::DataAdmin => crate::glossary::DATA_ADMIN,
     };
     theme::badge(ui, label, theme::Intent::Info);
 }
@@ -881,7 +912,7 @@ fn dataset_action(ui: &mut egui::Ui, enabled: bool, label: &str, dataset_name: &
     response.widget_info(|| {
         egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, accessible_label.clone())
     });
-    if response.clicked() && label == "Stats" {
+    if response.clicked() && label == crate::glossary::STATISTICS {
         response.request_focus();
     }
     response.clicked()

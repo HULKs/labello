@@ -492,7 +492,7 @@ impl LabelloApp {
             }
             if self.work.correction_draft.is_none()
                 && ui
-                    .add_enabled(ready, egui::Button::new("Reset item"))
+                    .add_enabled(ready, egui::Button::new(crate::glossary::RESET_ITEM))
                     .clicked()
             {
                 self.reset_review_item();
