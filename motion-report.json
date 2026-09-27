@@ -1,0 +1,25 @@
+{
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "preference": "no-preference",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "frames": 8,
+      "minimum_relative_image_width": 0.9570200573065902,
+      "duration_s": 3.114309787750244
+    },
+    {
+      "preference": "reduce",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "frames": 7,
+      "minimum_relative_image_width": 1.0,
+      "duration_s": 3.0457448959350586
+    }
+  ]
+}

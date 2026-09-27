@@ -1,0 +1,54 @@
+diff --git a/crates/labello-ui/src/canvas/scan_transition.rs b/crates/labello-ui/src/canvas/scan_transition.rs
+index 42e59d1a1..97740ff8c 100644
+--- a/crates/labello-ui/src/canvas/scan_transition.rs
++++ b/crates/labello-ui/src/canvas/scan_transition.rs
+@@ -1,6 +1,6 @@
+ use egui::{Context, Id, Rect};
+ 
+-const DURATION: f64 = 0.45;
++const DURATION: f64 = 0.1;
+ 
+ /// Presentation only: never changes the stored zoom, pan, or annotation geometry.
+ #[derive(Clone, Debug, Default)]
+diff --git a/crates/labello-ui/src/ui_tests/suites/migration.rs b/crates/labello-ui/src/ui_tests/suites/migration.rs
+index 568b8db96..9a775bd17 100644
+--- a/crates/labello-ui/src/ui_tests/suites/migration.rs
++++ b/crates/labello-ui/src/ui_tests/suites/migration.rs
+@@ -2702,20 +2702,20 @@ fn migration_scan_cue_settles_once_and_respects_motion_and_input() {
+     harness.step();
+     let transform = harness.state().work.canvas.stored_transform();
+     assert!(harness.state().work.canvas.scan_emphasis() > 0.9);
+-    harness.input_mut().time = Some(10.1);
++    harness.input_mut().time = Some(10.022);
+     harness.step();
+     let contracted = image_rect(&harness);
+     assert!(contracted.width() < full.width() * 0.93, "phase entry must visibly contract");
+     assert!(contracted.center().distance(full.center()) < 0.01);
+     assert_eq!(harness.state().work.canvas.stored_transform(), transform, "motion must not enter persisted view preferences");
+-    harness.input_mut().time = Some(10.225);
++    harness.input_mut().time = Some(10.05);
+     harness.step();
+     assert!((image_rect(&harness).width() - full.width()).abs() < 0.1, "rebound");
+-    harness.input_mut().time = Some(10.34);
++    harness.input_mut().time = Some(10.075);
+     harness.step();
+     assert!(image_rect(&harness).width() > contracted.width());
+     assert!(image_rect(&harness).width() < full.width());
+-    harness.input_mut().time = Some(10.46);
++    harness.input_mut().time = Some(10.101);
+     harness.step();
+     assert_eq!(image_rect(&harness), full);
+     assert_eq!(harness.state().work.canvas.scan_emphasis(), 0.0);
+diff --git a/docs/ui-design-guidelines.md b/docs/ui-design-guidelines.md
+index a1df9163c..063955dfd 100644
+--- a/docs/ui-design-guidelines.md
++++ b/docs/ui-design-guidelines.md
+@@ -189,7 +189,7 @@ has been recorded.
+   errors, and keyboard focus. It follows workflow phase rather than zoom and
+   adds no visible text. Hide it without an image preview. On phase entry, briefly
+   brighten the frame and contract the image and overlays together by about eight
+-  percent, with one rebound and a small settle within 450 ms. Keep the animation
++  percent, with one rebound and a small settle within 100 ms. Keep the animation
+   inside the image bounds and out of persisted view preferences. User input stops
+   it; zooming within the phase does not restart it. Respect reduced motion, with
+   the static frame as the default when no platform preference adapter is present.

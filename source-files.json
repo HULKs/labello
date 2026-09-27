@@ -1,0 +1,5 @@
+{
+  "crates/labello-ui/src/canvas/scan_transition.rs": "2b19f5f03bdf6ed545f1e1439a79ed1fadc735495732d226becd38cba86c97cc",
+  "crates/labello-ui/src/ui_tests/suites/migration.rs": "8994fb93735e385c39044ff5e384510a7072692e46ce5df20515cb2af88e98bf",
+  "docs/ui-design-guidelines.md": "3b531270bdeef14abceaa5068f609b1c6ddd5ddb6d69ec1b707d6c8971d8f02a"
+}
