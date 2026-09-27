@@ -685,7 +685,7 @@ impl LabelloApp {
     }
     fn inspection_return_controls(&mut self, ui: &mut egui::Ui, record: &ImageRecord, busy: bool) {
         ui.separator();
-        ui.strong("Return to review");
+        ui.strong(crate::glossary::RETURN_TO_REVIEW);
         ui.weak("Select completed workflows and give a reason.");
         let mut changed = false;
         ui.add_enabled_ui(!busy, |ui| {
@@ -854,11 +854,11 @@ impl LabelloApp {
 
 fn status_label(status: &TaskStatus) -> &'static str {
     match status {
-        TaskStatus::Pending => "Pending",
-        TaskStatus::InProgress => "In progress",
-        TaskStatus::Submitted => "Submitted",
-        TaskStatus::NeedsCorrection => "Needs correction",
-        TaskStatus::Completed => "Completed",
+        TaskStatus::Pending => crate::glossary::PENDING,
+        TaskStatus::InProgress => crate::glossary::IN_PROGRESS,
+        TaskStatus::Submitted => crate::glossary::AWAITING_REVIEW,
+        TaskStatus::NeedsCorrection => crate::glossary::NEEDS_CORRECTION,
+        TaskStatus::Completed => crate::glossary::COMPLETED,
         _ => "Historical status",
     }
 }

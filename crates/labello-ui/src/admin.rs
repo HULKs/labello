@@ -29,12 +29,12 @@ impl AdminSection {
     fn label(self) -> &'static str {
         match self {
             Self::Overview => "Overview",
-            Self::People => "People",
-            Self::Images => "Images",
-            Self::Schema => "Schema",
-            Self::Automation => "Automation",
-            Self::Backups => "Backups",
-            Self::Export => "Export",
+            Self::People => crate::glossary::PEOPLE,
+            Self::Images => crate::glossary::IMAGES,
+            Self::Schema => crate::glossary::SCHEMA,
+            Self::Automation => crate::glossary::AUTOMATION,
+            Self::Backups => crate::glossary::SNAPSHOTS,
+            Self::Export => crate::glossary::EXPORT,
         }
     }
 }

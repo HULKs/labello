@@ -306,7 +306,10 @@ impl LabelloApp {
                             } else if let Some(error) = self.runtime.error.clone() {
                                 let claimed = self.work.assignment.is_some();
                                 let (title, retry) = if claimed {
-                                    ("Assignment image unavailable", "Retry image load")
+                                    (
+                                        "Assignment image unavailable",
+                                        crate::glossary::RETRY_IMAGE_LOAD,
+                                    )
                                 } else {
                                     ("Assignment unavailable", "Retry assignment")
                                 };
@@ -366,7 +369,7 @@ impl LabelloApp {
                                     title,
                                     "No work is available right now. Retry to check again.",
                                     Some(
-                                        egui::Button::new("Retry image load")
+                                        egui::Button::new(crate::glossary::RETRY_IMAGE_LOAD)
                                             .shortcut_text(crate::theme::button_shortcut(shortcut)),
                                     ),
                                 ) {

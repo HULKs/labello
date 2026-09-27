@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn admin_automation(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Automation");
+        ui.heading(crate::glossary::AUTOMATION);
         ui.label(
             RichText::new("Configure preloading, prelabels, and assignment balancing.").color(theme::TEXT_MUTED),
         );

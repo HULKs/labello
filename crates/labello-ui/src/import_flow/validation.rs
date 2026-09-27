@@ -385,7 +385,7 @@ impl LabelloApp {
                         ImportMappingIssueSeverity::Error,
                         Some(index),
                         ImportMappingField::BoundingBoxTaskId,
-                        "Bounding-box task ID must be a non-empty safe path segment of at most 255 bytes.",
+                        "Bounding-box workflow ID must be a non-empty safe path segment of at most 255 bytes.",
                     );
                 }
                 if category.bounding_box_task_name.trim().is_empty() {
@@ -394,7 +394,7 @@ impl LabelloApp {
                         ImportMappingIssueSeverity::Error,
                         Some(index),
                         ImportMappingField::BoundingBoxTaskName,
-                        "Bounding-box task name cannot be empty.",
+                        "Bounding-box workflow name cannot be empty.",
                     );
                 }
                 task_id_owners
@@ -413,7 +413,7 @@ impl LabelloApp {
                         ImportMappingIssueSeverity::Error,
                         Some(index),
                         ImportMappingField::SkeletonTaskId,
-                        "Skeleton task ID must be a non-empty safe path segment of at most 255 bytes.",
+                        "Skeleton workflow ID must be a non-empty safe path segment of at most 255 bytes.",
                     );
                 }
                 if category.skeleton_task_name.trim().is_empty() {
@@ -422,7 +422,7 @@ impl LabelloApp {
                         ImportMappingIssueSeverity::Error,
                         Some(index),
                         ImportMappingField::SkeletonTaskName,
-                        "Skeleton task name cannot be empty.",
+                        "Skeleton workflow name cannot be empty.",
                     );
                 }
                 task_id_owners
@@ -532,7 +532,7 @@ impl LabelloApp {
                     ImportMappingIssueSeverity::Error,
                     Some(*index),
                     *field,
-                    "Every generated task must use a unique task ID.",
+                    "Every generated workflow must use a unique workflow ID.",
                 );
             }
         }
@@ -549,7 +549,7 @@ impl LabelloApp {
                 None,
                 ImportMappingField::Form,
                 format!(
-                    "The mapping generates {generated_tasks} tasks; the server limit is {limit}."
+                    "The mapping generates {generated_tasks} workflows; the server limit is {limit}."
                 ),
             );
         }
@@ -650,7 +650,7 @@ impl LabelloApp {
                     ImportMappingIssueSeverity::Warning,
                     None,
                     ImportMappingField::Compatibility(ImportCompatibilityField::CocoCrowds),
-                    "Crowd objects will exclude the affected image-task pair.",
+                    "Crowd objects will exclude the affected image-workflow pair.",
                 ),
                 labello_client::CocoCrowdPolicy::Block => {}
             }

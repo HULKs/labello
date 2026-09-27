@@ -230,7 +230,7 @@ impl LabelloApp {
                                 .find(|task| &task.task_id == id)
                                 .map_or_else(|| id.to_string(), |task| task.name.clone())
                         })
-                        .unwrap_or_else(|| "Whole image".into());
+                        .unwrap_or_else(|| crate::glossary::FULL_IMAGE.into());
                     let relevance = if reason.current_exclusion {
                         " · Active exclusion"
                     } else if reason.current_round {

@@ -36,8 +36,8 @@ impl LabelloApp {
                 "",
                 "",
                 "Fit image",
-                "Previous image",
-                "Next image",
+                crate::glossary::PREVIOUS_IMAGE,
+                crate::glossary::NEXT_IMAGE,
                 "Refresh image",
             ]
         };
@@ -105,7 +105,10 @@ impl LabelloApp {
                 .values()
                 .any(|a| matches!(a, InspectorAction::List(q) if q.page == 1));
         ui.horizontal_wrapped(|ui| {
-            for (right, title) in [(false, "Images"), (true, "Overlays")] {
+            for (right, title) in [
+                (false, crate::glossary::IMAGES),
+                (true, crate::glossary::OVERLAYS),
+            ] {
                 let selected = if layout == LayoutMode::Wide {
                     if right {
                         !self.inspection.overlays_collapsed
@@ -163,21 +166,23 @@ impl LabelloApp {
                     .selected
                     .as_ref()
                     .and_then(|r| items.iter().position(|i| i.image.image_id == r.image_id));
-                [(true, "Previous image", "‹"), (false, "Next image", "›")].map(
-                    |(previous, label, icon)| {
-                        let target = position
-                            .and_then(|p| {
-                                if previous {
-                                    p.checked_sub(1)
-                                } else {
-                                    p.checked_add(1)
-                                }
-                            })
-                            .and_then(|p| items.get(p))
-                            .map(|i| i.image.clone());
-                        (previous, label, icon, target, position)
-                    },
-                )
+                [
+                    (true, crate::glossary::PREVIOUS_IMAGE, "‹"),
+                    (false, crate::glossary::NEXT_IMAGE, "›"),
+                ]
+                .map(|(previous, label, icon)| {
+                    let target = position
+                        .and_then(|p| {
+                            if previous {
+                                p.checked_sub(1)
+                            } else {
+                                p.checked_add(1)
+                            }
+                        })
+                        .and_then(|p| items.get(p))
+                        .map(|i| i.image.clone());
+                    (previous, label, icon, target, position)
+                })
             };
             for (previous, label, icon, target, position) in navigation {
                 let page_target = position.and(self.inspection.page.as_ref()).and_then(|p| {
@@ -273,7 +278,11 @@ impl LabelloApp {
         let screen = ctx.content_rect();
         let width = (if right { 300.0_f32 } else { 420.0_f32 }).min(screen.width() - 48.0);
         let height = (screen.height() - 64.0).max(120.0);
-        let title = if right { "Overlays" } else { "Images" };
+        let title = if right {
+            crate::glossary::OVERLAYS
+        } else {
+            crate::glossary::IMAGES
+        };
         let id = egui::Id::new("inspection-drawer");
         let area = egui::Modal::default_area(id)
             .anchor(

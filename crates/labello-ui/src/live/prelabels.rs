@@ -46,7 +46,7 @@ impl LabelloApp {
             };
             let result = futures::future::Abortable::new(future, registration)
                 .await
-                .unwrap_or_else(|_| Err("Hint request cancelled".into()));
+                .unwrap_or_else(|_| Err("Prelabel request cancelled".into()));
             UiMessage::PrelabelFinished {
                 request,
                 result: Box::new(result),
@@ -240,7 +240,7 @@ impl LabelloApp {
                         execution: None,
                         generation: None,
                         error: Some(format!(
-                            "Hints unavailable: {error}. Manual annotation is still available."
+                            "Prelabels unavailable: {error}. Manual annotation is still available."
                         )),
                         from_batch: false,
                         checked_at: Instant::now(),

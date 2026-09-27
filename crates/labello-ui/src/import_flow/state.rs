@@ -166,11 +166,11 @@ impl ImportStage {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Source => "Source",
+            Self::Source => crate::glossary::SOURCE,
             Self::Configure => "Configure",
-            Self::Preflight => "Preflight",
+            Self::Preflight => crate::glossary::PREFLIGHT,
             Self::Ready => "Ready",
-            Self::Import => "Import",
+            Self::Import => crate::glossary::IMPORT,
         }
     }
 }

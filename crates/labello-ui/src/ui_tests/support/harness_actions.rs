@@ -155,7 +155,7 @@ pub(super) fn select_admin_section(harness: &mut Harness<'static, LabelloApp>, l
         "Images" => AdminSection::Images,
         "Schema" => AdminSection::Schema,
         "Automation" => AdminSection::Automation,
-        "Backups" => AdminSection::Backups,
+        "Snapshots" => AdminSection::Backups,
         "Export" => AdminSection::Export,
         _ => panic!("unknown Admin section {label:?}"),
     };

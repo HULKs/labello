@@ -223,7 +223,7 @@ impl LabelloApp {
 
     fn submission_issue(&self) -> Option<String> {
         if !self.visible_prelabels().is_empty() {
-            return Some("Confirm or delete the remaining model objects before submitting.".into());
+            return Some("Confirm or delete the remaining prelabels before submitting.".into());
         }
         if self.work.annotations.iter().any(|annotation| self.companion_needs_box(annotation)) {
             return Some("Draw a bounding box for each keypoint guide before submitting.".into());

@@ -398,7 +398,7 @@ fn export_profile_and_shape_validation_use_canonical_mapping_policy() {
             .accesskit_node()
             .is_disabled()
     );
-    assert!(harness.query_by_label("No tasks match this export profile. Choose another profile or configure compatible tasks.").is_some());
+    assert!(harness.query_by_label("No workflows match this export profile. Choose another profile or configure compatible workflows.").is_some());
 }
 
 #[test]
@@ -464,7 +464,7 @@ fn export_initial_failure_retry_and_loading_do_not_render_empty_history() {
     assert!(
         harness
             .query_by_label(
-                "No exports yet. Choose a profile and task/class mappings, then run preflight."
+                "No exports yet. Choose a profile and workflow/class mappings, then run preflight."
             )
             .is_none()
     );

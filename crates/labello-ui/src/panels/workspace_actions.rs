@@ -18,7 +18,7 @@ impl LabelloApp {
             if removable && workspace_action_button(ui, ready && app.work.review_corrections.submission.is_none(), "Remove item", WorkspaceActionIcon::Remove, width, theme::Intent::Error).clicked() {
                 app.remove_migration_review_item();
             }
-            if workspace_action_button(ui, ready, "Skip", WorkspaceActionIcon::Skip, width, theme::Intent::Neutral).clicked() {
+            if workspace_action_button(ui, ready, crate::glossary::SKIP, WorkspaceActionIcon::Skip, width, theme::Intent::Neutral).clicked() {
                 app.trigger_user_action(labello_domain::UserAction::SkipAssignment);
             }
         };
@@ -50,7 +50,7 @@ impl LabelloApp {
     fn previous_review_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
         if self.view == AppView::Review && self.bar_has_previous_image()
             && workspace_action_button(ui, !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none(),
-                "Previous image", WorkspaceActionIcon::PreviousImage, width, theme::Intent::Neutral).on_hover_text("Return to the immediately previous eligible assignment.").clicked()
+                crate::glossary::PREVIOUS_IMAGE, WorkspaceActionIcon::PreviousImage, width, theme::Intent::Neutral).on_hover_text("Return to the immediately previous eligible assignment.").clicked()
         {
             self.trigger_user_action(labello_domain::UserAction::PreviousImage);
         }
@@ -58,7 +58,7 @@ impl LabelloApp {
 
     fn discard_review_action(&mut self, ui: &mut egui::Ui, width: Option<f32>) {
         let ready = self.has_review_corrections() && self.work.review_corrections.submission.is_none() && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none();
-        let label = "Discard changes";
+        let label = crate::glossary::DISCARD_CHANGES;
         if workspace_action_button(ui, ready, label, WorkspaceActionIcon::Discard, width, theme::Intent::Neutral).clicked() { self.discard_all_review_corrections(); }
     }
 
@@ -90,10 +90,10 @@ impl LabelloApp {
         let primary = self.bar_annotation_primary();
         let pending = !matches!(primary, PrelabelPrimaryAction::Submit);
         let (primary_label, primary_help) = match primary {
-            PrelabelPrimaryAction::Guide => ("Next guide", "Save this box and focus the next source keypoint guide. The final box submits the image."),
-            PrelabelPrimaryAction::Confirm => ("Confirm & next", "Confirm this object's geometry or deletion and focus the next object."),
-            PrelabelPrimaryAction::Focus => ("Next object", "Focus the next model object that needs confirmation."),
-            PrelabelPrimaryAction::Submit => ("Submit & next", "Save, complete this assignment, and claim another."),
+            PrelabelPrimaryAction::Guide => (crate::glossary::NEXT_GUIDE, "Save this box and focus the next source keypoint guide. The final box submits the image."),
+            PrelabelPrimaryAction::Confirm => (crate::glossary::CONFIRM_NEXT, "Confirm this object's geometry or deletion and focus the next object."),
+            PrelabelPrimaryAction::Focus => (crate::glossary::NEXT_OBJECT, "Focus the next prelabel that needs confirmation."),
+            PrelabelPrimaryAction::Submit => (crate::glossary::SUBMIT_NEXT, "Save, complete this assignment, and claim another."),
         };
         let objects = self.annotation_objects();
         let selected = objects.iter().any(|object| !object.deleted && Some(&object.annotation_id) == self.work.selected_annotation.as_ref());
@@ -106,11 +106,11 @@ impl LabelloApp {
         ui.allocate_ui_with_layout(egui::vec2(secondary_width, 44.0), egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true), |ui| {
         ui.push_id("annotation-primary-actions", |ui| {
             for (action, label, icon, enabled, intent, help) in [
-                (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, can_commit && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
-                (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
-                (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, can_commit && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
-                (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model box still needs Confirm & next."),
-                (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, can_commit, theme::Intent::Neutral, "Release this assignment and claim another."),
+                (UserAction::PreviousImage, crate::glossary::PREVIOUS_IMAGE, WorkspaceActionIcon::PreviousImage, can_commit && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
+                (UserAction::SelectPreviousObject, crate::glossary::PREVIOUS_OBJECT, WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
+                (UserAction::SaveAnnotations, crate::glossary::SAVE, WorkspaceActionIcon::Save, can_commit && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
+                (UserAction::DeleteAnnotation, crate::glossary::DELETE, WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model box still needs Confirm & next."),
+                (UserAction::SkipAssignment, crate::glossary::SKIP, WorkspaceActionIcon::Skip, can_commit, theme::Intent::Neutral, "Release this assignment and claim another."),
             ] {
                 if action == UserAction::PreviousImage && !previous || action == UserAction::SaveAnnotations && save_in_menu { continue; }
                 ui.push_id(action, |ui| {
@@ -122,11 +122,11 @@ impl LabelloApp {
             }
         });
         let mut actions = vec![
-            self.workspace_secondary_action(ui.ctx(), UserAction::UndoEdit, "Undo", ready && !self.work.undo_stack.is_empty(), "Undo the last edit."),
-            self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, "Redo", ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
+            self.workspace_secondary_action(ui.ctx(), UserAction::UndoEdit, crate::glossary::UNDO, ready && !self.work.undo_stack.is_empty(), "Undo the last edit."),
+            self.workspace_secondary_action(ui.ctx(), UserAction::RedoEdit, crate::glossary::REDO, ready && !self.work.redo_stack.is_empty(), "Redo the last undone edit."),
         ];
         if save_in_menu {
-            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, "Save", can_commit && dirty, "Save confirmed annotations and keep this assignment active."));
+            actions.insert(0, self.workspace_secondary_action(ui.ctx(), UserAction::SaveAnnotations, crate::glossary::SAVE, can_commit && dirty, "Save confirmed annotations and keep this assignment active."));
         }
         self.dispatch_workspace_secondary(workspace_secondary_actions(ui, &actions, "More actions"));
         });
@@ -143,7 +143,7 @@ impl LabelloApp {
             && !self.work.migration.busy && self.work.pending_transition.is_none()
             && self.work.review_corrections.submission.is_none();
         let position = self.review_position();
-        if workspace_toolbar_button(ui, ready && position > 0, "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
+        if workspace_toolbar_button(ui, ready && position > 0, crate::glossary::PREVIOUS_OBJECT, WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
             .on_hover_text("Return to the previous object in this image, retaining valid corrections. Stops at the first object.").clicked() {
             self.cycle_review_item(-1);
         }
@@ -162,8 +162,8 @@ impl LabelloApp {
     }
 
     fn drawer_panel_buttons(&mut self, ui: &mut egui::Ui, icon_only: bool) {
-        self.drawer_panel_button(ui, Drawer::Workflow, "Workflow", false, icon_only);
-        self.drawer_panel_button(ui, Drawer::Inspector, "Inspector", true, icon_only);
+        self.drawer_panel_button(ui, Drawer::Workflow, crate::glossary::WORKFLOW, false, icon_only);
+        self.drawer_panel_button(ui, Drawer::Inspector, crate::glossary::INSPECTOR, true, icon_only);
     }
 
     fn drawer_panel_button(
@@ -234,8 +234,8 @@ impl LabelloApp {
 
 fn drawer_panel_labels_fit(ui: &egui::Ui) -> bool {
     let spacing = ui.spacing().item_spacing.x;
-    panel_label_button_width(ui, "Workflow")
-        + panel_label_button_width(ui, "Inspector")
+    panel_label_button_width(ui, crate::glossary::WORKFLOW)
+        + panel_label_button_width(ui, crate::glossary::INSPECTOR)
         + spacing
         <= ui.available_size_before_wrap().x + 0.5
 }

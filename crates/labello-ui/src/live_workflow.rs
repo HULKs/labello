@@ -776,7 +776,7 @@ impl LabelloApp {
     pub(crate) fn request_save(&mut self, submit: bool) {
         if submit && !self.visible_prelabels().is_empty() {
             self.runtime.error = Some(
-                "Confirm the remaining model objects, including deleted boxes, before submitting."
+                "Confirm the remaining prelabels, including deleted boxes, before submitting."
                     .into(),
             );
             return;

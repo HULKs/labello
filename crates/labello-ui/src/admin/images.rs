@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn admin_images(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        ui.heading("Images");
+        ui.heading(crate::glossary::IMAGES);
         ui.label(
             RichText::new("Manage image roots, ingestion, uploads, and indexed image state.")
                 .color(theme::TEXT_MUTED),
@@ -170,10 +170,10 @@ impl LabelloApp {
                                         .find(|task| &task.task_id == task_id)
                                         .map(|task| task.name.as_str())
                                 })
-                                .unwrap_or("Any task"),
+                                .unwrap_or("Any workflow"),
                         )
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.admin.image_task, None, "Any task");
+                            ui.selectable_value(&mut self.admin.image_task, None, "Any workflow");
                             for task in &tasks {
                                 ui.selectable_value(
                                     &mut self.admin.image_task,
@@ -238,7 +238,7 @@ impl LabelloApp {
                         if self.admin.images_error.is_some()
                             && self.admin.images.is_none()
                         {
-                            "Retry image load"
+                            crate::glossary::RETRY_IMAGE_LOAD
                         } else {
                             "Refresh images"
                         },
@@ -408,7 +408,7 @@ fn admin_image_grid(ui: &mut egui::Ui, items: &[ImageExplorerItem]) {
                 .striped(true)
                 .spacing([theme::SPACE_4, theme::SPACE_2])
                 .show(ui, |ui| {
-                    for heading in ["Image", "Dimensions", "Path", "Classes", "Workflow"] {
+                    for heading in [crate::glossary::IMAGE, "Dimensions", "Path", "Classes", crate::glossary::WORKFLOW] {
                         ui.label(RichText::new(heading).strong().color(theme::TEXT_MUTED));
                     }
                     ui.end_row();

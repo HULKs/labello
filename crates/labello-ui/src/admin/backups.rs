@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn snapshots_section(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        ui.heading("Backups");
+        ui.heading(crate::glossary::SNAPSHOTS);
         ui.label(
             RichText::new(
                 "Create and download native dataset snapshots. Image bytes are not included.",
@@ -30,9 +30,9 @@ impl LabelloApp {
                     !self.loading.snapshots && !self.loading.creating_snapshot,
                     egui::Button::new(
                         if self.admin.snapshots_error.is_some() && !self.admin.snapshots_loaded {
-                            "Retry backup load"
+                            "Retry snapshot load"
                         } else {
-                            "Refresh backups"
+                            "Refresh snapshots"
                         },
                     ),
                 )
@@ -44,9 +44,9 @@ impl LabelloApp {
                     ui.spinner();
                     ui.small(
                         if self.admin.snapshots_loaded || !self.admin.snapshots.is_empty() {
-                            "Refreshing backups..."
+                            "Refreshing snapshots..."
                         } else {
-                            "Loading backups..."
+                            "Loading snapshots..."
                         },
                     );
                 }
@@ -61,11 +61,11 @@ impl LabelloApp {
                         theme::Intent::Error
                     },
                     if self.admin.snapshots_loaded {
-                        format!("Showing the last loaded backups. Refresh failed: {error}")
+                        format!("Showing the last loaded snapshots. Refresh failed: {error}")
                     } else if !self.admin.snapshots.is_empty() {
-                        format!("Showing newly created backups. Catalog refresh failed: {error}")
+                        format!("Showing newly created snapshots. Catalog refresh failed: {error}")
                     } else {
-                        format!("Could not load backups: {error}")
+                        format!("Could not load snapshots: {error}")
                     },
                 );
             }
@@ -73,7 +73,7 @@ impl LabelloApp {
                 theme::inline_message(
                     ui,
                     theme::Intent::Error,
-                    format!("Backup action failed: {error}"),
+                    format!("Snapshot action failed: {error}"),
                 );
             }
 
@@ -83,7 +83,7 @@ impl LabelloApp {
             {
                 theme::empty_state(
                     ui,
-                    "Backups are not loaded",
+                    "Snapshots are not loaded",
                     "Refresh to load the available dataset snapshots.",
                     None,
                 );
@@ -141,7 +141,7 @@ fn admin_snapshot_grid(
                 .striped(true)
                 .spacing([theme::SPACE_4, theme::SPACE_2])
                 .show(ui, |ui| {
-                    for heading in ["Snapshot", "Created", "Files", "Size", "Details"] {
+                    for heading in [crate::glossary::SNAPSHOT, "Created", "Files", "Size", "Details"] {
                         ui.label(RichText::new(heading).strong().color(theme::TEXT_MUTED));
                     }
                     ui.end_row();
@@ -201,7 +201,7 @@ fn admin_snapshot_grid(
                                     egui::Button::new(if downloading {
                                         "Downloading..."
                                     } else {
-                                        "Download"
+                                        crate::glossary::DOWNLOAD
                                     })
                                     .min_size(egui::vec2(110.0, 44.0)),
                                 );
@@ -271,7 +271,7 @@ fn admin_snapshot_cards(
                             egui::Button::new(if downloading {
                                 "Downloading..."
                             } else {
-                                "Download"
+                                crate::glossary::DOWNLOAD
                             })
                             .min_size(egui::vec2(110.0, 44.0)),
                         );
