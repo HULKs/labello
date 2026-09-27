@@ -93,6 +93,8 @@ the user workflow.
   overlay is active; it blocks background input, and Escape reaches it first.
 - Constrain overlays to the viewport and keep decisions reachable by scrolling
   the whole surface on short screens. Blocking drawers follow the same rules.
+- In compact shortcut settings, place action labels above binding controls and
+  wrap long bindings. Keep the save/cancel row at its content height.
 - Popup menus and drawers suppress workspace shortcuts. Consume captured
   keyboard events before other controls process them.
 - Use a danger action plus concise confirmation for destructive work. Never use

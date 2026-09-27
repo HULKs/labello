@@ -52,6 +52,16 @@ Open Settings with `Ctrl+,` on Windows/Linux or `Cmd+,` on macOS. Search actions
 record bindings, resolve contextual conflicts, and choose **Save changes**.
 Settings are staged until saved and can be restored to defaults.
 
+Bindings accept keyboard keys, right-click, and extra mouse buttons 4 and 5,
+with Shift, Alt, and the primary Ctrl/Cmd modifier. To assign Delete annotation
+to right-click, record that action, press the right mouse button, and save.
+Mouse bindings activate once on press over the annotation canvas, using the
+same selected target and workflow guards as keyboard bindings. They do not
+activate over settings, toolbars, drawers, or other overlays, or from pen/touch
+input. Left-click and middle-button drag remain reserved for editing and panning;
+wheel and multi-click gestures are not configurable bindings. Existing keyboard
+defaults are unchanged.
+
 Submission and completion actions require a fresh press. Holding a shortcut or
 the activation key of a focused button acts on at most one item, even if saving
 finishes or another object or image loads while the key is held. Release and
@@ -70,6 +80,13 @@ A press while an action is unavailable does not queue a later submission.
 | Previous image | Left arrow; subject to the previous-assignment eligibility rules |
 | Delete annotation | `Delete`; also discards a selected locally added review object |
 | Pen annotation | Primary-tip drag creates/moves/resizes boxes; tap places keypoints and drag moves them. See the [stylus contract](stylus-input.md) for tested event streams and pending device coverage. |
+
+The browser regression uses the disposable server and Python dependencies from
+[the browser input procedure](stylus-input.md#automated-browser-procedure).
+After building the server and release WASM distribution, run
+`/tmp/labello-stylus-env/bin/python apps/labello-wasm/tests/mouse_bindings.py` from
+the repository root. It checks persisted Shift+right-click deletion, modifier
+matching, canvas scope, and suppression of the browser context menu.
 
 Canvas zoom ranges from fit-to-view to 48 times that scale, including restored
 workspace views. Zoom magnifies the working preview; it does not fetch additional

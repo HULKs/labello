@@ -2132,3 +2132,111 @@ fn browser_review_recovery_preserves_local_decisions_without_marking_an_untouche
         assert_eq!(app.review_overview(), changed);
     }
 }
+
+#[test]
+fn mouse_binding_records_saves_and_dispatches_only_on_canvas() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api.clone());
+    click_application_menu_item(&mut harness, "Settings");
+    click_accesskit_button(&mut harness, "Record shortcut for Submit and next");
+    let position = egui::pos2(750.0, 150.0);
+    for pressed in [true, false] {
+        harness.event(egui::Event::PointerButton {
+            pos: position,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::SHIFT,
+        });
+        harness.step();
+    }
+    assert_eq!(harness.state().work.shortcut_settings.recording, None);
+    let draft = harness.state().work.shortcut_settings.draft.as_ref().unwrap();
+    assert_eq!(draft.bindings[&labello_domain::UserAction::NextImage].to_string(), "Shift+Right click");
+    assert_eq!(api.counts().complete_assignment, 0);
+    click_accesskit_button(&mut harness, "Save changes");
+    step_until(&mut harness, 8, |app| !app.loading.keybindings);
+    assert_eq!(api.counts().save_keybindings, 1);
+    assert_eq!(harness.state().shortcut_text(&harness.ctx, labello_domain::UserAction::NextImage), "Shift+Right click");
+    click(&mut harness, "Cancel");
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    for (pos, modifiers) in [
+        (egui::pos2(5.0, 5.0), egui::Modifiers::SHIFT),
+        (center, egui::Modifiers::NONE),
+    ] {
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers });
+            harness.step();
+        }
+        assert_eq!(api.counts().complete_assignment, 0);
+    }
+    harness.event(egui::Event::PointerButton { pos: center, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::SHIFT });
+    step_until(&mut harness, 16, |_| api.counts().complete_assignment == 1);
+    harness.run_steps(4);
+    assert_eq!(api.counts().complete_assignment, 1);
+    harness.event(egui::Event::PointerButton { pos: center, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::SHIFT });
+    harness.run_steps(4);
+    assert_eq!(api.counts().complete_assignment, 1);
+}
+
+#[test]
+fn mouse_delete_obeys_annotation_loading_and_settings_guards() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    let center = harness.get_by_label("Annotation canvas").rect().center();
+    drag_at(&mut harness, center - egui::vec2(55.0, 55.0), center + egui::vec2(55.0, 55.0));
+    let selected = harness.state().work.selected_annotation.clone().expect("created box");
+    harness.state_mut().work.keybindings.bindings.insert(
+        labello_domain::UserAction::DeleteAnnotation,
+        labello_domain::KeyChord::new("MouseRight"),
+    );
+    let right_click = |harness: &mut Harness<'static, LabelloApp>| {
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton { pos: center, button: egui::PointerButton::Secondary, pressed, modifiers: egui::Modifiers::NONE });
+        }
+        harness.step();
+    };
+    for blocked in ["loading", "settings", "pen"] {
+        match blocked {
+            "loading" => harness.state_mut().loading.image = true,
+            "settings" => harness.state_mut().work.show_settings = true,
+            "pen" => crate::pointer_input::set_pen_pointer(&harness.ctx, true),
+            _ => unreachable!(),
+        }
+        right_click(&mut harness);
+        assert!(harness.state().work.annotations.iter().any(|a| a.annotation_id == selected && !a.deleted), "{blocked}");
+        harness.state_mut().loading.image = false;
+        harness.state_mut().work.show_settings = false;
+        crate::pointer_input::set_pen_pointer(&harness.ctx, false);
+        harness.run_steps(2);
+    }
+    right_click(&mut harness);
+    assert!(harness.state().work.annotations.iter().any(|a| a.annotation_id == selected && a.deleted));
+    assert!(harness.state().work.selected_annotation.is_none());
+}
+
+#[test]
+fn compact_mouse_binding_rows_keep_labels_above_controls() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().open_shortcut_settings();
+    harness.state_mut().work.shortcut_settings.search = "delete annotation".to_string();
+    let mut chord = labello_domain::KeyChord::primary("MouseExtra2");
+    chord.shift = true;
+    chord.alt = true;
+    harness.state_mut().work.shortcut_settings.draft.as_mut().unwrap().bindings.insert(
+        labello_domain::UserAction::DeleteAnnotation, chord,
+    );
+    for size in [egui::vec2(320.0, 568.0), egui::vec2(390.0, 844.0)] {
+        harness.set_size(size);
+        harness.run_steps(3);
+        let label = harness.query_all_by_value("Delete annotation")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Label)
+            .unwrap().rect();
+        let control = harness.query_all_by_label_contains("Record shortcut for Delete annotation")
+            .find(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
+            .unwrap().rect();
+        assert!(label.bottom() <= control.top(), "action label overlaps mouse binding");
+        let footer = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Restore all defaults").rect();
+        assert!(control.bottom() <= footer.top(), "binding is clipped behind the footer");
+        assert_visible_controls_clamped(&harness, size.x, size.y);
+        assert_label_inside(&harness, "Keyboard shortcuts", size.x, size.y);
+    }
+}

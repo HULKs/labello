@@ -39,8 +39,11 @@ impl LabelloApp {
             .keybindings
             .bindings
             .get(&action)
-            .and_then(keyboard_shortcut)
-            .map(|shortcut| ctx.format_shortcut(&shortcut))
+            .map(|chord| {
+                keyboard_shortcut(chord)
+                    .map(|shortcut| ctx.format_shortcut(&shortcut))
+                    .unwrap_or_else(|| chord.to_string())
+            })
             .unwrap_or_default()
     }
 
@@ -466,7 +469,7 @@ impl LabelloApp {
             } else {
                 consume_keyboard_shortcut(ctx, &chord)
             };
-            if triggered {
+            if triggered || crate::pointer_input::consume_mouse_shortcut(ctx, &chord) {
                 self.trigger_user_action(action);
             }
         }

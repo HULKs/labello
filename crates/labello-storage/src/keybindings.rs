@@ -51,6 +51,27 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn mouse_bindings_survive_repository_reload() {
+        let temp = tempfile::tempdir().unwrap();
+        let user = UserId::from("mouse_user");
+        let mut bindings = KeybindingSet::defaults_for(user.clone());
+        let mut chord = KeyChord::new("MouseRight");
+        chord.shift = true;
+        bindings
+            .bindings
+            .insert(UserAction::DeleteAnnotation, chord);
+        DatasetRepository::new(temp.path())
+            .save_keybindings(&bindings)
+            .await
+            .unwrap();
+        let reloaded = DatasetRepository::new(temp.path())
+            .load_keybindings(&user)
+            .await
+            .unwrap();
+        assert_eq!(reloaded, bindings);
+    }
+
+    #[tokio::test]
     async fn load_normalizes_legacy_actions_and_save_round_trips() {
         let temp = tempfile::tempdir().unwrap();
         let repo = DatasetRepository::new(temp.path());
