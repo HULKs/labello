@@ -352,10 +352,10 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
     for (width, height) in sizes {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        if LayoutMode::for_width(width) != LayoutMode::Compact {
-            assert!(harness.query_all_by_label(&image_name).next().is_some());
-        }
-        assert!(harness.query_all_by_label(&workflow_label).next().is_some());
+        let summary = harness.get_by_label_contains("Annotation details:");
+        let summary_label = summary.accesskit_node().label().unwrap().to_owned();
+        assert!(summary_label.contains(&image_name));
+        assert!(summary_label.contains(&workflow_label));
         let presence = harness.get_by_label_contains("Labelling presence:").rect();
         let status_badge = harness.get_by_label_contains("Connection status:").rect();
         assert!(
@@ -643,7 +643,7 @@ fn compact_long_work_context_preserves_canvas_and_controls() {
         }
         assert!(harness.query_by_label_contains("Refocus object").is_none());
         let workflow = harness
-            .get_by_label("A deliberately long workflow name for compact layout testing")
+            .get_by_label_contains("Annotation details:")
             .rect();
         assert!(
             workflow.height() <= 44.0,
@@ -1216,9 +1216,8 @@ fn wide_inspector_uses_the_toolbar_toggle_and_returns_its_width_to_the_canvas() 
         )
         .rect();
     assert!(
-        inspector_toggle.left() >= workflow_toggle.right()
-            && inspector_toggle.left() - workflow_toggle.right() <= 12.0,
-        "the side-panel controls should form one toolbar group"
+        workflow_toggle.left() <= 15.0 && inspector_toggle.right() >= 1273.0,
+        "the side-panel controls should remain at opposite bar edges"
     );
     // Secondary actions may be inline when the remaining toolbar width permits it.
     let secondary_actions: &[&str] = if harness

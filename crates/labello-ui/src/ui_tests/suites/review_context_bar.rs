@@ -672,3 +672,60 @@ fn review_submitter_profile_loads_through_the_assignment_request() {
     assert!(harness.state().work.review_submitters.is_empty());
     assert!(harness.query_by_label_contains("@loaded-submitter").is_none());
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn workspace_context_centers_content_between_edge_toggles() {
+    use crate::inspector_presets::{self, InspectorPreset::*};
+    for preset in [Annotation, PrelabelBoxes, Review, ReviewCorrection, MigrationObject, MigrationFullImage, MigrationReview, MigrationCompanionAnnotation] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut h = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
+        for (width, height) in [(1440.0, 1000.0), (1288.0, 820.0), (600.0, 800.0), (390.0, 844.0), (320.0, 320.0)] {
+            h.set_size(egui::vec2(width, height));
+            h.run_steps(4);
+            let wide = LayoutMode::for_width(width) == LayoutMode::Wide;
+            let left_label = if wide { "Collapse workflow panel" } else { "Workflow" };
+            let right_label = if wide { "Expand inspector panel" } else { "Inspector" };
+            let left = h.get_by_label(left_label).rect();
+            let right = h.get_by_label(right_label).rect();
+            assert!((left.left() - 14.0).abs() <= 1.0, "{preset:?} {width}: {left:?}");
+            assert!((right.right() - (width - 14.0)).abs() <= 1.0, "{preset:?} {width}: {right:?}");
+            let fit = h.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
+            assert!((left.center().y - fit.center().y).abs() <= 1.0);
+            assert!((right.center().y - fit.center().y).abs() <= 1.0);
+            let summary = h.get_by_label_contains(if h.state().view == AppView::Review { "Review details:" } else { "Annotation details:" }).rect();
+            let first = h.get_by_label_contains(if h.state().view == AppView::Review { "Refocus object" } else { "Pan" }).rect();
+            let controls = first.union(fit);
+            let compact = LayoutMode::for_width(width) == LayoutMode::Compact;
+            let group = if compact { controls } else { summary.union(controls) };
+            assert!((group.center().x - width * 0.5).abs() <= 1.0, "{preset:?} {width}: {group:?}");
+            assert!(left.right() < group.left() && group.right() < right.left());
+            if compact {
+                assert!((summary.center().x - width * 0.5).abs() <= 1.0);
+                assert!(summary.bottom() <= fit.top());
+            }
+            assert!(h.get_by_label("Workspace context bar").rect().contains_rect(summary));
+            assert!(h.get_by_label("Annotation canvas").rect().height() >= 44.0);
+        }
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn annotation_context_uses_review_hierarchy_and_retains_summary_during_loads() {
+    use crate::inspector_presets::{self, InspectorPreset::*};
+    for (preset, progress, kind) in [(Annotation, "Item 1 / 1", "Bounding boxes"), (MigrationObject, "Item 1 /", "Skeletons"), (MigrationFullImage, "Image overview", "Skeletons")] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut h = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
+        h.run_steps(4);
+        let summary = h.get_by_label_contains("Annotation details:");
+        let label = summary.accesskit_node().label().unwrap().to_owned();
+        assert!(label.contains(progress) && label.contains(kind), "{preset:?}: {label}");
+        assert_eq!(summary.accesskit_node().role(), egui::accesskit::Role::Label);
+        let rect = summary.rect();
+        h.state_mut().clear_current_image();
+        h.state_mut().loading.image = true;
+        h.run_steps(4);
+        assert_eq!(h.get_by_label(&label).rect(), rect);
+    }
+}

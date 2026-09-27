@@ -1971,6 +1971,28 @@ impl LabelloApp {
         }
     }
 
+    pub(crate) fn migration_context_progress(&self) -> String {
+        let (expected, _, _, _) = self.migration_counts();
+        if self.work.migration.adding_missing_object {
+            return "Adding missing object".into();
+        }
+        if let Some(group) = &self.work.migration.inspected_group_id
+            && let Some(target) = self.migration_target(group)
+        {
+            return format!(
+                "Item {} / {expected} · Read only",
+                target.sequence_index + 1
+            );
+        }
+        match self.work.migration.cursor {
+            Some(MigrationCursor::Object { sequence_index, .. }) => {
+                format!("Item {} / {expected}", sequence_index + 1)
+            }
+            Some(MigrationCursor::FullImage) => "Image overview".into(),
+            None => "Migration cursor unavailable".into(),
+        }
+    }
+
     fn migration_counts(&self) -> (u64, u64, u64, u64) {
         if let Some(progress) = &self.work.migration.progress {
             return (

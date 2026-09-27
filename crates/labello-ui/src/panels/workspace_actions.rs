@@ -161,11 +161,6 @@ impl LabelloApp {
         }
     }
 
-    fn drawer_panel_buttons(&mut self, ui: &mut egui::Ui, icon_only: bool) {
-        self.drawer_panel_button(ui, Drawer::Workflow, crate::glossary::WORKFLOW, false, icon_only);
-        self.drawer_panel_button(ui, Drawer::Inspector, crate::glossary::INSPECTOR, true, icon_only);
-    }
-
     fn drawer_panel_button(
         &mut self,
         ui: &mut egui::Ui,
@@ -230,18 +225,6 @@ impl LabelloApp {
             self.trigger_user_action(action);
         }
     }
-}
-
-fn drawer_panel_labels_fit(ui: &egui::Ui) -> bool {
-    let spacing = ui.spacing().item_spacing.x;
-    panel_label_button_width(ui, crate::glossary::WORKFLOW)
-        + panel_label_button_width(ui, crate::glossary::INSPECTOR)
-        + spacing
-        <= ui.available_size_before_wrap().x + 0.5
-}
-
-fn panel_label_button_width(ui: &egui::Ui, label: &str) -> f32 {
-    25.0 + theme::SPACE_2 + text_button_width(ui, label)
 }
 
 fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {

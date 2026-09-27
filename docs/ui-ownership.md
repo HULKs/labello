@@ -48,7 +48,7 @@ inspector. See the [product glossary](glossary.md).
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
 | `prelabel_flow.rs`, `live/prelabels.rs` | Explicit model choice, item-scoped retained-hint defaults, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
 | `prelabel_review.rs` | Pending editable prelabels, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
-| `panels/review_context_bar.rs`, `review_context.rs` | Exact-target identity, type, phase, version and context height |
+| `panels/review_context_bar.rs`, `review_context.rs` | Shared context summary/layout and height; exact review target identity, type, phase and version |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
 | `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
 | `review_revision.rs` | Locally staged replacement decisions and stable commit retries |
@@ -130,7 +130,11 @@ bar presentation includes the current confirmation action and object progress.
 
 ## Assignment navigation and review
 
-The review context bar is passive text and a submitter avatar. Panel toggles own
+Annotation and Review share the measured two-line context summary and centered
+canvas-control layout. Workflow and Inspector toggles stay at the left and right
+edges. Each workflow projects its own progress, type and class into retained bar
+presentation; image transitions retain the summary and control geometry together.
+Review additionally shows the submission author avatar. The summary is passive text. Panel toggles own
 Inspector opening and focus return. Profile presentation loads with review images
 through `get_review_submitters` and the existing request/epoch gate. It matches
 image, workflow and authoritative submitter ID before using public profile data.
