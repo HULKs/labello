@@ -1,0 +1,17 @@
+{
+  "viewport": [
+    1288,
+    820
+  ],
+  "dpr": 1,
+  "frame": [
+    16,
+    244,
+    1272,
+    668
+  ],
+  "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+  "transport": "synthetic intercepted responses; no backend claim",
+  "accessibility": "Canvas node present",
+  "actual_tab_zoom": 2
+}

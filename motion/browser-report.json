@@ -1,0 +1,214 @@
+{
+  "revision": "3e570f25404866901624c0d4ac314d4bffa84916",
+  "browser": "149.0.7827.55",
+  "cases": [
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "frame": [
+        8,
+        122,
+        312,
+        266
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "frame": [
+        8,
+        122,
+        312,
+        266
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "frame": [
+        8,
+        122,
+        312,
+        492
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "frame": [
+        8,
+        122,
+        312,
+        492
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "frame": [
+        8,
+        122,
+        382,
+        768
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "frame": [
+        8,
+        122,
+        382,
+        768
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "frame": [
+        8,
+        122,
+        592,
+        724
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "frame": [
+        8,
+        122,
+        592,
+        724
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "frame": [
+        250,
+        122,
+        1280,
+        744
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "frame": [
+        251,
+        122,
+        1280,
+        744
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "frame": [
+        250,
+        22,
+        1432,
+        924
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "frame": [
+        251,
+        23,
+        1432,
+        924
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "frame": [
+        8,
+        122,
+        382,
+        768
+      ],
+      "browser_input": "wheel zoom preserves phase cue; keyboard Tab works",
+      "transport": "synthetic intercepted responses; no backend claim",
+      "accessibility": "Canvas node present"
+    }
+  ]
+}
