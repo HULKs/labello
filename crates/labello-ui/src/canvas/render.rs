@@ -407,7 +407,7 @@ fn canvas_state_description(annotations: &[AnnotationVersion], prelabels: &[Prel
     }
     for (index, suggestion) in prelabels.iter().enumerate() {
         if let AnnotationGeometry::Skeleton(skeleton) = &suggestion.geometry {
-            descriptions.push(format!("Suggestion {}: {}", index + 1, skeleton_state_description(skeleton)));
+            descriptions.push(format!("Prelabel {}: {}", index + 1, skeleton_state_description(skeleton)));
         }
     }
     descriptions.join(". ")

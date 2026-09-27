@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn people_section(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        ui.heading("People");
+        ui.heading(crate::glossary::PEOPLE);
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
@@ -48,7 +48,7 @@ impl LabelloApp {
                     .striped(true)
                     .spacing([theme::SPACE_4, theme::SPACE_2])
                     .show(ui, |ui| {
-                        for heading in ["Person", "Roles", "Status"] {
+                        for heading in ["Person", crate::glossary::ROLES, crate::glossary::STATUS] {
                             ui.label(RichText::new(heading).strong().color(theme::TEXT_MUTED));
                         }
                         ui.end_row();
@@ -91,11 +91,11 @@ impl LabelloApp {
                                 |ui| {
                                     ui.label(
                                         RichText::new(if this_saving {
-                                            "Saving"
+                                            crate::glossary::SAVING
                                         } else if dirty {
                                             "Staged"
                                         } else {
-                                            "Saved"
+                                            crate::glossary::SAVED
                                         })
                                         .color(
                                             if dirty || this_saving {
@@ -132,7 +132,7 @@ impl LabelloApp {
                             let this_saving = saving.as_ref() == Some(&user.account.user_id);
                             ui.label(
                                 RichText::new(if this_saving {
-                                    "Saving"
+                                    crate::glossary::SAVING
                                 } else if dirty {
                                     "Changes staged"
                                 } else {
@@ -203,9 +203,9 @@ fn edit_user_roles(
     admin_loading: bool,
 ) {
     for (role, label) in [
-        (DatasetRole::Annotator, "Annotator"),
-        (DatasetRole::Reviewer, "Reviewer"),
-        (DatasetRole::DataAdmin, "Data admin"),
+        (DatasetRole::Annotator, crate::glossary::ANNOTATOR),
+        (DatasetRole::Reviewer, crate::glossary::REVIEWER),
+        (DatasetRole::DataAdmin, crate::glossary::DATA_ADMIN),
     ] {
         let is_admin_role = role == DatasetRole::DataAdmin;
         let role_enabled = !admin_loading
@@ -262,12 +262,12 @@ fn task_statuses() -> [TaskStatus; 5] {
 
 fn task_status_label(status: &TaskStatus) -> &'static str {
     match status {
-        TaskStatus::Pending => "Pending",
-        TaskStatus::InProgress => "In progress",
-        TaskStatus::Submitted => "Submitted",
-        TaskStatus::Completed => "Completed",
-        TaskStatus::NeedsCorrection => "Needs correction",
-        TaskStatus::LegacyAdjudicationRequired => "Needs correction",
+        TaskStatus::Pending => crate::glossary::PENDING,
+        TaskStatus::InProgress => crate::glossary::IN_PROGRESS,
+        TaskStatus::Submitted => crate::glossary::AWAITING_REVIEW,
+        TaskStatus::Completed => crate::glossary::COMPLETED,
+        TaskStatus::NeedsCorrection => crate::glossary::NEEDS_CORRECTION,
+        TaskStatus::LegacyAdjudicationRequired => crate::glossary::NEEDS_CORRECTION,
     }
 }
 

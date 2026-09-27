@@ -181,7 +181,7 @@ prelabels, stylus support, or browser recovery.
 ## Model suggestions
 
 See [Model prelabels](prelabels.md) for selecting a model or no prelabels,
-loading and fallback states, overlap suppression, and confirming model objects.
+loading and fallback states, overlap suppression, and confirming prelabels.
 Each object opens selected and zoomed in for editing. **Confirm & next** keeps it
 and advances; **Delete** or the Delete key removes it. The last object returns to
 the full image for **Submit & next**. Pending objects are never accepted by autosave.
@@ -211,13 +211,13 @@ eligibility still depend on the selected task, assignment and loading state.
 
 | Setting (persisted action) | Buttons or other controls and current context |
 | --- | --- |
-| Confirm / submit (`next_image`) | Annotation: Submit & next; Confirm & next for pending model objects; Next object to focus pending work; Next guide for companion boxes. Review: Approve or Submit correction. Migration: Save skeleton & advance / Save & next; Save missing object / Save object; Save object changes / Save changes; Keep current & advance / Keep & next; Confirm all guides & finish or Confirm no guides & finish / Confirm & finish. Object actions and final image submission retain their different semantics. |
+| Confirm / submit (`next_image`) | Annotation: Submit & next; Confirm & next for pending prelabels; Next object to focus pending work; Next guide for companion boxes. Review: Approve or Submit correction. Migration: Save skeleton & advance / Save & next; Save missing object / Save object; Save object changes / Save changes; Keep current & advance / Keep & next; Confirm all guides & finish or Confirm no guides & finish / Confirm & finish. Object actions and final image submission retain their different semantics. |
 | Previous image (`previous_image`) | Previous image in annotation, review and migration; returns to the preceding eligible assignment. |
 | Undo (`undo_edit`) | Undo in annotation; Undo last keypoint in migration. Review correction uses fixed Ctrl/Cmd+Z, not this binding. |
 | Redo (`redo_edit`) | Redo in annotation. No migration or review redo. |
 | Save (`save_annotations`) | Save, inline or in More, in annotation. Migration object saves use Confirm / submit. |
 | Skip (`skip_assignment`) | Skip in work views; release and claim another assignment. |
-| Delete (`delete_annotation`) | Delete in annotation, including pending model objects. Migration deletes a missing object being added, or removes the last guide keypoint. In review this shortcut only removes a selected new addition; Reset item is a different action. |
+| Delete (`delete_annotation`) | Delete in annotation, including pending prelabels. Migration deletes a missing object being added, or removes the last guide keypoint. In review this shortcut only removes a selected new addition; Reset item is a different action. |
 | Previous workflow (`select_previous_workflow`) | Shortcut-only cycling; the Workflow panel also permits direct workflow selection. Annotation only. |
 | Next workflow (`select_next_workflow`) | Shortcut-only cycling of enabled workflows in annotation. |
 | Previous object (`select_previous_object`) | Previous object in annotation and migration; migration also revisits earlier guides. Review has a Previous object button, but its keyboard context currently excludes this binding. |
@@ -225,10 +225,10 @@ eligibility still depend on the selected task, assignment and loading state.
 | Visible / Occluded (`toggle_keypoint_hidden`) | Visible and Occluded controls for the editing target or next placement; only where the task allows occlusion. |
 | Not present (`mark_keypoint_absent`) | Mark a named keypoint as not present in annotation; Not present in migration. Requires an eligible optional point. |
 | Add or cancel missing migration object (`add_missing_object`) | Shortcut-only start/cancel in migration's full-image phase. Blank-canvas creation and Discard object changes are related contextual interactions, not universal aliases. |
-| Previous prelabel (`select_previous_prelabel`) | Shortcut-only previous pending model object in ordinary annotation. |
-| Next prelabel (`select_next_prelabel`) | Shortcut-only next pending model object in ordinary annotation. |
-| Confirm selected model object (`accept_prelabel`) | Shortcut-only confirmation of the selected pending model object. The primary Confirm & next uses Confirm / submit; both can reach model-object confirmation under its eligibility guards. |
-| Delete selected model object (`discard_prelabel`) | Shortcut-only deletion of a pending model object; deleted model boxes still need Confirm / submit. Delete also reaches that operation for a pending selection, but is the broader Delete binding. |
+| Previous prelabel (`select_previous_prelabel`) | Shortcut-only previous pending prelabel in ordinary annotation. |
+| Next prelabel (`select_next_prelabel`) | Shortcut-only next pending prelabel in ordinary annotation. |
+| Confirm selected prelabel (`accept_prelabel`) | Shortcut-only confirmation of the selected pending prelabel. The primary Confirm & next uses Confirm / submit; both can reach prelabel confirmation under its eligibility guards. |
+| Delete selected prelabel (`discard_prelabel`) | Shortcut-only deletion of a pending prelabel; deleted model boxes still need Confirm / submit. Delete also reaches that operation for a pending selection, but is the broader Delete binding. |
 | Pan (`toggle_pan_mode`) | Pan, with a selected state, in eligible work views. Review enforces pan mode. |
 | Zoom in (`zoom_in`) | Shortcut-only zoom; wheel, touchpad and pinch remain separate gestures. |
 | Zoom out (`zoom_out`) | Shortcut-only zoom; no explicit zoom buttons. |

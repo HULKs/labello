@@ -92,12 +92,12 @@ impl LabelloApp {
             };
             let header = if width < 260.0 {
                 ui.vertical(|ui| {
-                    ui.heading("Statistics");
+                    ui.heading(crate::glossary::STATISTICS);
                     close_button(ui);
                 })
             } else {
                 ui.horizontal(|ui| {
-                    ui.heading("Statistics");
+                    ui.heading(crate::glossary::STATISTICS);
                     ui.with_layout(
                         egui::Layout::right_to_left(egui::Align::Center),
                         close_button,
@@ -248,13 +248,22 @@ impl LabelloApp {
         ui.add_space(theme::SPACE_5);
         ui.heading("Dataset totals");
         let metrics = [
-            ("Images", self.datasets.stats.total_images),
-            ("Completed", self.datasets.stats.completed_tasks),
-            ("Pending", self.datasets.stats.pending_tasks),
-            ("In progress", self.datasets.stats.in_progress_tasks),
-            ("Awaiting review", self.datasets.stats.awaiting_review_tasks),
+            (crate::glossary::IMAGES, self.datasets.stats.total_images),
             (
-                "Needs correction",
+                crate::glossary::COMPLETED,
+                self.datasets.stats.completed_tasks,
+            ),
+            (crate::glossary::PENDING, self.datasets.stats.pending_tasks),
+            (
+                crate::glossary::IN_PROGRESS,
+                self.datasets.stats.in_progress_tasks,
+            ),
+            (
+                crate::glossary::AWAITING_REVIEW,
+                self.datasets.stats.awaiting_review_tasks,
+            ),
+            (
+                crate::glossary::NEEDS_CORRECTION,
                 self.datasets.stats.needs_correction_tasks,
             ),
         ];
@@ -295,13 +304,13 @@ impl LabelloApp {
                 ));
                 ui.label(
                     RichText::new(
-                        "Annotation balance counts submitted and completed images. Review balance counts completed images. Excluded denominator entries and disabled tasks do not participate.",
+                        "Annotation balance counts submitted and completed images. Review balance counts completed images. Excluded denominator entries and disabled workflows do not participate.",
                     )
                     .color(theme::TEXT_MUTED),
                 );
                 ui.label(
                     RichText::new(
-                        "The selected task is blocked when its count exceeds the least-completed enabled peer by more than the window. A gap equal to the window remains eligible.",
+                        "The selected workflow is blocked when its count exceeds the least-completed enabled peer by more than the window. A gap equal to the window remains eligible.",
                     )
                     .color(theme::TEXT_MUTED),
                 );
@@ -322,13 +331,13 @@ impl LabelloApp {
         }
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.heading("Per Task");
+            ui.heading(crate::glossary::PER_WORKFLOW);
             let rows = &self.datasets.stats.per_task;
             if rows.is_empty() {
                 theme::empty_state(
                     ui,
-                    "No enabled tasks",
-                    "Enable a labeling workflow to collect task statistics.",
+                    "No enabled workflows",
+                    "Enable a labeling workflow to collect workflow statistics.",
                     None,
                 );
             } else if compact {
@@ -345,11 +354,11 @@ impl LabelloApp {
                             .strong(),
                         );
                         for (label, value) in [
-                            ("Pending", stats.pending),
-                            ("In progress", stats.in_progress),
-                            ("Awaiting review", stats.awaiting_review),
-                            ("Needs correction", stats.needs_correction),
-                            ("Completed", stats.completed),
+                            (crate::glossary::PENDING, stats.pending),
+                            (crate::glossary::IN_PROGRESS, stats.in_progress),
+                            (crate::glossary::AWAITING_REVIEW, stats.awaiting_review),
+                            (crate::glossary::NEEDS_CORRECTION, stats.needs_correction),
+                            (crate::glossary::COMPLETED, stats.completed),
                         ] {
                             ui.label(format!("{label}: {value}"));
                         }
@@ -389,7 +398,7 @@ impl LabelloApp {
                             .strong(),
                         );
                         ui.label(format!(
-                            "Annotations: {}  Completed tasks: {}",
+                            "Annotations: {}  Completed workflows: {}",
                             stats.annotations, stats.completed_tasks
                         ));
                     });
@@ -449,13 +458,13 @@ fn stats_task_grid(
         .striped(true)
         .spacing([theme::SPACE_3, theme::SPACE_1])
         .show(ui, |ui| {
-            stats_name_cell(ui, "Task", 180.0, true);
+            stats_name_cell(ui, crate::glossary::WORKFLOW, 180.0, true);
             for heading in [
-                "Pending",
-                "In progress",
-                "Awaiting review",
-                "Needs correction",
-                "Completed",
+                crate::glossary::PENDING,
+                crate::glossary::IN_PROGRESS,
+                crate::glossary::AWAITING_REVIEW,
+                crate::glossary::NEEDS_CORRECTION,
+                crate::glossary::COMPLETED,
             ] {
                 stats_number_cell(ui, heading, 130.0, true);
             }
@@ -495,9 +504,9 @@ fn stats_class_grid(
         .striped(true)
         .spacing([theme::SPACE_3, theme::SPACE_1])
         .show(ui, |ui| {
-            stats_name_cell(ui, "Class", 220.0, true);
+            stats_name_cell(ui, crate::glossary::CLASS, 220.0, true);
             stats_number_cell(ui, "Annotations", 130.0, true);
-            stats_number_cell(ui, "Completed tasks", 140.0, true);
+            stats_number_cell(ui, "Completed workflows", 140.0, true);
             ui.end_row();
 
             for (class_id, stats) in rows {

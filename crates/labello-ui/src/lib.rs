@@ -5,6 +5,7 @@ pub mod canvas;
 mod dataset_inspector;
 mod export_flow;
 pub mod folder_upload;
+pub mod glossary;
 mod image_transfer;
 mod import_flow;
 #[cfg(feature = "inspector-presets")]

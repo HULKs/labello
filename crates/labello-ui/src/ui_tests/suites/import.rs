@@ -153,7 +153,7 @@ fn setup_import_blocks_mapping_when_real_category_contract_is_absent() {
     assert!(harness.query_by_label("Preflight summary").is_some());
     assert!(
         harness
-            .query_by_label("Category and task mapping")
+            .query_by_label("Category and workflow mapping")
             .is_some()
     );
 

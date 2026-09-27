@@ -181,10 +181,10 @@ impl LabelloApp {
             if let Some(drawer) = self.work.drawer {
                 let (title, align, offset) = match drawer {
                     Drawer::Workflow => {
-                        ("Workflow", egui::Align2::LEFT_CENTER, egui::vec2(12.0, 0.0))
+                        (crate::glossary::WORKFLOW, egui::Align2::LEFT_CENTER, egui::vec2(12.0, 0.0))
                     }
                     Drawer::Inspector => (
-                        "Inspector",
+                        crate::glossary::INSPECTOR,
                         egui::Align2::RIGHT_CENTER,
                         egui::vec2(-12.0, 0.0),
                     ),
@@ -201,7 +201,7 @@ impl LabelloApp {
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let button =
-                                ui.add(egui::Button::new("Close").min_size(egui::vec2(64.0, 44.0)));
+                                ui.add(egui::Button::new(crate::glossary::CLOSE).min_size(egui::vec2(64.0, 44.0)));
                             button.widget_info(|| {
                                 egui::WidgetInfo::labeled(
                                     egui::WidgetType::Button,
@@ -381,12 +381,12 @@ impl LabelloApp {
                 format!("{}+left-drag", self.work.keybindings.pan_drag_modifier);
             let pan_required = self.work.canvas.pan_mode_required();
             let pan_width = (if dense { 44.0_f32 } else { 52.0_f32 }).min(ui.available_size_before_wrap().x.max(44.0));
-            let pan_icon = text_button_width(ui, "Pan") > pan_width;
-            let pan = egui::Button::new(if pan_icon { "" } else { "Pan" })
+            let pan_icon = text_button_width(ui, crate::glossary::PAN) > pan_width;
+            let pan = egui::Button::new(if pan_icon { "" } else { crate::glossary::PAN })
                 .selected(self.work.canvas.pan_mode())
                 .min_size(egui::vec2(pan_width, 44.0));
             let pan_response = ui.add_enabled(self.work.canvas.can_pan() && !pan_required, pan);
-            pan_response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, self.work.canvas.can_pan() && !pan_required, self.work.canvas.pan_mode(), "Pan"));
+            pan_response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, self.work.canvas.can_pan() && !pan_required, self.work.canvas.pan_mode(), crate::glossary::PAN));
             if pan_icon { paint_workspace_action_icon(ui, &pan_response, WorkspaceActionIcon::Pan); }
             if pan_response
                 .on_disabled_hover_text(if pan_required {
@@ -413,7 +413,7 @@ impl LabelloApp {
                     self.shortcut_text(ui.ctx(), labello_domain::UserAction::RefocusObject);
                 let can_refocus = self.refocus_annotation().is_some();
                 let refocus_label = format!("Refocus object {refocus_shortcut}");
-                let response = workspace_action_button(ui, can_refocus, "Refocus", WorkspaceActionIcon::Refocus, dense.then_some(44.0), theme::Intent::Neutral)
+                let response = workspace_action_button(ui, can_refocus, crate::glossary::REFOCUS, WorkspaceActionIcon::Refocus, dense.then_some(44.0), theme::Intent::Neutral)
                     .on_disabled_hover_text("Select an object to refocus.")
                     .on_hover_text(format!(
                         "Refocus object ({refocus_shortcut}). Center and zoom to the active object."
@@ -431,7 +431,7 @@ impl LabelloApp {
             }
 
             let fit_shortcut = self.shortcut_text(ui.ctx(), labello_domain::UserAction::FitImage);
-            if workspace_action_button(ui, true, "Fit", WorkspaceActionIcon::Fit, dense.then_some(44.0), theme::Intent::Neutral)
+            if workspace_action_button(ui, true, crate::glossary::FIT, WorkspaceActionIcon::Fit, dense.then_some(44.0), theme::Intent::Neutral)
                 .on_hover_text(format!("Fit ({fit_shortcut}). Or double-click canvas."))
                 .clicked()
             {

@@ -157,8 +157,8 @@ impl LabelloApp {
 
     fn import_transport_step(&mut self, ui: &mut egui::Ui) {
         if let Some(job) = &self.import.job {
-            status_row(ui, "Import", job.import_id.to_string());
-            status_row(ui, "Status", lifecycle_label(job.lifecycle));
+            status_row(ui, crate::glossary::IMPORT, job.import_id.to_string());
+            status_row(ui, crate::glossary::STATUS, lifecycle_label(job.lifecycle));
             if job.transport == ImportTransport::BrowserFolder {
                 status_row(
                     ui,
@@ -246,7 +246,7 @@ impl LabelloApp {
                     );
                     theme::labeled_text_field(
                         ui,
-                        "Split",
+                        crate::glossary::SPLIT,
                         &mut descriptor.split,
                         theme::COMPACT_TEXT_FIELD_HEIGHT,
                     );

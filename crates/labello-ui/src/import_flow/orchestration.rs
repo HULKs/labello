@@ -349,7 +349,7 @@ impl LabelloApp {
             });
             if let Some(error) = &error {
                 theme::inline_message(ui, theme::Intent::Warning, error);
-                if ui.button("Retry").clicked() {
+                if ui.button(crate::glossary::RETRY).clicked() {
                     navigate = Some(current.to_string());
                 }
             }
@@ -553,7 +553,7 @@ impl LabelloApp {
             || !self.import_mappings_complete()
         {
             self.import.error = Some(
-                "Mappings changed or the accepted plan omits discovered categories/tasks. Save exact source mappings and wait for a complete matching plan before committing."
+                "Mappings changed or the accepted plan omits discovered categories/workflows. Save exact source mappings and wait for a complete matching plan before committing."
                     .to_string(),
             );
             return;

@@ -1,3 +1,7 @@
+use crate::glossary::shortcuts::{
+    action_button_names, action_category, action_description, action_label,
+};
+
 use eframe::egui::{self, RichText};
 use labello_domain::{AnnotationGeometry, AnnotationType, KeypointState};
 
@@ -22,12 +26,12 @@ enum AppBarAction {
 impl AppBarAction {
     fn label(self) -> &'static str {
         match self {
-            Self::Statistics => "Statistics",
-            Self::Admin => "Admin",
-            Self::Setup => "Setup",
-            Self::Tutorial => "Tutorial",
-            Self::Settings => "Settings",
-            Self::SignOut => "Sign out",
+            Self::Statistics => crate::glossary::STATISTICS,
+            Self::Admin => crate::glossary::ADMIN,
+            Self::Setup => crate::glossary::SETUP,
+            Self::Tutorial => crate::glossary::TUTORIAL,
+            Self::Settings => crate::glossary::SETTINGS,
+            Self::SignOut => crate::glossary::SIGN_OUT,
         }
     }
 
@@ -38,7 +42,7 @@ impl AppBarAction {
             Self::Setup => "Open setup",
             Self::Tutorial => "Open tutorial",
             Self::Settings => "Open settings",
-            Self::SignOut => "Sign out",
+            Self::SignOut => crate::glossary::SIGN_OUT,
         }
     }
 
@@ -110,7 +114,7 @@ fn keypoint_visibility_mode(
         let visible = theme::button(
             ui,
             true,
-            egui::Button::new("Visible")
+            egui::Button::new(crate::glossary::VISIBLE)
                 .selected(visible_selected)
                 .min_size(egui::vec2(88.0, 44.0)),
         )
@@ -136,7 +140,7 @@ fn keypoint_visibility_mode(
         let occluded_response = theme::button(
             ui,
             true,
-            egui::Button::new("Occluded")
+            egui::Button::new(crate::glossary::OCCLUDED)
                 .selected(occluded_selected)
                 .shortcut_text(crate::theme::button_shortcut(shortcut))
                 .min_size(egui::vec2(88.0, 44.0)),
@@ -211,77 +215,13 @@ impl LabelloApp {
     }
 }
 
-fn action_label(action: &labello_domain::UserAction) -> &'static str {
-    use labello_domain::UserAction;
-    match action {
-        UserAction::NextImage => "Confirm / submit",
-        UserAction::UndoEdit => "Undo",
-        UserAction::RedoEdit => "Redo",
-        UserAction::SkipAssignment => "Skip",
-        UserAction::ToggleWorkflowPanel => "Workflow panel",
-        UserAction::ToggleInspectorPanel => "Inspector panel",
-        UserAction::OpenSettings => "Settings",
-        UserAction::SelectPreviousWorkflow => "Previous workflow",
-        UserAction::SelectNextWorkflow => "Next workflow",
-        UserAction::SelectPreviousObject => "Previous object",
-        UserAction::SelectNextObject => "Next object",
-        UserAction::SelectPreviousPrelabel => "Previous prelabel",
-        UserAction::SelectNextPrelabel => "Next prelabel",
-        UserAction::AcceptPrelabel => "Confirm selected model object",
-        UserAction::DiscardPrelabel => "Delete selected model object",
-        UserAction::ToggleKeypointHidden => "Visible / Occluded",
-        UserAction::MarkKeypointAbsent => "Not present",
-        UserAction::AddMissingObject => "Add or cancel missing migration object",
-        UserAction::RetryImageLoad => "Retry image load",
-        UserAction::TogglePanMode => "Pan",
-        UserAction::ZoomIn => "Zoom in",
-        UserAction::ZoomOut => "Zoom out",
-        UserAction::FitImage => "Fit",
-        UserAction::RefocusObject => "Refocus",
-        UserAction::PreviousImage => "Previous image",
-        UserAction::SaveAnnotations => "Save",
-        UserAction::DeleteAnnotation => "Delete",
-        UserAction::SelectBoundingBoxTool => "Bounding-box tool",
-        UserAction::SelectKeypointTool => "Keypoint tool",
-        UserAction::AcceptReviewObject => "Approve directly",
-        UserAction::RejectReviewObject => "Reject directly",
-        UserAction::OpenTutorial => "Tutorial",
-        UserAction::ToggleOfflineMode => "Offline mode",
-    }
-}
-
-/// Context-dependent button labels for the same configured action. Persisted IDs stay unchanged.
-fn action_button_names(action: labello_domain::UserAction) -> &'static str {
-    use labello_domain::UserAction;
-    match action {
-        UserAction::NextImage => {
-            "Annotation: Submit & next, Confirm & next, Next object, Next guide. Review: Approve, Submit correction. Migration: Save skeleton & advance (Save & next), Save missing object (Save object), Save object changes (Save changes), Keep current & advance (Keep & next), Confirm all guides & finish, Confirm no guides & finish (Confirm & finish)."
-        }
-        UserAction::UndoEdit => "Undo; Undo last keypoint (migration).",
-        UserAction::ToggleKeypointHidden => {
-            "Visible; Occluded. Toggles the current edit or next placement mode."
-        }
-        UserAction::MarkKeypointAbsent => {
-            "Mark keypoint as not present; Mark <keypoint name> as not present; Not present."
-        }
-        UserAction::OpenSettings => "Settings; Open settings; Open shortcut settings.",
-        UserAction::ToggleWorkflowPanel => {
-            "Workflow; Open Workflow; Close Workflow; Toggle Workflow panel."
-        }
-        UserAction::ToggleInspectorPanel => {
-            "Inspector; Open Inspector; Close Inspector; Toggle Inspector panel."
-        }
-        _ => "",
-    }
-}
-
 const SHORTCUT_CATEGORIES: [&str; 6] = [
-    "Assignment",
-    "Annotation",
+    crate::glossary::ASSIGNMENT,
+    crate::glossary::ANNOTATION,
     "Prelabels",
-    "Canvas",
-    "Workspace",
-    "Review",
+    crate::glossary::CANVAS,
+    crate::glossary::WORKSPACE,
+    crate::glossary::REVIEW,
 ];
 
 fn ordered_shortcut_actions() -> Vec<labello_domain::UserAction> {
@@ -309,115 +249,6 @@ fn shortcut_conflict_context(
             "annotation / migration"
         }
         _ => "annotation / review workspaces",
-    }
-}
-
-fn action_category(action: labello_domain::UserAction) -> &'static str {
-    use labello_domain::UserAction;
-    match action {
-        UserAction::NextImage
-        | UserAction::UndoEdit
-        | UserAction::RedoEdit
-        | UserAction::SaveAnnotations
-        | UserAction::SkipAssignment
-        | UserAction::PreviousImage => "Assignment",
-        UserAction::SelectPreviousWorkflow
-        | UserAction::SelectNextWorkflow
-        | UserAction::SelectPreviousObject
-        | UserAction::SelectNextObject
-        | UserAction::DeleteAnnotation
-        | UserAction::ToggleKeypointHidden
-        | UserAction::MarkKeypointAbsent
-        | UserAction::AddMissingObject => "Annotation",
-        UserAction::SelectPreviousPrelabel
-        | UserAction::SelectNextPrelabel
-        | UserAction::AcceptPrelabel
-        | UserAction::DiscardPrelabel => "Prelabels",
-        UserAction::TogglePanMode
-        | UserAction::ZoomIn
-        | UserAction::ZoomOut
-        | UserAction::FitImage
-        | UserAction::RefocusObject => "Canvas",
-        UserAction::OpenTutorial
-        | UserAction::ToggleWorkflowPanel
-        | UserAction::ToggleInspectorPanel
-        | UserAction::OpenSettings
-        | UserAction::RetryImageLoad => "Workspace",
-        UserAction::AcceptReviewObject | UserAction::RejectReviewObject => "Review",
-        UserAction::SelectBoundingBoxTool
-        | UserAction::SelectKeypointTool
-        | UserAction::ToggleOfflineMode => "Legacy",
-    }
-}
-
-fn action_description(action: labello_domain::UserAction) -> &'static str {
-    use labello_domain::UserAction;
-    match action {
-        UserAction::NextImage => {
-            "The primary work button: confirm the current object or submit the image. Its label and effect depend on the workflow; see button names below."
-        }
-        UserAction::UndoEdit => {
-            "Undo the last annotation edit. In migration, Undo last keypoint removes the last draft point. Review correction currently uses fixed Ctrl/Cmd+Z instead."
-        }
-        UserAction::RedoEdit => {
-            "Redo the last undone annotation edit. Not available in migration or review."
-        }
-        UserAction::SaveAnnotations => {
-            "Save annotations without leaving the image. Migration saves use Confirm / submit instead."
-        }
-        UserAction::SkipAssignment => "Release this image and claim another.",
-        UserAction::DeleteAnnotation => {
-            "Delete the selected annotation or pending model object. In migration, delete a missing object being added or remove the last guide keypoint. In review, only a selected new addition can be removed."
-        }
-        UserAction::OpenTutorial => "Show or hide workflow instructions.",
-        UserAction::ToggleWorkflowPanel => "Open or close workflow navigation.",
-        UserAction::ToggleInspectorPanel => "Open or close object controls.",
-        UserAction::OpenSettings => "Open this keyboard shortcut editor.",
-        UserAction::SelectPreviousWorkflow => "Cycle to the previous enabled workflow.",
-        UserAction::SelectNextWorkflow => "Cycle to the next enabled workflow.",
-        UserAction::SelectPreviousObject => {
-            "Select the previous annotation or migration object. In review, use the Previous object button; this shortcut is unavailable there."
-        }
-        UserAction::SelectNextObject => {
-            "Select the next annotation or migration object. This shortcut is unavailable in review."
-        }
-        UserAction::SelectPreviousPrelabel => "Highlight the previous suggestion.",
-        UserAction::SelectNextPrelabel => "Highlight the next suggestion.",
-        UserAction::AcceptPrelabel => {
-            "Confirm the selected model object with its current edits, then focus the next one."
-        }
-        UserAction::DiscardPrelabel => {
-            "Delete the selected pending model object. Model boxes stay selected until Confirm / submit confirms the deletion."
-        }
-        UserAction::ToggleKeypointHidden => {
-            "Toggle occlusion for the keypoint being edited, or for the next placement."
-        }
-        UserAction::MarkKeypointAbsent => "Record an allowed optional keypoint without a position.",
-        UserAction::AddMissingObject => {
-            "Begin or cancel a skeleton for an object missing from the imported data."
-        }
-        UserAction::RetryImageLoad => "Try to claim and load an image again.",
-        UserAction::TogglePanMode => "Use primary drag to move a zoomed image.",
-        UserAction::ZoomIn => {
-            "Increase canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom."
-        }
-        UserAction::ZoomOut => {
-            "Decrease canvas zoom with this shortcut. Wheel, touchpad scrolling and pinch also zoom."
-        }
-        UserAction::FitImage => "Fit and center the image.",
-        UserAction::RefocusObject => {
-            "Center and zoom to the active review object, migration object, or companion box."
-        }
-        UserAction::AcceptReviewObject => {
-            "Shortcut-only direct approval of the current review target. The visible Approve / Submit correction button uses Confirm / submit and confirms the current item or submits the overview."
-        }
-        UserAction::RejectReviewObject => {
-            "Shortcut-only rejection of the current review target through the existing correction/rejection flow. It is not the primary Submit correction button."
-        }
-        UserAction::PreviousImage => "Return to the last skipped or submitted assignment.",
-        UserAction::SelectBoundingBoxTool
-        | UserAction::SelectKeypointTool
-        | UserAction::ToggleOfflineMode => "No longer used.",
     }
 }
 
@@ -595,12 +426,12 @@ fn shortcut_key_aliases(key: &str) -> &'static str {
 
 fn view_label(view: AppView) -> &'static str {
     match view {
-        AppView::Setup => "Setup",
-        AppView::Annotate => "Annotate",
-        AppView::Review => "Review",
-        AppView::Admin => "Admin",
-        AppView::Stats => "Stats",
-        AppView::Inspect => "Inspect",
+        AppView::Setup => crate::glossary::SETUP,
+        AppView::Annotate => crate::glossary::ANNOTATE,
+        AppView::Review => crate::glossary::REVIEW,
+        AppView::Admin => crate::glossary::ADMIN,
+        AppView::Stats => crate::glossary::STATISTICS,
+        AppView::Inspect => crate::glossary::INSPECT,
     }
 }
 
@@ -636,8 +467,8 @@ pub(crate) fn placed_keypoint_visibility(
             ui.label(&keypoint.name);
             ui.horizontal(|ui| {
                 for (state, label) in [
-                    (KeypointState::Visible, "Visible"),
-                    (KeypointState::Hidden, "Occluded"),
+                    (KeypointState::Visible, crate::glossary::VISIBLE),
+                    (KeypointState::Hidden, crate::glossary::OCCLUDED),
                 ] {
                     let response = ui.add(
                         egui::Button::selectable(keypoint.state == state, label)

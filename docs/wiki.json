@@ -6,6 +6,7 @@
       {"source": "docs/README.md", "page": "Home"},
       {"source": "README.md", "page": "Overview"},
       {"source": "docs/getting-started.md", "page": "Getting-started"},
+      {"source": "docs/glossary.md", "page": "Product-glossary"},
       {"source": "docs/annotation.md", "page": "Annotation-and-review"},
       {"source": "docs/stylus-input.md", "page": "Stylus-input"},
       {"source": "docs/administration.md", "page": "Dataset-administration"},

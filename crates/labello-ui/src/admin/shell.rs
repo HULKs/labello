@@ -115,7 +115,7 @@ impl LabelloApp {
                     && theme::quiet_button(
                         ui,
                         can_reload,
-                        egui::Button::new("Reload"),
+                        egui::Button::new(crate::glossary::RELOAD),
                     )
                     .on_hover_text(if !can_reload {
                         "Finish the active operation and save or discard staged changes before reloading."

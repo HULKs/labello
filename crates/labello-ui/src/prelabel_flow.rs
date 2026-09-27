@@ -437,11 +437,11 @@ impl LabelloApp {
                     egui::WidgetInfo::labeled(
                         egui::WidgetType::Button,
                         refresh.enabled(),
-                        "Refresh hints",
+                        crate::glossary::REFRESH_PRELABELS,
                     )
                 });
                 refresh
-                    .on_hover_text("Refresh hints")
+                    .on_hover_text(crate::glossary::REFRESH_PRELABELS)
                     .clicked()
                     .then_some(key)
                     .flatten()
@@ -479,10 +479,12 @@ impl LabelloApp {
                     .as_ref()
                     .is_some_and(|generation| generation.paused)
                 {
-                    ui.label("Hints were removed. A dataset administrator can resume generation.");
+                    ui.label(
+                        "Prelabels were removed. A dataset administrator can resume generation.",
+                    );
                 }
                 if status.from_batch {
-                    ui.label("Using dataset hints");
+                    ui.label("Using dataset prelabels");
                 }
                 match status.execution {
                     Some(PrelabelExecutionKind::ServerCuda) => {
@@ -516,7 +518,7 @@ impl LabelloApp {
                     _ => {}
                 }
             } else {
-                ui.label("Preparing hints… You can annotate while they load.");
+                ui.label("Preparing prelabels… You can annotate while they load.");
             }
         }
     }
@@ -526,8 +528,8 @@ impl LabelloApp {
             return;
         }
         ui.separator();
-        ui.heading("Dataset hints");
-        ui.label("Generate hints for all remaining box workflows. Save model and workflow changes before starting.");
+        ui.heading(crate::glossary::DATASET_PRELABELS);
+        ui.label("Generate prelabels for all remaining box workflows. Save model and workflow changes before starting.");
         let busy = self.admin.prelabels.pending.is_some();
         if let Some(error) = &self.admin.prelabels.error {
             ui.colored_label(theme::DANGER, error);
@@ -670,7 +672,7 @@ impl LabelloApp {
             }
         }
         ui.separator();
-        ui.label("Remove hints");
+        ui.label("Remove prelabels");
         let previous_scope = self.admin.prelabels.reset_scope.clone();
         if let Some(metadata) = &self.datasets.admin_baseline {
             egui::ComboBox::from_id_salt("reset_workflow")
@@ -727,16 +729,16 @@ impl LabelloApp {
         if previous_scope != self.admin.prelabels.reset_scope {
             self.admin.prelabels.confirm_reset = false;
         }
-        ui.label("Removal cancels affected runs and pauses new hints. Annotations and drafts are preserved.");
+        ui.label("Removal cancels affected runs and pauses new prelabels. Annotations and drafts are preserved.");
         ui.checkbox(
             &mut self.admin.prelabels.confirm_reset,
-            "Confirm hint removal",
+            "Confirm prelabel removal",
         );
         ui.horizontal_wrapped(|ui| {
             if theme::danger_button(
                 ui,
                 !busy && self.admin.prelabels.confirm_reset,
-                egui::Button::new("Remove hints and pause"),
+                egui::Button::new(crate::glossary::REMOVE_PRELABELS_AND_PAUSE),
             )
             .clicked()
             {
@@ -746,7 +748,10 @@ impl LabelloApp {
                 })));
             }
             if ui
-                .add_enabled(!busy, egui::Button::new("Resume hints in this scope"))
+                .add_enabled(
+                    !busy,
+                    egui::Button::new(crate::glossary::RESUME_PRELABELS_IN_THIS_SCOPE),
+                )
                 .clicked()
             {
                 self.request_prelabels(PrelabelAction::Admin(Some(PrelabelAdminCommand::Resume {

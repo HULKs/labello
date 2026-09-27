@@ -29,15 +29,15 @@ enum MigrationPrimaryAction {
 impl MigrationPrimaryAction {
     fn label(&self, compact: bool) -> &'static str {
         match (self, compact) {
-            (Self::Submit, _) => "Submit",
-            (Self::SaveSkeleton(_), true) => "Save & next",
-            (Self::SaveSkeleton(_), false) => "Save skeleton & advance",
-            (Self::AddSkeleton, true) => "Save object",
-            (Self::AddSkeleton, false) => "Save missing object",
-            (Self::EditSkeleton(_), true) => "Save changes",
-            (Self::EditSkeleton(_), false) => "Save object changes",
-            (Self::KeepDisposition(_), true) => "Keep & next",
-            (Self::KeepDisposition(_), false) => "Keep current & advance",
+            (Self::Submit, _) => crate::glossary::SUBMIT,
+            (Self::SaveSkeleton(_), true) => crate::glossary::SAVE_NEXT,
+            (Self::SaveSkeleton(_), false) => crate::glossary::SAVE_SKELETON_ADVANCE,
+            (Self::AddSkeleton, true) => crate::glossary::SAVE_OBJECT,
+            (Self::AddSkeleton, false) => crate::glossary::SAVE_MISSING_OBJECT,
+            (Self::EditSkeleton(_), true) => crate::glossary::SAVE_CHANGES,
+            (Self::EditSkeleton(_), false) => crate::glossary::SAVE_OBJECT_CHANGES,
+            (Self::KeepDisposition(_), true) => crate::glossary::KEEP_NEXT,
+            (Self::KeepDisposition(_), false) => crate::glossary::KEEP_CURRENT_ADVANCE,
         }
     }
 }
@@ -758,7 +758,7 @@ impl LabelloApp {
             self.request_reopen_migration_target(group_id.clone());
         }
         ui.separator();
-        ui.label(RichText::new("Skeleton").strong());
+        ui.label(RichText::new(crate::glossary::SKELETON).strong());
         self.ensure_migration_draft(&group_id);
         if matches!(status, Some(MigrationDispositionStatus::Annotated { .. }))
             && ui
@@ -801,7 +801,7 @@ impl LabelloApp {
             && ui
                 .add_enabled(
                     guide_valid && !self.work.migration.busy,
-                    egui::Button::new("Undo last keypoint").shortcut_text(
+                    egui::Button::new(crate::glossary::UNDO_LAST_KEYPOINT).shortcut_text(
                         crate::theme::button_shortcut(
                             self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
                         ),
@@ -916,7 +916,7 @@ impl LabelloApp {
                 if ui
                     .add_enabled(
                         self.can_edit_previous_migration_object(),
-                        egui::Button::new("Previous object").shortcut_text(
+                        egui::Button::new(crate::glossary::PREVIOUS_OBJECT).shortcut_text(
                             crate::theme::button_shortcut(self.shortcut_text(
                                 ui.ctx(),
                                 labello_domain::UserAction::SelectPreviousObject,
@@ -933,7 +933,7 @@ impl LabelloApp {
                         egui::Button::new(if returns_to_current {
                             "Return to current object"
                         } else {
-                            "Next object"
+                            crate::glossary::NEXT_OBJECT
                         })
                         .shortcut_text(crate::theme::button_shortcut(
                             self.shortcut_text(
@@ -1163,7 +1163,7 @@ impl LabelloApp {
             && ui
                 .add_enabled(
                     !self.work.migration.busy,
-                    egui::Button::new("Undo last keypoint").shortcut_text(
+                    egui::Button::new(crate::glossary::UNDO_LAST_KEYPOINT).shortcut_text(
                         crate::theme::button_shortcut(
                             self.shortcut_text(ui.ctx(), labello_domain::UserAction::UndoEdit),
                         ),
@@ -1371,16 +1371,16 @@ impl LabelloApp {
                             ui,
                             self.migration_keypoint_undo_enabled(),
                             if compact {
-                                "Undo"
+                                crate::glossary::UNDO
                             } else {
-                                "Undo last keypoint"
+                                crate::glossary::UNDO_LAST_KEYPOINT
                             },
                             WorkspaceActionIcon::Undo,
                             width,
                             theme::Intent::Neutral,
                         );
                         response.widget_info(|| {
-                            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Undo last keypoint")
+                            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, crate::glossary::UNDO_LAST_KEYPOINT)
                         });
                         if response.clicked() {
                             self.remove_last_migration_keypoint();
@@ -1393,7 +1393,7 @@ impl LabelloApp {
                     && !self.work.migration.busy
                     && self.work.pending_transition.is_none();
                 if workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
-                    "Previous object", WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
+                    crate::glossary::PREVIOUS_OBJECT, WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
                     .on_hover_text("Edit the previous object in this image. Unsaved changes require confirmation. Stops at the first object.").clicked() {
                     self.trigger_user_action(labello_domain::UserAction::SelectPreviousObject);
                 }
@@ -1401,7 +1401,7 @@ impl LabelloApp {
                     && workspace_toolbar_button(
                         ui,
                         ready && self.runtime.api.is_some(),
-                        "Previous image",
+                        crate::glossary::PREVIOUS_IMAGE,
                         WorkspaceActionIcon::PreviousImage,
                         width,
                         theme::Intent::Neutral,
@@ -1414,7 +1414,7 @@ impl LabelloApp {
                 if workspace_toolbar_button(
                     ui,
                     ready && self.runtime.api.is_some(),
-                    "Skip",
+                    crate::glossary::SKIP,
                     WorkspaceActionIcon::Skip,
                     width,
                     theme::Intent::Neutral,
@@ -1431,7 +1431,7 @@ impl LabelloApp {
                         label: if bar.next_returns_to_current {
                             "Return to current object"
                         } else {
-                            "Next object"
+                            crate::glossary::NEXT_OBJECT
                         }
                         .into(),
                         shortcut: self
@@ -1624,9 +1624,14 @@ impl LabelloApp {
         }
         if ui
             .add(
-                egui::Button::new("Previous object").shortcut_text(crate::theme::button_shortcut(
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::SelectPreviousObject),
-                )),
+                egui::Button::new(crate::glossary::PREVIOUS_OBJECT).shortcut_text(
+                    crate::theme::button_shortcut(
+                        self.shortcut_text(
+                            ui.ctx(),
+                            labello_domain::UserAction::SelectPreviousObject,
+                        ),
+                    ),
+                ),
             )
             .clicked()
         {
@@ -1645,7 +1650,7 @@ impl LabelloApp {
             && ui
                 .add_enabled(
                     ready,
-                    egui::Button::new("Previous image").shortcut_text(
+                    egui::Button::new(crate::glossary::PREVIOUS_IMAGE).shortcut_text(
                         crate::theme::button_shortcut(
                             self.shortcut_text(ui.ctx(), labello_domain::UserAction::PreviousImage),
                         ),
@@ -1658,9 +1663,11 @@ impl LabelloApp {
         if ui
             .add_enabled(
                 ready,
-                egui::Button::new("Skip").shortcut_text(crate::theme::button_shortcut(
-                    self.shortcut_text(ui.ctx(), labello_domain::UserAction::SkipAssignment),
-                )),
+                egui::Button::new(crate::glossary::SKIP).shortcut_text(
+                    crate::theme::button_shortcut(
+                        self.shortcut_text(ui.ctx(), labello_domain::UserAction::SkipAssignment),
+                    ),
+                ),
             )
             .clicked()
         {
@@ -1670,7 +1677,7 @@ impl LabelloApp {
 
     fn migration_assignment_section(&mut self, ui: &mut egui::Ui) {
         ui.separator();
-        ui.label(RichText::new("Assignment").strong());
+        ui.label(RichText::new(crate::glossary::ASSIGNMENT).strong());
         self.migration_assignment_buttons(ui);
     }
 
@@ -1682,7 +1689,7 @@ impl LabelloApp {
         let label = if matches!(&action, MigrationPrimaryAction::SaveSkeleton(group)
             if bar.direct_revisit_group.as_ref() == Some(group))
         {
-            "Save object changes"
+            crate::glossary::SAVE_OBJECT_CHANGES
         } else {
             action.label(compact)
         };
@@ -3275,9 +3282,9 @@ fn migration_target_is_unmigrated(status: Option<&MigrationDispositionStatus>) -
 
 fn disposition_label(status: Option<&MigrationDispositionStatus>) -> &'static str {
     match status {
-        Some(MigrationDispositionStatus::Pending) => "Pending",
+        Some(MigrationDispositionStatus::Pending) => crate::glossary::PENDING,
         Some(MigrationDispositionStatus::Annotated { .. }) => "Skeleton annotated",
-        Some(MigrationDispositionStatus::Excluded { .. }) => "Excluded",
+        Some(MigrationDispositionStatus::Excluded { .. }) => crate::glossary::EXCLUDED,
         None => "Unavailable",
     }
 }

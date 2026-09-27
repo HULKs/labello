@@ -31,7 +31,7 @@ selections can break that compatibility.
 ## Configure a dataset
 
 Administration groups changes into Overview, People, Images, Schema, Automation,
-Backups, and Export. Configuration edits remain staged while switching sections.
+Snapshots, and Export. Configuration edits remain staged while switching sections.
 Resolve validation errors and save before starting work that requires saved
 configuration.
 
@@ -42,7 +42,7 @@ configuration.
 | Images | Configure relative filesystem roots, upload folders, run ingestion, inspect job results |
 | Schema | Define classes and box/skeleton tasks, keypoint order, workflow settings, and instructions |
 | Automation | Configure assignment balance, models, and [dataset hint generation/removal](prelabels.md) |
-| Backups | Create and download annotation snapshots |
+| Snapshots | Create and download annotation snapshots |
 | Export | Preflight, build, inspect, cancel, and download private detection/pose jobs |
 
 An approval workflow requires one reviewer. Without approval review, annotation

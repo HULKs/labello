@@ -25,8 +25,8 @@ fn target_keypoint_typing_does_not_echo_into_template_controls() {
     assert!(
         harness
             .query_by_label(
-                "Required outputs for the current mapping — categories: 1, tasks: 2. Accepted \
-                 preflight outputs — categories: 1, tasks: 1. Click “Save mappings and re-run \
+                "Required outputs for the current mapping — categories: 1, workflows: 2. Accepted \
+                 preflight outputs — categories: 1, workflows: 1. Click “Save mappings and re-run \
                  preflight”; commit remains disabled until the refreshed plan includes every \
                  required output."
             )
@@ -2230,7 +2230,7 @@ fn work_workflow_draws_saves_submits_and_reviews() {
     assert!(harness.query_by_label("Tutorial").is_none());
     assert!(harness.query_by_label("Approve").is_some());
     assert!(harness.query_by_label("Reject").is_none());
-    assert!(harness.query_by_label("Refresh hints").is_none());
+    assert!(harness.query_by_label("Refresh prelabels").is_none());
     harness.key_press(egui::Key::Y);
     harness.step();
     step_until(&mut harness, 10, |app| !app.loading.saving);

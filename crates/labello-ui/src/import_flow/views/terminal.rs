@@ -1,10 +1,10 @@
 impl LabelloApp {
     fn import_running_step(&mut self, ui: &mut egui::Ui) {
         if let Some(job) = &self.import.job {
-            status_row(ui, "Status", lifecycle_label(job.lifecycle));
+            status_row(ui, crate::glossary::STATUS, lifecycle_label(job.lifecycle));
             status_row(
                 ui,
-                "Images",
+                crate::glossary::IMAGES,
                 format!(
                     "{} of {}",
                     job.progress.processed_images, job.progress.total_images
@@ -39,7 +39,7 @@ impl LabelloApp {
             theme::inline_message(ui, theme::Intent::Error, &failure.safe_summary);
             status_row(
                 ui,
-                "Retry",
+                crate::glossary::RETRY,
                 if failure.retryable {
                     "Available"
                 } else {

@@ -117,7 +117,7 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
         "Images",
         "Schema",
         "Automation",
-        "Backups",
+        "Snapshots",
     ] {
         assert!(
             harness
@@ -256,13 +256,13 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.state_mut().admin.section = AdminSection::Backups;
     harness.state_mut().loading.snapshots = true;
     harness.step();
-    assert!(harness.query_by_label("Refreshing backups...").is_some());
+    assert!(harness.query_by_label("Refreshing snapshots...").is_some());
     harness.state_mut().loading.snapshots = false;
     harness.state_mut().admin.snapshots_error = Some("offline".to_string());
     harness.step();
     assert!(
         harness
-            .query_by_label("Showing the last loaded backups. Refresh failed: offline")
+            .query_by_label("Showing the last loaded snapshots. Refresh failed: offline")
             .is_some()
     );
     harness.state_mut().admin.snapshots_loaded = false;
@@ -271,7 +271,7 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.step();
     assert!(
         harness
-            .query_by_label("Showing newly created backups. Catalog refresh failed: offline")
+            .query_by_label("Showing newly created snapshots. Catalog refresh failed: offline")
             .is_some()
     );
 
@@ -968,9 +968,9 @@ fn stats_geometry_keeps_header_actions_and_equal_cards_in_view() {
             );
         } else {
             assert!(harness.query_all_by_label("Completed").next().is_some());
-            assert!(harness.query_by_label("Completed tasks").is_some());
+            assert!(harness.query_by_label("Completed workflows").is_some());
             if LayoutMode::for_width(width) == LayoutMode::Wide {
-                let header_y = harness.get_by_label("Task").rect().center().y;
+                let header_y = harness.get_by_label("Workflow").rect().center().y;
                 let columns = [
                     "Pending",
                     "In progress",

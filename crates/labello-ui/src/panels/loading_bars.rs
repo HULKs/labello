@@ -78,14 +78,14 @@ impl LabelloApp {
                     && self.work.availability.tasks.is_empty(),
                 review_removable: self.migration_review_removal().is_some(),
                 review_primary: if self.focused_review_changed() {
-                    "Submit correction"
+                    crate::glossary::SUBMIT_CORRECTION
                 } else {
-                    "Approve"
+                    crate::glossary::APPROVE
                 },
                 review_next: if self.review_position() + 1 == self.review_object_targets().len() {
                     "Overview"
                 } else {
-                    "Next object"
+                    crate::glossary::NEXT_OBJECT
                 },
             });
     }
@@ -185,7 +185,7 @@ impl LabelloApp {
             .workspace_bars
             .presentation
             .as_ref()
-            .map_or("Approve", |bar| bar.review_primary)
+            .map_or(crate::glossary::APPROVE, |bar| bar.review_primary)
     }
 
     fn bar_review_next_label(&self) -> &'static str {
@@ -193,6 +193,6 @@ impl LabelloApp {
             .workspace_bars
             .presentation
             .as_ref()
-            .map_or("Next object", |bar| bar.review_next)
+            .map_or(crate::glossary::NEXT_OBJECT, |bar| bar.review_next)
     }
 }

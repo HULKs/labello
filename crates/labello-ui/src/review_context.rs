@@ -114,8 +114,8 @@ impl ReviewContext {
             lines.push("Review revision mode".to_string());
         }
         let decision = match self.decision {
-            Some(ReviewDecision::Approved) => "Approved",
-            Some(ReviewDecision::Rejected) => "Rejected",
+            Some(ReviewDecision::Approved) => crate::glossary::APPROVED,
+            Some(ReviewDecision::Rejected) => crate::glossary::REJECTED,
             None => "Not reviewed",
         };
         lines.push(format!(
@@ -130,8 +130,8 @@ impl ReviewContext {
             lines.push(format!(
                 "Staged decision: {} (not committed)",
                 match staged {
-                    ReviewDecision::Approved => "Approved",
-                    ReviewDecision::Rejected => "Rejected",
+                    ReviewDecision::Approved => crate::glossary::APPROVED,
+                    ReviewDecision::Rejected => crate::glossary::REJECTED,
                 }
             ));
         }

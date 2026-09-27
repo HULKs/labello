@@ -1,5 +1,7 @@
 # Labello documentation
 
+See the [product glossary](glossary.md) for canonical UI actions and concepts.
+
 Start with [getting started](getting-started.md), then choose the guide for your
 work. These pages describe the implemented application. Code and tests resolve
 any disagreement with the prose.

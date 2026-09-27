@@ -20,7 +20,7 @@ const PERIODS: [&str; 6] = [
     "Last year",
     "Overall",
 ];
-const METRICS: [&str; 4] = ["Labeled", "Reviewed", "Acceptance", "Score"];
+const METRICS: [&str; 4] = ["Labeled", "Reviewed", "Acceptance", crate::glossary::SCORE];
 const METRIC_WIDTHS: [f32; 4] = [100.0, 110.0, 160.0, 90.0];
 const PODIUM_TITLES: [&str; 4] = [
     "Most labeled",
@@ -261,7 +261,7 @@ impl LeaderboardState {
         let mut selected = previous;
         let label = previous.map_or("Person", |metric| {
             if metric == STREAK {
-                "Streak"
+                crate::glossary::STREAK
             } else {
                 METRICS[metric]
             }
@@ -281,7 +281,7 @@ impl LeaderboardState {
                     for &metric in metrics {
                         ui.selectable_value(&mut selected, Some(metric), METRICS[metric]);
                     }
-                    ui.selectable_value(&mut selected, Some(STREAK), "Streak");
+                    ui.selectable_value(&mut selected, Some(STREAK), crate::glossary::STREAK);
                     ui.selectable_value(&mut selected, None, "Person");
                 })
                 .response
@@ -397,7 +397,7 @@ impl LeaderboardState {
             ));
         }
         ui.horizontal_wrapped(|ui| {
-            ui.selectable_value(&mut self.history, false, "Leaderboard");
+            ui.selectable_value(&mut self.history, false, crate::glossary::LEADERBOARD);
             ui.selectable_value(&mut self.history, true, "History graph");
         });
         period_selector(ui, &mut self.period, "Period");
@@ -593,7 +593,7 @@ impl LeaderboardState {
                         .show(ui, |ui| {
                             super::stats_number_cell(ui, "Rank", 76.0, true);
                             self.sort_header(ui, None, "Person", name_width);
-                            self.sort_header(ui, Some(STREAK), "Streak", 90.0);
+                            self.sort_header(ui, Some(STREAK), crate::glossary::STREAK, 90.0);
                             for &metric in metrics {
                                 self.sort_header(
                                     ui,
@@ -700,7 +700,7 @@ impl LeaderboardState {
                 ui.label("Score = 10 × square root of total points, rounded down. Rankings use exact points. Periods include deductions made during that period, so period scores can be negative. Historical work earns points; focus bonuses begin when scoring is activated.");
             }
             ui.label("Streak: reach 20 labeled submissions or 30 reviews per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
-            ui.label("Labeled: distinct image–task submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
+            ui.label("Labeled: distinct image–workflow submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
             ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
             ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
         });
@@ -840,7 +840,7 @@ fn activity_chart(
                         (total + count, maximum.max(count))
                     });
                 ui.small(format!("{total} activities"))
-                    .on_hover_text("Labeled tasks + reviews in the selected period.");
+                    .on_hover_text("Labeled workflows + reviews in the selected period.");
                 (daily, start, maximum)
             })
             .inner;
@@ -1098,7 +1098,7 @@ fn podium(ui: &mut egui::Ui, rows: &[Row<'_>], metric: usize) {
                                     row.total.accepted + row.total.rejected
                                 )
                             } else {
-                                ["tasks", "reviews", "", "score"][metric].into()
+                                ["workflows", "reviews", "", "score"][metric].into()
                             };
                             column
                                 .add_sized(
