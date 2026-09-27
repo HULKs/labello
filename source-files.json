@@ -1,8 +1,9 @@
 {
+  "crates/labello-ui/src/live/reduce_support.rs": "b5984f14c7238795780cca256cd0e6db9f4a1a4a1f331f6d9ad6a7906378bf33",
   "crates/labello-ui/src/panels.rs": "1b9db029b732f9532b85229db982a2ef3dc73a0880cfa7dbe2d3d223c2e9d938",
-  "crates/labello-ui/src/panels/overlays.rs": "2f06039db64b726e06a74917d4112bb6df7d77d1aa00678ff15a48423d11f648",
-  "crates/labello-ui/src/ui_tests/suites/persistence.rs": "a222a5648d3d4373d55bad2f65d54194a3a4415d736a7f4cfd6243aa813f7eac",
-  "docs/annotation.md": "8c80d2240e2a25f64c4890dd2f2a26ad81e9c2135961f31d83f5b8631d46eab0",
+  "crates/labello-ui/src/panels/overlays.rs": "d34f7a62ab0952d8953c98ffc441daae05c9cdbb342efc410ec502baacd01b67",
+  "crates/labello-ui/src/ui_tests/suites/persistence.rs": "959a244b0940d1a9ef70cb6f58fcd1df5dbb9b7af9f5ac249a1a5d4184da1761",
+  "docs/annotation.md": "436aea7346cef0161d616403df3631aa224c3146a7845d2eead47fd70b4b9295",
   "docs/ui-design-guidelines.md": "8e3a230ef5020aae1b0d2c56951d7a6970556001378656e25a1c734bacaa9115",
   "docs/ui-ownership.md": "e684903bda6a4b51034e7c4f95139f79b2bf51f294c0b8fd1c7f4e5810176f82"
 }

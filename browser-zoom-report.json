@@ -6,6 +6,6 @@
   "dpr": 1,
   "zoom": 2,
   "page_errors": [],
-  "keyboard": "Tab twice then Escape",
+  "keyboard": "Tab twice; top-right close at DPR 1, Escape otherwise",
   "transport": "synthetic intercepted Setup responses; no image or runtime dataset"
 }

@@ -1,10 +1,10 @@
 # Shortcut settings evidence for issue 190
 
-Production change: `120f9cdef1a74c39217f9cc7da2f57147a322538`.
+Production change: `64dabe8b6a2adf7e0b079b9f1de4830a591a192f`.
 Comparison base: PR #191, `88c079e9d502f3e41c3c0a19bb0b771213f01baa`.
 Stack: main → #184 → #185 → #186 → #187 → #191 → #192.
 Captures were taken from the working diff subsequently published as that commit.
-`source-files.json` records the final six source/document file hashes.
+`source-files.json` records the final seven source/document file hashes.
 
 ## Before and after
 
@@ -21,7 +21,7 @@ Captures were taken from the working diff subsequently published as that commit.
 - `native-conflict-390.png`: peer name/context, conflict filter and disabled Save,
   390x844, scale 1.
 
-Native and browser captures were refreshed after rebasing onto #191. Native evidence proves shared rendering
+Native and browser captures were refreshed for the close-button and successful-save closure follow-up. Native evidence proves shared rendering
 and AccessKit semantics, not browser behavior.
 
 ## Chromium
@@ -45,8 +45,9 @@ Published representative captures:
   pending save, synthetic HTTP 503 retains F9, then Escape opens discard;
   1440x1000, DPR 1, 100% zoom. The intercepted save payload contained F9.
 
-The browser matrix checks startup and Escape dismissal; the separate interaction
-case checks real keyboard recording and save-failure presentation. Per-control
+The browser matrix checks startup, top-right close at DPR 1, and Escape dismissal; the separate interaction
+case checks real keyboard recording, save-failure presentation and successful retry closing settings.
+`browser-saved-closed.png` shows Setup after the successful response, at 1440x1000, DPR 1. Per-control
 browser accessibility is not exposed by the current canvas adapter; CDP reports
 Canvas/textbox roles. Native AccessKit and deterministic tests cover control names
 and disabled/selected semantics. OS-level text enlargement and platform screen
@@ -58,7 +59,7 @@ request bodies or browser traces are included.
 
 - `./scripts/verify.sh changed 88c079e9d502f3e41c3c0a19bb0b771213f01baa`: passed on final change; selected UI
   and browser profiles, complete locked baseline and release Trunk build.
-- UI suite: 638 passed, one existing ignored test.
+- UI suite: 639 passed, one existing ignored test.
 - Focused tests cover aliases (including actual schema keypoint names), category
   continuity, text/control non-intersection with long chords, peer conflicts and
   filtering, final-row/footer scroll reachability, existing save/reset/cancel/error

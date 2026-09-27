@@ -37,8 +37,10 @@
     "Ctrl+Z binding conflict names Undo/Confirm / submit and workspace context",
     "Show conflicting shortcuts filters to conflict; Save changes semantically disabled",
     "Escape with edits opens discard decision; Keep editing retains draft",
-    "Restore all defaults returns to baseline; Escape then closes settings"
+    "Restore all defaults returns to baseline; Escape then closes settings",
+    "Top-right close remains beside title at all sizes, including 320x320",
+    "Close dismisses clean settings; dirty close opens discard and Keep editing retains draft"
   ],
   "limits": "Native shared renderer only. Short viewport list/footer reachability also exercised with deterministic scroll_to_me regression.",
-  "head": "120f9cdef1a74c39217f9cc7da2f57147a322538"
+  "head": "64dabe8b6a2adf7e0b079b9f1de4830a591a192f"
 }
