@@ -499,10 +499,11 @@ preserving its visibility and object identity. Multi-keypoint placement order
 and explicit guide confirmation remain unchanged.
 
 Migration full-image confirmation starts a missing-object skeleton on a blank
-canvas press and release and selects existing objects directly. No Add missing
-object or Edit added object buttons are shown. After a complete one-keypoint
-draft, the next blank placement saves it through the existing migration command
-and starts the next object only
+canvas press and release and selects existing objects directly. No separate Add
+missing object or Edit added object buttons are shown in the inspector. The class
+workflow panel provides the Add missing objects entry. After a complete
+one-keypoint draft, the next blank placement saves it through the existing
+migration command and starts the next object only
 after success. Selecting another object uses the same save-before-switch path.
 The reducer retains the final dragged position in the pending canvas action and
 the current draft on failure for retry. Multi-keypoint drafts require explicit
@@ -545,3 +546,24 @@ authorized membership could have changed. Authentication/workspace invalidation
 clears the overview and dismisses the modal. The global endpoint fails closed
 rather than returning partial aggregates. Dataset reads are sequential; there is
 no cross-dataset atomic snapshot or large-server performance guarantee.
+
+## Class workflow navigation
+
+In Annotate, `panels/task_selector.rs` groups enabled one-class tasks under their
+class identity. Each group orders bounding-box annotation, migration, and
+missing-object entries, followed by direct skeleton annotation when configured.
+Multiple tasks retain their names and IDs. Review keeps its task selector.
+The annotation panel has bounded width; task names wrap or truncate without
+expanding the canvas layout, and accessible names include class, activity, and
+task. Unconfigured activities remain disabled with an explanation.
+
+Missing-object selection reflects the authoritative migration full-image cursor.
+The entry begins a missing-object draft only when that phase is active; repeated
+selection preserves an existing draft. Migration from full-image confirmation
+revisits the first guide through the existing audited command and discard guard.
+Neither entry advances the migration cursor locally or bypasses unresolved work.
+These current-assignment actions remain usable when the queue has no further
+assignments, but loading, saving, and pending transitions retain their guards.
+Migration-configured tasks without migration targets on the loaded image expose
+direct skeleton annotation instead. Normal task switches still use the shared
+pending-transition owner, and workflow-cycle shortcuts continue selecting tasks.

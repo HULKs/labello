@@ -210,7 +210,7 @@ has been recorded.
 - **Workspace:** keep the primary submit, save-and-advance, or confirm action at
   the bottom right in annotation, migration, and review, including compact layouts. Placed objects remain editable; expose placed-keypoint
   Visible/Occluded controls when allowed by the task. Migration overview uses
-  canvas clicks to create and select objects; omit Add missing object and Edit
+  canvas clicks to create and select objects; omit separate inspector Add missing object and Edit
   added object mode buttons. Preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
@@ -513,3 +513,21 @@ or descriptions. Keep compact footer decisions adjacent rather than distributing
 them through the available height. Conflict feedback names the other action and
 workspace context, with a filter to locate the affected rows. Verify text/control
 non-intersection and scroll reachability as well as viewport containment.
+
+### Annotation class groups
+
+The annotation workflow panel and drawer use one bordered group per class. The
+class is the heading; bounding-box annotation, migration, and adding missing
+objects are subordinate activities in that order. Keep task names below their
+activity labels so multiple workflows for one class remain distinguishable.
+Direct skeleton workflows have a separate Skeleton annotation entry. Show
+unconfigured activities as disabled with an explanation, and do not present
+migration as active on images that support only direct skeleton annotation.
+
+The selected marker follows the current activity, including the missing-object
+phase at full-image confirmation. Adding objects cannot skip outstanding guide
+work. Returning to Migration uses the existing revisit and draft-discard flow.
+Preserve task selection and review behavior. Keep the annotation panel bounded
+at 340 logical points, cap drawers to the viewport, wrap class headings, and
+retain complete accessible names and task names in tooltips. Focused rows scroll
+into view; long task text must not widen the canvas layout.

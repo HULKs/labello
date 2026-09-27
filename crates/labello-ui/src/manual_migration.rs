@@ -2439,6 +2439,18 @@ impl LabelloApp {
         self.work.assignment_touched = true;
     }
 
+    pub(crate) fn revisit_first_migration_object(&mut self) {
+        if self.view != AppView::Annotate
+            || !self.manual_migration_active()
+            || !matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+        {
+            return;
+        }
+        if let Some(target) = self.migration_targets().first() {
+            self.begin_revisit_migration_target(target.object_group_id.clone());
+        }
+    }
+
     fn begin_revisit_migration_target(&mut self, group_id: ObjectGroupId) {
         if self.work.migration.busy || self.loading.image {
             return;

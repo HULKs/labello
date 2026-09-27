@@ -134,15 +134,15 @@ fn workers_select_class_specific_workflows() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
 
-    assert!(harness.query_all_by_label("Person boxes").next().is_some());
+    assert!(harness.query_all_by_label("Person: Bounding box annotation · Person boxes").next().is_some());
     assert!(harness.query_by_label("Current").is_none());
-    assert!(harness.query_all_by_label("Vehicle boxes").next().is_some());
-    click(&mut harness, "Vehicle boxes");
+    assert!(harness.query_all_by_label("Vehicle: Bounding box annotation · Vehicle boxes").next().is_some());
+    click(&mut harness, "Vehicle: Bounding box annotation · Vehicle boxes");
     assert!(harness.query_by_label("Release and switch").is_none());
     step_until(&mut harness, 12, |app| {
         app.selected_class_id() == Some(&ClassId::from("vehicle")) && app.work.current.is_some()
     });
-    assert!(harness.query_all_by_label("Vehicle boxes").next().is_some());
+    assert!(harness.query_all_by_label("Vehicle: Bounding box annotation · Vehicle boxes").next().is_some());
 
     assert_eq!(
         harness
@@ -190,15 +190,15 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
     harness.step();
 
     let bounding_box = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes")
         .rect();
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
         .rect();
     let skeleton = harness
         .get_by_role_and_label(
             egui::accesskit::Role::Button,
-            "Person skeleton with a deliberately long workflow name",
+            "Person: Skeleton annotation · Person skeleton with a deliberately long workflow name",
         )
         .rect();
     assert_eq!(bounding_box.width(), vehicle.width());
@@ -206,16 +206,16 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
     assert_eq!(bounding_box.height(), vehicle.height());
     assert_eq!(bounding_box.height(), skeleton.height());
     assert!(
-        bounding_box.width() > LayoutMode::TASK_PANEL_WIDTH,
-        "the longest workflow pill should expand the workflow panel: {bounding_box:?}"
+        bounding_box.width() <= 340.0,
+        "long task names must not expand the panel: {bounding_box:?}"
     );
-    assert!(bounding_box.height() <= 52.0);
+    assert!(bounding_box.height() <= 64.0);
     assert!(
-        skeleton.top() - bounding_box.bottom() <= 8.0,
+        skeleton.top() > bounding_box.bottom(),
         "bounding_box={bounding_box:?} skeleton={skeleton:?}"
     );
     assert!(
-        vehicle.top() - skeleton.bottom() <= 8.0,
+        vehicle.top() > skeleton.bottom(),
         "skeleton={skeleton:?} vehicle={vehicle:?}"
     );
     assert!(
@@ -251,7 +251,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     assert_eq!(collapse.bottom(), fit.bottom());
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes")
             .is_some()
     );
     let expanded_inspector_id = harness
@@ -284,7 +284,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     );
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes")
             .is_none()
     );
     assert!(
@@ -325,7 +325,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     assert!(!harness.state().work.workflow_panel_collapsed);
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes")
             .is_some()
     );
     assert_eq!(
@@ -349,7 +349,7 @@ fn workflow_availability_disables_cards_skips_keyboard_cycles_and_retries_failur
         .unwrap();
     assert!(vehicle.accesskit_node().is_disabled());
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes");
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes");
     assert_eq!(
         vehicle.accesskit_node().description(),
         Some("No assignments available".to_string())
@@ -1003,7 +1003,7 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
     assert_eq!(harness.state().work.queue.queue_size(), 2);
     assert!(!harness.state().loading.image);
     let selected_workflow =
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
         Some("Loaded assignment queue: 2/2".to_string())
@@ -2230,7 +2230,7 @@ fn dirty_workflow_changes_save_before_loading_the_new_assignment() {
 
     click(&mut harness, "Confirm & next");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
-    click(&mut harness, "Vehicle boxes");
+    click(&mut harness, "Vehicle: Bounding box annotation · Vehicle boxes");
     assert!(
         harness
             .query_by_label("Switch active assignment?")
@@ -3610,7 +3610,7 @@ fn acknowledged_workflow_change_does_not_return_after_assignment_and_queue_load(
     );
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
             .is_some()
     );
 }
@@ -4051,10 +4051,10 @@ fn workflow_dot_marks_only_the_committed_selection() {
     harness.set_size(egui::vec2(1500.0, 780.0));
     harness.run();
     let person = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes")
         .rect();
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
         .rect();
     assert_eq!(workflow_dot_centers(&harness, person).len(), 1);
     assert!(workflow_dot_centers(&harness, vehicle).is_empty());
@@ -4083,24 +4083,24 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     click(&mut harness, "Confirm & next");
     harness.run();
-    let before = assert_workflow_dot(&harness, "Person boxes", true);
+    let before = assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", true);
     harness
         .state_mut()
         .request_transition(crate::app::PendingTransition::Workflow(TaskId::from(
             "bounding_box:vehicle",
         )));
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", false);
     harness.state_mut().cancel_pending_transition();
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", true);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
         .focus();
     harness.step();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", false);
     harness
         .state_mut()
         .execute_transition(crate::app::PendingTransition::Workflow(TaskId::from(
@@ -4108,17 +4108,17 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
         )));
     step_until(&mut harness, 12, |app| app.work.current.is_some());
     harness.run();
-    let after = assert_workflow_dot(&harness, "Person boxes", false);
+    let after = assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", false);
     assert_eq!(before, after, "selection does not resize or shift cards");
-    let vehicle = assert_workflow_dot(&harness, "Vehicle boxes", true);
+    let vehicle = assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
     harness.hover_at(vehicle.center());
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
         .focus();
     harness.step();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
     harness
         .state_mut()
         .work
@@ -4126,17 +4126,17 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
         .tasks
         .insert(TaskId::from("bounding_box:vehicle"), false);
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
     assert!(
         harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes")
             .accesskit_node()
             .is_disabled()
     );
     harness.state_mut().work.selected_task_id = None;
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", false);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", false);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", false);
 }
 
 #[test]
@@ -4145,12 +4145,12 @@ fn workflow_dot_and_persistent_fallback_notice_share_the_committed_identity() {
     api.set_workflow_availability("bounding_box:person", false);
     let mut harness = workflow_change_harness(api, AppView::Annotate);
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", false);
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", false);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
     assert!(harness.state().work.automatic_workflow_change.is_some());
     click(&mut harness, "Acknowledge and continue");
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", true);
 }
 
 #[test]
@@ -4180,14 +4180,14 @@ fn workflow_dot_uses_the_same_decorative_slot_in_panel_and_drawer() {
             None
         };
         harness.run();
-        let selected = assert_workflow_dot(&harness, long, true);
-        let other = assert_workflow_dot(&harness, "Vehicle boxes", false);
+        let selected = assert_workflow_dot(&harness, &format!("Person: Bounding box annotation · {long}"), true);
+        let other = assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", false);
         let dot = workflow_dot_centers(&harness, selected)[0];
         assert!(dot.x - 4.0 >= selected.left() && dot.x + 4.0 <= selected.right());
         assert_eq!(selected.width(), other.width());
         assert!(selected.left() >= 0.0 && selected.right() <= width);
         let buttons = harness
-            .query_all_by_label(long)
+            .query_all_by_label(&format!("Person: Bounding box annotation · {long}"))
             .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
             .count();
         assert_eq!(
@@ -4222,8 +4222,8 @@ fn workflow_dot_ignores_stale_availability() {
         })
         .unwrap();
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes", false);
     assert!(harness.state().work.automatic_workflow_change.is_none());
 }
 
@@ -4431,12 +4431,13 @@ fn workflow_reason_icons_explain_disabled_cards_and_keep_selection_at_all_sizes(
             harness.set_size(egui::vec2(width,height));
             harness.state_mut().work.drawer = (width < 1288.0).then_some(Drawer::Workflow);
             harness.run();
-            let node = harness.get_by_role_and_label(egui::accesskit::Role::Button,long);
+            let accessible = format!("Person: Bounding box annotation · {long}");
+            let node = harness.get_by_role_and_label(egui::accesskit::Role::Button,&accessible);
             assert!(node.accesskit_node().is_disabled());
             assert!(node.accesskit_node().description().unwrap().starts_with(label));
-            let rect = assert_workflow_dot(&harness,long,true);
+            let rect = assert_workflow_dot(&harness,&format!("Person: Bounding box annotation · {long}"),true);
             assert!(rect.left() >= 0.0 && rect.right() <= width);
-            assert_workflow_dot(&harness,"Vehicle boxes",false);
+            assert_workflow_dot(&harness,"Vehicle: Bounding box annotation · Vehicle boxes",false);
         }
     }
 }
@@ -4468,7 +4469,7 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.loading = false;
     harness.run();
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button,"Person boxes").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button,"Person: Bounding box annotation · Person boxes").accesskit_node().is_disabled());
 }
 
 #[test]
@@ -4689,4 +4690,29 @@ fn automatic_workflow_change_distinguishes_same_names_and_retains_types() {
         assert!(harness.query_all_by_label("bounding box annotation type").next().is_some());
         harness.get_by_label("skeleton annotation type");
     }
+}
+
+#[test]
+fn annotation_workflows_have_class_headings_and_unconfigured_activities() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.run();
+    let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person");
+    let boxes = harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Person: Bounding box annotation · Person boxes",
+    );
+    let migration = harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Person: Migration",
+    );
+    let missing = harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Person: Add missing objects",
+    );
+    assert!(heading.rect().bottom() < boxes.rect().top());
+    assert!(boxes.rect().bottom() < migration.rect().top());
+    assert!(migration.rect().bottom() < missing.rect().top());
+    assert!(migration.accesskit_node().is_disabled());
+    assert!(missing.accesskit_node().is_disabled());
+    assert_eq!(migration.accesskit_node().description().as_deref(), Some("Migration is not configured for this class."));
 }

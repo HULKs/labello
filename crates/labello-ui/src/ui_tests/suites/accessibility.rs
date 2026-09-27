@@ -52,12 +52,13 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
         if LayoutMode::for_width(width) == LayoutMode::Wide {
             let canvas = migration.get_by_label("Annotation canvas").rect();
             let inspector = migration.get_by_label("Inspector").rect();
-            let workflow_label = migration.state().selected_workflow().unwrap().label();
+            let workflow_label = migration.state().workflow_entry_label(&migration.state().selected_workflow().unwrap(), (migration.state().view == AppView::Annotate).then_some(crate::panels::WorkflowActivity::Migration));
             let workflow_boundary = migration
                 .get_by_role_and_label(egui::accesskit::Role::Button, &workflow_label)
                 .rect()
                 .right()
                 + theme::SPACE_4
+                + theme::inset_frame().total_margin().right
                 + theme::side_frame().stroke.width;
             let inspector_boundary = width - LayoutMode::INSPECTOR_PANEL_WIDTH;
             let selected_workflow = migration
