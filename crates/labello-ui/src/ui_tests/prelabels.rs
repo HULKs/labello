@@ -789,7 +789,11 @@ fn model_objects_are_editable_before_confirmation_and_advance_without_submitting
     assert!(harness.state().pending_prelabel_objects().is_empty());
     assert_eq!(harness.state().work.annotations.len(), 1);
     assert_eq!(harness.state().work.canvas.current_zoom(), 1.0);
-    assert!(harness.query_by_label("Image overview").is_some());
+    assert!(
+        harness
+            .query_by_label_contains("Annotation details: Image overview")
+            .is_some()
+    );
     assert!(harness.query_by_label("Submit & next").is_some());
     assert_eq!(api.counts().complete_assignment, 0);
     harness.key_press(egui::Key::Space);
