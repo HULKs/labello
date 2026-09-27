@@ -68,7 +68,7 @@ impl LabelloApp {
             .annotation_objects()
             .iter()
             .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
+                self.annotation_matches_selected_workflow(annotation)
             })
             .map(|annotation| annotation.annotation_id.clone())
             .collect::<Vec<_>>();

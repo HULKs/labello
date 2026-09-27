@@ -146,7 +146,7 @@ no inspector CLI endpoint flag. Configure each disposable server using the
 The default is the annotation preset. Use `-- --preset <name>` with Cargo for
 another frozen state.
 
-Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
+Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `prelabel-boxes`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `review`, `review-correction`,
 `admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
@@ -162,7 +162,8 @@ Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `pr
 `migration-discovery-review`, `migration-companion-annotation`, `migration-annotated-edit`, and
 `migration-guide-deleted`. The `migration-single-optional` preset reproduces a
 pending imported guide with one optional `center` keypoint and no positioned
-draft input, without a server or dataset. Preset actions
+draft input, without a server or dataset. The `prelabel-boxes` preset opens two
+synthetic pending bounding boxes for confirmation, deletion, and Undo/Redo inspection. Preset actions
 are intentionally local and deterministic; restart with another preset for a
 clean inspection context. The `statistics` and `statistics-failure` presets open
 an accessible, scrollable statistics modal above Setup; Escape or Close returns

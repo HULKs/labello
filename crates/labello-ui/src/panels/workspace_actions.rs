@@ -91,12 +91,12 @@ impl LabelloApp {
         let pending = !matches!(primary, PrelabelPrimaryAction::Submit);
         let (primary_label, primary_help) = match primary {
             PrelabelPrimaryAction::Guide => ("Next guide", "Save this box and focus the next source keypoint guide. The final box submits the image."),
-            PrelabelPrimaryAction::Confirm => ("Confirm & next", "Confirm this object's edited geometry and focus the next object."),
+            PrelabelPrimaryAction::Confirm => ("Confirm & next", "Confirm this object's geometry or deletion and focus the next object."),
             PrelabelPrimaryAction::Focus => ("Next object", "Focus the next model object that needs confirmation."),
             PrelabelPrimaryAction::Submit => ("Submit & next", "Save, complete this assignment, and claim another."),
         };
         let objects = self.annotation_objects();
-        let selected = objects.iter().any(|object| Some(&object.annotation_id) == self.work.selected_annotation.as_ref());
+        let selected = objects.iter().any(|object| !object.deleted && Some(&object.annotation_id) == self.work.selected_annotation.as_ref());
         let save_in_menu = LayoutMode::for_width(ui.ctx().content_rect().width()) == LayoutMode::Compact;
         let count = 5 + usize::from(previous) - usize::from(save_in_menu);
         let width = ((ui.available_width() - 44.0 - count as f32 * ui.spacing().item_spacing.x)
@@ -109,7 +109,7 @@ impl LabelloApp {
                 (UserAction::PreviousImage, "Previous image", WorkspaceActionIcon::PreviousImage, can_commit && self.runtime.api.is_some(), theme::Intent::Neutral, "Return to the immediately previous eligible assignment."),
                 (UserAction::SelectPreviousObject, "Previous object", WorkspaceActionIcon::Previous, ready && !objects.is_empty(), theme::Intent::Neutral, "Select the previous object in this image, wrapping from the first to the last."),
                 (UserAction::SaveAnnotations, "Save", WorkspaceActionIcon::Save, can_commit && dirty, theme::Intent::Neutral, "Save confirmed annotations and keep this assignment active."),
-                (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model object advances to the next one."),
+                (UserAction::DeleteAnnotation, "Delete", WorkspaceActionIcon::Remove, ready && selected, theme::Intent::Error, "Delete the selected object. A pending model box still needs Confirm & next."),
                 (UserAction::SkipAssignment, "Skip", WorkspaceActionIcon::Skip, can_commit, theme::Intent::Neutral, "Release this assignment and claim another."),
             ] {
                 if action == UserAction::PreviousImage && !previous || action == UserAction::SaveAnnotations && save_in_menu { continue; }

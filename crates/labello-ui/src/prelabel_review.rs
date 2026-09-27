@@ -183,6 +183,19 @@ impl LabelloApp {
         };
         self.record_edit();
         let id = item.annotation.annotation_id.clone();
+        if item.annotation.deleted {
+            self.work
+                .accepted_prelabels
+                .push(item.suggestion.suggestion_id);
+            self.work
+                .prelabel_review
+                .objects
+                .retain(|item| item.annotation.annotation_id != id);
+            self.work.prelabel_review.changed = true;
+            self.mark_edited();
+            self.advance_prelabel_object();
+            return true;
+        }
         if let Some(evidence) = item.suggestion.evidence {
             self.work.prelabel_evidence.insert(id.clone(), evidence);
         }
@@ -222,7 +235,25 @@ impl LabelloApp {
         let Some(item) = self.selected_prelabel_object().cloned() else {
             return false;
         };
+        if item.annotation.deleted {
+            return true;
+        }
         self.record_edit();
+        if matches!(item.annotation.geometry, AnnotationGeometry::BoundingBox(_)) {
+            let pending = self
+                .work
+                .prelabel_review
+                .objects
+                .iter_mut()
+                .find(|candidate| {
+                    candidate.annotation.annotation_id == item.annotation.annotation_id
+                })
+                .expect("selected pending object exists");
+            pending.annotation.deleted = true;
+            self.work.prelabel_review.changed = true;
+            self.mark_edited();
+            return true;
+        }
         self.work
             .accepted_prelabels
             .push(item.suggestion.suggestion_id);
@@ -249,7 +280,9 @@ impl LabelloApp {
         else {
             return false;
         };
-        if self.work.prelabel_review.objects[index].annotation.geometry != geometry {
+        if !self.work.prelabel_review.objects[index].annotation.deleted
+            && self.work.prelabel_review.objects[index].annotation.geometry != geometry
+        {
             self.record_edit();
             let item = &mut self.work.prelabel_review.objects[index];
             item.annotation.geometry = geometry;
@@ -270,6 +303,12 @@ impl LabelloApp {
             return None;
         }
         let pending = self.pending_prelabel_objects();
+        if self
+            .selected_prelabel_object()
+            .is_some_and(|item| item.annotation.deleted)
+        {
+            return Some("Box deleted".into());
+        }
         if pending.is_empty() {
             Some("Image overview".into())
         } else {

@@ -112,10 +112,12 @@ framework belongs here.
 Pending prelabel objects are projected into the normal canvas and object selector,
 but remain outside `work.annotations` and annotation save commands. Confirmation
 transfers one object's edited geometry and its original signed evidence into the
-annotation draft. Deletion records a local dismissal and advances. The normal
-history snapshot includes pending objects, so Undo/Redo retains their geometry and
-selection. Browser annotation drafts store pending objects in a separate optional
-field and remain recoverable after autosaving confirmed work. Older drafts default
+annotation draft. Deleting a pending box marks its local object deleted, hides its
+canvas geometry, and preserves selection and view until explicit confirmation
+records the dismissal and advances. Pending skeleton deletion still advances
+immediately. The normal history snapshot includes pending objects, so Undo/Redo
+retains their geometry, pending deletions, and selection. Browser annotation drafts
+store pending objects in a separate optional field and remain recoverable after autosaving confirmed work. Older drafts default
 to no pending objects; older clients cannot mistake the separate field for accepted
 annotations. Model and generation checks gate visibility and confirmation after
 recovery. Submission cannot bypass visible pending objects. The retained workspace
