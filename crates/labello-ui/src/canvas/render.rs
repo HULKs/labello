@@ -332,6 +332,16 @@ pub(crate) fn show_canvas_with_task_edges(
         edges_by_task,
     );
 
+    if editable
+        && let Some(DragOperation::PlaceKeypoint { hidden }) = state.drag
+        && let Some(point) = state.draft_keypoint
+    {
+        let painter = ui.painter().with_clip_rect(viewport.intersect(image_rect));
+        paint_keypoint(&painter, normalized_to_screen(image_rect, pos2(point.x, point.y)),
+            &if hidden { KeypointState::Hidden } else { KeypointState::Visible },
+            annotation_color, 5.0, false);
+    }
+
     if let Some(missing) = missing {
         let painter = ui.painter().with_clip_rect(viewport.intersect(image_rect));
         for marker in missing.locations {
