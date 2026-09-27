@@ -1,0 +1,19 @@
+{
+  "viewport": [
+    1288,
+    820
+  ],
+  "dpr": 1,
+  "zoom": 2,
+  "counts": {
+    "details": 1,
+    "dismissed": 1,
+    "inbox": 3,
+    "work_writes": 0
+  },
+  "page_errors": [],
+  "mandatory": true,
+  "failure": false,
+  "browser_ax": "canvas only; semantic labels checked by native AccessKit and egui_kittest",
+  "transport": "intercepted synthetic API responses; production release WASM"
+}

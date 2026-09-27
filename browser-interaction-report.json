@@ -1,0 +1,59 @@
+[
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "dpr": 1,
+    "zoom": 1,
+    "counts": {
+      "details": 5,
+      "dismissed": 5,
+      "inbox": 7,
+      "work_writes": 0
+    },
+    "page_errors": [],
+    "mandatory": true,
+    "failure": false,
+    "browser_ax": "canvas only; semantic labels checked by native AccessKit and egui_kittest",
+    "transport": "intercepted synthetic API responses; production release WASM"
+  },
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "dpr": 1,
+    "zoom": 1,
+    "counts": {
+      "details": 1,
+      "dismissed": 2,
+      "inbox": 6,
+      "work_writes": 0
+    },
+    "page_errors": [],
+    "mandatory": false,
+    "failure": false,
+    "browser_ax": "canvas only; semantic labels checked by native AccessKit and egui_kittest",
+    "transport": "intercepted synthetic API responses; production release WASM"
+  },
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "dpr": 1,
+    "zoom": 1,
+    "counts": {
+      "details": 1,
+      "dismissed": 0,
+      "inbox": 2,
+      "work_writes": 0
+    },
+    "page_errors": [],
+    "mandatory": true,
+    "failure": true,
+    "browser_ax": "canvas only; semantic labels checked by native AccessKit and egui_kittest",
+    "transport": "intercepted synthetic API responses; production release WASM"
+  }
+]
