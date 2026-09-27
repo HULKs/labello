@@ -421,7 +421,20 @@ impl LabelloApp {
                 && selected.is_some()
                 && self.work.migration.draft.is_some(),
             selected_keypoint: None,
+            keypoint_placement: Some(crate::canvas::KeypointPlacement {
+                hidden: self.work.migration.next_hidden,
+                replace_selected: (matches!(
+                    self.work.migration.cursor,
+                    Some(MigrationCursor::Object { .. })
+                ) && self.work.migration.draft.as_ref().is_some_and(|draft| {
+                    draft.keypoints.len() == 1 && draft.keypoints[0].point.is_some()
+                }))
+                .then_some(0),
+            }),
         };
+        if self.view != AppView::Annotate {
+            interaction.keypoint_placement = None;
+        }
         self.apply_staged_review_previews(&mut annotations);
         if let Some(preview) = self.review_correction_preview() {
             selected = Some(preview.annotation_id.clone());

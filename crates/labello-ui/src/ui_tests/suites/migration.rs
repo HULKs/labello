@@ -2870,3 +2870,77 @@ fn migration_added_object_deletion_button_and_key_retry_and_exit_editor() {
         assert!(harness.query_by_label("Submit").is_some());
     }
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_single_keypoint_press_drag_repositions_without_advancing() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for size in [egui::vec2(1440.0, 1000.0), egui::vec2(390.0, 844.0)] {
+        let mut harness = Harness::builder().with_size(size).build_eframe(|ctx|
+            inspector_presets::build(InspectorPreset::MigrationSingleOptional, &ctx.egui_ctx));
+        harness.run_steps(3);
+        let cursor = harness.state().work.migration.cursor.clone();
+        let center = harness.get_by_label("Annotation canvas").rect().center();
+        let first = center + egui::vec2(20.0, 20.0);
+        drag_at(&mut harness, center, first);
+        let before = harness.state().work.migration.draft.clone().unwrap();
+        assert!(before.keypoints[0].point.is_some(), "initial held press must place a point");
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        harness.key_press(egui::Key::H);
+        harness.step();
+        let start = center + egui::vec2(-30.0, -30.0);
+        let end = center + egui::vec2(-10.0, -10.0);
+        drag_at(&mut harness, start, end);
+        let moved = harness.state().work.migration.draft.clone().unwrap();
+        assert_ne!(moved.keypoints[0].point, before.keypoints[0].point);
+        assert_eq!(moved.keypoints[0].state, KeypointState::Hidden);
+        assert_eq!(moved.keypoints.len(), 1);
+        assert_eq!(harness.state().work.migration.keypoint_index, 1);
+        assert_eq!(harness.state().work.migration.cursor, cursor);
+        assert!(!harness.state().work.migration.adding_missing_object);
+        click_at(&mut harness, first);
+        assert_ne!(harness.state().work.migration.draft.as_ref().unwrap().keypoints[0].point, moved.keypoints[0].point);
+
+        let retained = harness.state().work.migration.draft.clone();
+        harness.event(egui::Event::PointerMoved(start));
+        harness.event(egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        harness.step();
+        harness.event(egui::Event::PointerMoved(end));
+        harness.step();
+        assert!(harness.state().work.canvas.is_dragging());
+        assert_eq!(harness.state().work.migration.draft, retained, "held placement is a preview until release");
+        harness.key_press(egui::Key::Escape);
+        harness.step();
+        harness.event(egui::Event::PointerButton { pos: end, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        harness.step();
+        assert!(!harness.state().work.canvas.is_dragging());
+        assert_eq!(harness.state().work.migration.draft, retained);
+    }
+}
+
+/// Supplies repository-owned synthetic state for the manual WASM input check.
+#[cfg(feature = "inspector-presets")]
+#[test]
+#[ignore = "writes synthetic fixtures to LABELLO_MIGRATION_BROWSER_FIXTURE"]
+fn export_keypoint_migration_browser_fixture() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let fixtures: Vec<_> = [InspectorPreset::MigrationSingleOptional, InspectorPreset::MigrationFullImage]
+        .into_iter().map(|preset| {
+            let mut app = inspector_presets::build(preset, &egui::Context::default());
+            let task_id = app.work.selected_task_id.clone().unwrap();
+            let task = app.work.tasks.iter_mut().find(|task| task.task_id == task_id).unwrap();
+            task.skeleton = Some(SkeletonSpec {
+                keypoints: vec![KeypointSpec { name: "center".into(), required: true }],
+                edges: vec![], allow_hidden: true, allow_absent: false,
+            });
+            let mut metadata = app.datasets.metadata.clone().unwrap();
+            metadata.tasks = app.work.tasks.clone();
+            serde_json::json!({
+                "metadata": metadata, "account": app.auth.account,
+                "assignment": app.work.assignment, "state": app.work.current_state,
+                "image": app.work.current.as_ref().unwrap().image, "keybindings": app.work.keybindings,
+            })
+        }).collect();
+    let path = std::env::var("LABELLO_MIGRATION_BROWSER_FIXTURE").expect("fixture output path");
+    std::fs::write(path, serde_json::to_vec(&fixtures).unwrap()).unwrap();
+}
