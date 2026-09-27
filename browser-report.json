@@ -1,0 +1,351 @@
+{
+  "browser": "149.0.7827.55",
+  "transport": "production WASM with intercepted synthetic API responses",
+  "cases": [
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 10745,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        320,
+        320
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 10755,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 55787,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 55785,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 118795,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 118766,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 201589,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        600,
+        800
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 201262,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 240959,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1288,
+        820
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 240946,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 379558,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 2,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 378400,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 3,
+      "failure": false,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 119372,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1440,
+        1000
+      ],
+      "dpr": 1,
+      "failure": true,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 379558,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "dpr": 1,
+      "failure": true,
+      "zoom": 1,
+      "counts": {
+        "claims": 2,
+        "release": 1,
+        "mutations": 0
+      },
+      "old_preview_pixels_while_pending": 118795,
+      "ax_roles": [
+        "Canvas",
+        "RootWebArea",
+        "generic",
+        "none",
+        "textbox"
+      ],
+      "page_errors": []
+    }
+  ]
+}
