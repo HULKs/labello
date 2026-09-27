@@ -57,7 +57,7 @@ or external integrations.
 | `annotations/<image-id>/events.jsonl` | Authoritative append-only audit and workflow history | Replay in sequence; never truncate, reorder, merge, or edit by hand |
 | `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, on a supported older schema, or with an older review projection generation |
 | `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration and before publishing companion-link or captured review-assignment events or accepted prelabel origins; do not treat it as annotation authority |
-| `users/<user-id>/keybindings.toml` | Authoritative keyboard and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
+| `users/<user-id>/keybindings.toml` | Authoritative keyboard, mouse-button, and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
 | `.labello/imports/<import-id>/manifest.json` | Authoritative committed import provenance | Must match the dataset and directory import ID |
 | `.labello/imports/<import-id>/source-objects.jsonl` | Authoritative committed source-object audit record | Preserve with its manifest and event history |
 | `.labello/migrations/...` | Durable migration journal and staged generation | Recovery state until migration completion; do not remove during an interrupted migration |
@@ -68,6 +68,13 @@ or external integrations.
 Browser IndexedDB/local-storage drafts and availability caches are recoverable
 client conveniences. They are outside the server root and never authoritative
 workflow state.
+
+Mouse-button shortcuts retain the existing keybinding record shape and schema
+version. The `key` strings `MouseRight`, `MouseExtra1`, and `MouseExtra2` identify
+right-click and mouse buttons 4 and 5; modifier fields have the same meaning as
+for keyboard bindings. Existing keyboard-only settings continue to load.
+Older clients/servers that do not recognize these names cannot use settings
+containing mouse bindings.
 
 ## Write and transaction boundaries
 

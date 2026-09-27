@@ -2,8 +2,9 @@
 #[test]
 fn review_delete_uses_the_configured_key_and_only_removes_the_selected_addition() {
     for (binding, key) in [
-        ("Delete", egui::Key::Delete),
-        ("Backspace", egui::Key::Backspace),
+        ("Delete", Some(egui::Key::Delete)),
+        ("Backspace", Some(egui::Key::Backspace)),
+        ("MouseRight", None),
     ] {
         for mut harness in [
             keypoint_review_overview(1),
@@ -41,12 +42,27 @@ fn review_delete_uses_the_configured_key_and_only_removes_the_selected_addition(
             click_at(&mut harness, first + egui::vec2(50.0, 0.0));
             harness.run_steps(2);
             assert!(harness.state().work.correction_draft.is_some());
-            if key != egui::Key::Delete {
+            if key != Some(egui::Key::Delete) {
                 harness.key_press(egui::Key::Delete);
                 harness.step();
                 assert!(harness.state().work.review_corrections.changes == changes);
             }
-            harness.key_press(key);
+            let activate = |harness: &mut Harness<'static, LabelloApp>| {
+                if let Some(key) = key {
+                    harness.key_press(key);
+                } else {
+                    let pos = harness.get_by_label("Annotation canvas").rect().center();
+                    for pressed in [true, false] {
+                        harness.event(egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Secondary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        });
+                    }
+                }
+            };
+            activate(&mut harness);
             harness.run_steps(2);
             assert!(
                 harness.state().work.review_corrections.changes
@@ -54,13 +70,13 @@ fn review_delete_uses_the_configured_key_and_only_removes_the_selected_addition(
             );
             assert!(harness.state().work.correction_draft.is_none());
             assert!(harness.state().work.selected_annotation.is_none());
-            harness.key_press(key);
+            activate(&mut harness);
             harness.step();
             assert_eq!(harness.state().work.review_corrections.changes.len(), 2);
             harness.state_mut().navigate_review_item(0);
             harness.run_steps(2);
             let editor = harness.state().work.correction_draft.clone();
-            harness.key_press(key);
+            activate(&mut harness);
             harness.step();
             assert!(harness.state().work.correction_draft == editor);
             assert_eq!(harness.state().work.review_corrections.changes.len(), 2);

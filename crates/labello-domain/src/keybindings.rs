@@ -228,7 +228,12 @@ impl std::fmt::Display for KeyChord {
         if self.alt {
             parts.push("Alt".to_string());
         }
-        parts.push(self.key.clone());
+        parts.push(match self.key.as_str() {
+            "MouseRight" => "Right click".to_string(),
+            "MouseExtra1" => "Mouse button 4".to_string(),
+            "MouseExtra2" => "Mouse button 5".to_string(),
+            _ => self.key.clone(),
+        });
         f.write_str(&parts.join("+"))
     }
 }
@@ -457,7 +462,10 @@ fn supported_key_name(key: &str) -> bool {
     }
     matches!(
         key,
-        "ArrowDown"
+        "MouseRight"
+            | "MouseExtra1"
+            | "MouseExtra2"
+            | "ArrowDown"
             | "ArrowLeft"
             | "ArrowRight"
             | "ArrowUp"
@@ -595,5 +603,46 @@ mod tests {
         let loaded: KeybindingSet = serde_json::from_value(legacy).unwrap();
 
         assert_eq!(loaded.pan_drag_modifier, PanDragModifier::Control);
+    }
+}
+
+#[cfg(test)]
+mod mouse_tests {
+    use super::*;
+
+    #[test]
+    fn mouse_bindings_validate_conflict_and_preserve_keyboard_defaults() {
+        let mut bindings = KeybindingSet::defaults_for(UserId::from("mouse_user"));
+        for key in ["MouseRight", "MouseExtra1", "MouseExtra2"] {
+            bindings
+                .bindings
+                .insert(UserAction::DeleteAnnotation, KeyChord::new(key));
+            assert!(bindings.validate().is_ok());
+            let wire = serde_json::to_string(&bindings).unwrap();
+            let decoded: KeybindingSet = serde_json::from_str(&wire).unwrap();
+            assert_eq!(bindings, decoded);
+        }
+        bindings
+            .bindings
+            .insert(UserAction::NextImage, KeyChord::new("MouseExtra2"));
+        assert!(bindings.validate().is_err());
+        bindings
+            .bindings
+            .get_mut(&UserAction::NextImage)
+            .unwrap()
+            .shift = true;
+        assert!(bindings.validate().is_ok());
+        for key in ["MouseLeft", "MouseMiddle", "MouseExtra3"] {
+            bindings
+                .bindings
+                .insert(UserAction::DeleteAnnotation, KeyChord::new(key));
+            assert!(bindings.validate().is_err());
+        }
+        bindings.reset_to_defaults();
+        assert_eq!(
+            bindings.bindings[&UserAction::DeleteAnnotation],
+            KeyChord::new("Delete")
+        );
+        assert_eq!(KeyChord::new("MouseRight").to_string(), "Right click");
     }
 }

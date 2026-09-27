@@ -46,6 +46,52 @@ pub fn on_canvas(ctx: &Context, position: Pos2) -> bool {
         && ctx.memory(|memory| memory.top_modal_layer().is_none())
 }
 
+// Primary and middle buttons remain reserved for editing and navigation.
+pub(crate) fn binding_name(button: egui::PointerButton) -> Option<&'static str> {
+    match button {
+        egui::PointerButton::Secondary => Some("MouseRight"),
+        egui::PointerButton::Extra1 => Some("MouseExtra1"),
+        egui::PointerButton::Extra2 => Some("MouseExtra2"),
+        _ => None,
+    }
+}
+
+pub(crate) fn consume_mouse_shortcut(ctx: &Context, chord: &labello_domain::KeyChord) -> bool {
+    if !matches!(
+        chord.key.as_str(),
+        "MouseRight" | "MouseExtra1" | "MouseExtra2"
+    ) || pen_pointer(ctx)
+        || ctx.input(|input| input.any_touches())
+    {
+        return false;
+    }
+    let events = ctx.input(|input| input.events.clone());
+    let index = events.iter().position(|event| {
+        let egui::Event::PointerButton {
+            pos,
+            button,
+            pressed: true,
+            modifiers,
+        } = event
+        else {
+            return false;
+        };
+        binding_name(*button) == Some(chord.key.as_str())
+            && modifiers.shift == chord.shift
+            && modifiers.alt == chord.alt
+            && (modifiers.command || modifiers.ctrl) == (chord.command || chord.ctrl)
+            && on_canvas(ctx, *pos)
+    });
+    if let Some(index) = index {
+        ctx.input_mut(|input| {
+            input.events.remove(index);
+        });
+        true
+    } else {
+        false
+    }
+}
+
 pub(crate) fn scroll_source(ctx: &Context) -> ScrollSource {
     ScrollSource {
         drag: if pen_pointer(ctx) {

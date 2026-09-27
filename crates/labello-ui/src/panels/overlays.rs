@@ -415,27 +415,25 @@ impl LabelloApp {
             && let Some(action) = self.work.shortcut_settings.recording
         {
             let captured = ctx.input_mut(|input| {
-                let index = input.events.iter().rposition(|event| {
-                    matches!(
-                        event,
-                        egui::Event::Key {
-                            pressed: true,
-                            repeat: false,
-                            ..
-                        }
-                    )
+                let index = input.events.iter().rposition(|event| match event {
+                    egui::Event::Key { pressed: true, repeat: false, .. } => true,
+                    egui::Event::PointerButton { button, pressed: true, .. } =>
+                        crate::pointer_input::binding_name(*button).is_some(),
+                    _ => false,
                 })?;
                 match input.events.remove(index) {
-                    egui::Event::Key { key, modifiers, .. } => Some((key, modifiers)),
+                    egui::Event::Key { key, modifiers, .. } => Some((key.name().to_string(), modifiers)),
+                    egui::Event::PointerButton { button, modifiers, .. } =>
+                        Some((crate::pointer_input::binding_name(button)?.to_string(), modifiers)),
                     _ => None,
                 }
             });
             if let Some((key, modifiers)) = captured {
-                if key == egui::Key::Escape {
+                if key == "Escape" {
                     self.work.shortcut_settings.recording = None;
                 } else if let Some(draft) = self.work.shortcut_settings.draft.as_mut() {
                     let chord = labello_domain::KeyChord {
-                        key: key.name().to_string(),
+                        key,
                         ctrl: false,
                         shift: modifiers.shift,
                         alt: modifiers.alt,
@@ -463,9 +461,9 @@ impl LabelloApp {
             let mut contents = |ui: &mut egui::Ui| {
                 ui.heading("Keyboard shortcuts");
                 ui.label(
-                    RichText::new("Choose an action, then press its new key combination.")
+                    RichText::new("Record a key, right-click, or mouse button 4/5.")
                         .color(theme::MUTED),
-                );
+                ).on_hover_text("Mouse bindings work over the canvas. Left and middle buttons stay reserved for editing and panning.");
                 if let Some(error) = &self.work.shortcut_settings.error {
                     theme::inline_message(
                         ui,
@@ -501,7 +499,7 @@ impl LabelloApp {
                     .to_ascii_lowercase();
                 let compact_footer = ui.available_width() < 420.0;
                 let scroll_height = if compact_footer {
-                    (screen.height() - 500.0).clamp(64.0, 520.0)
+                    (screen.height() - 400.0).clamp(120.0, 520.0)
                 } else if screen.height() < 700.0 {
                     (screen.height() - 380.0).clamp(120.0, 520.0)
                 } else {
@@ -560,11 +558,13 @@ impl LabelloApp {
                             ui.heading(RichText::new(category).size(16.0));
                         }
                         theme::card_frame().show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
+                            let name_and_hint = |ui: &mut egui::Ui| {
                                 ui.vertical(|ui| {
                                     ui.label(RichText::new(label).strong());
                                     ui.small(RichText::new(description).color(theme::MUTED));
                                 });
+                            };
+                            let mut controls = |ui: &mut egui::Ui| {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
@@ -595,6 +595,7 @@ impl LabelloApp {
                                             .add_enabled(
                                                 !self.loading.keybindings,
                                                 egui::Button::new(&text)
+                                                    .wrap()
                                                     .selected(recording)
                                                     .min_size(egui::vec2(140.0, 44.0)),
                                             )
@@ -612,7 +613,16 @@ impl LabelloApp {
                                         }
                                     },
                                 );
-                            });
+                            };
+                            if compact_footer {
+                                name_and_hint(ui);
+                                ui.horizontal(|ui| controls(ui));
+                            } else {
+                                ui.horizontal_wrapped(|ui| {
+                                    name_and_hint(ui);
+                                    controls(ui);
+                                });
+                            }
                             if let Some(pan_drag_modifier) = pan_drag_modifier {
                                 let name_and_hint = |ui: &mut egui::Ui| {
                                     ui.horizontal(|ui| {
@@ -686,7 +696,7 @@ impl LabelloApp {
                                 };
                                 if compact_footer {
                                     name_and_hint(ui);
-                                    controls(ui);
+                                    ui.horizontal(|ui| controls(ui));
                                 } else {
                                     ui.horizontal_wrapped(|ui| {
                                         name_and_hint(ui);
@@ -763,8 +773,10 @@ impl LabelloApp {
                 if compact_footer {
                     ui.vertical(|ui| {
                         restore_defaults(ui);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            decision_actions(ui);
+                        ui.horizontal(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                decision_actions(ui);
+                            });
                         });
                     });
                 } else {
