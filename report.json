@@ -1,0 +1,33 @@
+{
+  "browser": "149.0.7827.55",
+  "viewport": [
+    1288,
+    820
+  ],
+  "dpr": 1,
+  "zoom": 1,
+  "results": [
+    {
+      "scenario": "update",
+      "navigations": 2,
+      "storage_preserved": true
+    },
+    {
+      "scenario": "persistent",
+      "navigations": 3,
+      "storage_preserved": true
+    },
+    {
+      "scenario": "network-failure",
+      "navigations": 1,
+      "storage_preserved": true
+    },
+    {
+      "scenario": "storage-denied",
+      "navigations": 1,
+      "storage_preserved": true
+    }
+  ],
+  "cache_reload_requests": 85,
+  "limitations": "Synthetic identity API; native tests cover shared draft gating. Browser AX exposes canvas only."
+}
