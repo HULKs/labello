@@ -228,8 +228,10 @@ reads overlay the current dataset setting without publishing that overlay as a
 cache. The next successful transaction stamps the policy into events, after
 which the persisted cache is again exactly reproducible from those events.
 Snapshots preserve raw event history and replayed caches along with dataset
-configuration; offline bundles retain the current policy. Offline mutation
-metadata cannot override the server's choice when events are resequenced.
+configuration; offline bundles retain the current policy. Offline mutations are
+server-constructed and use the normal event transaction. Clients cannot select
+the policy. Migration command resequencing stamps the selected server policy
+onto its constructed events.
 
 Hidden annotation IDs are derived, not persisted as deletion flags. Migration
 confirmation hashes include skipped Pending target IDs when nonempty. Review

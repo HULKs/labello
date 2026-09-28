@@ -129,7 +129,7 @@ async fn changed_visibility_rejects_stale_review_without_partial_events() {
 }
 
 #[tokio::test]
-async fn offline_event_visibility_cannot_override_server_policy() {
+async fn resequenced_event_visibility_cannot_override_server_policy() {
     let (_temp, repo, image_id, task_id, annotator, _) =
         correction_repo(AnnotationType::BoundingBox, false).await;
     let mut state = repo.load_image_state(&image_id).await.unwrap();
@@ -140,7 +140,7 @@ async fn offline_event_visibility_cannot_override_server_policy() {
     historical.bounding_box_visibility = None;
     assert_eq!(historical.review_target_fingerprint(task), fingerprint);
     let mut duplicate = state.current_annotation(&"ann_1".into()).unwrap().clone();
-    duplicate.annotation_id = "zz_offline_duplicate".into();
+    duplicate.annotation_id = "zz_resequenced_duplicate".into();
     let mut event = EventLogEntry::new(
         1,
         image_id.clone(),
