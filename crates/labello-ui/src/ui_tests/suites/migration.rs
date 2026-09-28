@@ -3097,6 +3097,9 @@ fn class_workflow_chooser_shows_full_names_and_preserves_work_on_cancel() {
         harness.key_press(egui::Key::Enter);
         harness.run();
         assert!(egui::Popup::is_any_open(&harness.ctx));
+        let heading = harness.get_by_label("Person: Bounding box annotation").rect();
+        let first = harness.get_by_role_and_label(egui::accesskit::Role::Button, &labels[0]).rect();
+        assert!(heading.top() >= 0.0 && heading.bottom() < first.top(), "{width}x{height}: heading {heading:?}, first option {first:?}");
         for label in &labels {
             let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, label);
             assert!(option.rect().height() >= 44.0);

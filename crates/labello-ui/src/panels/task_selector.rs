@@ -606,17 +606,18 @@ impl LabelloApp {
             }
             popup.show(|ui| {
                 ui.set_max_width((ui.ctx().content_rect().width() - 48.0).clamp(160.0, 360.0));
+                let height = (ui.ctx().content_rect().height() - 96.0).max(44.0);
+                ui.set_max_height(height);
                 ui.add(
                     egui::Label::new(
                         RichText::new(label.trim_end_matches(" · Choose workflow")).strong(),
                     )
-                    .truncate(),
+                    .wrap(),
                 );
-                let height = (ui.ctx().content_rect().height() - 96.0).max(44.0);
-                ui.set_max_height(height);
+                ui.separator();
                 egui::ScrollArea::vertical()
                     .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
-                    .max_height(height)
+                    .max_height(ui.available_height())
                     .show(ui, |ui| {
                         for choice in choices {
                             let current =
