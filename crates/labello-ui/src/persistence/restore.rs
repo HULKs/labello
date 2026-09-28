@@ -608,3 +608,37 @@ impl crate::app::LabelloApp {
         self.runtime.persistence.desired_work_draft = None;
     }
 }
+
+impl crate::app::LabelloApp {
+    /// Called after this frame has queued its latest drafts and preferences.
+    pub(crate) fn browser_drafts_ready_for_reload(&self) -> bool {
+        let persistence = &self.runtime.persistence;
+        if persistence.active || !persistence.commands.is_empty()
+            || persistence.recovery.is_some()
+            || persistence.expected_assignment.is_some()
+            || persistence.preference_desired_encoded.as_ref().is_some_and(|desired|
+                persistence.preference_encoded.as_ref() != Some(desired))
+        {
+            return false;
+        }
+        let work_dirty = matches!(self.work.save_status,
+            crate::app::SaveStatus::Dirty | crate::app::SaveStatus::Saving | crate::app::SaveStatus::Retry)
+            || self.work.prelabel_review.changed || self.review_editor_changed() || self.has_review_corrections();
+        if work_dirty && (persistence.identity.is_none()
+            || self.work.assignment.as_ref().is_none_or(|assignment|
+                persistence.work_ready.as_ref() != Some(&assignment.assignment_id))
+            || persistence.desired_work_draft.as_ref().is_none_or(|desired|
+                persistence.last_work_draft.as_ref().is_none_or(|saved| !same_work_draft(saved, desired))))
+        {
+            return false;
+        }
+        if self.datasets.admin_config != self.datasets.admin_baseline
+            && self.datasets.admin_config.is_some()
+            && (persistence.identity.is_none()
+                || persistence.last_admin_config != self.datasets.admin_config)
+        {
+            return false;
+        }
+        true
+    }
+}

@@ -199,6 +199,56 @@ mod tests {
     }
 
     #[test]
+    fn reload_waits_for_draft_and_preference_commit_including_failed_writes() {
+        let store = Rc::new(MemoryDraftStore::default());
+        store.fail_next(1, "quota denied");
+        let mut app = crate::app::LabelloApp::default();
+        app.work.save_status = crate::app::SaveStatus::Dirty;
+        app.work.assignment = Some(assignment());
+        app.runtime.persistence.identity = Some(identity());
+        app.runtime.persistence.work_ready = Some(assignment().assignment_id);
+        app.runtime.persistence.store = store.clone();
+        let draft = work_draft();
+        app.runtime.persistence.desired_work_draft = Some(draft.clone());
+        app.queue_persistence(PersistenceCommand::Save(Box::new(DraftRecord::Work(
+            Box::new(draft),
+        ))));
+        assert!(!app.browser_drafts_ready_for_reload());
+        let command = app.runtime.persistence.commands.pop_front().unwrap();
+        app.handle_persistence_completion(poll(execute_persistence_command(
+            store.clone(),
+            command,
+        )));
+        assert!(
+            !app.browser_drafts_ready_for_reload(),
+            "failed draft write must block navigation"
+        );
+        let command = app.runtime.persistence.commands.pop_front().unwrap();
+        app.handle_persistence_completion(poll(execute_persistence_command(store, command)));
+        assert!(app.browser_drafts_ready_for_reload());
+        app.runtime.persistence.preference_encoded = Some("existing preference".into());
+        assert!(
+            app.browser_drafts_ready_for_reload(),
+            "already loaded preferences need no write"
+        );
+        app.runtime.persistence.preference_desired_encoded = Some("latest preference".into());
+        assert!(!app.browser_drafts_ready_for_reload());
+        app.runtime.persistence.preference_encoded =
+            app.runtime.persistence.preference_desired_encoded.clone();
+        assert!(app.browser_drafts_ready_for_reload());
+        app.runtime
+            .persistence
+            .desired_work_draft
+            .as_mut()
+            .unwrap()
+            .edit_generation += 1;
+        assert!(
+            !app.browser_drafts_ready_for_reload(),
+            "newer edits require another successful write"
+        );
+    }
+
+    #[test]
     fn failed_put_retries_the_unchanged_record_and_advances_marker_only_on_success() {
         let store = Rc::new(MemoryDraftStore::default());
         store.fail_next(1, "quota denied");

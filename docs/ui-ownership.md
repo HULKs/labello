@@ -88,6 +88,23 @@ so a snapshot taken before prelabel acceptance cannot replace server provenance.
 Routine saves use periodic statistics refresh; completion
 requests an immediate refresh.
 
+## Browser build recovery
+
+`build_information` owns mismatch recovery decisions and the generation gate for
+asynchronous preparation. Its browser adapter in `labello-wasm` owns the per-tab
+attempt marker, fresh asset requests, and navigation. Native UI has no reload
+adapter. The existing endpoint-owned identity request gate remains authoritative.
+
+The shell queues current drafts and writes preferences before advancing recovery.
+The persistence owner confirms that those writes have committed. Recovery waits
+for active commands, gestures, and unrecoverable staged input. Asset preparation
+never navigates; the shared owner checks current work again after it completes,
+so edits made during asset downloads must also be saved. Once navigation starts,
+the shell shows `Updating Labello...` and accepts no further edits. Recovery does not release
+assignments or change auth/workspace epochs. Failed preparation retains the app
+and exposes manual retry in About. See [deployment](deployment.md#product-build-identity)
+for the cache and attempt-limit contract.
+
 ## Browser input
 
 `apps/labello-wasm/src/pen_input.rs` normalizes browser pen Pointer Events before

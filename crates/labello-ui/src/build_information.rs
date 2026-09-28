@@ -12,6 +12,7 @@ pub type BuildClipboardWriter = Rc<dyn Fn(String) -> Pin<Box<dyn Future<Output =
 
 #[derive(Default)]
 pub(crate) struct BuildInformationState {
+    pub reload: BuildReloadState,
     pub web: BuildIdentity,
     pub server: Option<BuildIdentity>,
     pub checked: bool,
@@ -22,6 +23,8 @@ pub(crate) struct BuildInformationState {
     pub copy_feedback: Option<&'static str>,
     pub reveal_manual_copy: bool,
 }
+
+include!("build_information/reload.rs");
 
 impl LabelloApp {
     /// Set only from metadata compiled into the executing browser artifact.
@@ -64,6 +67,16 @@ impl LabelloApp {
 
     pub(crate) fn reduce_build_message(&mut self, message: UiMessage) -> Option<UiMessage> {
         match message {
+            UiMessage::BuildReloadPrepared { generation, result } => {
+                if self.builds.reload.generation == generation
+                    && matches!(self.builds.reload.phase, ReloadPhase::Preparing)
+                {
+                    self.builds.reload.phase = match result {
+                        Ok(()) => ReloadPhase::Prepared,
+                        Err(message) => ReloadPhase::Failed(message),
+                    };
+                }
+            }
             UiMessage::BuildRefreshRequested => self.request_build_information(),
             UiMessage::BuildInformationLoaded { request, result } => {
                 if self.builds.pending_request_id != Some(request.request_id)
@@ -165,6 +178,7 @@ impl LabelloApp {
                 ui.add_space(theme::SPACE_3);
                 ui.label(RichText::new("Web app and server builds differ.").color(theme::WARNING));
             }
+            self.build_reload_controls(ui);
             ui.add_space(theme::SPACE_5);
             ui.horizontal_wrapped(|ui| {
                 if focus_action(theme::primary_button(
@@ -328,3 +342,7 @@ fn focus_action(response: egui::Response) -> bool {
     }
     response.clicked()
 }
+
+#[cfg(test)]
+#[path = "build_information/reload_tests.rs"]
+mod reload_tests;

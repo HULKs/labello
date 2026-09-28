@@ -15,6 +15,7 @@ use crate::app::{
 
 impl LabelloApp {
     pub(crate) fn rebuild_http_api(&mut self) {
+        self.reset_build_reload();
         self.builds.pending_request_id = None;
         self.builds.loading = false;
         self.builds.server = None;

@@ -339,6 +339,26 @@ lower-right warning appears only when both complete release identities differ.
 Server refreshes happen at startup, About opening, retry and visible-tab focus;
 failure clears the previously displayed server identity and mismatch.
 
+A confirmed mismatch automatically prepares fresh browser assets and reloads
+once pending operations and recoverable draft writes finish. The browser fetches
+a cache-busted entry document and its JS/WASM preload inventory with HTTP cache
+reload semantics, then navigates to that document. This relies on the complete
+Trunk distribution's content-hashed JS/WASM URLs, including generated module
+imports. It does not erase cookies, local storage, IndexedDB, or unrelated caches.
+Labello installs no service worker; an externally controlling worker blocks this
+recovery because it could intercept the cache-bypass requests.
+
+A session-storage marker permits one automatic attempt per current target server
+identity and endpoint in a tab. A persistent mismatch, unavailable tab storage,
+or failed asset preparation leaves an explanation and `Retry app update` in
+About. Manual retry checks the server identity again before attempting recovery.
+Incomplete identities and failed identity checks never trigger a reload.
+Staged operations without browser recovery, including migration input, revision
+decisions, import configuration, and return-to-review reasons, must be finished
+or discarded first. Browser-storage failure leaves work in the current tab.
+Deployment checks must include an open release A updating to B with warm browser
+caches and a deliberately persistent mismatch that stops after one attempt.
+
 ## Browser inference assets
 
 The Trunk pre-build hook downloads the pinned ONNX Runtime Web archive using
