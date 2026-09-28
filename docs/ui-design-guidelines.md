@@ -517,7 +517,9 @@ non-intersection and scroll reachability as well as viewport containment.
 ### Annotation class groups
 
 The annotation workflow panel and drawer use one bordered group per class. The
-class name spans the heading above equal-width activity columns. Order configured
+class name is centered above equal-width activity columns. Center each type icon
+and activity label independently of selection and availability cues. Place those
+cues in a fixed, centered status row below the label so they never shift the icon. Order configured
 activities left to right: bounding-box annotation, migration, adding missing
 objects, then direct skeleton annotation when applicable. Omit unconfigured
 activities: one activity fills the card, two share it equally, and three use

@@ -3073,6 +3073,16 @@ fn class_workflow_configured_activities_share_width_evenly() {
         let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
         harness.run();
         let rects = labels.map(|label| harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect());
+        let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person").rect();
+        assert!((heading.center().x - (rects[0].left() + rects[2].right()) / 2.0).abs() <= 1.0);
+        for label in ["bounding box annotation type", "skeleton annotation type"] {
+            for icon in harness.query_all_by_label(label) {
+                let icon = icon.rect();
+                if let Some(tile) = rects.iter().find(|tile| tile.contains_rect(icon)) {
+                    assert!((icon.center().x - tile.center().x).abs() <= 1.0, "icon {icon:?} is off-center in {tile:?}");
+                }
+            }
+        }
         for pair in rects.windows(2) {
             assert!((pair[0].width() - pair[1].width()).abs() <= 1.0, "{rects:?}");
             assert_eq!(pair[0].top(), pair[1].top());

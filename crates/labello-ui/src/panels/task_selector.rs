@@ -257,8 +257,10 @@ impl LabelloApp {
                 let width = (ui.available_width() - frame.total_margin().sum().x).max(1.0);
                 frame.show(ui, |ui| {
                     ui.set_width(width);
-                    let heading = ui.add(
+                    let heading = ui.add_sized(
+                        [width, 0.0],
                         egui::Label::new(RichText::new(self.class_name(&class_id)).heading())
+                            .halign(egui::Align::Center)
                             .wrap(),
                     );
                     ui.ctx().accesskit_node_builder(heading.id, |node| {
@@ -456,7 +458,7 @@ impl LabelloApp {
                 content_id,
                 egui::vec2(
                     (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0),
-                    76.0,
+                    96.0,
                 ),
             ))
         } else {
@@ -479,7 +481,7 @@ impl LabelloApp {
         .min_size(egui::vec2(
             ui.available_width(),
             if activity.is_some() {
-                84.0
+                104.0
             } else {
                 Self::WORKFLOW_PILL_HEIGHT
             },
@@ -522,21 +524,36 @@ impl LabelloApp {
             });
         }
         if let Some(rect) = choice.rect(content_id) {
-            let icons = egui::Rect::from_center_size(
+            let icon_rect = egui::Rect::from_center_size(
                 egui::pos2(rect.center().x, rect.top() + Self::WORKFLOW_ICON_SIZE / 2.0),
-                egui::vec2(40.0, Self::WORKFLOW_ICON_SIZE),
+                egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
             );
-            let marker_rect =
-                egui::Rect::from_min_size(icons.min, egui::vec2(12.0, icons.height()));
-            let icon_rect =
-                egui::Rect::from_min_max(egui::pos2(marker_rect.right(), icons.top()), icons.max);
             workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
             if let Some(activity) = activity {
                 paint_workflow_activity_badge(ui, icon_rect, activity);
             }
-            paint_workflow_marker(ui, marker_rect, selected, reason);
+            let status_center = egui::pos2(rect.center().x, rect.bottom() - 9.0);
+            let reason_center = if selected && reason.is_some() {
+                status_center + egui::vec2(6.0, 0.0)
+            } else {
+                status_center
+            };
+            paint_workflow_marker(
+                ui,
+                egui::Rect::from_center_size(reason_center, egui::vec2(18.0, 18.0)),
+                false,
+                reason,
+            );
+            if selected {
+                let dot_center = if reason.is_some() {
+                    status_center - egui::vec2(11.0, 0.0)
+                } else {
+                    status_center
+                };
+                ui.painter().circle_filled(dot_center, 4.0, theme::TEXT);
+            }
             if let Some(galley) = galley {
-                let position = egui::pos2(rect.center().x, icons.bottom() + theme::SPACE_1);
+                let position = egui::pos2(rect.center().x, icon_rect.bottom() + theme::SPACE_1);
                 let color = ui.style().interact(&choice.response).fg_stroke.color;
                 ui.painter().galley(
                     position,
