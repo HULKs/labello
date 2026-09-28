@@ -411,10 +411,13 @@ impl LabelloApp {
 
     pub(crate) fn review_corrections_panel(&mut self, ui: &mut egui::Ui) {
         let count = self.review_object_targets().len();
-        if self.view != AppView::Review || self.work.assignment.is_none() {
+        if self.view != AppView::Review
+            || (self.work.assignment.is_none() && !self.work.retired_image)
+        {
             return;
         }
-        let ready = !self.loading.saving
+        let ready = !self.work.retired_image
+            && !self.loading.saving
             && !self.loading.image
             && !self.work.migration.busy
             && self.work.pending_transition.is_none()

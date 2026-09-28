@@ -77,7 +77,9 @@ qualify a term; compact synonyms must be listed in the glossary.
 - Keep loaded data visible during refresh. View-specific bars start blank with
   their layout space reserved. Within the same view and workflow, retain their
   last loaded contents during image navigation and disable retained controls.
-  Loading feedback belongs in the image region. Never show zero placeholders
+  Loading feedback is visible only on initial view entry. Subsequent image loads
+  retain the previous canvas and inspector until the replacement is ready;
+  routine background reads keep loaded data visible without refresh indicators. Never show zero placeholders
   after failure or present retained contents as newly loaded data. The global
   top bar stays visible and keeps its layout during loads.
 - Put validation and failures in the affected field, section, or page. Reserve
@@ -405,8 +407,9 @@ right. Pending candidates, hover and keyboard focus never acquire the dot.
 Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
 stops or accessible names. Keep the selected fill/border and semantic selection.
-Saving precedes image loading, then a pending transition, then availability.
-Retained known restrictions precede checking during refresh. Unknown or failed
+Saving precedes initial image loading, then a pending transition, then availability.
+Once an image is displayed, image loads and availability refreshes are silent.
+Retained known restrictions remain visible during refresh. Unknown or failed
 availability alone never disables selection. A static segmented spinner avoids
 continuous animation. Specific server reasons require a supported workflow-wide
 result; mixed restrictions remain generic. Panel and drawer use the same renderer.

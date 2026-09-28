@@ -255,9 +255,6 @@ impl LabelloApp {
             if page.items.len() < page.total_items {
                 ui.weak(format!("{} listed", page.items.len()));
             }
-            if loading {
-                ui.spinner();
-            }
         });
         if page.items.is_empty() {
             ui.label("No images match these filters.");

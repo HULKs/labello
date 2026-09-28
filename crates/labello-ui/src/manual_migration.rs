@@ -412,7 +412,8 @@ impl LabelloApp {
                 && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage)));
         let can_start_missing = self.migration_can_add_missing_object();
         let mut interaction = CanvasInteraction {
-            editable: !self.work.migration.busy
+            editable: !self.workspace_bars_loading()
+                && !self.work.migration.busy
                 && self.work.migration.inspected_group_id.is_none()
                 && (skeleton_editable || can_start_missing || !selectable_annotations.is_empty()),
             allow_create: skeleton_editable || can_start_missing,
@@ -523,6 +524,9 @@ impl LabelloApp {
                     egui::StrokeKind::Inside,
                 );
             }
+        }
+        if self.workspace_bars_loading() {
+            return;
         }
         let action = framed.inner;
         if self.work.correction_draft.is_some() {

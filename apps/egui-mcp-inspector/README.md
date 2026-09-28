@@ -222,9 +222,9 @@ message-first ordering, scrolling, dismissal and the short-viewport feedback win
 behavior.
 
 The `review-initial-load`, `review-next-image`, and `migration-next-image`
-presets freeze an image request with no active image. Initial review leaves
+presets freeze an image request with no active assignment. Initial review leaves
 the context and action bars blank; next-image presets retain the preceding
-view's disabled bar presentation. They exercise the shared presentation owner,
+view's canvas, inspector context and disabled bar presentation. They exercise the shared presentation owner,
 not live networking. Use Chromium with delayed responses for the actual request
 transition.
 

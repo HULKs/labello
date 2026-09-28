@@ -19,12 +19,14 @@ impl eframe::App for LabelloApp {
             self.work.review_details_focus_return = None;
         }
         self.retry_prefetch_if_due(ui.ctx());
-        self.sync_review_selection();
-        self.sync_missing_objects();
-        self.work.canvas.require_pan_mode(false);
-        self.sync_manual_migration();
-        self.sync_review_editor();
-        self.sync_prelabel_review();
+        if !self.work.retired_image {
+            self.sync_review_selection();
+            self.sync_missing_objects();
+            self.work.canvas.require_pan_mode(false);
+            self.sync_manual_migration();
+            self.sync_review_editor();
+            self.sync_prelabel_review();
+        }
         self.start_next_persistence_command();
         self.start_setup_load();
         if !self.builds.checked && !self.builds.loading && self.runtime.api.is_some() {

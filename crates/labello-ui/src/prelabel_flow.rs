@@ -120,6 +120,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn refresh_prelabels_if_due(&mut self, ctx: &egui::Context) {
+        if self.work.retired_image {
+            return;
+        }
         if !self.auth.prelabel_available {
             self.cancel_prelabel_load();
             return;

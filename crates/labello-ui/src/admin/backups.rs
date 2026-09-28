@@ -40,15 +40,9 @@ impl LabelloApp {
                 {
                     self.request_snapshots();
                 }
-                if self.loading.snapshots {
+                if self.loading.snapshots && !self.admin.snapshots_loaded && self.admin.snapshots.is_empty() {
                     ui.spinner();
-                    ui.small(
-                        if self.admin.snapshots_loaded || !self.admin.snapshots.is_empty() {
-                            "Refreshing snapshots..."
-                        } else {
-                            "Loading snapshots..."
-                        },
-                    );
+                    ui.small("Loading snapshots...");
                 }
             });
 

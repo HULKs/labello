@@ -37,7 +37,7 @@ impl LabelloApp {
                     self.work.availability.loading = false;
                     self.work.availability.last_attempt = Some(Instant::now());
                     if std::mem::take(&mut self.work.availability.refresh_after_load) {
-                        let migration_active = self.manual_migration_active();
+                        let migration_active = self.manual_migration_active() && !self.work.retired_image;
                         if !migration_active {
                             self.work.availability.tasks.clear();
                             self.work.availability.reasons.clear();

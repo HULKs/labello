@@ -859,7 +859,7 @@ fn statistics_overlay_remote_states_and_close_fit_supported_viewports() {
         harness.state_mut().datasets.stats_error = None;
         harness.state_mut().loading.stats = true;
         harness.step();
-        assert!(harness.query_by_label("Refreshing statistics").is_some());
+        assert!(harness.query_by_label("Refreshing statistics").is_none());
         assert!(harness.query_by_label("Metric Images").is_some());
         harness.state_mut().loading.stats = false;
         harness.state_mut().datasets.stats = DatasetStats::default();

@@ -174,6 +174,7 @@ impl LabelloApp {
         });
         self.work.assignment_touched = same_assignment && self.assignment_has_work();
         self.work.migration = Default::default();
+        self.work.retired_image = false;
         self.work.assignment = Some(loaded.assignment);
         self.work.current = Some(loaded.queued);
         self.work.current_state = Some(loaded.state.clone());
@@ -262,7 +263,7 @@ impl LabelloApp {
         }
         if let Some(crate::app::PendingTransition::PreviousAssignment(assignment)) = transition {
             self.work.previous_assignment = Some(assignment.clone());
-            self.clear_current_image();
+            self.retire_current_image();
             self.request_reopen_assignment(assignment);
             return;
         }
@@ -281,7 +282,7 @@ impl LabelloApp {
         if self.promote_prepared_assignment(ctx, released_image_id) {
             return;
         }
-        self.clear_current_image();
+        self.retire_current_image();
         self.request_next_image();
     }
 

@@ -977,7 +977,7 @@ fn stats_remote_states_never_replace_real_data_with_placeholders() {
     harness.state_mut().datasets.stats_error = None;
     harness.state_mut().loading.stats = true;
     harness.step();
-    assert!(harness.query_by_label("Refreshing statistics").is_some());
+    assert!(harness.query_by_label("Refreshing statistics").is_none());
     assert!(harness.query_by_label("Metric Images").is_some());
 
     harness.state_mut().loading.stats = false;

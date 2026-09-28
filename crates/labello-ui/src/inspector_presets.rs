@@ -254,10 +254,16 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             );
             app.sync_review_selection();
             app.sync_manual_migration();
+            app.sync_review_editor();
             if preset != InspectorPreset::ReviewInitialLoad {
+                app.work.inspector_panel_collapsed = false;
                 app.sync_workspace_bars();
             }
-            app.clear_current_image();
+            if preset == InspectorPreset::ReviewInitialLoad {
+                app.clear_current_image();
+            } else {
+                app.retire_current_image();
+            }
             app.loading.image = true;
             app
         }

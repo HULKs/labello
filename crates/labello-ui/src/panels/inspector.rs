@@ -26,6 +26,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn right_panel(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
+        if self.workspace_bars_loading() { ui.disable(); }
         ui.heading(RichText::new(crate::glossary::INSPECTOR).color(theme::TEXT));
         if self.view == AppView::Review && !self.review_context_section(ui) {
             return;
@@ -250,11 +251,11 @@ impl LabelloApp {
     }
 
     fn review_context_section(&self, ui: &mut egui::Ui) -> bool {
-        let Some(context) = self.review_context() else {
+        let Some(context) = self.displayed_inspector_context() else {
             theme::inline_message(
                 ui,
                 theme::Intent::Info,
-                if self.loading.image {
+                if self.loading.image && self.initial_workspace_load() {
                     "Loading review target…"
                 } else if self.work.assignment.is_none() {
                     "No active review assignment"

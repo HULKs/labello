@@ -341,10 +341,7 @@ fn short_review_availability_feedback_preserves_type_phase_and_canvas_allocation
         assert_eq!(harness.get_by_label("Workspace context bar").rect().height(), bar.height());
         assert!(after.height() >= 44.0);
         assert_review_bar_paints(&harness, "Item 1 / 1");
-        let details = harness.get_by_label_contains("Review details: Workflow:").rect();
-        let spinner = harness.get_by_label("Loading workflow assignment availability").rect();
-        assert!(details.contains_rect(spinner), "loading feedback shares the identity line: {spinner:?} in {details:?}");
-        assert!(spinner.bottom() <= details.top() + details.height() / 2.0);
+        assert!(harness.query_by_label("Loading workflow assignment availability").is_none());
         assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment);
         harness.get_by_role_and_label(egui::accesskit::Role::Button, "Inspector").focus();
         harness.key_press(egui::Key::Enter);

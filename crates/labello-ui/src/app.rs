@@ -420,6 +420,8 @@ pub struct WorkState {
     pub(crate) reason_notice: Option<crate::workflow_reasons::ReasonNotice>,
     pub(crate) tool: Tool,
     pub(crate) assignment: Option<Assignment>,
+    // The remaining image fields are display-only until replacement or failure.
+    pub(crate) retired_image: bool,
     pub(crate) previous_assignment: Option<Assignment>,
     pub(crate) previous_prelabel_decisions:
         Option<crate::prelabel_review::PreviousPrelabelDecisions>,

@@ -40,7 +40,7 @@ impl LabelloApp {
                         Ok(None) => {
                             self.work.one_shot_excluded_image_id = None;
                             self.runtime.persistence.expected_assignment = None;
-                            self.work.assignment = None;
+                            self.clear_current_image();
                             self.runtime.error = None;
                             self.runtime.notice = Some(
                                 match self.view {
@@ -60,6 +60,7 @@ impl LabelloApp {
                                 self.work.one_shot_excluded_image_id = None;
                             }
                             self.runtime.persistence.expected_assignment = None;
+                            if self.work.retired_image { self.clear_current_image(); }
                             self.work.assignment = assignment;
                             self.runtime.error = Some(error.to_string());
                             self.request_assignment_availability();
@@ -124,7 +125,7 @@ impl LabelloApp {
                             self.release_reservation(dataset_id, cached.assignment);
                             self.runtime.error = None;
                             if !self.promote_prepared_assignment(ctx, None) {
-                                self.clear_current_image();
+                                self.retire_current_image();
                                 self.request_next_image();
                             }
                         }
@@ -425,7 +426,7 @@ impl LabelloApp {
                                         self.remember_previous_assignment(assignment);
                                     }
                                     if !self.promote_prepared_assignment(ctx, None) {
-                                        self.clear_current_image();
+                                        self.retire_current_image();
                                     }
                                 }
                             }
@@ -473,7 +474,7 @@ impl LabelloApp {
                             self.runtime.error = None;
                             self.request_stats();
                             if !self.promote_prepared_assignment(ctx, None) {
-                                self.clear_current_image();
+                                self.retire_current_image();
                             }
                             self.assignment_availability_mutation_completed(
                                 request
