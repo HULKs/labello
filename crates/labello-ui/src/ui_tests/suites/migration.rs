@@ -74,6 +74,11 @@ fn active_migration_discards_stale_availability_without_rechecking() {
         .with_size(egui::vec2(1440.0, 900.0))
         .build_eframe(|_| app);
     harness.step();
+    harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Person: Bounding box annotation · Choose workflow",
+    ).click();
+    harness.run();
     let unavailable_workflow = harness.get_by_role_and_label(
         egui::accesskit::Role::Button,
         "Person: Bounding box annotation · Imported person bounding-box cleanup",
