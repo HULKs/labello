@@ -254,12 +254,14 @@ impl LabelloApp {
                         node.set_role(egui::accesskit::Role::Heading);
                         node.set_label(self.class_name(&class_id));
                     });
-                    for activity in [
+                    let activities: Vec<_> = [
                         WorkflowActivity::Boxes,
                         WorkflowActivity::Migration,
                         WorkflowActivity::MissingObjects,
                         WorkflowActivity::Skeleton,
-                    ] {
+                    ]
+                    .into_iter()
+                    .filter_map(|activity| {
                         let matching: Vec<_> = entries
                             .iter()
                             .filter(|entry| {
@@ -269,54 +271,23 @@ impl LabelloApp {
                                         && primary == WorkflowActivity::Migration)
                             })
                             .collect();
-                        if matching.is_empty() && activity != WorkflowActivity::Skeleton {
-                            self.unconfigured_workflow_entry(ui, &class_id, activity);
+                        (!matching.is_empty()).then_some((activity, matching))
+                    })
+                    .collect();
+                    ui.columns(activities.len(), |columns| {
+                        for (column, (activity, matching)) in columns.iter_mut().zip(activities) {
+                            column.spacing_mut().button_padding.x = theme::SPACE_1;
+                            for workflow in matching {
+                                column.push_id((&workflow.task_id, activity.label()), |ui| {
+                                    self.workflow_entry(ui, workflow, Some(activity))
+                                });
+                            }
                         }
-                        for workflow in matching {
-                            ui.push_id((&workflow.task_id, activity.label()), |ui| {
-                                self.workflow_entry(ui, workflow, Some(activity))
-                            });
-                        }
-                    }
+                    });
                 });
             });
             ui.add_space(theme::SPACE_2);
         }
-    }
-
-    fn unconfigured_workflow_entry(
-        &self,
-        ui: &mut egui::Ui,
-        class_id: &labello_domain::ClassId,
-        activity: WorkflowActivity,
-    ) {
-        let reason = match activity {
-            WorkflowActivity::Boxes => "Bounding box annotation is not configured for this class.",
-            _ if self.work.tasks.iter().any(|task| {
-                task.class_ids.first() == Some(class_id)
-                    && task.manual_box_guide_migration.is_some()
-            }) =>
-            {
-                "Migration is not active on this image. Use skeleton annotation."
-            }
-            _ => "Migration is not configured for this class.",
-        };
-        let response = ui.add_enabled(
-            false,
-            egui::Button::new(activity.label())
-                .min_size(egui::vec2(ui.available_width(), 44.0))
-                .truncate(),
-        );
-        response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::WidgetType::Button,
-                false,
-                format!("{}: {}", self.class_name(class_id), activity.label()),
-            )
-        });
-        ui.ctx()
-            .accesskit_node_builder(response.id, |node| node.set_description(reason));
-        response.on_disabled_hover_text(reason);
     }
 
     fn workflow_entry(
@@ -345,17 +316,18 @@ impl LabelloApp {
             && self.work.pending_transition.is_none();
         let label = self.workflow_entry_label(workflow, activity);
         let text: egui::WidgetText = if let Some(activity) = activity {
-            let width = (ui.available_width()
-                - 2.0 * ui.spacing().button_padding.x
-                - Self::WORKFLOW_MARKER_WIDTH
-                - Self::WORKFLOW_ICON_SIZE
-                - 2.0 * theme::SPACE_2)
-                .max(1.0);
+            let width = (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0);
             let mut job = egui::text::LayoutJob::default();
             job.wrap.max_width = width;
             job.wrap.max_rows = 3;
+            job.halign = egui::Align::Center;
             job.append(
-                activity.label(),
+                match activity {
+                    WorkflowActivity::Boxes => "Boxes",
+                    WorkflowActivity::Migration => "Migrate",
+                    WorkflowActivity::MissingObjects => "Missing\nobjects",
+                    WorkflowActivity::Skeleton => "Skeleton",
+                },
                 0.0,
                 egui::TextFormat {
                     font_id: egui::TextStyle::Button.resolve(ui.style()),
@@ -391,17 +363,36 @@ impl LabelloApp {
             && self.displayed_workflow_availability(&workflow.task_id) == Some(false);
         let icon_id = ui.id().with(("workflow-type", &workflow.task_id));
         let marker_id = ui.id().with(("workflow-selection", &workflow.task_id));
-        let button = egui::Button::new((
-            egui::Atom::custom(
-                marker_id,
-                egui::vec2(Self::WORKFLOW_MARKER_WIDTH, Self::WORKFLOW_ICON_SIZE),
-            ),
-            egui::Atom::custom(
-                icon_id,
-                egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
-            ),
-            text,
-        ))
+        let content_id = ui.id().with("workflow-content");
+        let galley = activity.map(|_| {
+            text.clone().into_galley(
+                ui,
+                Some(egui::TextWrapMode::Truncate),
+                ui.available_width(),
+                egui::TextStyle::Button,
+            )
+        });
+        let button = if activity.is_some() {
+            egui::Button::new(egui::Atom::custom(
+                content_id,
+                egui::vec2(
+                    (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0),
+                    88.0,
+                ),
+            ))
+        } else {
+            egui::Button::new((
+                egui::Atom::custom(
+                    marker_id,
+                    egui::vec2(Self::WORKFLOW_MARKER_WIDTH, Self::WORKFLOW_ICON_SIZE),
+                ),
+                egui::Atom::custom(
+                    icon_id,
+                    egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
+                ),
+                text,
+            ))
+        }
         .selected(selected)
         .frame(true)
         .frame_when_inactive(true)
@@ -409,7 +400,7 @@ impl LabelloApp {
         .min_size(egui::vec2(
             ui.available_width(),
             if activity.is_some() {
-                64.0
+                112.0
             } else {
                 Self::WORKFLOW_PILL_HEIGHT
             },
@@ -444,11 +435,32 @@ impl LabelloApp {
                 node.set_description(description);
             });
         }
-        if let Some(icon_rect) = choice.rect(icon_id) {
+        if let Some(rect) = choice.rect(content_id) {
+            let icons = egui::Rect::from_center_size(
+                egui::pos2(rect.center().x, rect.top() + Self::WORKFLOW_ICON_SIZE / 2.0),
+                egui::vec2(40.0, Self::WORKFLOW_ICON_SIZE),
+            );
+            let marker_rect =
+                egui::Rect::from_min_size(icons.min, egui::vec2(12.0, icons.height()));
+            let icon_rect =
+                egui::Rect::from_min_max(egui::pos2(marker_rect.right(), icons.top()), icons.max);
             workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
-        }
-        if let Some(marker_rect) = choice.rect(marker_id) {
             paint_workflow_marker(ui, marker_rect, selected, reason);
+            if let Some(galley) = galley {
+                let position = egui::pos2(rect.center().x, icons.bottom() + theme::SPACE_1);
+                ui.painter().galley(
+                    position,
+                    galley,
+                    ui.style().interact(&choice.response).fg_stroke.color,
+                );
+            }
+        } else {
+            if let Some(icon_rect) = choice.rect(icon_id) {
+                workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
+            }
+            if let Some(marker_rect) = choice.rect(marker_id) {
+                paint_workflow_marker(ui, marker_rect, selected, reason);
+            }
         }
         let mut hover_text = format!(
             "{} workflow\nPrevious: {} · Next: {}",

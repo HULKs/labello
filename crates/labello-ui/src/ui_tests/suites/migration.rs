@@ -3016,7 +3016,7 @@ fn class_workflow_migration_configuration_keeps_direct_skeleton_assignments_acce
     let entry = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
     assert!(!entry.accesskit_node().is_disabled());
     assert_eq!(entry.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
-    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Migration").accesskit_node().is_disabled());
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Migration").is_none());
 }
 
 #[cfg(feature = "inspector-presets")]
@@ -3042,5 +3042,36 @@ fn class_workflow_missing_objects_is_keyboard_reachable_in_scrolling_drawers() {
         harness.key_press(egui::Key::Enter);
         harness.run();
         assert!(harness.state().work.migration.adding_missing_object);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn class_workflow_configured_activities_share_width_evenly() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    use crate::panels::WorkflowActivity;
+    for (width, height) in [(320.0, 568.0), (390.0, 844.0), (1440.0, 1000.0)] {
+        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+        let selected = app.work.selected_task_id.clone().unwrap();
+        app.work.tasks.retain(|task| task.task_id == selected || task.annotation_type == AnnotationType::BoundingBox);
+        app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
+        let choices = app.workflow_choices();
+        let boxes = choices.iter().find(|choice| choice.annotation_type == AnnotationType::BoundingBox).unwrap();
+        let migration = app.selected_workflow().unwrap();
+        let labels = [
+            app.workflow_entry_label(boxes, Some(WorkflowActivity::Boxes)),
+            app.workflow_entry_label(&migration, Some(WorkflowActivity::Migration)),
+            app.workflow_entry_label(&migration, Some(WorkflowActivity::MissingObjects)),
+        ];
+        let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
+        harness.run();
+        let rects = labels.map(|label| harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect());
+        for pair in rects.windows(2) {
+            assert!((pair[0].width() - pair[1].width()).abs() <= 1.0, "{rects:?}");
+            assert_eq!(pair[0].top(), pair[1].top());
+            assert_eq!(pair[0].height(), pair[1].height());
+            assert!(pair[0].right() < pair[1].left(), "{rects:?}");
+        }
+        assert!(rects[0].left() >= 0.0 && rects[2].right() <= width, "{rects:?}");
     }
 }

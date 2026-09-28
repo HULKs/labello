@@ -550,12 +550,14 @@ no cross-dataset atomic snapshot or large-server performance guarantee.
 ## Class workflow navigation
 
 In Annotate, `panels/task_selector.rs` groups enabled one-class tasks under their
-class identity. Each group orders bounding-box annotation, migration, and
-missing-object entries, followed by direct skeleton annotation when configured.
-Multiple tasks retain their names and IDs. Review keeps its task selector.
+class identity. Each class is one card with its name above equal-width activity
+columns: bounding-box annotation, migration, missing objects, and direct skeleton
+annotation when applicable. Unconfigured activities do not take up columns;
+multiple tasks within one activity stack inside its column and retain their
+names and IDs. Review keeps its task selector.
 The annotation panel has bounded width; task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
-task. Unconfigured activities remain disabled with an explanation.
+task. Temporarily blocked configured activities remain disabled with an explanation.
 
 Missing-object selection reflects the authoritative migration full-image cursor.
 The entry begins a missing-object draft only when that phase is active; repeated

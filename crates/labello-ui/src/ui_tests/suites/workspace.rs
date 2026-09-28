@@ -170,7 +170,7 @@ fn workers_select_class_specific_workflows() {
 }
 
 #[test]
-fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
+fn workflow_selector_divides_each_class_into_equal_activity_columns() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     let mut skeleton = harness.state().work.tasks[0].clone();
@@ -201,7 +201,7 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
             "Person: Skeleton annotation · Person skeleton with a deliberately long workflow name",
         )
         .rect();
-    assert_eq!(bounding_box.width(), vehicle.width());
+    assert!((skeleton.right() - bounding_box.left() - vehicle.width()).abs() < 2.0, "{bounding_box:?} {skeleton:?} {vehicle:?}");
     assert_eq!(bounding_box.width(), skeleton.width());
     assert_eq!(bounding_box.height(), vehicle.height());
     assert_eq!(bounding_box.height(), skeleton.height());
@@ -209,9 +209,9 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
         bounding_box.width() <= 340.0,
         "long task names must not expand the panel: {bounding_box:?}"
     );
-    assert!(bounding_box.height() <= 64.0);
+    assert!(bounding_box.height() <= 112.0);
     assert!(
-        skeleton.top() > bounding_box.bottom(),
+        skeleton.left() > bounding_box.right() && skeleton.top() == bounding_box.top(),
         "bounding_box={bounding_box:?} skeleton={skeleton:?}"
     );
     assert!(
@@ -4693,7 +4693,7 @@ fn automatic_workflow_change_distinguishes_same_names_and_retains_types() {
 }
 
 #[test]
-fn annotation_workflows_have_class_headings_and_unconfigured_activities() {
+fn annotation_workflows_omit_unconfigured_activities() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     harness.run();
     let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person");
@@ -4701,18 +4701,7 @@ fn annotation_workflows_have_class_headings_and_unconfigured_activities() {
         egui::accesskit::Role::Button,
         "Person: Bounding box annotation · Person boxes",
     );
-    let migration = harness.get_by_role_and_label(
-        egui::accesskit::Role::Button,
-        "Person: Migration",
-    );
-    let missing = harness.get_by_role_and_label(
-        egui::accesskit::Role::Button,
-        "Person: Add missing objects",
-    );
     assert!(heading.rect().bottom() < boxes.rect().top());
-    assert!(boxes.rect().bottom() < migration.rect().top());
-    assert!(migration.rect().bottom() < missing.rect().top());
-    assert!(migration.accesskit_node().is_disabled());
-    assert!(missing.accesskit_node().is_disabled());
-    assert_eq!(migration.accesskit_node().description().as_deref(), Some("Migration is not configured for this class."));
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Migration").is_none());
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Add missing objects").is_none());
 }

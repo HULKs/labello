@@ -517,17 +517,20 @@ non-intersection and scroll reachability as well as viewport containment.
 ### Annotation class groups
 
 The annotation workflow panel and drawer use one bordered group per class. The
-class is the heading; bounding-box annotation, migration, and adding missing
-objects are subordinate activities in that order. Keep task names below their
-activity labels so multiple workflows for one class remain distinguishable.
-Direct skeleton workflows have a separate Skeleton annotation entry. Show
-unconfigured activities as disabled with an explanation, and do not present
-migration as active on images that support only direct skeleton annotation.
+class name spans the heading above equal-width activity columns. Order configured
+activities left to right: bounding-box annotation, migration, adding missing
+objects, then direct skeleton annotation when applicable. Omit unconfigured
+activities: one activity fills the card, two share it equally, and three use
+thirds. Keep task names below activity labels and stack multiple tasks within
+their activity column. Compact labels retain full activity and task names in
+accessible names and tooltips. Configured activities that are temporarily blocked
+remain visible with an explanation. Do not present migration as active on images
+that support only direct skeleton annotation.
 
 The selected marker follows the current activity, including the missing-object
 phase at full-image confirmation. Adding objects cannot skip outstanding guide
 work. Returning to Migration uses the existing revisit and draft-discard flow.
 Preserve task selection and review behavior. Keep the annotation panel bounded
 at 340 logical points, cap drawers to the viewport, wrap class headings, and
-retain complete accessible names and task names in tooltips. Focused rows scroll
+retain complete accessible names and task names in tooltips. Focused activities scroll
 into view; long task text must not widen the canvas layout.
