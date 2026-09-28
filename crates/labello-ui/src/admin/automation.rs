@@ -2,7 +2,7 @@ impl LabelloApp {
     fn admin_automation(&mut self, ui: &mut egui::Ui) {
         ui.heading(crate::glossary::AUTOMATION);
         ui.label(
-            RichText::new("Configure preloading, prelabels, and assignment balancing.").color(theme::TEXT_MUTED),
+            RichText::new("Configure box visibility, preloading, prelabels, and assignment balancing.").color(theme::TEXT_MUTED),
         );
         let enabled = !self.loading.admin
             && self.loading.roles_user.is_none()
@@ -27,6 +27,16 @@ impl LabelloApp {
                             .labelled_by(label.id);
                     });
                     ui.small("Preload upcoming annotation and review work. Larger queues use more memory and reserve more work. Balance limits may keep the queue below this target.");
+                });
+                admin_card(ui, "Overlapping boxes card", |ui| {
+                    ui.heading("Overlapping boxes");
+                    ui.horizontal_wrapped(|ui| {
+                        let label = ui.label("IoU threshold");
+                        ui.add(egui::DragValue::new(&mut config.bounding_box_visibility.iou_threshold)
+                            .range(0.0..=1.0).speed(0.01).max_decimals(2))
+                            .labelled_by(label.id);
+                    });
+                    ui.small("Hide same-class boxes above this overlap within each image. Prefer approved, then unreviewed boxes; use stable object IDs for ties. Stored annotations and exports are preserved. Set 1 to show all boxes.");
                 });
                 if prelabel_available {
                     edit_prelabels(ui, &mut config.prelabel_configs, &mut config.tasks, &config.label_classes, &mut self.admin.prelabels.model_checks, &mut model_checks);

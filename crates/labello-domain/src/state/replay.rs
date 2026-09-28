@@ -2,6 +2,20 @@ use super::*;
 
 impl ImageState {
     pub fn apply_event(&mut self, event: &EventLogEntry) -> DomainResult<()> {
+        if let Some(policy) = event.bounding_box_visibility
+            && self.bounding_box_visibility != Some(policy)
+        {
+            policy.validate()?;
+            let mut next = self.clone();
+            next.bounding_box_visibility = Some(policy);
+            next.apply_event_payload(event)?;
+            *self = next;
+            return Ok(());
+        }
+        self.apply_event_payload(event)
+    }
+
+    fn apply_event_payload(&mut self, event: &EventLogEntry) -> DomainResult<()> {
         if event.image_id != self.image_id {
             return Err(DomainError::ImageMismatch {
                 expected: self.image_id.to_string(),
@@ -312,7 +326,7 @@ impl ImageState {
             }
         }
         if terminal
-            && self.active_annotations().any(|annotation| {
+            && self.visible_annotations().any(|annotation| {
                 annotation.task_id == task_state.task_id
                     && matches!(
                         &annotation.origin,

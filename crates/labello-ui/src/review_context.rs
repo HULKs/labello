@@ -191,14 +191,7 @@ impl LabelloApp {
         let (target, phase, annotation_id) = if self.manual_migration_active() {
             self.migration_review_context_target(&canonical_targets)?
         } else {
-            let objects = self
-                .work
-                .annotations
-                .iter()
-                .filter(|annotation| {
-                    !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-                })
-                .collect::<Vec<_>>();
+            let objects = self.annotation_objects();
             let displayed_targets = objects
                 .iter()
                 .map(|annotation| ReviewTarget::AnnotationVersion {

@@ -664,3 +664,14 @@ and writes a human accepted/edited revision through the existing assignment
 transaction. Raw client provenance cannot substitute for evidence. Historical
 prelabel revision sources remain readable. See [Model prelabels](prelabels.md)
 for binding, reset, trust, resource limits, and failure behavior.
+
+### Bounding-box visibility configuration
+
+Dataset metadata and `UpdateDatasetConfigRequest` include
+`boundingBoxVisibility: { "iouThreshold": 0.9 }`, defaulting to 0.9 when omitted.
+The existing data-admin configuration route owns updates. Values must be finite
+and within `[0, 1]`; invalid JSON values fail extraction. Image state responses
+retain all annotation records and carry the current visibility policy so shared
+clients can filter consistently. The policy does not authorize mutation of
+hidden records or bypass assignment ownership. See
+[configuration](configuration.md) and [workflow policy](workflow-policy.md#overlapping-box-visibility).

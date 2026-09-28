@@ -90,6 +90,11 @@ review workflow and [verification](docs/verification.md) defines additional
 checks. Build the browser distribution with `trunk build --release --locked`
 from `apps/labello-wasm`.
 
+Overlapping bounding boxes of the same class are hidden within each image using
+an administrator-configurable IoU threshold, default 0.9. Their records remain
+in the dataset. See [configuration](docs/configuration.md) for winner selection,
+migration behavior, and export preservation.
+
 ## Current limitations
 
 Labello is under active development. These boundaries matter when choosing it:

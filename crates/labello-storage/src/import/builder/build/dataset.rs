@@ -406,6 +406,7 @@ pub(super) async fn build(
             migration_target_sets,
         };
         let event = EventLogEntry {
+            bounding_box_visibility: None,
             schema_version: SCHEMA_VERSION,
             event_sequence: 1,
             event_id: EventId::from(deterministic_id(

@@ -6,6 +6,7 @@
 
 pub mod annotation;
 pub mod assignment;
+pub mod box_visibility;
 pub mod dataset;
 pub mod error;
 pub mod event;
@@ -28,6 +29,7 @@ pub mod user;
 
 pub use annotation::*;
 pub use assignment::*;
+pub use box_visibility::*;
 pub use dataset::*;
 pub use error::*;
 pub use event::*;

@@ -2745,3 +2745,58 @@ async fn preload_claims_apply_projected_balance_and_accept_large_exclusion_lists
     let invalid = claim_assignment_with_body(&app, "admin", json!({"taskId": "bounding_box:pixel", "kind": "annotation", "prefetch": true, "assignmentId": current["assignmentId"]})).await;
     assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn bounding_box_visibility_configuration_is_admin_owned_validated_and_persisted() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/datasets/ds/admin")
+                .header("x-test-user-id", "admin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(config["boundingBoxVisibility"]["iouThreshold"], json!(0.9));
+    for (actor, threshold, expected) in [
+        ("admin", 0.95, StatusCode::OK),
+        ("intruder", 0.5, StatusCode::UNAUTHORIZED),
+        ("other_annotator", 0.5, StatusCode::UNAUTHORIZED),
+        ("admin", -0.1, StatusCode::UNPROCESSABLE_ENTITY),
+        ("admin", 1.1, StatusCode::UNPROCESSABLE_ENTITY),
+    ] {
+        config["boundingBoxVisibility"]["iouThreshold"] = json!(threshold);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/datasets/ds/admin")
+                    .header("x-test-user-id", actor)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(config.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    let reopened = labello_storage::DatasetRepository::new(temp.path().join("ds"));
+    assert_eq!(
+        reopened
+            .load_dataset_config()
+            .await
+            .unwrap()
+            .bounding_box_visibility.iou_threshold,
+        0.95
+    );
+}

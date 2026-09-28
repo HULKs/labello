@@ -340,6 +340,7 @@ impl DatasetRepository {
             let mut event = original.clone();
             event.event_sequence = next_state.current_sequence + 1;
             event.image_id = image_id.clone();
+            event.bounding_box_visibility = next_state.bounding_box_visibility;
             next_state.apply_event(&event)?;
             resequenced.push(event);
         }

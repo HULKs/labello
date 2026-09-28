@@ -246,6 +246,8 @@ pub struct EventLogEntry {
     pub actor_role: DatasetRole,
     pub timestamp: Timestamp,
     pub payload: EventPayload,
+    /// Server-selected query policy used to validate this event. Absent in historical events.
+    pub bounding_box_visibility: Option<crate::BoundingBoxVisibility>,
 }
 
 mod validation;

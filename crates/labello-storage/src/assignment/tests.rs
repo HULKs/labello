@@ -5046,3 +5046,5 @@ async fn polling_reuses_image_facts_after_configuration_changes_and_prunes_remov
     assert!(repo.active_lease_holders().await.unwrap().is_empty());
     assert!(repo.polling_images.lock().is_empty());
 }
+
+mod box_visibility;

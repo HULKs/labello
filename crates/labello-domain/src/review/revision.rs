@@ -58,7 +58,11 @@ impl ImageState {
                 })?;
             let mut canonical = set.targets.iter().collect::<Vec<_>>();
             canonical.sort_by_key(|target| target.sequence_index);
+            let skipped = self.skipped_migration_groups(&task.task_id);
             for target in canonical {
+                if skipped.contains(&target.object_group_id) {
+                    continue;
+                }
                 let disposition = self
                     .migration_dispositions
                     .get(&task.task_id)
@@ -100,7 +104,7 @@ impl ImageState {
             );
         } else {
             targets.extend(
-                self.active_annotations()
+                self.visible_annotations()
                     .filter(|annotation| annotation.task_id == task.task_id)
                     .map(|annotation| ReviewTarget::AnnotationVersion {
                         annotation_id: annotation.annotation_id.clone(),
@@ -301,7 +305,16 @@ impl ImageState {
             self.migration_confirmations.get(&task.task_id),
         ))
         .expect("review context contains serializable domain data");
-        blake3::hash(&bytes).to_hex().to_string()
+        let exclusions = self.bounding_box_exclusions();
+        if !exclusions.is_empty() {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(&bytes);
+            hasher.update(b"box-visibility-v1");
+            hasher.update(&serde_json::to_vec(&exclusions).expect("serializable exclusion IDs"));
+            hasher.finalize().to_hex().to_string()
+        } else {
+            blake3::hash(&bytes).to_hex().to_string()
+        }
     }
 }
 

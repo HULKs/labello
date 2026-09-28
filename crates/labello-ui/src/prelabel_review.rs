@@ -58,6 +58,15 @@ impl LabelloApp {
         if self.view != AppView::Annotate || self.manual_migration_active() || self.loading.image {
             return;
         }
+        let excluded = self.work_box_exclusions();
+        if self
+            .work
+            .selected_annotation
+            .as_ref()
+            .is_some_and(|id| excluded.contains_key(id))
+        {
+            self.work.selected_annotation = None;
+        }
         let hints = self.visible_prelabels();
         let was_pending = self.work.selected_annotation.as_ref().is_some_and(|id| {
             self.work
@@ -95,6 +104,18 @@ impl LabelloApp {
                 suggestion: hint.clone(),
             });
         }
+        if self.work.selected_annotation.as_ref().is_some_and(|id| {
+            self.work
+                .annotations
+                .iter()
+                .any(|annotation| &annotation.annotation_id == id)
+                && !self
+                    .annotation_objects()
+                    .iter()
+                    .any(|annotation| &annotation.annotation_id == id)
+        }) {
+            self.work.selected_annotation = None;
+        }
         let pending = self.pending_prelabel_objects();
         let empty = pending.is_empty();
         let selection_visible = pending.iter().any(|item| {
@@ -129,13 +150,60 @@ impl LabelloApp {
         })
     }
 
+    pub(crate) fn work_box_exclusions(
+        &self,
+    ) -> std::collections::BTreeMap<labello_domain::AnnotationId, labello_domain::AnnotationId>
+    {
+        let empty = labello_domain::ImageState::new("visibility".into());
+        let state = self.work.current_state.as_ref().unwrap_or(&empty);
+        let policy = if self.work.current_state.is_some() {
+            state.bounding_box_visibility
+        } else {
+            Some(Default::default())
+        };
+        policy.map_or_else(Default::default, |policy| {
+            policy
+                .exclusions(state, &self.work.annotations)
+                .expect("validated dataset visibility policy")
+        })
+    }
+
+    pub(crate) fn filter_visible_boxes(&self, annotations: &mut Vec<AnnotationVersion>) {
+        let empty = labello_domain::ImageState::new("visibility".into());
+        let state = self.work.current_state.as_ref().unwrap_or(&empty);
+        let policy = if self.work.current_state.is_some() {
+            state.bounding_box_visibility
+        } else {
+            Some(Default::default())
+        };
+        let Some(policy) = policy else {
+            return;
+        };
+        let mut complete = self
+            .work
+            .annotations
+            .iter()
+            .map(|annotation| (&annotation.annotation_id, annotation))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        for annotation in annotations.iter() {
+            complete.insert(&annotation.annotation_id, annotation);
+        }
+        let excluded = policy
+            .exclusions(state, complete.into_values())
+            .expect("validated dataset visibility policy");
+        annotations.retain(|annotation| !excluded.contains_key(&annotation.annotation_id));
+    }
+
     pub(crate) fn annotation_objects(&self) -> Vec<AnnotationVersion> {
+        let excluded = self.work_box_exclusions();
         let mut objects = self
             .work
             .annotations
             .iter()
             .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
+                !annotation.deleted
+                    && !excluded.contains_key(&annotation.annotation_id)
+                    && self.annotation_matches_selected_workflow(annotation)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -144,6 +212,7 @@ impl LabelloApp {
                 .into_iter()
                 .map(|item| item.annotation.clone()),
         );
+        self.filter_visible_boxes(&mut objects);
         objects
     }
 

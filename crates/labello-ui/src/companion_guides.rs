@@ -32,7 +32,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn companion_needs_box(&self, annotation: &AnnotationVersion) -> bool {
-        if self.view != AppView::Annotate || !self.annotation_matches_selected_workflow(annotation)
+        if self.view != AppView::Annotate
+            || !self.annotation_matches_selected_workflow(annotation)
+            || self
+                .work_box_exclusions()
+                .contains_key(&annotation.annotation_id)
         {
             return false;
         }
@@ -61,8 +65,7 @@ impl LabelloApp {
             return true;
         }
         let next = self
-            .work
-            .annotations
+            .annotation_objects()
             .iter()
             .find(|annotation| self.companion_needs_box(annotation))
             .map(|annotation| annotation.annotation_id.clone());

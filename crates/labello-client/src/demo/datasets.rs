@@ -57,6 +57,7 @@ impl DatasetApi for DemoLabelloApi {
         request: UpdateDatasetConfigRequest,
     ) -> crate::ApiFuture<'a, DatasetMetadata> {
         Box::pin(async move {
+            request.bounding_box_visibility.validate().map_err(|error| ClientError::Demo(error.to_string()))?;
             let mut state = self.state.borrow_mut();
             let metadata = state
                 .datasets
@@ -69,6 +70,7 @@ impl DatasetApi for DemoLabelloApi {
             metadata.role_assignments = request.role_assignments;
             metadata.imbalance = request.imbalance;
             metadata.preload_queue_size = request.preload_queue_size;
+            metadata.bounding_box_visibility = request.bounding_box_visibility;
             metadata.prelabel_configs = request.prelabel_configs;
             metadata.updated_at = labello_domain::now();
             Ok(metadata.clone())

@@ -116,6 +116,16 @@ impl LabelloApp {
     }
 
     pub(crate) fn sync_work_config(&mut self, metadata: DatasetMetadata) {
+        if self.datasets.metadata.as_ref().is_some_and(|previous| {
+            previous.bounding_box_visibility != metadata.bounding_box_visibility
+        }) {
+            self.release_prepared_assignments();
+        }
+        if let Some(state) = &mut self.work.current_state {
+            state.bounding_box_visibility = Some(metadata.bounding_box_visibility);
+        }
+        self.inspection
+            .set_box_visibility(metadata.bounding_box_visibility);
         self.resize_preload_queue(metadata.preload_queue_size);
         self.work.classes = metadata.label_classes.clone();
         self.work.tasks = metadata.tasks.clone();

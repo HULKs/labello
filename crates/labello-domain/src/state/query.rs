@@ -39,7 +39,12 @@ impl ImageState {
         let set = self.migration_target_sets.get(task_id).ok_or_else(|| {
             DomainError::InvalidMigration("migration target set is missing".into())
         })?;
-        let mut targets = set.targets.iter().collect::<Vec<_>>();
+        let skipped = self.skipped_migration_groups(task_id);
+        let mut targets = set
+            .targets
+            .iter()
+            .filter(|target| !skipped.contains(&target.object_group_id))
+            .collect::<Vec<_>>();
         targets.sort_by_key(|target| target.sequence_index);
         let pass = pass_id
             .map(|pass_id| {

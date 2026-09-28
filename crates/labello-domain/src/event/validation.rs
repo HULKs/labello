@@ -20,11 +20,20 @@ impl EventLogEntry {
             actor_role,
             timestamp,
             payload,
+            bounding_box_visibility: None,
         }
     }
 
     pub fn validate_shape(&self) -> crate::DomainResult<()> {
         crate::validate_supported_schema_version(self.schema_version)?;
+        if let Some(policy) = self.bounding_box_visibility {
+            policy.validate()?;
+            if self.schema_version != crate::SCHEMA_VERSION {
+                return Err(crate::DomainError::InvalidSchemaArtifact(
+                    "bounding-box visibility requires schema version 3".into(),
+                ));
+            }
+        }
         if self.schema_version == crate::LEGACY_SCHEMA_VERSION
             && !matches!(
                 self.event_type,

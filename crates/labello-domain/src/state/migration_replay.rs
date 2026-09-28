@@ -248,10 +248,11 @@ impl ImageState {
         let all_resolved = self
             .validate_migration_resolution(&confirmation.task_id)
             .is_ok();
+        let skipped = self.skipped_migration_groups(&confirmation.task_id);
         let has_dependencies = self
             .migration_dependencies
             .get(&confirmation.task_id)
-            .is_some_and(|markers| !markers.is_empty());
+            .is_some_and(|markers| markers.keys().any(|group| !skipped.contains(group)));
         if confirmation.target_set_hash != set.target_set_hash
             || confirmation.state_hash != state_hash
             || confirmation.confirmation_hash != expected
@@ -306,7 +307,11 @@ impl ImageState {
             DomainError::InvalidMigration("migration target set is missing".into())
         })?;
         let dispositions = &self.migration_dispositions[task_id];
+        let skipped = self.skipped_migration_groups(task_id);
         for target in &set.targets {
+            if skipped.contains(&target.object_group_id) {
+                continue;
+            }
             let guide = self
                 .current_annotation(&target.guide_annotation_id)
                 .ok_or_else(|| {
@@ -446,7 +451,17 @@ impl ImageState {
                 ))
             })
             .collect::<Vec<_>>();
-        crate::migration_state_hash_with_companions(&base, &companions)
+        let hash = crate::migration_state_hash_with_companions(&base, &companions)?;
+        let skipped = self.skipped_migration_groups(task_id);
+        if skipped.is_empty() {
+            Ok(hash)
+        } else {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(b"migration-skipped-boxes-v1");
+            hasher.update(hash.as_str().as_bytes());
+            hasher.update(&serde_json::to_vec(&skipped).expect("serializable group IDs"));
+            Ok(crate::MigrationHash::from_hasher(hasher))
+        }
     }
 }
 

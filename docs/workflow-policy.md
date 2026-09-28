@@ -82,3 +82,32 @@ Existing repository recovery tests prove that a missing or stale `state.json`
 is rebuilt from a complete event batch. Assignment batch tests prove a failed
 batch leaves no partial events, while exact-version migration and workflow
 claim tests prove concurrent writers have one winner. Preserve those lock scopes and tests when changing transaction policy.
+
+## Overlapping-box visibility
+
+`labello-domain/box_visibility.rs` owns dataset-configured, per-image selection.
+It orders current non-deleted boxes by effective exact-version review status,
+then annotation ID, and greedily compares each box against retained boxes of its
+class. Overlap groups are not transitive: a suppressed box cannot suppress
+another box. Skeleton geometry does not participate. The full image participates
+before any task or view filter, so changing workflows cannot expose a duplicate.
+
+`ImageState::visible_annotations` supplies ordinary review targets and inspector
+objects. The shared UI applies the same policy to drafts, correction previews,
+pending prelabels, canvas overlays, object lists, and selection. A changed draft
+does not inherit approval of the stored geometry. `active_annotations` remains
+the preserved source for audit, statistics, and export.
+
+`skipped_migration_groups` excludes only Pending target dispositions whose guides
+are hidden. Migration cursors, confirmation validation, digests, and review
+ordering use that same set. Annotated or explicitly excluded dispositions remain
+part of the existing migration workflow; hiding a guide never deletes its
+skeleton. Frozen target sets and dispositions are retained unchanged. A
+confirmation digest binds the skipped target IDs. Review assignment fingerprints
+bind the visibility result, so an outdated target set cannot be submitted.
+
+The storage transaction selects the current dataset policy and stamps new events
+with it. Replay uses that historical policy, while live reads overlay the current
+configuration. See [event history](event-history.md#bounding-box-visibility) for
+wire compatibility. Visibility changes alone do not append deletion events,
+change historical task completion, or alter export selection.
