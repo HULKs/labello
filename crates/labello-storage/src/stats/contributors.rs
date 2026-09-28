@@ -7,10 +7,30 @@ use labello_domain::{
 
 use super::aggregation::StatsAggregation;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(super) struct ContributorAggregation(BTreeMap<UserId, BTreeMap<String, ContributorDay>>);
 
 impl ContributorAggregation {
+    pub(super) fn extend(&mut self, other: &Self) {
+        for (user, days) in &other.0 {
+            for (date, day) in days {
+                let target = self
+                    .0
+                    .entry(user.clone())
+                    .or_default()
+                    .entry(date.clone())
+                    .or_insert_with(|| ContributorDay {
+                        day: date.clone(),
+                        ..Default::default()
+                    });
+                target.labeled += day.labeled;
+                target.reviewed += day.reviewed;
+                target.accepted += day.accepted;
+                target.rejected += day.rejected;
+            }
+        }
+    }
+
     fn day(&mut self, user: &UserId, timestamp: labello_domain::Timestamp) -> &mut ContributorDay {
         let day = timestamp.date_naive().to_string();
         self.0

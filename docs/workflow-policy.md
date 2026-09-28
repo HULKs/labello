@@ -71,10 +71,12 @@ The single-image commit order is:
 2. Complete assignment/migration invalidation policy for the planned batch.
 3. Apply the entire batch to a cloned next state so any invalid event rejects
    the batch before persistence.
-4. Atomically publish `events.jsonl`.
-5. Publish the rebuildable `state.json` cache only after the event log.
-6. Invalidate statistics and assignment-availability caches after durable
-   publication.
+4. Invalidate affected polling projections and aggregate generations before
+   event-log publication, while the image lock is held.
+5. Atomically publish `events.jsonl`.
+6. Publish the rebuildable `state.json` cache only after the event log.
+7. Invalidate aggregate statistics and assignment-availability caches after
+   durable publication.
 
 Existing repository recovery tests prove that a missing or stale `state.json`
 is rebuilt from a complete event batch. Assignment batch tests prove a failed

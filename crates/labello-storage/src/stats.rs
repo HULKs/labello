@@ -205,6 +205,7 @@ mod tests {
             .unwrap();
 
         let stats = repository.dataset_stats().await.unwrap();
+        assert_eq!(stats, repository.reference_dataset_stats().await.unwrap());
         assert_eq!(stats.per_class[&ClassId::from("person")].annotations, 2);
         assert_eq!(stats.provenance.human_authored_annotations, 1);
         assert_eq!(
@@ -305,6 +306,7 @@ mod tests {
             .unwrap();
 
         let stats = repository.dataset_stats().await.unwrap();
+        assert_eq!(stats, repository.reference_dataset_stats().await.unwrap());
         assert_eq!(stats.import_coverage.excluded, 1);
         assert_eq!(stats.pending_tasks, 0);
         assert_eq!(stats.per_task[&task_id].pending, 0);
@@ -437,5 +439,20 @@ mod tests {
         let generation = repository.stats_cache.generation.load(Ordering::Acquire);
         let cached = repository.stats_cache.value.lock().await;
         assert_eq!(cached.as_ref().unwrap().generation, generation);
+    }
+    #[tokio::test]
+    async fn cancelled_statistics_refresh_releases_its_permit() {
+        let (_temp, repository) = empty_repository().await;
+        let pause = repository.stats_cache.pause_after_next_scan().await;
+        let reader = repository.clone();
+        let request = tokio::spawn(async move { reader.dataset_stats().await });
+        pause.started.notified().await;
+        request.abort();
+        assert!(request.await.unwrap_err().is_cancelled());
+        let result = tokio::time::timeout(Duration::from_secs(2), repository.dataset_stats())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, repository.reference_dataset_stats().await.unwrap());
     }
 }

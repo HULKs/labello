@@ -31,12 +31,12 @@ impl DatasetRepository {
         let mut holders = BTreeMap::new();
         for image in images.by_ref().take(32) {
             let repo = self.clone();
-            workers.spawn(async move { repo.load_image_state(&image).await });
+            workers.spawn(async move { repo.polling_image(&image).await });
         }
         while let Some(result) = workers.join_next().await {
             let state = result
                 .map_err(|_| StorageError::BackgroundTask("presence scan failed".into()))??;
-            for assignment in &state.assignments {
+            for assignment in &state.state.assignments {
                 if assignment.status != AssignmentStatus::Active
                     || !matches!(
                         assignment.kind,
@@ -55,7 +55,7 @@ impl DatasetRepository {
             }
             if let Some(image) = images.next() {
                 let repo = self.clone();
-                workers.spawn(async move { repo.load_image_state(&image).await });
+                workers.spawn(async move { repo.polling_image(&image).await });
             }
         }
         let active = unexpired(&holders, labello_domain::now());

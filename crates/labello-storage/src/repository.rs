@@ -61,6 +61,8 @@ pub struct DatasetRepository {
     pub(crate) review_config_lock: Arc<AsyncRwLock<()>>,
     migration_complete: Arc<AtomicBool>,
     pub(crate) images_index_cache: Arc<AsyncRwLock<Option<Arc<ImagesIndex>>>>,
+    pub(crate) polling_images:
+        Arc<Mutex<BTreeMap<ImageId, Arc<crate::assignment::polling::PollingImage>>>>,
     pub(crate) presence_cache: Arc<AsyncMutex<Option<crate::assignment::presence::CachedPresence>>>,
     pub(crate) assignment_cursors: Arc<Mutex<BTreeMap<String, usize>>>,
     pub(crate) assignment_claim_lock: Arc<AsyncMutex<()>>,
@@ -103,6 +105,7 @@ impl DatasetRepository {
             migration_complete: Arc::new(AtomicBool::new(false)),
             images_index_cache: Arc::new(AsyncRwLock::new(None)),
             presence_cache: Arc::default(),
+            polling_images: Arc::default(),
             assignment_cursors: Arc::new(Mutex::new(BTreeMap::new())),
             assignment_claim_lock: Arc::default(),
             stats_cache: Arc::new(StatsCache::default()),

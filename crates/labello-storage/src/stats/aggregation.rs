@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Debug)]
 pub(super) struct StatsAggregation {
     stats: DatasetStats,
     throughput: BTreeMap<String, (usize, usize)>,
@@ -146,6 +147,44 @@ impl StatsAggregation {
         }
     }
 
+    pub(super) fn extend(&mut self, other: &Self) {
+        let a = &mut self.stats;
+        let b = &other.stats;
+        a.completed_tasks += b.completed_tasks;
+        a.pending_tasks += b.pending_tasks;
+        a.in_progress_tasks += b.in_progress_tasks;
+        a.awaiting_review_tasks += b.awaiting_review_tasks;
+        a.needs_correction_tasks += b.needs_correction_tasks;
+        add_provenance(&mut a.provenance, &b.provenance);
+        add_migration(&mut a.migration, &b.migration);
+        a.import_coverage.complete += b.import_coverage.complete;
+        a.import_coverage.verified_empty += b.import_coverage.verified_empty;
+        a.import_coverage.incomplete += b.import_coverage.incomplete;
+        a.import_coverage.excluded += b.import_coverage.excluded;
+        for (id, value) in &b.per_task {
+            let target = a.per_task.entry(id.clone()).or_default();
+            target.completed += value.completed;
+            target.pending += value.pending;
+            target.in_progress += value.in_progress;
+            target.awaiting_review += value.awaiting_review;
+            target.needs_correction += value.needs_correction;
+            add_provenance(&mut target.provenance, &value.provenance);
+            add_migration(&mut target.migration, &value.migration);
+        }
+        for (id, value) in &b.per_class {
+            let target = a.per_class.entry(id.clone()).or_default();
+            target.annotations += value.annotations;
+            target.completed_tasks += value.completed_tasks;
+            add_provenance(&mut target.provenance, &value.provenance);
+        }
+        for (day, (annotations, reviews)) in &other.throughput {
+            let target = self.throughput.entry(day.clone()).or_default();
+            target.0 += annotations;
+            target.1 += reviews;
+        }
+        self.contributors.extend(&other.contributors);
+    }
+
     pub(super) fn finish(mut self) -> DatasetStats {
         self.stats.contributors = Some(self.contributors.finish());
         self.stats.throughput = self
@@ -193,6 +232,22 @@ impl StatsAggregation {
         }
         self.stats
     }
+}
+
+fn add_provenance(a: &mut labello_domain::ProvenanceStats, b: &labello_domain::ProvenanceStats) {
+    a.accepted_prelabel_annotations += b.accepted_prelabel_annotations;
+    a.imported_direct_annotations += b.imported_direct_annotations;
+    a.imported_derived_annotations += b.imported_derived_annotations;
+    a.human_authored_annotations += b.human_authored_annotations;
+    a.human_accepted_imports += b.human_accepted_imports;
+    a.reviewer_corrections += b.reviewer_corrections;
+}
+
+fn add_migration(a: &mut labello_domain::MigrationStats, b: &labello_domain::MigrationStats) {
+    a.expected += b.expected;
+    a.annotated += b.annotated;
+    a.excluded += b.excluded;
+    a.pending += b.pending;
 }
 
 #[cfg(test)]
