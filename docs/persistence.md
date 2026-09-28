@@ -355,13 +355,50 @@ than the server time count. Legacy assignments without `expiresAt` use the
 existing `updatedAt` plus 30-minute lease duration. Multiple leases for a user
 in one dataset reduce to their latest expiry. No presence artifact is persisted.
 
-Repository clones share a presence cache and a single refresh lock. A cold scan
-loads at most 32 image states concurrently. Existing assignment-availability
-commit, configuration, index and rebuild invalidation also invalidates this
-projection. Expiry is filtered on every cache read, independent of writes, and
-restart reconstructs the projection. A concurrent invalidation prevents a scan
-from publishing its cached result. Presence is a sampled view, not a transaction
-snapshot across datasets, and reading it never renews leases.
+Repository clones share a presence cache and a single refresh lock. Cold reads
+load at most 32 images concurrently. Refreshes reuse compact per-image assignment
+facts shared with availability checks, loading only invalidated images. These
+facts include workflow status, import eligibility, active assignments, review
+revision contexts, and final-review participation; they omit annotation geometry
+and complete event histories. User-specific permissions and eligibility are
+still checked, and claims still reload authoritative state under the image lock.
+Expiry is filtered on every presence read, independent of writes. Presence is a
+sampled view, not a transaction snapshot across datasets; reading never renews leases.
+
+Event publication and explicit repair invalidate the affected image facts while
+holding the image lock, before publication can rename the event log. Thus
+cancellation, directory-sync failure, or a failed state-cache write cannot leave
+a stale entry. Concurrent cold readers share the image lock. Configuration changes
+recompute availability decisions without discarding unchanged image facts.
+Index saves discard removed image entries. Restart reconstructs facts lazily.
+A concurrent invalidation prevents a refresh from publishing its aggregate as
+current. These process-local caches require the existing single-server ownership.
+
+## Statistics contributions
+
+Statistics retain image-local task/class/provenance/migration totals, contributor
+days, and unfinalized scoring awards. A relevant event publication invalidates only
+that image's contribution before the event-log rename; an assignment-only event
+does not affect statistics. Configuration identity is checked before reuse.
+Refreshes combine unchanged contributions with newly computed ones, with at most
+32 cold image readers. They do not reread unchanged histories after ordinary
+labeling writes. Global scoring order, daily multipliers and focus selection are
+applied after combining contributions, preserving cross-image scoring semantics.
+
+The aggregate generation still detects concurrent writes. A request may return
+its bounded sample, but a newer generation forces the next refresh. Index changes
+remove departed image contributions; explicit repair invalidates its image.
+Restart rebuilds from authoritative files. Focus-window selection retains its
+historical event-prefix replay at a new boundary; current-user daily activity
+retains the separate projection described above.
+
+Memory grows with indexed images, configured tasks/classes, active lease contexts,
+contributor days and credited label awards. Raw events and annotation-version
+geometry are not retained by these projections. They are not a fixed-memory
+capacity guarantee: measure peak RSS with representative histories using the
+[synthetic polling workload](verification.md#concurrent-polling-performance)
+and reserve room for active requests, previews, imports, exports and inference.
+No persisted artifact, schema, polling interval or browser behavior changes.
 
 ## Inspector filter metadata
 

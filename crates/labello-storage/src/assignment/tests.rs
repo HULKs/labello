@@ -238,7 +238,7 @@ async fn assignment_availability_caches_single_pass_scans_and_invalidates_on_wri
         .await
         .unwrap();
     assert_eq!(refreshed, availability);
-    assert_eq!(repo.image_state_load_count(), images.len() as u64);
+    assert_eq!(repo.image_state_load_count(), 1);
     assert_eq!(
         repo.assignment_availability_cache.scan_count(),
         2,
@@ -253,7 +253,7 @@ async fn assignment_availability_caches_single_pass_scans_and_invalidates_on_wri
     );
     assert_eq!(first.unwrap(), availability);
     assert_eq!(second.unwrap(), availability);
-    assert_eq!(repo.image_state_load_count(), images.len() as u64);
+    assert_eq!(repo.image_state_load_count(), 0);
     assert_eq!(
         repo.assignment_availability_cache.scan_count(),
         3,
@@ -4910,3 +4910,139 @@ async fn inspector_multi_workflow_return_recovers_committed_event_after_cache_fa
 
 #[path = "preload_tests.rs"]
 mod preload;
+
+#[tokio::test]
+async fn warm_polling_does_not_reread_unchanged_image_histories() {
+    let (_temp, repo, task, users) = annotation_repo(64, &["a", "b"]).await;
+    repo.dataset_stats().await.unwrap();
+    repo.active_lease_holders().await.unwrap();
+    repo.assignment_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    let claimed = repo
+        .assign_next_image(&users[0], &task, AssignmentKind::Annotation)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.reset_image_state_load_count();
+    repo.reset_event_load_count();
+    let stats = repo.dataset_stats().await.unwrap();
+    let presence = repo.active_lease_holders().await.unwrap();
+    for user in &users {
+        repo.assignment_availability(user, AssignmentKind::Annotation)
+            .await
+            .unwrap();
+    }
+    assert!(
+        repo.image_state_load_count() <= 2,
+        "warm polling loaded {} image states",
+        repo.image_state_load_count()
+    );
+    assert!(
+        repo.event_load_count() <= 2,
+        "warm polling loaded {} histories",
+        repo.event_load_count()
+    );
+    assert!(presence.contains_key(&users[0]));
+    let fresh = DatasetRepository::new(repo.root());
+    assert_eq!(stats, fresh.reference_dataset_stats().await.unwrap());
+    assert_eq!(presence, fresh.active_lease_holders().await.unwrap());
+    repo.release_assignment(
+        &users[0],
+        &claimed.assignment_id,
+        &claimed.image_id,
+        &task,
+        AssignmentKind::Annotation,
+    )
+    .await
+    .unwrap();
+    assert!(repo.active_lease_holders().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn polling_recovers_committed_changes_after_cancelled_or_failed_state_publication() {
+    for cancel in [false, true] {
+        let (_temp, repo, task, users) = annotation_repo(8, &["a"]).await;
+        let claimed = repo
+            .assign_next_image(&users[0], &task, AssignmentKind::Annotation)
+            .await
+            .unwrap()
+            .unwrap();
+        repo.dataset_stats().await.unwrap();
+        assert!(
+            repo.active_lease_holders()
+                .await
+                .unwrap()
+                .contains_key(&users[0])
+        );
+        let pause = if cancel {
+            Some(repo.pause_after_next_completion_observation().await)
+        } else {
+            repo.fail_next_state_cache_write_after_completion();
+            None
+        };
+        let writer_repo = repo.clone();
+        let user = users[0].clone();
+        let write_task = task.clone();
+        let writer = tokio::spawn(async move {
+            writer_repo
+                .release_assignment(
+                    &user,
+                    &claimed.assignment_id,
+                    &claimed.image_id,
+                    &write_task,
+                    AssignmentKind::Annotation,
+                )
+                .await
+        });
+        if let Some(pause) = pause {
+            pause.started.notified().await;
+            writer.abort();
+            assert!(writer.await.unwrap_err().is_cancelled());
+        } else {
+            assert!(writer.await.unwrap().is_err());
+        }
+        let fresh = DatasetRepository::new(repo.root());
+        assert_eq!(
+            repo.dataset_stats().await.unwrap(),
+            fresh.dataset_stats().await.unwrap()
+        );
+        assert!(repo.active_lease_holders().await.unwrap().is_empty());
+        assert_eq!(
+            repo.assignment_availability(&users[0], AssignmentKind::Annotation)
+                .await
+                .unwrap(),
+            fresh
+                .assignment_availability(&users[0], AssignmentKind::Annotation)
+                .await
+                .unwrap()
+        );
+    }
+}
+
+#[tokio::test]
+async fn polling_reuses_image_facts_after_configuration_changes_and_prunes_removed_images() {
+    let (_temp, repo, task, users) = annotation_repo(8, &["a", "b"]).await;
+    repo.dataset_stats().await.unwrap();
+    repo.active_lease_holders().await.unwrap();
+    let mut metadata = repo.load_dataset_config().await.unwrap();
+    metadata.tasks[0].enabled = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    assert_eq!(
+        repo.dataset_stats().await.unwrap(),
+        repo.reference_dataset_stats().await.unwrap()
+    );
+    repo.reset_image_state_load_count();
+    let availability = repo
+        .assignment_availability(&users[1], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(!availability[&task]);
+    assert_eq!(repo.image_state_load_count(), 0);
+    let mut index = repo.load_images_index().await.unwrap();
+    index.images_by_hash.clear();
+    repo.save_images_index(&index).await.unwrap();
+    assert_eq!(repo.dataset_stats().await.unwrap().total_images, 0);
+    assert!(repo.active_lease_holders().await.unwrap().is_empty());
+    assert!(repo.polling_images.lock().is_empty());
+}

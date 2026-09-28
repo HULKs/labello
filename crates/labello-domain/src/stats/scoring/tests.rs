@@ -364,3 +364,37 @@ fn unsent_deleted_and_imported_geometry_do_not_earn_labels() {
     submit(&mut events, time());
     assert!(scores(&events, &[]).is_empty());
 }
+
+#[test]
+fn combining_image_projections_preserves_global_daily_tiers_and_focus() {
+    let mut direct = ScoringProjection::default();
+    let mut combined = ScoringProjection::default();
+    for image in (0..110).rev() {
+        let mut events = Vec::new();
+        let label = annotation("label");
+        save(&mut events, label, time());
+        submit(&mut events, time());
+        if image % 3 == 0 {
+            review(&mut events, "review", 1, ReviewDecision::Rejected, time());
+        }
+        let image_id = ImageId::from(format!("image_{image}"));
+        for event in &mut events {
+            event.image_id = image_id.clone();
+        }
+        let state = rebuild_state(image_id, &events).unwrap();
+        direct.record_image(&state, &events);
+        let mut contribution = ScoringProjection::default();
+        contribution.record_image(&state, &events);
+        combined.extend(&contribution);
+    }
+    let focus = [FocusWindow {
+        starts_at: time(),
+        ends_at: time() + std::time::Duration::from_secs(1200),
+        task_id: Some(TaskId::from("boxes")),
+    }];
+    let mut expected = BTreeMap::new();
+    let mut actual = BTreeMap::new();
+    direct.finish(&mut expected, &focus);
+    combined.finish(&mut actual, &focus);
+    assert_eq!(actual, expected);
+}

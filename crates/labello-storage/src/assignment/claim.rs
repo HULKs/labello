@@ -242,7 +242,8 @@ impl DatasetRepository {
         async move {
             let lock = repository.image_lock(&image_id);
             let _guard = lock.lock().await;
-            let state = repository.load_image_state(&image_id).await?;
+            let projection = repository.polling_image_unlocked(&image_id).await?;
+            let state = &projection.state;
             let now = labello_domain::now();
             let mut available_by_kind = Vec::with_capacity(eligible.len());
             for (kind, task_ids) in eligible.iter() {
@@ -252,10 +253,10 @@ impl DatasetRepository {
                     .iter()
                     .filter(|task| task_ids.contains(&task.task_id))
                 {
-                    let status = effective_assignment_status(&state, &task.task_id, kind, now);
+                    let status = effective_assignment_status(state, &task.task_id, kind, now);
                     let reason = repository
                         .image_assignment_block(
-                            &image_id, &state, task, &user_id, kind, &status, now,
+                            &image_id, state, task, &user_id, kind, &status, now,
                         )
                         .await?;
                     available.insert(task.task_id.clone(), reason);
@@ -815,7 +816,17 @@ impl DatasetRepository {
             }));
         }
         if *kind == AssignmentKind::Review {
-            let already_final = if task.manual_box_guide_migration.is_some() {
+            // Availability readers already populated these facts under this image
+            // lock. A cold claim keeps its original event-only check instead of
+            // loading the authoritative state a second time to fill a read cache.
+            let projection = self.polling_images.lock().get(image_id).cloned();
+            let already_final = if let Some(projection) = projection {
+                projection.already_final(
+                    task_id,
+                    user_id,
+                    task.manual_box_guide_migration.is_some(),
+                )
+            } else if task.manual_box_guide_migration.is_some() {
                 let events = self.load_events(image_id).await?;
                 has_migration_final_review_by_user(&events, task_id, user_id)
                     || migration_final_approval_count(&events, task_id) >= 1

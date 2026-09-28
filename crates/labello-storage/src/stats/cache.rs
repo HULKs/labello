@@ -15,6 +15,9 @@ pub(super) struct StatsScanPause {
 
 #[derive(Debug, Default)]
 pub(crate) struct StatsCache {
+    pub(super) images: parking_lot::Mutex<
+        BTreeMap<labello_domain::ImageId, std::sync::Arc<super::scan::ImageContribution>>,
+    >,
     pub(super) generation: AtomicU64,
     pub(super) value: Mutex<Option<CachedStats>>,
     pub(super) activity: Mutex<Option<super::activity::CachedActivity>>,
@@ -31,6 +34,19 @@ pub(crate) struct StatsCache {
 }
 
 impl StatsCache {
+    pub(crate) fn invalidate_image(&self, image: &labello_domain::ImageId) {
+        self.images.lock().remove(image);
+        self.invalidate();
+    }
+
+    pub(crate) fn retain_images(
+        &self,
+        images: &std::collections::BTreeSet<labello_domain::ImageId>,
+    ) {
+        self.images.lock().retain(|image, _| images.contains(image));
+        self.invalidate();
+    }
+
     pub(crate) fn invalidate(&self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
     }

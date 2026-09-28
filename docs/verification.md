@@ -401,3 +401,35 @@ training or prediction. Keep the dependency freeze, exact interpreter and
 reader versions, command logs, archive hashes, and JSON report with acceptance
 evidence. The reader check supplements canonical verification; it does not
 replace it.
+
+## Concurrent polling performance
+
+The opt-in Linux test `tests::polling_performance::nine_client_polling_performance`
+uses the production Axum router with authenticated sessions, authorization, CSRF,
+real storage transactions, and disposable synthetic metadata. It does not contact
+production or use real user data. It creates 6,928 images with eight annotations
+and eight versions per annotation, then warms statistics and presence. Nine
+concurrent clients each perform five claim/submit/statistics/presence/availability
+cycles. This is an accelerated contention workload, not a simulation of human
+labeling speed. Image delivery, browser rendering, TLS and proxy latency are
+outside this measurement; route handlers and response bodies are exercised.
+
+```sh
+cargo test --locked --release -p labello-api nine_client_polling_performance -- --ignored --nocapture
+```
+
+`LABELLO_BENCH_IMAGES` and `LABELLO_BENCH_ROUNDS` override the default image and
+cycle counts. Use at least nine images per round. Output contains only aggregate
+fixture size, workload counts, process CPU seconds, logical read bytes, process
+peak RSS, wall time, and route mean/p95 microseconds. Peak RSS includes fixture
+creation and warming. Logical reads include filesystem-cache hits and do not
+measure physical disk throughput. The test requires Linux `/proc` and `getconf`.
+
+For a before/after comparison, copy the same test module and its `mod` declaration
+into an isolated checkout of the comparison commit. Build both release test
+binaries, then run each on the same otherwise idle machine with identical
+parameters. Record the base and changed SHAs, hardware, filesystem, Rust version,
+and full aggregate output. Repeat when scheduling variance obscures claim or
+submit latency. Keep fixtures out of commits; temporary data is removed when the
+test finishes. A smoke run with 100 images and two rounds checks the procedure,
+not the production-scale performance claim.

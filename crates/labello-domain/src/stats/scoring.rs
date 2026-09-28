@@ -71,6 +71,7 @@ fn base_value(geometry: &AnnotationGeometry) -> i64 {
     }
 }
 
+#[derive(Clone, Debug)]
 struct LabelAward {
     timestamp: Timestamp,
     image: ImageId,
@@ -82,13 +83,28 @@ struct LabelAward {
     manual: bool,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ScoringProjection {
     labels: Vec<LabelAward>,
     days: BTreeMap<UserId, BTreeMap<String, ScoreDay>>,
 }
 
 impl ScoringProjection {
+    /// Combine image-local awards before applying globally ordered daily multipliers.
+    pub fn extend(&mut self, other: &Self) {
+        self.labels.extend(other.labels.iter().cloned());
+        for (user, days) in &other.days {
+            for (date, score) in days {
+                self.days
+                    .entry(user.clone())
+                    .or_default()
+                    .entry(date.clone())
+                    .or_default()
+                    .add(score);
+            }
+        }
+    }
+
     fn day(&mut self, user: &UserId, timestamp: Timestamp) -> &mut ScoreDay {
         self.days
             .entry(user.clone())

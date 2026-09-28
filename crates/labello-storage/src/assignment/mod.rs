@@ -17,6 +17,7 @@ pub type TaskAssignmentAvailability =
 mod claim;
 mod inspection;
 mod migration;
+pub(crate) mod polling;
 pub(crate) mod presence;
 mod review;
 mod revision;

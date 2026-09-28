@@ -157,6 +157,11 @@ impl DatasetRepository {
         self.explorer_cache
             .lock()
             .retain(|id, _| next_image_ids.contains(id));
+        self.polling_images
+            .lock()
+            .retain(|id, _| next_image_ids.contains(id));
+        self.stats_cache.retain_images(&next_image_ids);
+        self.assignment_availability_cache.invalidate();
         *cached = None;
         write_json_atomic(&self.images_index_path(), &index).await?;
         *cached = Some(Arc::new(index));
