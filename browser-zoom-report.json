@@ -1,0 +1,23 @@
+{
+  "viewport": [
+    1288,
+    820
+  ],
+  "dpr": 1,
+  "failure": false,
+  "zoom": 2,
+  "counts": {
+    "claims": 2,
+    "release": 1,
+    "mutations": 0
+  },
+  "old_preview_pixels_while_pending": 243528,
+  "ax_roles": [
+    "Canvas",
+    "RootWebArea",
+    "generic",
+    "none",
+    "textbox"
+  ],
+  "page_errors": []
+}
