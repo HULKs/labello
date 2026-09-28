@@ -39,7 +39,7 @@ glossary! {
     ADD_MISSING_OBJECTS => ("Add missing objects", "Begin a skeleton for an object without a bounding-box guide during migration full-image confirmation."),
     BOXES => ("Boxes", "Compact class activity label for bounding box annotation."),
     MIGRATE => ("Migrate", "Compact class activity label for migration."),
-    MISSING_OBJECTS => ("Missing objects", "Compact class activity label for adding missing objects."),
+    MISSING_OBJECTS => ("Missing", "Compact class activity label for adding missing objects."),
     FULL_IMAGE => ("Full image", "The complete image, including objects outside the currently focused guide."),
     PENDING => ("Pending", "A workflow on an image that has not started."),
     IN_PROGRESS => ("In progress", "A workflow on an image with work underway."),

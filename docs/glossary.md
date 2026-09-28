@@ -57,7 +57,7 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 | Add missing objects | Begin a skeleton for an object without a bounding-box guide during migration full-image confirmation. |
 | Boxes | Compact class activity label for bounding box annotation. |
 | Migrate | Compact class activity label for migration. |
-| Missing objects | Compact class activity label for adding missing objects. |
+| Missing | Compact class activity label for adding missing objects. |
 | Full image | The complete image, including objects outside the currently focused guide. |
 | Pending | A workflow on an image that has not started. |
 | In progress | A workflow on an image with work underway. |
