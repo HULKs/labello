@@ -23,6 +23,13 @@ impl LabelloApp {
         }
     }
 
+    pub(crate) fn acknowledge_workflow_change(&mut self) {
+        self.clear_workflow_change_outside_scope();
+        if self.work.automatic_workflow_change.take().is_some() {
+            self.request_next_image();
+        }
+    }
+
     pub(crate) fn selected_task(&self) -> Option<&TaskDefinition> {
         let selected = self.work.selected_task_id.as_ref()?;
         self.work

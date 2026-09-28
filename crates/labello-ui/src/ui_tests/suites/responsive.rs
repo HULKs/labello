@@ -1458,10 +1458,8 @@ fn setup_home_action_preserves_responsive_navigation_and_work_protection() {
 }
 
 #[test]
-fn automatic_workflow_notice_is_accessible_and_preserves_compact_canvas() {
-    let api = Rc::new(SpyApi::new());
-    api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api);
+fn automatic_workflow_dialog_is_accessible_with_long_names_and_short_viewports() {
+    let mut harness = workflow_change_harness(Rc::new(SpyApi::new()), AppView::Annotate);
     let mut notice = harness
         .state()
         .work
@@ -1472,60 +1470,53 @@ fn automatic_workflow_notice_is_accessible_and_preserves_compact_canvas() {
         "Previous task with a deliberately very long name (Previous class with a long name)".into();
     notice.current =
         "New task with a deliberately very long name (New class with a long name)".into();
-    let label = format!(
-        "Workflow changed automatically. From {} to {}.",
-        notice.previous, notice.current
-    );
-    for (width, height) in [
-        (320.0, 568.0),
-        (390.0, 844.0),
-        (600.0, 800.0),
-        (1288.0, 820.0),
-        (1440.0, 1000.0),
-        (320.0, 320.0),
-    ] {
-        harness.set_size(egui::vec2(width, height));
-        harness.state_mut().work.automatic_workflow_change = None;
-        harness.run();
-        let without_notice = harness.get_by_label("Annotation canvas").rect();
-        harness.state_mut().work.automatic_workflow_change = Some(notice.clone());
-        harness.run();
-        let with_notice = harness.get_by_label("Annotation canvas").rect();
-        assert_eq!(with_notice.left(), without_notice.left());
-        if height >= 480.0 {
-            assert_eq!(with_notice.top(), without_notice.top());
-            assert!(with_notice.height() >= without_notice.height());
-        } else {
-            assert!(with_notice.bottom() >= without_notice.bottom());
-        }
-        assert_eq!(with_notice.width(), without_notice.width());
-        assert!(with_notice.height() >= 44.0);
-        let status = harness.get_by_role_and_label(egui::accesskit::Role::Status, &label);
-        assert_eq!(
-            status.accesskit_node().live(),
-            egui::accesskit::Live::Polite
-        );
-        assert!(!status.accesskit_node().is_modal());
-        assert_control_inside(
-            &harness,
-            "Dismiss workflow change",
-            egui::accesskit::Role::Button,
-            width,
-            height,
-        );
-        let dismiss =
-            harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change");
-        assert!(dismiss.rect().width() >= 44.0 && dismiss.rect().height() >= 44.0);
-        assert!(!dismiss.rect().intersects(status.rect()));
-        if height < 480.0 {
-            assert!(!dismiss.rect().intersects(with_notice));
-            assert!(!status.rect().intersects(with_notice));
+    for font_size in [16.0, 24.0] {
+        harness.ctx.global_style_mut(|style| {
+            for text_style in [egui::TextStyle::Body, egui::TextStyle::Button] {
+                style
+                    .text_styles
+                    .insert(text_style, egui::FontId::proportional(font_size));
+            }
+        });
+        for (width, height) in viewport_sizes().into_iter().chain([(320.0, 320.0)]) {
+            harness.set_size(egui::vec2(width, height));
+            notice.focus_pending = true;
+            harness.state_mut().work.automatic_workflow_change = Some(notice.clone());
+            harness.run();
+            let dialog =
+                harness.get_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed");
+            assert!(dialog.accesskit_node().is_modal());
+            assert!(dialog.rect().left() >= 0.0 && dialog.rect().right() <= width);
+            assert!(dialog.rect().top() >= 0.0 && dialog.rect().bottom() <= height);
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
+                .focus();
+            harness.run();
+            assert_control_inside(
+                &harness,
+                "Acknowledge and continue",
+                egui::accesskit::Role::Button,
+                width,
+                height,
+            );
+            let button = harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue");
+            assert!(button.rect().height() >= 44.0);
+            let dialog =
+                harness.get_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed");
+            assert!(
+                button.rect().bottom() <= dialog.rect().bottom() - 12.0,
+                "action must not be clipped by the dialog"
+            );
+            harness.key_press(egui::Key::Escape);
+            harness.run();
+            assert!(harness.state().work.automatic_workflow_change.is_some());
         }
     }
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
         .focus();
-    harness.step();
+    harness.run();
     harness.key_press(egui::Key::Enter);
     harness.run();
     assert!(harness.state().work.automatic_workflow_change.is_none());

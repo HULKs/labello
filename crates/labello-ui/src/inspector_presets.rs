@@ -40,6 +40,7 @@ pub enum InspectorPreset {
     ReviewInitialLoad,
     ReviewNextImage,
     MigrationNextImage,
+    WorkflowChange,
     WorkflowReasons,
     WorkflowAvailability,
     Admin,
@@ -93,7 +94,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 66] = [
+    pub const ALL: [Self; 67] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -110,6 +111,7 @@ impl InspectorPreset {
         Self::ReviewInitialLoad,
         Self::ReviewNextImage,
         Self::MigrationNextImage,
+        Self::WorkflowChange,
         Self::WorkflowReasons,
         Self::WorkflowAvailability,
         Self::Admin,
@@ -181,6 +183,7 @@ impl InspectorPreset {
             Self::ReviewNextImage => "review-next-image",
             Self::MigrationNextImage => "migration-next-image",
             Self::WorkflowAvailability => "workflow-availability",
+            Self::WorkflowChange => "workflow-change",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::PrelabelsDisabled => "prelabels-disabled",
@@ -426,6 +429,18 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Review => work_preset(AssignmentKind::Review, ctx),
+        InspectorPreset::WorkflowChange => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            app.clear_current_image();
+            app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
+                previous: "Vehicle boxes (Vehicle)".into(),
+                current: app.workflow_identity_label(app.selected_task().unwrap()),
+                dataset_id: app.config.dataset_id.clone(),
+                view: app.view,
+                focus_pending: true,
+            });
+            app
+        }
         InspectorPreset::WorkflowReasons => {
             let mut app = work_preset(AssignmentKind::Review, ctx);
             let assignment = app.work.assignment.as_ref().unwrap();
@@ -471,14 +486,6 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
                     })
                     .collect(),
             );
-            app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
-                previous: "Synthetic previous workflow".into(),
-                current: "Synthetic current workflow".into(),
-                dataset_id: app.config.dataset_id.clone(),
-                view: app.view,
-                presented: true,
-                presented_pass: None,
-            });
             app
         }
         InspectorPreset::ReviewCorrection => {

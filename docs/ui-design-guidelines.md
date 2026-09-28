@@ -271,7 +271,7 @@ has been recorded.
   displacing type/phase or adding a row. Short viewports retain identity, phase,
   and useful canvas height; migration bars remove spare padding.
 - **Saved reasons:** show only feedback matching the active image and workflow,
-  sharing the persistent, dismissible area with workflow-change notices. Lead
+  independent of the blocking workflow-change dialog. Lead
   with the event and explanation at a four-point gap; keep the 44-point dismiss
   target beside the content so it cannot inflate that gap. Use eight-point
   grouping gaps, existing text roles and quiet borders. Keep workflow and status
@@ -382,19 +382,22 @@ confirmation and cancellation apply to this navigation.
 
 ## Availability fallback feedback
 
-Automatic workflow selection shows a persistent outlined notice with the old
-and new task/class names. The new identity is emphasized, and the notice has a
-44px dismiss action. Long visible names truncate within the card while tooltips
-and the polite AccessKit status retain complete names. The card floats inside
-the workspace without reducing its canvas layout. On short compact screens it
-uses the existing identity row when that row presents the notice. Otherwise the
-workspace reserves an inline notice above the canvas and reclaims its vertical
-canvas inset to keep a usable image area. The notice must not overlap the canvas,
-and a 320×320 review workspace retains at least 44px of canvas height. Only a
-notice actually presented in the current render pass suppresses that fallback. It is
-nonmodal and leaves ordinary work available after the new identity has been
-presented. Dismissing
-it retains the current workflow identity in the context bar and selector.
+Automatic workflow selection opens a blocking modal titled "Workflow changed".
+Explain that no assignments are currently available in the previous workflow;
+this does not mean all work is permanently complete. Show the previous and new
+task/class names with wrapping text, and emphasize the new workflow. Use one
+44-point primary action, "Acknowledge and continue". Do not provide a close
+control or dismiss on Escape or outside clicks. Work remains blocked until the
+user activates the acknowledgment action.
+
+Constrain the modal to the viewport and scroll its entire contents on short
+screens or with long names and enlarged text. Expose the dialog title, modal
+state, full workflow identities, reason, and action through AccessKit. Start
+without a focused action to avoid consuming the completion key that caused the
+change. Tab reaches the action and scrolls it into view; explicit keyboard
+activation is supported. After acknowledgment, release dialog focus and retain
+the new workflow identity in the context bar and selector. Saved workflow-reason
+notices remain independent.
 
 ## Current workflow marker
 

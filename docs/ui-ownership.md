@@ -400,12 +400,18 @@ validity. See [administration](administration.md#create-or-reuse-a-schema).
 
 ## Notices and build information
 
-Work owns automatic-workflow notices separately from transient runtime errors.
-An accepted availability change captures old/new identities and presents them
-before the next claim, without requiring acknowledgement. Same-pass presentation
-suppresses duplicate fallback; short layouts reserve inline space and reclaim the
-canvas inset. Loading/prefetch/retry keep the notice. Dismissal, explicit selection,
-auth/dataset changes, or leaving work clear it.
+Work owns pending automatic-workflow changes separately from transient runtime
+errors and saved workflow reasons. An accepted availability fallback captures the
+old/new task and class identities. A blocking modal explains that no assignments
+are currently available in the previous workflow and requires explicit
+acknowledgment before claiming work in the new workflow. Rendering, loading,
+queue refresh, retries, Escape, and outside clicks cannot acknowledge it.
+The shell disables background controls and workspace shortcuts while it is
+pending, including the first frame. The modal starts without focusing its action,
+so an incidental completion key cannot acknowledge it; Tab reaches the action.
+Acknowledgment clears the pending change and retries normal availability/claim
+selection. A subsequent fallback requires its own acknowledgment. Explicit
+selection, auth/dataset changes, or leaving work clear obsolete pending state.
 
 `workflow_reasons.rs` owns image-and-workflow-scoped saved feedback. Assignment
 load fetches it with state/preview under the same ownership gate; failure fails

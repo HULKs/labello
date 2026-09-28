@@ -544,10 +544,10 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     );
     assert!(
         app.runtime.commands.is_empty(),
-        "fallback must be presented before claim"
+        "fallback must be acknowledged before claim"
     );
     assert!(!app.loading.image);
-    render_workflow_notice(&mut app);
+    acknowledge_presented_workflow_change(&mut app);
     let UiCommand::ClaimAssignment { task_id, .. } = app.runtime.commands.pop_back().unwrap()
     else {
         panic!("expected assignment claim after availability");
@@ -559,7 +559,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
     ));
 
     assert!(app.runtime.commands.is_empty());
-    render_workflow_notice(&mut app);
+    acknowledge_presented_workflow_change(&mut app);
     assert!(app.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment {
@@ -578,7 +578,9 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
 fn fresh_cached_availability_survives_reload_without_another_check() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api.clone());
+    let mut harness = workflow_change_harness(api.clone(), AppView::Annotate);
+    click(&mut harness, "Acknowledge and continue");
+    step_until(&mut harness, 12, |app| app.work.current.is_some());
     step_until(&mut harness, 8, |app| {
         app.runtime
             .persistence
@@ -630,7 +632,7 @@ fn fresh_cached_availability_survives_reload_without_another_check() {
             .all(|command| !matches!(command, UiCommand::AssignmentAvailability { .. }))
     );
     assert!(!reloaded.loading.image);
-    render_workflow_notice(&mut reloaded);
+    acknowledge_presented_workflow_change(&mut reloaded);
     assert!(reloaded.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment { task_id, .. }
@@ -3585,41 +3587,19 @@ fn untouched_assignment_navigation_releases_without_confirmation_and_preserves_f
 }
 
 #[test]
-fn automatic_workflow_change_stays_visible_after_assignment_and_queue_load() {
+fn acknowledged_workflow_change_does_not_return_after_assignment_and_queue_load() {
     let api = Rc::new(SpyApi::new());
-    api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api);
-    step_until(&mut harness, 16, |app| !app.work.queue.is_loading());
-    assert_eq!(
-        harness.state().work.selected_task_id,
-        Some(TaskId::from("bounding_box:vehicle"))
-    );
-    let notice =
-        "Workflow changed automatically. From Person boxes (Person) to Vehicle boxes (Vehicle).";
-    let change = harness
-        .state()
-        .work
-        .automatic_workflow_change
-        .as_ref()
-        .expect("notice state retained");
-    assert_eq!(
-        format!(
-            "Workflow changed automatically. From {} to {}.",
-            change.previous, change.current
-        ),
-        notice
-    );
-    assert!(
-        harness.query_by_label(notice).is_some(),
-        "automatic changes need persistent old/new task and class feedback"
-    );
-    harness.state_mut().runtime.notice = Some("Unrelated update".to_string());
-    harness.step();
-    assert!(harness.query_by_label(notice).is_some());
-    click(&mut harness, "Dismiss workflow change");
+    let mut harness = workflow_change_harness(api, AppView::Annotate);
+    click(&mut harness, "Acknowledge and continue");
+    step_until(&mut harness, 20, |app| {
+        app.work.current.is_some() && !app.work.queue.is_loading()
+    });
     assert!(harness.state().work.automatic_workflow_change.is_none());
-    harness.step();
-    assert!(harness.query_by_label(notice).is_none());
+    assert!(
+        harness
+            .query_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed")
+            .is_none()
+    );
     assert!(
         harness
             .query_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
@@ -3627,7 +3607,7 @@ fn automatic_workflow_change_stays_visible_after_assignment_and_queue_load() {
     );
 }
 
-fn render_workflow_notice(app: &mut LabelloApp) {
+fn acknowledge_presented_workflow_change(app: &mut LabelloApp) {
     let ctx = egui::Context::default();
     for _ in 0..3 {
         let _ = ctx.run_ui(
@@ -3638,13 +3618,17 @@ fn render_workflow_notice(app: &mut LabelloApp) {
                 )),
                 ..Default::default()
             },
-            |ui| app.central(ui, LayoutMode::Wide),
+            |ui| {
+                app.central(ui, LayoutMode::Wide);
+                app.overlays(ui.ctx(), LayoutMode::Wide);
+            },
         );
     }
+    app.acknowledge_workflow_change();
 }
 
 #[test]
-fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
+fn short_review_fallback_waits_for_keyboard_acknowledgment_and_claims_once() {
     let api = Rc::new(SpyApi::new());
     let mut app = base_live_app(api.clone());
     app.sync_work_config(api.metadata());
@@ -3674,57 +3658,21 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
         .unwrap();
     app.process_messages(&egui::Context::default());
     assert!(app.runtime.commands.is_empty());
-    let context_slot = Rc::new(std::cell::Cell::new(false));
-    let render_context_slot = context_slot.clone();
     let mut harness = Harness::builder()
         .with_size(egui::vec2(320.0, 320.0))
         .build_ui_state(
-            move |ui, app: &mut LabelloApp| {
-                if render_context_slot.get() {
-                    app.workspace_context_bar(ui, LayoutMode::Compact);
-                } else {
-                    // A 320px review viewport leaves 96px after its bars and footer.
-                    ui.set_max_height(96.0);
-                }
+            |ui, app: &mut LabelloApp| {
                 app.central(ui, LayoutMode::Compact);
+                app.overlays(ui.ctx(), LayoutMode::Compact);
             },
             app,
         );
-    for _ in 0..4 {
-        harness.step();
-    }
-    let notice =
-        "Workflow changed automatically. From Person boxes (Person) to Vehicle boxes (Vehicle).";
-    assert!(harness.query_by_label(notice).is_some());
-    let dismiss =
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss workflow change");
-    assert!(dismiss.rect().height() >= 44.0);
-    assert!(dismiss.rect().right() <= 320.0);
-    harness.state_mut().work.current = Some(crate::queue::QueuedImage {
-        image: image_record("notice-review", "synthetic-notice.png", 640, 480),
-        prelabels: Vec::new(),
-    });
-    harness.step();
-    let dismiss = harness.get_by_label("Dismiss workflow change");
-    let canvas = harness.get_by_label("Annotation canvas").rect();
-    assert!(canvas.height() >= 44.0);
-    assert!(dismiss.rect().bottom() <= canvas.top(), "notice must not cover the review canvas");
+    harness.run_steps(4);
     assert!(
         harness
-            .state()
-            .work
-            .automatic_workflow_change
-            .as_ref()
-            .unwrap()
-            .presented
+            .query_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed")
+            .is_some()
     );
-    assert_eq!(harness.state().runtime.commands.iter().filter(|command| matches!(command,
-        UiCommand::ClaimAssignment { task_id, .. } if *task_id == TaskId::from("bounding_box:vehicle")
-    )).count(), 1);
-    for _ in 0..3 {
-        harness.step();
-    }
-    assert!(harness.query_by_label(notice).is_some());
     assert_eq!(
         harness
             .state()
@@ -3733,29 +3681,25 @@ fn short_review_fallback_is_presented_without_a_context_bar_and_claims_once() {
             .iter()
             .filter(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
             .count(),
-        1
+        0
     );
-    for visible in [true, false] {
-        context_slot.set(visible);
-        for _ in 0..3 {
-            harness.step();
-        }
-        assert_eq!(
-            harness.query_all_by_label(notice).count(),
-            1,
-            "exactly one current notice must survive context-slot changes"
-        );
-        assert_eq!(
-            harness
-                .state()
-                .runtime
-                .commands
-                .iter()
-                .filter(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
-                .count(),
-            1
-        );
-    }
+    harness
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
+        .focus();
+    harness.run_steps(4);
+    assert_control_inside(
+        &harness,
+        "Acknowledge and continue",
+        egui::accesskit::Role::Button,
+        320.0,
+        320.0,
+    );
+    harness.key_press(egui::Key::Enter);
+    harness.run_steps(4);
+    assert!(harness.state().work.automatic_workflow_change.is_none());
+    assert_eq!(harness.state().runtime.commands.iter().filter(|command| matches!(command,
+        UiCommand::ClaimAssignment { task_id, .. } if *task_id == TaskId::from("bounding_box:vehicle")
+    )).count(), 1);
 }
 
 #[test]
@@ -3976,18 +3920,12 @@ fn missing_object_history_is_read_only_navigable_and_separate_from_current_revie
 fn automatic_workflow_change_scope_and_committed_selection_are_explicit() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api);
+    let mut harness = workflow_change_harness(api, AppView::Annotate);
     let app = harness.state_mut();
     assert!(app.work.automatic_workflow_change.is_some());
-    app.request_transition(crate::app::PendingTransition::Workflow(TaskId::from(
-        "bounding_box:person",
-    )));
-    assert!(app.work.pending_transition.is_some());
-    app.cancel_pending_transition();
-    assert!(
-        app.work.automatic_workflow_change.is_some(),
-        "cancel preserves committed identity feedback"
-    );
+    assert!(!app.select_workflow(&TaskId::from("unknown")));
+    assert!(!app.select_workflow(&TaskId::from("bounding_box:vehicle")));
+    assert!(app.work.automatic_workflow_change.is_some());
     app.clear_current_image();
     assert!(
         app.work.automatic_workflow_change.is_some(),
@@ -4018,7 +3956,9 @@ fn automatic_workflow_change_scope_and_committed_selection_are_explicit() {
 fn later_automatic_workflow_change_replaces_the_actual_previous_identity() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api);
+    let mut harness = workflow_change_harness(api, AppView::Annotate);
+    click(&mut harness, "Acknowledge and continue");
+    step_until(&mut harness, 12, |app| app.work.current.is_some());
     let app = harness.state_mut();
     app.clear_current_image();
     app.work.availability.tasks = BTreeMap::from([
@@ -4029,7 +3969,7 @@ fn later_automatic_workflow_change_replaces_the_actual_previous_identity() {
     let notice = app.work.automatic_workflow_change.as_ref().unwrap();
     assert_eq!(notice.previous, "Vehicle boxes (Vehicle)");
     assert_eq!(notice.current, "Person boxes (Person)");
-    assert!(!notice.presented);
+    assert!(notice.focus_pending);
     assert!(!app.loading.image);
 }
 
@@ -4195,12 +4135,12 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
 fn workflow_dot_and_persistent_fallback_notice_share_the_committed_identity() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = loaded_work_harness(api);
+    let mut harness = workflow_change_harness(api, AppView::Annotate);
     harness.run();
     assert_workflow_dot(&harness, "Person boxes", false);
     assert_workflow_dot(&harness, "Vehicle boxes", true);
     assert!(harness.state().work.automatic_workflow_change.is_some());
-    click(&mut harness, "Dismiss workflow change");
+    click(&mut harness, "Acknowledge and continue");
     harness.run();
     assert_workflow_dot(&harness, "Vehicle boxes", true);
 }
@@ -4548,4 +4488,125 @@ fn workflow_reasons_restore_with_their_cache_and_reject_stale_responses() {
     }).unwrap();
     harness.run();
     assert_eq!(harness.state().work.availability.reasons[&task],reason);
+}
+
+fn workflow_change_harness(api: Rc<SpyApi>, view: AppView) -> Harness<'static, LabelloApp> {
+    api.set_workflow_availability("bounding_box:person", false);
+    let mut harness = live_harness(api);
+    step_until(&mut harness, 8, |app| app.datasets.summaries.len() == 1);
+    click(
+        &mut harness,
+        if view == AppView::Review {
+            "Review Demo Dataset"
+        } else {
+            "Continue with Demo Dataset"
+        },
+    );
+    step_until(&mut harness, 12, |app| {
+        app.work.automatic_workflow_change.is_some()
+    });
+    harness.run_steps(4);
+    harness
+}
+
+#[test]
+fn automatic_workflow_change_requires_acknowledgment_before_claiming() {
+    for view in [AppView::Annotate, AppView::Review] {
+        let api = Rc::new(SpyApi::new());
+        let mut harness = workflow_change_harness(api.clone(), view);
+        assert_eq!(
+            api.counts().assign_next_image,
+            0,
+            "rendering must not claim the new workflow"
+        );
+        assert!(harness.state().work.current.is_none());
+        for key in [
+            egui::Key::Space,
+            egui::Key::Enter,
+            egui::Key::Escape,
+            egui::Key::N,
+        ] {
+            harness.key_press(key);
+            harness.run_steps(3);
+            assert!(harness.state().work.automatic_workflow_change.is_some());
+            assert_eq!(api.counts().assign_next_image, 0);
+        }
+        harness.state_mut().request_next_image();
+        harness.state_mut().request_assignment_availability();
+        harness.state_mut().runtime.notice = Some("Unrelated update".into());
+        harness.run_steps(3);
+        assert_eq!(api.counts().assign_next_image, 0);
+        click(&mut harness, "Acknowledge and continue");
+        step_until(&mut harness, 12, |app| app.work.current.is_some());
+        assert!(harness.state().work.automatic_workflow_change.is_none());
+        assert_eq!(
+            harness.state().work.selected_task_id,
+            Some(TaskId::from("bounding_box:vehicle"))
+        );
+    }
+}
+
+#[test]
+fn workflow_change_blocks_loaded_annotation_review_and_migration_input() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    for preset in [
+        InspectorPreset::Annotation,
+        InspectorPreset::ReviewCorrection,
+        InspectorPreset::MigrationObject,
+        InspectorPreset::MigrationReview,
+    ] {
+        let mut harness = Harness::builder()
+            .with_size(egui::vec2(1440.0, 1000.0))
+            .build_eframe(|cc| {
+                let mut app = inspector_presets::build(preset, &cc.egui_ctx);
+                app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
+                    previous: "Previous task (Previous class)".into(),
+                    current: app.workflow_identity_label(app.selected_task().unwrap()),
+                    dataset_id: app.config.dataset_id.clone(),
+                    view: app.view,
+                    focus_pending: true,
+                });
+                app
+            });
+        let generation = harness.state().work.edit_generation;
+        let annotations = harness.state().work.annotations.clone();
+        let cursor = harness.state().work.migration.cursor.clone();
+        for key in [
+            egui::Key::Space,
+            egui::Key::Enter,
+            egui::Key::Delete,
+            egui::Key::Escape,
+        ] {
+            harness.key_press(key);
+            harness.run_steps(3);
+        }
+        // Direct action dispatch and the first-frame shell guard both honor the pending decision.
+        harness
+            .state_mut()
+            .trigger_user_action(labello_domain::UserAction::NextImage);
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        let point = canvas.left_top() + egui::vec2(12.0, 12.0);
+        harness.event(egui::Event::PointerMoved(point));
+        for pressed in [true, false] {
+            harness.event(egui::Event::PointerButton {
+                pos: point,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run_steps(2);
+        }
+        assert!(
+            harness.state().work.automatic_workflow_change.is_some(),
+            "{preset:?}"
+        );
+        assert_eq!(
+            harness.state().work.edit_generation,
+            generation,
+            "{preset:?}"
+        );
+        assert_eq!(harness.state().work.annotations, annotations, "{preset:?}");
+        assert_eq!(harness.state().work.migration.cursor, cursor, "{preset:?}");
+        assert!(harness.state().work.pending_transition.is_none());
+    }
 }

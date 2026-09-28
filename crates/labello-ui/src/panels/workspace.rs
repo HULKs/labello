@@ -17,106 +17,100 @@ impl LabelloApp {
             }
             AppView::Annotate | AppView::Review => {}
         }
-        if self.workflow_change_needs_inline_slot(ui.ctx()) {
-            let width = ui.available_width();
-            let notice = egui::Frame::new()
-                .inner_margin(egui::Margin::symmetric(6, 0))
-                .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
-            ui.painter().rect_stroke(
-                notice.response.rect,
-                6,
-                egui::Stroke::new(2.0, theme::AMBER),
-                egui::StrokeKind::Inside,
-            );
-        }
         let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
-        self.automatic_workflow_change_notice(ui.ctx(), canvas_rect);
+        self.saved_workflow_reason_notice(ui.ctx(), canvas_rect);
     }
 
-    pub(crate) fn workflow_change_needs_inline_slot(&self, ctx: &egui::Context) -> bool {
-        let viewport = ctx.content_rect().size();
-        LayoutMode::for_width(viewport.x) == LayoutMode::Compact
-            && Self::short_viewport(viewport)
-            && self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
-                notice.presented_pass != Some(ctx.cumulative_pass_nr())
-            })
-    }
-
-    fn automatic_workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+    fn saved_workflow_reason_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         self.clear_reason_notice_outside_scope();
-        let workflow_visible = self.work.automatic_workflow_change.as_ref().is_some_and(|notice| {
-            notice.presented_pass != Some(ctx.cumulative_pass_nr())
-        });
-        if !workflow_visible && !self.reason_notice_visible() { return; }
+        if !self.reason_notice_visible() { return; }
         let width = (canvas.width() - 16.0).clamp(200.0, 520.0);
-        egui::Area::new(egui::Id::new("automatic-workflow-change"))
+        egui::Area::new(egui::Id::new("saved-workflow-reasons"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
             .constrain_to(canvas)
             .show(ctx, |ui| {
                 ui.set_width(width);
-                if workflow_visible {
-                    theme::card_frame()
-                        .inner_margin(egui::Margin::same(6))
-                        .stroke(egui::Stroke::new(2.0, theme::AMBER))
-                        .show(ui, |ui| self.workflow_change_contents(ui, width - 12.0));
-                }
                 self.reason_notice_contents(ui, width, canvas.height());
             });
     }
 
-    fn workflow_change_contents(&mut self, ui: &mut egui::Ui, width: f32) {
+    fn automatic_workflow_change_modal(&mut self, ctx: &egui::Context) {
         let Some(notice) = self.work.automatic_workflow_change.clone() else {
             return;
         };
-        let label = format!(
-            "Workflow changed automatically. From {} to {}.",
-            notice.previous, notice.current
-        );
-        let presented = ui.is_visible();
-        let mut dismiss = false;
-        ui.set_width(width);
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.set_width((width - 54.0).max(60.0));
-                let response = ui
-                    .add(egui::Label::new(format!("Changed from {}", notice.previous)).truncate());
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::WidgetType::Label, true, label.clone())
-                });
-                ui.ctx().accesskit_node_builder(response.id, |node| {
-                    node.set_role(egui::accesskit::Role::Status);
-                    node.set_label(label.clone());
-                    node.set_live(egui::accesskit::Live::Polite);
-                });
-                response.on_hover_text(&notice.previous);
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(format!("Now {}", notice.current))
-                            .strong()
-                            .color(theme::AMBER),
-                    )
-                    .truncate(),
-                )
-                .on_hover_text(&notice.current);
+        let screen = ctx.content_rect();
+        let width = (screen.width() - 48.0).clamp(160.0, 520.0);
+        let max_height = (screen.height() - 48.0).max(80.0);
+        let gap = if Self::short_viewport(screen.size()) {
+            0.0
+        } else {
+            theme::SPACE_2
+        };
+        let mut acknowledged = false;
+        let mut presented = false;
+        let response =
+            theme::modal(ctx, egui::Id::new("automatic-workflow-change-modal")).show(ctx, |ui| {
+                ui.set_width(width);
+                ui.set_max_height(max_height);
+                egui::ScrollArea::vertical()
+                    .scroll_source(crate::pointer_input::scroll_source(ctx))
+                    .max_height(max_height)
+                    .show(ui, |ui| {
+                        let title = ui.add(
+                            egui::Label::new(RichText::new("Workflow changed").heading())
+                                .sense(egui::Sense::focusable_noninteractive()),
+                        );
+                        if title.gained_focus() {
+                            title.scroll_to_me(None);
+                        }
+                        if notice.focus_pending && ui.is_visible() {
+                            // Focus the explanation, not a button that a completion key could activate.
+                            title.request_focus();
+                            presented = true;
+                        }
+                        ui.add_space(gap);
+                        ui.label(
+                            "No assignments are currently available in the previous workflow.",
+                        );
+                        ui.add_space(gap);
+                        ui.label(RichText::new(crate::glossary::PREVIOUS_WORKFLOW).weak());
+                        ui.add(egui::Label::new(&notice.previous).wrap());
+                        ui.add_space(gap);
+                        ui.label(RichText::new("New workflow").weak());
+                        ui.add(egui::Label::new(RichText::new(&notice.current).strong()).wrap());
+                        ui.add_space(gap + theme::SPACE_1);
+                        let button = theme::primary_button(
+                            ui,
+                            !notice.focus_pending,
+                            egui::Button::new("Acknowledge and continue")
+                                .wrap()
+                                .min_size(egui::vec2(44.0, 44.0)),
+                        );
+                        if button.gained_focus() {
+                            button.scroll_to_me(None);
+                        }
+                        if button.clicked() {
+                            button.surrender_focus();
+                            acknowledged = true;
+                        }
+                    });
             });
-            let button = ui
-                .add(egui::Button::new("×").min_size(egui::vec2(44.0, 44.0)))
-                .on_hover_text("Dismiss workflow change");
-            button.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dismiss workflow change")
-            });
-            dismiss = button.clicked();
+        response.response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Workflow changed")
         });
-        if dismiss {
-            self.work.automatic_workflow_change = None;
+        ctx.accesskit_node_builder(response.response.id, |node| {
+            node.set_role(egui::accesskit::Role::Dialog);
+            node.set_modal();
+        });
+        // Deliberately ignore should_close: neither Escape nor the backdrop acknowledges a change.
+        if acknowledged {
+            self.acknowledge_workflow_change();
+            ctx.request_repaint();
         } else if presented && let Some(notice) = self.work.automatic_workflow_change.as_mut() {
-            notice.presented = true;
-            notice.presented_pass = Some(ui.ctx().cumulative_pass_nr());
-        }
-        if !notice.presented && presented {
-            self.request_next_image();
+            notice.focus_pending = false;
+            ctx.request_repaint();
         }
     }
 
@@ -133,6 +127,10 @@ impl LabelloApp {
             .is_some()
         {
             self.migration_companion_reconciliation_modal(ctx);
+            return;
+        }
+        if self.work.automatic_workflow_change.is_some() {
+            self.automatic_workflow_change_modal(ctx);
             return;
         }
         if self.navigation.statistics.open {
