@@ -81,6 +81,7 @@ fn paint_workflow_marker(
     rect: egui::Rect,
     selected: bool,
     reason: Option<WorkflowMarkerReason>,
+    reason_color: egui::Color32,
 ) {
     use WorkflowMarkerReason as M;
     use labello_domain::WorkflowUnavailableReason as R;
@@ -88,7 +89,7 @@ fn paint_workflow_marker(
     let center = rect.center();
     let origin = center - egui::vec2(9.0, 9.0);
     let point = |x, y| origin + egui::vec2(x, y);
-    let stroke = egui::Stroke::new(1.5, theme::TEXT_MUTED);
+    let stroke = egui::Stroke::new(1.5, reason_color);
     let line = |a: (f32, f32), b: (f32, f32)| {
         painter.line_segment([point(a.0, a.1), point(b.0, b.1)], stroke);
     };
@@ -157,7 +158,7 @@ fn paint_workflow_marker(
                     [center + direction * 5.0, center + direction * 8.0],
                     egui::Stroke::new(
                         1.5,
-                        theme::TEXT_MUTED.gamma_multiply(0.35 + i as f32 * 0.09),
+                        reason_color.gamma_multiply(0.35 + i as f32 * 0.09),
                     ),
                 );
             }
@@ -190,7 +191,7 @@ fn paint_workflow_marker(
                 ],
                 false,
             );
-            painter.circle_filled(point(9.0, 14.0), 0.9, theme::TEXT_MUTED);
+            painter.circle_filled(point(9.0, 14.0), 0.9, reason_color);
         }
         Some(M::Unavailable(R::BalanceLimit)) => {
             line((9.0, 1.0), (9.0, 16.0));

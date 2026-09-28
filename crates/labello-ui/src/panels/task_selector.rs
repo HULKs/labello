@@ -543,6 +543,7 @@ impl LabelloApp {
                 egui::Rect::from_center_size(reason_center, egui::vec2(18.0, 18.0)),
                 false,
                 reason,
+                if selected { theme::TEXT } else { theme::TEXT_MUTED },
             );
             if selected {
                 let dot_center = if reason.is_some() {
@@ -570,7 +571,7 @@ impl LabelloApp {
                 workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
             }
             if let Some(marker_rect) = choice.rect(marker_id) {
-                paint_workflow_marker(ui, marker_rect, selected, reason);
+                paint_workflow_marker(ui, marker_rect, selected, reason, theme::TEXT_MUTED);
             }
         }
         let mut hover_text = format!(
