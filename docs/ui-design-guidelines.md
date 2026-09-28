@@ -364,6 +364,13 @@ fails or is unavailable. Server loading, unavailable and retry states are local
 to About. Clipboard feedback is an accessible polite status and success requires
 the platform copy operation to succeed.
 
+In the browser, a confirmed mismatch automatically prepares an update and reloads
+when current operations and browser draft writes have finished. About shows a
+polite status explaining preparation, pending work or storage, and failure. Failed
+or already-attempted recovery offers a 44-point `Retry app update` action alongside
+the build details. It rechecks server identity before retrying. These controls
+wrap within About's existing scrollable content at compact and short sizes.
+
 Routine identity values stay in About. Only two complete differing release
 identities produce the persistent lower-right bottom-bar warning, `Web app and
 server builds differ`. Use the existing amber warning intent, a small warning

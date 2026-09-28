@@ -147,7 +147,7 @@ The default is the annotation preset. Use `-- --preset <name>` with Cargo for
 another frozen state.
 
 Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `prelabel-boxes`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
-`build-unavailable`, `review`, `review-correction`,
+`build-unavailable`, `build-update-failed`, `review`, `review-correction`,
 `admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
 `statistics-failure`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
@@ -198,6 +198,9 @@ browser-only or unsupported in the inspector.
 Use the headless launch recipe with `--live` when no graphical display is
 available. Preset or native live-mode evidence must be accompanied by the
 Chromium checks required by the [verification contract](../../docs/verification.md).
+
+The `build-update-failed` preset shows the browser update failure and retry control
+in About without navigating.
 
 The build-information presets use synthetic release identities. `about` shows
 matching identities, `build-unavailable` shows the local unavailable state, and

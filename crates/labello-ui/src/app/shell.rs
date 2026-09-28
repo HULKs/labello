@@ -9,6 +9,12 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
+        if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
+            // Navigation is asynchronous. Do not accept edits after the final
+            // persistence check while the browser replaces this document.
+            ui.centered_and_justified(|ui| { ui.label("Updating Labello..."); });
+            return;
+        }
         if self.view != AppView::Review {
             self.work.review_details_focus_return = None;
         }
@@ -200,6 +206,7 @@ impl eframe::App for LabelloApp {
         self.overlays(ui.ctx(), layout);
         self.queue_current_drafts();
         self.persist_workspace_preference();
+        self.advance_build_reload(ui.ctx());
         self.start_next_command();
         if self.work.save_status == SaveStatus::Dirty
             && let Some(edited) = self.work.last_edit_at
