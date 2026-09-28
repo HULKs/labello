@@ -391,6 +391,35 @@ image-index and per-image event-log reads, as well as generated metadata.
 
 ## Dataset assignment balance
 
+Dataset administrators configure overlapping-box visibility in Administration >
+Automation > Overlapping boxes. The dataset setting defaults to 0.9 when absent:
+
+```toml
+[boundingBoxVisibility]
+iouThreshold = 0.9
+```
+
+The threshold must be finite and within `[0, 1]`. Boxes compete only within the
+same image and class, across that image's workflows. A box is hidden when its
+IoU with a retained box is strictly greater than the threshold. Set 1 to show
+all boxes. Current exact-version approval wins over an unreviewed box, which
+wins over a rejected box; stable annotation IDs break ties. Superseded decisions
+and approvals of older versions do not rank the current box.
+
+This filters annotation, review, dataset inspection, and migration guide views.
+It preserves stored annotations, versions, deletion flags, image membership,
+statistics, and export content. Moving or deleting a retained box or changing
+the threshold can reveal a previously hidden box. Reload other open clients to
+pick up a changed setting. Saving configuration updates the current client's
+views and releases its prepared assignments. Stale review submissions fail
+without partial writes and require a fresh assignment.
+
+Pending migration targets with hidden guide boxes are skipped. Existing
+skeletons and their review targets remain. Changing visibility does not rewrite
+completed history or automatically reopen completed tasks. See
+[workflow policy](workflow-policy.md#overlapping-box-visibility) for the shared
+selection and replay contract.
+
 Dataset administrators also configure `preloadQueueSize` in Administration >
 Automation. It is a top-level integer in `labello.dataset.toml`, defaults to two
 when absent, and accepts 1 through 200 upcoming assignments. The current image

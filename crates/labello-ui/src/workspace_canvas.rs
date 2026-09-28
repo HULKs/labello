@@ -55,6 +55,7 @@ impl LabelloApp {
                 annotations.retain(|annotation| annotation.annotation_id != preview.annotation_id);
                 annotations.push(preview);
             }
+            self.filter_visible_boxes(&mut annotations);
             let selectable = annotations
                 .iter()
                 .map(|annotation| annotation.annotation_id.clone())

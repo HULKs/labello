@@ -264,11 +264,18 @@ boxes win. Remaining hints are ordered by descending confidence with stable
 suggestion-ID ties. A hint is suppressed only when IoU is **greater than** the
 configured threshold against a kept hint or existing box in the same image,
 class, and workflow. The default threshold is **0.5**. Different classes and
-workflows may overlap. Editing or deleting a draft box immediately refilters
+workflows may overlap under this prelabel-specific filter. Editing or deleting a draft box immediately refilters
 the retained candidates. Pending object edits also participate in hint suppression;
 the original prediction must still pass the acceptance filter against annotations.
 Changing model or processing configuration invalidates
 the generation identity and requires refreshed hints.
+
+The dataset's [overlapping-box visibility](configuration.md) policy also applies
+to editable pending objects after this filter. It compares same-class boxes
+across workflows using the dataset threshold, default 0.9. Suppressed hints stay
+retained but do not appear on the canvas, in object counts, or as outstanding
+confirmation work. This does not change model generation or signed acceptance
+evidence, and it does not delete hints or annotation records.
 
 ## Dataset generation and removal
 

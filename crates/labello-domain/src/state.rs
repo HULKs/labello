@@ -21,6 +21,9 @@ pub struct ImageState {
     pub schema_version: u32,
     pub image_id: ImageId,
     pub current_sequence: u64,
+    /// Policy captured by events; live repository reads overlay current dataset settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bounding_box_visibility: Option<crate::BoundingBoxVisibility>,
     /// Derived-cache generation; authoritative event schema remains version 3.
     #[serde(default)]
     pub review_projection_version: u32,
@@ -76,6 +79,7 @@ impl ImageState {
             schema_version: SCHEMA_VERSION,
             image_id,
             current_sequence: 0,
+            bounding_box_visibility: None,
             review_projection_version: 1,
             annotations: BTreeMap::new(),
             reviews: Vec::new(),

@@ -4859,3 +4859,5 @@ async fn migration_review_can_approve_after_a_locally_corrected_skeleton() {
         corrected
     );
 }
+
+mod box_visibility;

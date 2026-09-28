@@ -554,6 +554,7 @@ impl crate::app::LabelloApp {
                 config.tasks = recovered.tasks;
                 config.imbalance = recovered.imbalance;
                 config.preload_queue_size = recovered.preload_queue_size;
+                config.bounding_box_visibility = recovered.bounding_box_visibility;
                 config.prelabel_configs = recovered.prelabel_configs;
                 self.datasets.admin_config = Some(config.clone());
                 self.runtime.notice = Some("Recovered the validated admin draft.".to_string());

@@ -86,7 +86,7 @@ impl BoundingBox {
         if union <= 0.0 {
             0.0
         } else {
-            intersection / union
+            (intersection / union).clamp(0.0, 1.0)
         }
     }
 }

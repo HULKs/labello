@@ -146,7 +146,7 @@ no inspector CLI endpoint flag. Configure each disposable server using the
 The default is the annotation preset. Use `-- --preset <name>` with Cargo for
 another frozen state.
 
-Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `prelabel-boxes`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
+Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `overlapping-boxes`, `overlapping-boxes-unfiltered`, `prelabel-boxes`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `build-update-failed`, `review`, `review-correction`,
 `admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,

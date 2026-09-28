@@ -777,6 +777,7 @@ async fn update_dataset_config(
     metadata.role_assignments = request.role_assignments;
     metadata.imbalance = request.imbalance;
     metadata.preload_queue_size = request.preload_queue_size;
+    metadata.bounding_box_visibility = request.bounding_box_visibility;
     metadata.prelabel_configs = request.prelabel_configs;
     metadata.updated_at = labello_domain::now();
     repo.save_dataset(&metadata).await?;
@@ -1120,6 +1121,10 @@ fn validate_config_update(
     request: &UpdateDatasetConfigRequest,
     actor: &Actor,
 ) -> ApiResult<()> {
+    request
+        .bounding_box_visibility
+        .validate()
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     labello_domain::validate_preload_queue_size(request.preload_queue_size)
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     if request.name.trim().is_empty() {

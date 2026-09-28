@@ -78,9 +78,17 @@ impl LabelloApp {
             candidate
         }).collect::<Vec<_>>();
         let kept = labello_domain::filter_prelabels(&candidates, &self.work.annotations, &processing);
-        kept.iter().filter_map(|candidate| hints.iter().find(|hint| hint.suggestion_id == candidate.suggestion_id))
+        let mut visible = kept.iter().filter_map(|candidate| hints.iter().find(|hint| hint.suggestion_id == candidate.suggestion_id))
             .filter(|suggestion| self.selected_class_id() == Some(&suggestion.class_id))
-            .cloned().collect()
+            .cloned().collect::<Vec<_>>();
+        let mut objects = self.work.prelabel_review.objects.iter()
+            .filter(|item| visible.iter().any(|hint| hint.suggestion_id == item.suggestion.suggestion_id))
+            .map(|item| item.annotation.clone()).collect();
+        self.filter_visible_boxes(&mut objects);
+        visible.retain(|hint| self.work.prelabel_review.objects.iter()
+            .find(|item| item.suggestion.suggestion_id == hint.suggestion_id)
+            .is_none_or(|item| objects.iter().any(|annotation| annotation.annotation_id == item.annotation.annotation_id)));
+        visible
     }
 
     fn prelabel_panel(&mut self, ui: &mut egui::Ui) {

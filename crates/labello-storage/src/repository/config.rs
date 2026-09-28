@@ -14,6 +14,7 @@ impl DatasetRepository {
     async fn create_dataset(&self, metadata: &DatasetMetadata) -> StorageResult<()> {
         labello_domain::validate_schema_version(metadata.schema_version)?;
         validate_current_review_config(metadata)?;
+        metadata.bounding_box_visibility.validate()?;
         let path = self.dataset_path();
         let text = toml::to_string_pretty(&DatasetConfig::from_metadata(metadata))
             .with_toml_encode_path(&path)?;
@@ -41,6 +42,7 @@ impl DatasetRepository {
         self.ensure_artifact_migration().await?;
         let config: DatasetConfig = read_current_toml(&self.dataset_path()).await?;
         labello_domain::validate_preload_queue_size(config.preload_queue_size)?;
+        config.bounding_box_visibility.validate()?;
         let images = self
             .load_images_index()
             .await?
@@ -55,6 +57,7 @@ impl DatasetRepository {
         self.ensure_artifact_migration().await?;
         let config: DatasetConfig = read_current_toml(&self.dataset_path()).await?;
         labello_domain::validate_preload_queue_size(config.preload_queue_size)?;
+        config.bounding_box_visibility.validate()?;
         Ok(config.into_metadata(BTreeMap::new()))
     }
 
@@ -63,6 +66,8 @@ impl DatasetRepository {
         let _review_config_guard = self.review_config_lock.write().await;
         labello_domain::validate_schema_version(metadata.schema_version)?;
         validate_current_review_config(metadata)?;
+        metadata.bounding_box_visibility.validate()?;
+        write_json_atomic(&self.schema_path(), &labello_schema_bundle()).await?;
         write_toml_atomic(
             &self.dataset_path(),
             &DatasetConfig::from_metadata(metadata),

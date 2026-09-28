@@ -120,6 +120,12 @@ impl Default for InspectorState {
     }
 }
 impl InspectorState {
+    pub(crate) fn set_box_visibility(&mut self, policy: labello_domain::BoundingBoxVisibility) {
+        if let Some(state) = &mut self.state {
+            state.bounding_box_visibility = Some(policy);
+        }
+    }
+
     pub(crate) fn suspend_requests(&mut self) {
         self.transfers.cancel_all();
         self.pending.clear();
@@ -134,7 +140,7 @@ impl InspectorState {
             .as_ref()
             .map(|state| {
                 state
-                    .active_annotations()
+                    .visible_annotations()
                     .filter(|annotation| {
                         !self.hidden_tasks.contains(&annotation.task_id)
                             && !self.hidden_statuses.contains(
@@ -628,7 +634,7 @@ impl LabelloApp {
         if let Some(state) = &self.inspection.state {
             for task in &self.work.tasks {
                 let count = state
-                    .active_annotations()
+                    .visible_annotations()
                     .filter(|a| a.task_id == task.task_id)
                     .count();
                 let status = state
@@ -1371,6 +1377,23 @@ mod tests {
                 assert_eq!(info.size(), egui::vec2(44.0, 44.0));
             }
         }
+    }
+
+    #[test]
+    fn overlapping_boxes_are_hidden_in_inspection_without_removing_records() {
+        let mut app = app();
+        let state = app.inspection.state.as_mut().unwrap();
+        state.bounding_box_visibility = Some(Default::default());
+        let mut duplicate = state.active_annotations().next().unwrap().clone();
+        duplicate.annotation_id = "zz_duplicate".into();
+        state
+            .annotations
+            .insert(duplicate.annotation_id.clone(), vec![duplicate]);
+        assert_eq!(state.active_annotations().count(), 2);
+        assert_eq!(app.inspection.overlays().len(), 1);
+        app.inspection
+            .set_box_visibility(labello_domain::BoundingBoxVisibility { iou_threshold: 1.0 });
+        assert_eq!(app.inspection.overlays().len(), 2);
     }
 
     #[test]

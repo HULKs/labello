@@ -27,6 +27,8 @@ pub enum InspectorPreset {
     DatasetGallery,
     DatasetInspection,
     Annotation,
+    OverlappingBoxes,
+    OverlappingBoxesUnfiltered,
     PrelabelBoxes,
     Presence,
     PresenceFallback,
@@ -94,10 +96,12 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 67] = [
+    pub const ALL: [Self; 69] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
+        Self::OverlappingBoxes,
+        Self::OverlappingBoxesUnfiltered,
         Self::PrelabelBoxes,
         Self::Presence,
         Self::PresenceFallback,
@@ -169,6 +173,8 @@ impl InspectorPreset {
             Self::DatasetGallery => "dataset-gallery",
             Self::DatasetInspection => "dataset-inspection",
             Self::Annotation => "annotation",
+            Self::OverlappingBoxes => "overlapping-boxes",
+            Self::OverlappingBoxesUnfiltered => "overlapping-boxes-unfiltered",
             Self::PrelabelBoxes => "prelabel-boxes",
             Self::Presence => "presence",
             Self::PresenceFallback => "presence-fallback",
@@ -280,6 +286,32 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::OverlappingBoxes | InspectorPreset::OverlappingBoxesUnfiltered => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            let mut duplicate = app.work.annotations[0].clone();
+            duplicate.annotation_id = "zz_duplicate".into();
+            if let AnnotationGeometry::BoundingBox(bounds) = &mut duplicate.geometry {
+                bounds.x += 0.005;
+            }
+            app.work.annotations.push(duplicate);
+            let state = app.work.current_state.as_mut().unwrap();
+            state.bounding_box_visibility = Some(labello_domain::BoundingBoxVisibility {
+                iou_threshold: if preset == InspectorPreset::OverlappingBoxes {
+                    0.9
+                } else {
+                    1.0
+                },
+            });
+            for annotation in &app.work.annotations {
+                state
+                    .annotations
+                    .insert(annotation.annotation_id.clone(), vec![annotation.clone()]);
+                app.work
+                    .persisted_annotations
+                    .insert(annotation.annotation_id.clone());
+            }
+            app
+        }
         InspectorPreset::PrelabelBoxes => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             let annotation = app.work.annotations.remove(0);

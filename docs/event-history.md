@@ -211,3 +211,29 @@ Server prediction execution may be `server_cpu`, `server_cuda`, or `server_web_g
 All three retain server-generated trust through accepted origin, replay, snapshots
 and offline wire data. Browser submissions cannot claim any server execution kind.
 Historical CPU and browser execution values keep their existing meaning.
+
+## Bounding-box visibility
+
+Version-3 events may carry optional `boundingBoxVisibility` metadata containing
+the server-selected `iouThreshold`. Replay applies the policy before the event
+payload, preserving the review target selection and migration confirmation
+semantics used at commit time. A failed event does not install a changed policy.
+Version-2 events cannot carry this metadata. Older version-2 and version-3 events
+without it retain historical unfiltered semantics until an event explicitly
+installs a policy. No existing event bytes are rewritten.
+
+`ImageState.boundingBoxVisibility` stores the replayed policy as an optional
+field. Missing fields in historical state caches decode as absent. Live storage
+reads overlay the current dataset setting without publishing that overlay as a
+cache. The next successful transaction stamps the policy into events, after
+which the persisted cache is again exactly reproducible from those events.
+Snapshots preserve raw event history and replayed caches along with dataset
+configuration; offline bundles retain the current policy. Offline mutations are
+server-constructed and use the normal event transaction. Clients cannot select
+the policy. Migration command resequencing stamps the selected server policy
+onto its constructed events.
+
+Hidden annotation IDs are derived, not persisted as deletion flags. Migration
+confirmation hashes include skipped Pending target IDs when nonempty. Review
+fingerprints include the current exclusions when nonempty.
+Historical hashes and fingerprints remain unchanged for unfiltered histories.

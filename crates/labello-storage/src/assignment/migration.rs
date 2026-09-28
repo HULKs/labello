@@ -2421,7 +2421,12 @@ fn canonical_review_target(
     let set = state.migration_target_sets.get(task_id).ok_or_else(|| {
         StorageError::InvalidAssignment("migration target set is missing".to_string())
     })?;
-    let mut targets = set.targets.iter().collect::<Vec<_>>();
+    let skipped = state.skipped_migration_groups(task_id);
+    let mut targets = set
+        .targets
+        .iter()
+        .filter(|target| !skipped.contains(&target.object_group_id))
+        .collect::<Vec<_>>();
     targets.sort_by_key(|target| target.sequence_index);
     for target in targets {
         let disposition = current_disposition(state, task_id, &target.object_group_id)?;
@@ -2592,11 +2597,15 @@ fn command_result(
     let dispositions = state.migration_dispositions.get(task_id).ok_or_else(|| {
         StorageError::InvalidAssignment("migration dispositions are missing".to_string())
     })?;
+    let skipped = state.skipped_migration_groups(task_id);
     let mut progress = ManualMigrationProgress {
-        expected: dispositions.len() as u64,
+        expected: (dispositions.len() - skipped.len()) as u64,
         ..ManualMigrationProgress::default()
     };
-    for disposition in dispositions.values() {
+    for (group_id, disposition) in dispositions {
+        if skipped.contains(group_id) {
+            continue;
+        }
         match disposition.status {
             MigrationDispositionStatus::Pending => progress.pending += 1,
             MigrationDispositionStatus::Annotated { .. } => progress.annotated += 1,

@@ -13,6 +13,8 @@ struct EventLogEntryWire {
     actor_role: DatasetRole,
     timestamp: Timestamp,
     payload: EventPayload,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bounding_box_visibility: Option<crate::BoundingBoxVisibility>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -43,6 +45,8 @@ pub struct EventLogEntryV3WireSchema {
     pub actor_role: DatasetRole,
     pub timestamp: Timestamp,
     pub payload: EventPayload,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bounding_box_visibility: Option<crate::BoundingBoxVisibility>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -122,6 +126,7 @@ impl From<EventLogEntryWire> for EventLogEntry {
             actor_role: wire.actor_role,
             timestamp: wire.timestamp,
             payload: wire.payload,
+            bounding_box_visibility: wire.bounding_box_visibility,
         }
     }
 }
@@ -138,6 +143,7 @@ impl From<&EventLogEntry> for EventLogEntryWire {
             actor_role: entry.actor_role.clone(),
             timestamp: entry.timestamp,
             payload: entry.payload.clone(),
+            bounding_box_visibility: entry.bounding_box_visibility,
         }
     }
 }
@@ -147,6 +153,13 @@ impl Serialize for EventLogEntry {
     where
         S: Serializer,
     {
+        if self.schema_version == crate::LEGACY_SCHEMA_VERSION
+            && self.bounding_box_visibility.is_some()
+        {
+            return Err(serde::ser::Error::custom(
+                "bounding-box visibility requires schema version 3",
+            ));
+        }
         if self.schema_version == crate::LEGACY_SCHEMA_VERSION
             && matches!(
                 self.payload,

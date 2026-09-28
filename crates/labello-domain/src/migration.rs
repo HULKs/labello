@@ -301,7 +301,7 @@ impl MigrationHash {
         self.bytes().map(|_| ())
     }
 
-    fn from_hasher(hasher: blake3::Hasher) -> Self {
+    pub(crate) fn from_hasher(hasher: blake3::Hasher) -> Self {
         Self(hasher.finalize().to_hex().to_string())
     }
 

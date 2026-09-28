@@ -312,12 +312,13 @@ impl LabelloApp {
     }
 
     pub(crate) fn current_review_annotation(&self) -> Option<&labello_domain::AnnotationVersion> {
+        let excluded = self.work_box_exclusions();
         (self.view == AppView::Review).then_some(()).and_then(|()| {
             self.work
                 .annotations
                 .iter()
                 .filter(|annotation| {
-                    !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
+                    !annotation.deleted && !excluded.contains_key(&annotation.annotation_id) && self.annotation_matches_selected_workflow(annotation)
                 })
                 .nth(self.work.review_index)
         })

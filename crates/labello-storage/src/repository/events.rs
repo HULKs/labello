@@ -41,9 +41,10 @@ impl DatasetRepository {
     }
 
     pub async fn load_image_state(&self, image_id: &ImageId) -> StorageResult<ImageState> {
-        self.load_image_state_with_events(image_id)
-            .await
-            .map(|(state, _)| state)
+        let (mut state, _) = self.load_image_state_with_events(image_id).await?;
+        state.bounding_box_visibility =
+            Some(self.load_dataset_config().await?.bounding_box_visibility);
+        Ok(state)
     }
 
     pub(crate) async fn load_image_state_with_events(
@@ -119,6 +120,12 @@ impl DatasetRepository {
     ) -> StorageResult<()> {
         if events.is_empty() {
             return Ok(());
+        }
+        // Publish the current optional wire fields before any new event uses them.
+        // Concurrent first writes are harmless; each schema publication is atomic.
+        if !self.current_schema_published.load(Ordering::Acquire) {
+            write_json_atomic(&self.schema_path(), &labello_schema_bundle()).await?;
+            self.current_schema_published.store(true, Ordering::Release);
         }
         let path = self.events_path(image_id);
         if let Some(parent) = path.parent() {

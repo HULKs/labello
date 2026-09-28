@@ -244,6 +244,7 @@ impl LabelloApp {
             discovery_focus.as_ref().or(guide.as_ref())
         });
         let task_id = task.task_id.clone();
+        let excluded_boxes = state.bounding_box_exclusions();
         let mut annotations = Vec::new();
         let mut annotation_styles = std::collections::BTreeMap::new();
         let mut selectable_annotations = std::collections::BTreeSet::new();
@@ -258,7 +259,10 @@ impl LabelloApp {
                     .as_ref()
                     .is_some_and(|(group, _)| group == &target.object_group_id);
                 let guide_style = migration_guide_style(current, status);
-                if let Some(guide) = state.current_annotation(&target.guide_annotation_id) {
+                if let Some(guide) = state
+                    .current_annotation(&target.guide_annotation_id)
+                    .filter(|guide| !excluded_boxes.contains_key(&guide.annotation_id))
+                {
                     let mut rendered = guide.clone();
                     if rendered.deleted {
                         rendered.deleted = false;
@@ -477,6 +481,12 @@ impl LabelloApp {
                     .map(|annotation| annotation.annotation_id.clone()),
             );
         }
+        self.filter_visible_boxes(&mut annotations);
+        selectable_annotations.retain(|id| {
+            annotations
+                .iter()
+                .any(|annotation| &annotation.annotation_id == id)
+        });
         self.style_review_correction_previews(&annotations, &mut annotation_styles);
         // Reserve the same gutter in both phases so the cue never covers image
         // pixels or changes the canvas transform when the workflow advances.
@@ -2026,7 +2036,7 @@ impl LabelloApp {
                 Some(MigrationDispositionStatus::Pending) | None => {}
             }
         }
-        let expected = set.targets.len() as u64;
+        let expected = (set.targets.len() - state.skipped_migration_groups(task_id).len()) as u64;
         (
             expected,
             annotated,
@@ -2076,6 +2086,12 @@ impl LabelloApp {
             })
             .map(|set| set.targets.clone())
             .unwrap_or_default();
+        if let (Some(state), Some(task_id)) =
+            (&self.work.current_state, &self.work.selected_task_id)
+        {
+            let skipped = state.skipped_migration_groups(task_id);
+            targets.retain(|target| !skipped.contains(&target.object_group_id));
+        }
         targets.sort_by_key(|target| target.sequence_index);
         targets
     }

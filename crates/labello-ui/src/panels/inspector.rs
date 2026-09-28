@@ -38,14 +38,7 @@ impl LabelloApp {
             if self.view == AppView::Review { self.review_corrections_panel(ui); }
             return;
         }
-        let active_count = self
-            .work
-            .annotations
-            .iter()
-            .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-            })
-            .count();
+        let active_count = self.annotation_objects().len();
         if self.view != AppView::Review {
             theme::compact_metric(ui, "Active annotations", active_count.to_string());
         }
@@ -283,14 +276,7 @@ impl LabelloApp {
     }
 
     fn review_phase(&self) -> (&'static str, String, &'static str) {
-        let total = self
-            .work
-            .annotations
-            .iter()
-            .filter(|annotation| {
-                !annotation.deleted && self.annotation_matches_selected_workflow(annotation)
-            })
-            .count();
+        let total = self.annotation_objects().len();
         if self.work.review_index < total {
             (
                 "Object review",

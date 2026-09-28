@@ -52,20 +52,6 @@ impl DatasetRepository {
         // 1. Load the replay-validated cache base from the authoritative event log.
         let mut next_state = self.load_image_state(image_id).await?;
         let previous_state = next_state.clone();
-        if payloads.iter().any(|payload| {
-            matches!(payload, EventPayload::AnnotationVersionCreated { annotation, .. } if matches!(annotation.origin, labello_domain::AnnotationOrigin::Prelabel { .. })) || matches!(
-                payload,
-                EventPayload::WorkReturnedToReview { .. }
-                    | EventPayload::ReviewAssignmentOpened { .. }
-                    | EventPayload::MissingObjectEvidenceRecorded { .. }
-            )
-        }) {
-            write_json_atomic(
-                &self.schema_path(),
-                &labello_domain::labello_schema_bundle(),
-            )
-            .await?;
-        }
         let previous_completion = self.completion_observation(&next_state);
         let timestamp = labello_domain::now();
         // 2. Let assignment/migration policy finish the complete event batch.
@@ -80,7 +66,7 @@ impl DatasetRepository {
             if let EventPayload::MissingObjectEvidenceRecorded { evidence, .. } = &mut payload {
                 evidence.timestamp = timestamp;
             }
-            let event = EventLogEntry::new(
+            let mut event = EventLogEntry::new(
                 next_state.current_sequence + 1,
                 image_id.clone(),
                 actor.user_id.clone(),
@@ -88,6 +74,7 @@ impl DatasetRepository {
                 timestamp,
                 payload,
             );
+            event.bounding_box_visibility = next_state.bounding_box_visibility;
             next_state.apply_event(&event)?;
             events.push(event);
         }

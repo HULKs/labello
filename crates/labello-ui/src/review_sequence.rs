@@ -2,7 +2,7 @@ use labello_domain::{ImageState, ReviewTarget, TaskId, UserId};
 
 pub(crate) fn reviewed_object_prefix(state: &ImageState, task_id: &TaskId, user: &UserId) -> usize {
     let annotations = state
-        .active_annotations()
+        .visible_annotations()
         .filter(|annotation| annotation.task_id == *task_id)
         .collect::<Vec<_>>();
     annotations

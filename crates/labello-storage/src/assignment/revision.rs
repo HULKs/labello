@@ -144,7 +144,7 @@ pub(crate) fn finalize_review_transaction(
         .map(|assignment| (assignment.assignment_id.clone(), assignment.task_id.clone()))
         .collect::<Vec<_>>();
     for (assignment_id, task_id) in finished {
-        let event = EventLogEntry::new(
+        let mut event = EventLogEntry::new(
             after.current_sequence + 1,
             after.image_id.clone(),
             last.actor_user_id.clone(),
@@ -155,6 +155,7 @@ pub(crate) fn finalize_review_transaction(
                 task_id,
             },
         );
+        event.bounding_box_visibility = after.bounding_box_visibility;
         after.apply_event(&event)?;
         events.push(event);
     }
