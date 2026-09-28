@@ -9,10 +9,10 @@ pub(crate) enum WorkflowActivity {
 impl WorkflowActivity {
     fn label(self) -> &'static str {
         match self {
-            Self::Boxes => "Bounding box annotation",
-            Self::Migration => "Migration",
-            Self::MissingObjects => "Add missing objects",
-            Self::Skeleton => "Skeleton annotation",
+            Self::Boxes => crate::glossary::BOUNDING_BOX_ANNOTATION,
+            Self::Migration => crate::glossary::MIGRATION,
+            Self::MissingObjects => crate::glossary::ADD_MISSING_OBJECTS,
+            Self::Skeleton => crate::glossary::SKELETON_ANNOTATION,
         }
     }
 }
@@ -56,22 +56,21 @@ impl LabelloApp {
     }
 
     pub(crate) fn workflow_queue_status(&self) -> Option<String> {
-        (matches!(self.view, AppView::Annotate | AppView::Review)
-            && self.work.assignment.is_some())
-        .then(|| {
-            let status = format!(
-                "Loaded assignment queue: {}/{}",
-                self.work.queue.len(),
-                self.work.queue.queue_size()
-            );
-            let suffix = match self.work.queue.wait_reason() {
-                Some(crate::queue::QueueWaitReason::ImbalanceLimit) => " (imbalance limit)",
-                Some(crate::queue::QueueWaitReason::NoAvailableWork) => " (no available work)",
-                Some(crate::queue::QueueWaitReason::Failed) => " (refill failed; retrying)",
-                None => "",
-            };
-            format!("{status}{suffix}")
-        })
+        (matches!(self.view, AppView::Annotate | AppView::Review) && self.work.assignment.is_some())
+            .then(|| {
+                let status = format!(
+                    "Loaded assignment queue: {}/{}",
+                    self.work.queue.len(),
+                    self.work.queue.queue_size()
+                );
+                let suffix = match self.work.queue.wait_reason() {
+                    Some(crate::queue::QueueWaitReason::ImbalanceLimit) => " (imbalance limit)",
+                    Some(crate::queue::QueueWaitReason::NoAvailableWork) => " (no available work)",
+                    Some(crate::queue::QueueWaitReason::Failed) => " (refill failed; retrying)",
+                    None => "",
+                };
+                format!("{status}{suffix}")
+            })
     }
 
     pub(crate) fn workflow_panel_toggle(&mut self, ui: &mut egui::Ui) {
@@ -274,6 +273,7 @@ impl LabelloApp {
                         (!matching.is_empty()).then_some((activity, matching))
                     })
                     .collect();
+                    ui.spacing_mut().item_spacing.x = theme::SPACE_1;
                     ui.columns(activities.len(), |columns| {
                         for (column, (activity, matching)) in columns.iter_mut().zip(activities) {
                             column.spacing_mut().button_padding.x = theme::SPACE_1;
@@ -323,14 +323,19 @@ impl LabelloApp {
             job.halign = egui::Align::Center;
             job.append(
                 match activity {
-                    WorkflowActivity::Boxes => "Boxes",
-                    WorkflowActivity::Migration => "Migrate",
-                    WorkflowActivity::MissingObjects => "Missing\nobjects",
-                    WorkflowActivity::Skeleton => "Skeleton",
+                    WorkflowActivity::Boxes => crate::glossary::BOXES,
+                    WorkflowActivity::Migration => crate::glossary::MIGRATE,
+                    WorkflowActivity::MissingObjects => crate::glossary::MISSING_OBJECTS,
+                    WorkflowActivity::Skeleton => crate::glossary::SKELETON,
                 },
                 0.0,
                 egui::TextFormat {
-                    font_id: egui::TextStyle::Button.resolve(ui.style()),
+                    font_id: if ui.available_width() < 75.0 {
+                        egui::TextStyle::Small
+                    } else {
+                        egui::TextStyle::Button
+                    }
+                    .resolve(ui.style()),
                     color: egui::Color32::PLACEHOLDER,
                     ..Default::default()
                 },
@@ -415,7 +420,7 @@ impl LabelloApp {
         choice.response.widget_info(|| {
             egui::WidgetInfo::selected(
                 egui::WidgetType::Button,
-                ready && !unavailable && blocked.is_none(),
+                choice.response.enabled(),
                 selected,
                 label.clone(),
             )
@@ -448,10 +453,15 @@ impl LabelloApp {
             paint_workflow_marker(ui, marker_rect, selected, reason);
             if let Some(galley) = galley {
                 let position = egui::pos2(rect.center().x, icons.bottom() + theme::SPACE_1);
+                let color = ui.style().interact(&choice.response).fg_stroke.color;
                 ui.painter().galley(
                     position,
                     galley,
-                    ui.style().interact(&choice.response).fg_stroke.color,
+                    if choice.response.enabled() {
+                        color
+                    } else {
+                        ui.visuals().disable(color)
+                    },
                 );
             }
         } else {
