@@ -75,7 +75,7 @@ impl LabelloApp {
                             "No assignments are currently available in the previous workflow.",
                         );
                         ui.add_space(gap);
-                        ui.label(RichText::new("Previous workflow").weak());
+                        ui.label(RichText::new(crate::glossary::PREVIOUS_WORKFLOW).weak());
                         ui.add(egui::Label::new(&notice.previous).wrap());
                         ui.add_space(gap);
                         ui.label(RichText::new("New workflow").weak());
