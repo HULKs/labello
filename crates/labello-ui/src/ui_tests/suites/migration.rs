@@ -3080,6 +3080,7 @@ fn class_workflow_configured_activities_share_width_evenly() {
                 let icon = icon.rect();
                 if let Some(tile) = rects.iter().find(|tile| tile.contains_rect(icon)) {
                     assert!((icon.center().x - tile.center().x).abs() <= 1.0, "icon {icon:?} is off-center in {tile:?}");
+                    assert!(icon.top() - tile.top() >= 12.0, "icon {icon:?} needs top padding in {tile:?}");
                 }
             }
         }

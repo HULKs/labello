@@ -519,15 +519,16 @@ non-intersection and scroll reachability as well as viewport containment.
 The annotation workflow panel and drawer use one bordered group per class. The
 class name is centered above equal-width activity columns. Center each type icon
 and activity label independently of selection and availability cues. Place those
-cues in a fixed, centered status row below the label so they never shift the icon. Order configured
+cues centered below the rendered label with a small, consistent gap, rather than
+anchoring them to the bottom of the tile. Give the type icon room above it; status
+cues must never shift its horizontal alignment. Order configured
 activities left to right: bounding-box annotation, migration, adding missing
 objects, then direct skeleton annotation when applicable. Omit unconfigured
 activities: one activity fills the card, two share it equally, and three use
 thirds. Use one compact tile per activity, with a visible option count when it contains
 multiple workflows. Such tiles open a bounded, scrollable chooser with full
 workflow names and individual availability explanations. Single-workflow tiles
-act directly. Show the committed workflow name below the row and explain the
-blocked missing-object phase visibly. Compact labels retain full activity and
+act directly. Explain the blocked missing-object phase visibly. Compact labels retain full activity and
 workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
 remain visible with an explanation. Do not present migration as active on images
 that support only direct skeleton annotation.

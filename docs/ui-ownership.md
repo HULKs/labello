@@ -556,7 +556,7 @@ annotation when applicable. Unconfigured activities do not take up columns;
 multiple tasks within one activity use a single tile with an option count. Its
 bounded chooser wraps full task names, marks the selected task, explains disabled
 options, and restores focus on dismissal. Single-task activities act directly.
-The card shows the current task name and a visible missing-object phase hint. Review keeps its task selector.
+The card shows a visible missing-object phase hint when that activity is blocked. Review keeps its task selector.
 The annotation panel has bounded width; task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
 task. Temporarily blocked configured activities remain disabled with an explanation.

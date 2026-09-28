@@ -303,18 +303,6 @@ impl LabelloApp {
                             });
                         }
                     });
-                    if let Some(current) = entries
-                        .iter()
-                        .find(|entry| self.work.selected_task_id.as_ref() == Some(&entry.task_id))
-                    {
-                        ui.add_space(theme::SPACE_1);
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(format!("Current: {}", current.label())).small(),
-                            )
-                            .wrap(),
-                        );
-                    }
                     if let Some(migration) = entries
                         .iter()
                         .filter(|entry| {
@@ -458,7 +446,7 @@ impl LabelloApp {
                 content_id,
                 egui::vec2(
                     (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0),
-                    96.0,
+                    104.0,
                 ),
             ))
         } else {
@@ -481,7 +469,7 @@ impl LabelloApp {
         .min_size(egui::vec2(
             ui.available_width(),
             if activity.is_some() {
-                104.0
+                112.0
             } else {
                 Self::WORKFLOW_PILL_HEIGHT
             },
@@ -525,14 +513,19 @@ impl LabelloApp {
         }
         if let Some(rect) = choice.rect(content_id) {
             let icon_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + Self::WORKFLOW_ICON_SIZE / 2.0),
+                egui::pos2(rect.center().x, rect.top() + theme::SPACE_2 + Self::WORKFLOW_ICON_SIZE / 2.0),
                 egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
             );
             workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
             if let Some(activity) = activity {
                 paint_workflow_activity_badge(ui, icon_rect, activity);
             }
-            let status_center = egui::pos2(rect.center().x, rect.bottom() - 9.0);
+            let label_top = icon_rect.bottom() + theme::SPACE_1;
+            let label_height = galley.as_ref().map_or(0.0, |galley| galley.size().y);
+            let status_center = egui::pos2(
+                rect.center().x,
+                label_top + label_height + theme::SPACE_1 + 9.0,
+            );
             let reason_center = if selected && reason.is_some() {
                 status_center + egui::vec2(6.0, 0.0)
             } else {
@@ -554,7 +547,7 @@ impl LabelloApp {
                 ui.painter().circle_filled(dot_center, 4.0, theme::TEXT);
             }
             if let Some(galley) = galley {
-                let position = egui::pos2(rect.center().x, icon_rect.bottom() + theme::SPACE_1);
+                let position = egui::pos2(rect.center().x, label_top);
                 let color = ui.style().interact(&choice.response).fg_stroke.color;
                 ui.painter().galley(
                     position,
