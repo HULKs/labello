@@ -597,6 +597,13 @@ impl LabelloApp {
             let popup = egui::Popup::menu(&response)
                 .width((ui.ctx().content_rect().width() - 48.0).clamp(160.0, 360.0));
             let was_open = popup.is_open();
+            if response.layer_id.order == egui::Order::Foreground {
+                // Keep a chooser opened inside a modal drawer above that drawer.
+                ui.ctx().set_sublayer(
+                    response.layer_id,
+                    egui::LayerId::new(egui::Order::Foreground, popup.get_id()),
+                );
+            }
             popup.show(|ui| {
                 ui.set_max_width((ui.ctx().content_rect().width() - 48.0).clamp(160.0, 360.0));
                 ui.add(

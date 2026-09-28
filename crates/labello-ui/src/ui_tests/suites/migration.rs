@@ -3149,3 +3149,26 @@ fn class_workflow_chooser_explains_unavailable_options_and_guards_dirty_switches
     assert_eq!(harness.state().work.selected_task_id, selected);
     assert_eq!(harness.state().work.migration.draft, draft);
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn class_workflow_chooser_pointer_hits_options_above_compact_drawer() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+    app.work.drawer = Some(Drawer::Workflow);
+    app.trigger_missing_migration_object_action();
+    app.work.migration.draft_dirty = true;
+    let selected = app.work.selected_task_id.clone();
+    let draft = app.work.migration.draft.clone();
+    let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0)).with_max_steps(40).build_eframe(|_| app);
+    harness.run();
+    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow").rect().center();
+    click_at(&mut harness, trigger);
+    harness.run();
+    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person bounding boxes").rect().center();
+    click_at(&mut harness, option);
+    harness.run();
+    assert!(harness.state().work.pending_transition.is_some());
+    assert_eq!(harness.state().work.selected_task_id, selected);
+    assert_eq!(harness.state().work.migration.draft, draft);
+}
