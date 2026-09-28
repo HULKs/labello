@@ -116,7 +116,7 @@ impl LabelloApp {
         } else {
             for workflow in &workflows {
                 ui.push_id(&workflow.task_id, |ui| {
-                    self.workflow_entry(ui, workflow, None)
+                    self.workflow_entry(ui, workflow, None, &[])
                 });
             }
         }
@@ -142,6 +142,18 @@ impl LabelloApp {
         let Some(activity) = activity else {
             return workflow.label();
         };
+        format!(
+            "{} · {}",
+            self.workflow_activity_label(workflow, activity),
+            workflow.label()
+        )
+    }
+
+    fn workflow_activity_label(
+        &self,
+        workflow: &crate::app::WorkflowChoice,
+        activity: WorkflowActivity,
+    ) -> String {
         let class = self
             .work
             .tasks
@@ -150,7 +162,7 @@ impl LabelloApp {
             .and_then(|task| task.class_ids.first())
             .map(|id| self.class_name(id))
             .unwrap_or_default();
-        format!("{class}: {} · {}", activity.label(), workflow.label())
+        format!("{class}: {}", activity.label())
     }
 
     fn workflow_activity_block(
@@ -276,14 +288,65 @@ impl LabelloApp {
                     ui.spacing_mut().item_spacing.x = theme::SPACE_1;
                     ui.columns(activities.len(), |columns| {
                         for (column, (activity, matching)) in columns.iter_mut().zip(activities) {
-                            column.spacing_mut().button_padding.x = theme::SPACE_1;
-                            for workflow in matching {
-                                column.push_id((&workflow.task_id, activity.label()), |ui| {
-                                    self.workflow_entry(ui, workflow, Some(activity))
-                                });
-                            }
+                            column.spacing_mut().button_padding =
+                                egui::vec2(theme::SPACE_1, theme::SPACE_1);
+                            let workflow = matching
+                                .iter()
+                                .find(|entry| {
+                                    self.work.selected_task_id.as_ref() == Some(&entry.task_id)
+                                })
+                                .unwrap_or(&matching[0]);
+                            column.push_id(activity.label(), |ui| {
+                                self.workflow_entry(ui, workflow, Some(activity), &matching)
+                            });
                         }
                     });
+                    if let Some(current) = entries
+                        .iter()
+                        .find(|entry| self.work.selected_task_id.as_ref() == Some(&entry.task_id))
+                    {
+                        ui.add_space(theme::SPACE_1);
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(format!("Current: {}", current.label())).small(),
+                            )
+                            .wrap(),
+                        );
+                    }
+                    if let Some(migration) = entries
+                        .iter()
+                        .filter(|entry| {
+                            self.workflow_primary_activity(entry) == WorkflowActivity::Migration
+                        })
+                        .min_by_key(|entry| {
+                            self.work.selected_task_id.as_ref() != Some(&entry.task_id)
+                        })
+                        && self
+                            .workflow_activity_block(
+                                migration,
+                                Some(WorkflowActivity::MissingObjects),
+                            )
+                            .is_some()
+                    {
+                        let reason = if self.work.selected_task_id.as_ref()
+                            == Some(&migration.task_id)
+                            && self.manual_migration_active()
+                        {
+                            if self.work.migration.inspected_group_id.is_some() {
+                                "Return to the full image before adding missing objects."
+                            } else {
+                                "Resolve the boxes before adding missing objects."
+                            }
+                        } else {
+                            "Open Migrate before adding missing objects."
+                        };
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(reason).small().color(theme::TEXT_MUTED),
+                            )
+                            .wrap(),
+                        );
+                    }
                 });
             });
             ui.add_space(theme::SPACE_2);
@@ -295,7 +358,9 @@ impl LabelloApp {
         ui: &mut egui::Ui,
         workflow: &crate::app::WorkflowChoice,
         activity: Option<WorkflowActivity>,
+        choices: &[&crate::app::WorkflowChoice],
     ) {
+        let multiple = choices.len() > 1;
         let task_selected = self.work.selected_task_id.as_ref() == Some(&workflow.task_id);
         let overview = task_selected
             && self.manual_migration_active()
@@ -314,7 +379,13 @@ impl LabelloApp {
             && !self.loading.image
             && !self.work.migration.busy
             && self.work.pending_transition.is_none();
-        let label = self.workflow_entry_label(workflow, activity);
+        let mut label = self.workflow_entry_label(workflow, activity);
+        if multiple && let Some(activity) = activity {
+            label = format!(
+                "{} · Choose workflow",
+                self.workflow_activity_label(workflow, activity)
+            );
+        }
         let text: egui::WidgetText = if let Some(activity) = activity {
             let width = (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0);
             let mut job = egui::text::LayoutJob::default();
@@ -340,15 +411,17 @@ impl LabelloApp {
                     ..Default::default()
                 },
             );
-            job.append(
-                &format!("\n{}", workflow.label()),
-                0.0,
-                egui::TextFormat {
-                    font_id: egui::TextStyle::Small.resolve(ui.style()),
-                    color: egui::Color32::PLACEHOLDER,
-                    ..Default::default()
-                },
-            );
+            if multiple {
+                job.append(
+                    &format!("\n{} options", choices.len()),
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::TextStyle::Small.resolve(ui.style()),
+                        color: egui::Color32::PLACEHOLDER,
+                        ..Default::default()
+                    },
+                );
+            }
             ui.fonts_mut(|fonts| fonts.layout_job(job)).into()
         } else {
             RichText::new(workflow.label()).strong().into()
@@ -361,6 +434,7 @@ impl LabelloApp {
             );
         let reason = self
             .workflow_marker_reason(&workflow.task_id)
+            .filter(|_| !multiple || task_selected)
             .filter(|reason| {
                 !current_migration_action || !matches!(reason, WorkflowMarkerReason::Unavailable(_))
             });
@@ -382,7 +456,7 @@ impl LabelloApp {
                 content_id,
                 egui::vec2(
                     (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0),
-                    88.0,
+                    76.0,
                 ),
             ))
         } else {
@@ -405,7 +479,7 @@ impl LabelloApp {
         .min_size(egui::vec2(
             ui.available_width(),
             if activity.is_some() {
-                112.0
+                84.0
             } else {
                 Self::WORKFLOW_PILL_HEIGHT
             },
@@ -413,9 +487,10 @@ impl LabelloApp {
         .gap(theme::SPACE_2)
         .truncate();
         let choice = ui
-            .add_enabled_ui(ready && !unavailable && blocked.is_none(), |ui| {
-                button.atom_ui(ui)
-            })
+            .add_enabled_ui(
+                ready && (multiple || (!unavailable && blocked.is_none())),
+                |ui| button.atom_ui(ui),
+            )
             .inner;
         choice.response.widget_info(|| {
             egui::WidgetInfo::selected(
@@ -435,6 +510,12 @@ impl LabelloApp {
         if let Some(blocked) = blocked {
             accessibility_description = Some(blocked.to_owned());
         }
+        if multiple {
+            accessibility_description = Some(format!(
+                "Choose from {} workflows. Full names and availability are shown in the menu.",
+                choices.len()
+            ));
+        }
         if let Some(description) = accessibility_description {
             ui.ctx().accesskit_node_builder(response_id, |node| {
                 node.set_description(description);
@@ -450,6 +531,9 @@ impl LabelloApp {
             let icon_rect =
                 egui::Rect::from_min_max(egui::pos2(marker_rect.right(), icons.top()), icons.max);
             workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
+            if let Some(activity) = activity {
+                paint_workflow_activity_badge(ui, icon_rect, activity);
+            }
             paint_workflow_marker(ui, marker_rect, selected, reason);
             if let Some(galley) = galley {
                 let position = egui::pos2(rect.center().x, icons.bottom() + theme::SPACE_1);
@@ -488,6 +572,12 @@ impl LabelloApp {
         if let Some(blocked) = blocked {
             hover_text = blocked.to_owned();
         }
+        if multiple {
+            hover_text = format!(
+                "Choose from {} workflows. The menu shows full names and availability.",
+                choices.len()
+            );
+        }
         hover_text = format!("{label}\n{hover_text}");
         let show_hover = |ui: &mut egui::Ui| {
             let width = (ui.ctx().content_rect().width() - 2.0 * theme::SPACE_4)
@@ -503,21 +593,83 @@ impl LabelloApp {
         if response.gained_focus() {
             response.scroll_to_me(Some(egui::Align::Center));
         }
-        if response.clicked() {
-            match activity {
-                Some(WorkflowActivity::MissingObjects)
-                    if !self.work.migration.adding_missing_object =>
-                {
-                    self.trigger_missing_migration_object_action();
-                }
-                Some(WorkflowActivity::Migration) if overview => {
-                    self.revisit_first_migration_object();
-                }
-                _ if !task_selected => {
-                    self.request_transition(PendingTransition::Workflow(workflow.task_id.clone()))
-                }
-                _ => {}
+        if multiple {
+            let popup = egui::Popup::menu(&response)
+                .width((ui.ctx().content_rect().width() - 48.0).clamp(160.0, 360.0));
+            let was_open = popup.is_open();
+            popup.show(|ui| {
+                ui.set_max_width((ui.ctx().content_rect().width() - 48.0).clamp(160.0, 360.0));
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(label.trim_end_matches(" · Choose workflow")).strong(),
+                    )
+                    .truncate(),
+                );
+                let height = (ui.ctx().content_rect().height() - 96.0).max(44.0);
+                ui.set_max_height(height);
+                egui::ScrollArea::vertical()
+                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+                    .max_height(height)
+                    .show(ui, |ui| {
+                        for choice in choices {
+                            let current =
+                                self.work.selected_task_id.as_ref() == Some(&choice.task_id);
+                            let block = self.workflow_activity_block(choice, activity);
+                            let unavailable = self.displayed_workflow_availability(&choice.task_id)
+                                == Some(false)
+                                && !(current
+                                    && self.manual_migration_active()
+                                    && matches!(
+                                        self.work.migration.cursor,
+                                        Some(labello_domain::MigrationCursor::FullImage)
+                                    ));
+                            let enabled = ready && block.is_none() && !unavailable;
+                            let option = ui.add_enabled(
+                                enabled,
+                                egui::Button::new(choice.label())
+                                    .selected(current)
+                                    .wrap()
+                                    .min_size(egui::vec2(ui.available_width(), 44.0)),
+                            );
+                            option.widget_info(|| {
+                                egui::WidgetInfo::selected(
+                                    egui::WidgetType::Button,
+                                    enabled,
+                                    current,
+                                    self.workflow_entry_label(choice, activity),
+                                )
+                            });
+                            if let Some(reason) = block.or_else(|| {
+                                unavailable.then(|| {
+                                    self.workflow_marker_reason(&choice.task_id)
+                                        .map(|reason| reason.label())
+                                        .unwrap_or("No assignments available")
+                                })
+                            }) {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(reason).small().color(theme::TEXT_MUTED),
+                                    )
+                                    .wrap(),
+                                );
+                            }
+                            if option.gained_focus() {
+                                option.scroll_to_me(Some(egui::Align::Center));
+                            }
+                            if option.clicked() {
+                                self.activate_workflow_entry(choice, activity);
+                                ui.close();
+                            }
+                        }
+                    });
+            });
+            if was_open
+                && !egui::Popup::is_id_open(ui.ctx(), egui::Popup::default_response_id(&response))
+            {
+                response.request_focus();
             }
+        } else if response.clicked() {
+            self.activate_workflow_entry(workflow, activity);
         }
         if self.view == AppView::Annotate
             && activity != Some(WorkflowActivity::MissingObjects)
@@ -532,6 +684,66 @@ impl LabelloApp {
                 RichText::new(format!("Focus · +25% · {minutes} min left")).color(theme::ACCENT),
             );
         }
+    }
+
+    fn activate_workflow_entry(
+        &mut self,
+        workflow: &crate::app::WorkflowChoice,
+        activity: Option<WorkflowActivity>,
+    ) {
+        let selected = self.work.selected_task_id.as_ref() == Some(&workflow.task_id);
+        let overview = selected
+            && self.manual_migration_active()
+            && matches!(
+                self.work.migration.cursor,
+                Some(labello_domain::MigrationCursor::FullImage)
+            );
+        match activity {
+            Some(WorkflowActivity::MissingObjects)
+                if !self.work.migration.adding_missing_object =>
+            {
+                self.trigger_missing_migration_object_action()
+            }
+            Some(WorkflowActivity::Migration) if overview => self.revisit_first_migration_object(),
+            _ if !selected => {
+                self.request_transition(PendingTransition::Workflow(workflow.task_id.clone()))
+            }
+            _ => {}
+        }
+    }
+}
+
+fn paint_workflow_activity_badge(ui: &egui::Ui, rect: egui::Rect, activity: WorkflowActivity) {
+    if !matches!(
+        activity,
+        WorkflowActivity::Migration | WorkflowActivity::MissingObjects
+    ) {
+        return;
+    }
+    let center = rect.right_bottom() - egui::vec2(2.0, 2.0);
+    ui.painter().circle_filled(center, 6.0, theme::SURFACE);
+    let stroke = egui::Stroke::new(1.5, theme::TEXT);
+    ui.painter().line_segment(
+        [center - egui::vec2(3.0, 0.0), center + egui::vec2(3.0, 0.0)],
+        stroke,
+    );
+    if activity == WorkflowActivity::MissingObjects {
+        ui.painter().line_segment(
+            [center - egui::vec2(0.0, 3.0), center + egui::vec2(0.0, 3.0)],
+            stroke,
+        );
+    } else {
+        ui.painter().line_segment(
+            [
+                center + egui::vec2(1.0, -2.0),
+                center + egui::vec2(3.0, 0.0),
+            ],
+            stroke,
+        );
+        ui.painter().line_segment(
+            [center + egui::vec2(1.0, 2.0), center + egui::vec2(3.0, 0.0)],
+            stroke,
+        );
     }
 }
 

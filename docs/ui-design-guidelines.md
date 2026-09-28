@@ -521,9 +521,12 @@ class name spans the heading above equal-width activity columns. Order configure
 activities left to right: bounding-box annotation, migration, adding missing
 objects, then direct skeleton annotation when applicable. Omit unconfigured
 activities: one activity fills the card, two share it equally, and three use
-thirds. Keep task names below activity labels and stack multiple tasks within
-their activity column. Compact labels retain full activity and task names in
-accessible names and tooltips. Configured activities that are temporarily blocked
+thirds. Use one compact tile per activity, with a visible option count when it contains
+multiple workflows. Such tiles open a bounded, scrollable chooser with full
+workflow names and individual availability explanations. Single-workflow tiles
+act directly. Show the committed workflow name below the row and explain the
+blocked missing-object phase visibly. Compact labels retain full activity and
+workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
 remain visible with an explanation. Do not present migration as active on images
 that support only direct skeleton annotation.
 

@@ -3013,6 +3013,10 @@ fn class_workflow_migration_configuration_keeps_direct_skeleton_assignments_acce
     let label = app.workflow_entry_label(&app.selected_workflow().unwrap(), Some(crate::panels::WorkflowActivity::Skeleton));
     let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
     harness.run();
+    let chooser = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Skeleton annotation · Choose workflow");
+    assert_eq!(chooser.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+    chooser.click();
+    harness.run();
     let entry = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
     assert!(!entry.accesskit_node().is_disabled());
     assert_eq!(entry.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
@@ -3055,11 +3059,9 @@ fn class_workflow_configured_activities_share_width_evenly() {
         let selected = app.work.selected_task_id.clone().unwrap();
         app.work.tasks.retain(|task| task.task_id == selected || task.annotation_type == AnnotationType::BoundingBox);
         app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
-        let choices = app.workflow_choices();
-        let boxes = choices.iter().find(|choice| choice.annotation_type == AnnotationType::BoundingBox).unwrap();
         let migration = app.selected_workflow().unwrap();
         let labels = [
-            app.workflow_entry_label(boxes, Some(WorkflowActivity::Boxes)),
+            "Person: Bounding box annotation · Choose workflow".to_string(),
             app.workflow_entry_label(&migration, Some(WorkflowActivity::Migration)),
             app.workflow_entry_label(&migration, Some(WorkflowActivity::MissingObjects)),
         ];
@@ -3074,4 +3076,76 @@ fn class_workflow_configured_activities_share_width_evenly() {
         }
         assert!(rects[0].left() >= 0.0 && rects[2].right() <= width, "{rects:?}");
     }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn class_workflow_chooser_shows_full_names_and_preserves_work_on_cancel() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    use crate::panels::WorkflowActivity;
+    for (width, height) in [(320.0, 320.0), (390.0, 844.0), (1440.0, 1000.0)] {
+        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+        app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
+        let labels: Vec<_> = app.workflow_choices().iter().filter(|choice| choice.annotation_type == AnnotationType::BoundingBox)
+            .map(|choice| app.workflow_entry_label(choice, Some(WorkflowActivity::Boxes))).collect();
+        let task = app.work.selected_task_id.clone();
+        let cursor = app.work.migration.cursor.clone();
+        let mut harness = Harness::builder().with_size(egui::vec2(width, height)).with_max_steps(40).build_eframe(|_| app);
+        harness.run();
+        let trigger = "Person: Bounding box annotation · Choose workflow";
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, trigger).focus();
+        harness.key_press(egui::Key::Enter);
+        harness.run();
+        assert!(egui::Popup::is_any_open(&harness.ctx));
+        for label in &labels {
+            let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, label);
+            assert!(option.rect().height() >= 44.0);
+            assert!(option.rect().left() >= 0.0 && option.rect().right() <= width, "{width}x{height}: {:?}", option.rect());
+        }
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, labels.last().unwrap()).focus();
+        harness.run();
+        let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, labels.last().unwrap()).rect();
+        assert!(rect.top() >= 0.0 && rect.bottom() <= height, "{width}x{height}: {rect:?}");
+        harness.key_press(egui::Key::Escape);
+        harness.run();
+        assert!(!egui::Popup::is_any_open(&harness.ctx));
+        assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, trigger).accesskit_node().is_focused());
+        assert_eq!(harness.state().work.selected_task_id, task);
+        assert_eq!(harness.state().work.migration.cursor, cursor);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn class_workflow_chooser_explains_unavailable_options_and_guards_dirty_switches() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    use crate::panels::WorkflowActivity;
+    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+    let boxes: Vec<_> = app.workflow_choices().into_iter().filter(|choice| choice.annotation_type == AnnotationType::BoundingBox).collect();
+    app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+    app.work.availability.kind = Some(AssignmentKind::Annotation);
+    app.work.availability.resolved = true;
+    for choice in &boxes { app.work.availability.tasks.insert(choice.task_id.clone(), false); }
+    let labels: Vec<_> = boxes.iter().map(|choice| app.workflow_entry_label(choice, Some(WorkflowActivity::Boxes))).collect();
+    let selected = app.work.selected_task_id.clone();
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
+    harness.run();
+    let trigger = "Person: Bounding box annotation · Choose workflow";
+    let button = harness.get_by_role_and_label(egui::accesskit::Role::Button, trigger);
+    assert!(!button.accesskit_node().is_disabled());
+    button.click();
+    harness.run();
+    for label in &labels { assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, label).accesskit_node().is_disabled()); }
+    assert_eq!(harness.query_all_by_label("No assignments available").count(), boxes.len());
+    harness.key_press(egui::Key::Escape);
+    harness.run();
+    harness.state_mut().work.availability.tasks.insert(boxes[0].task_id.clone(), true);
+    harness.state_mut().trigger_missing_migration_object_action();
+    harness.state_mut().work.migration.draft_dirty = true;
+    let draft = harness.state().work.migration.draft.clone();
+    click_accesskit_button(&mut harness, trigger);
+    click_accesskit_button(&mut harness, &labels[0]);
+    assert!(harness.state().work.pending_transition.is_some());
+    assert_eq!(harness.state().work.selected_task_id, selected);
+    assert_eq!(harness.state().work.migration.draft, draft);
 }
