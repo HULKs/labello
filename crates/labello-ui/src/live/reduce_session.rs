@@ -184,6 +184,7 @@ impl LabelloApp {
                             self.auth.can_create_datasets = false;
                             self.auth.prelabel_available = false;
                             self.datasets.summaries.clear();
+                            self.datasets.summaries_loaded = false;
                             self.datasets.summaries_error = None;
                             self.view = AppView::Setup;
                             if !matches!(self.setup.section, SetupSection::About | SetupSection::AdvancedConnection) {
@@ -222,6 +223,7 @@ impl LabelloApp {
                     match result {
                         Ok(datasets) => {
                             self.datasets.summaries = datasets;
+                            self.datasets.summaries_loaded = true;
                             self.datasets.summaries_error = None;
                             self.reopen_previous_workspace();
                         }
@@ -285,6 +287,7 @@ impl LabelloApp {
                     }
                 }
                 UiMessage::AdminLoaded { result, .. } => {
+                    self.admin.refreshing = false;
                     self.loading.admin = false;
                     match *result {
                         Ok(loaded) => {

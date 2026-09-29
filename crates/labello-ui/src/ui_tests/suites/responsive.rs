@@ -200,7 +200,7 @@ fn admin_navigation_and_remote_states_are_responsive_and_explicit() {
     harness.step();
     assert!(
         harness
-            .query_by_label("Saving or refreshing Admin changes")
+            .query_by_label("Saving Admin changes")
             .is_some()
     );
     assert!(

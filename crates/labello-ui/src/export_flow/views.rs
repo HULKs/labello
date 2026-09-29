@@ -24,7 +24,9 @@ impl LabelloApp {
                         .unwrap_or(ExportAction::Load),
                 );
             }
-            if busy {
+            let refreshing = self.admin.export.loaded && self.admin.export.pending.as_ref()
+                .is_some_and(|(_, action)| matches!(action, ExportAction::Load));
+            if busy && !refreshing {
                 ui.spinner();
                 ui.label(if self.admin.export.loaded {
                     "Refreshing export data..."

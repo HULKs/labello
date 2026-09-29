@@ -39,13 +39,16 @@ impl LabelloApp {
         task_id: &labello_domain::TaskId,
     ) -> Option<WorkflowMarkerReason> {
         use WorkflowMarkerReason as M;
-        if self.saving_blocks_interaction() {
+        let navigating = matches!(self.work.pending_transition,
+            Some(PendingTransition::NextAssignment | PendingTransition::PreviousAssignment(_)))
+            && (self.loading.image || (self.loading.saving && self.work.save_status != SaveStatus::Saving));
+        if self.saving_blocks_interaction() && !navigating {
             return Some(M::Saving);
         }
         if self.loading.image && self.work.current.is_none() && self.initial_workspace_load() {
             return Some(M::ImageLoading);
         }
-        if self.work.pending_transition.is_some() {
+        if self.work.pending_transition.is_some() && !navigating {
             return Some(M::Transition);
         }
         let kind = self.assignment_kind()?;

@@ -237,7 +237,11 @@ impl LabelloApp {
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         self.clear_workflow_change_outside_scope();
         if self.workspace_bars_blank() { return; }
-        if self.workspace_bars_loading() { ui.disable(); }
+        if self.workspace_bars_loading() {
+            let opacity = ui.opacity();
+            ui.disable();
+            ui.set_opacity(opacity);
+        }
         self.shared_context_bar(ui, layout);
     }
 

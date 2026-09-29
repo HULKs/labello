@@ -78,10 +78,17 @@ qualify a term; compact synonyms must be listed in the glossary.
   their layout space reserved. Within the same view and workflow, retain their
   last loaded contents during image navigation and disable retained controls.
   Loading feedback is visible only on initial view entry. Subsequent image loads
-  retain the previous canvas and inspector until the replacement is ready;
+  retain the previous canvas and inspector at their normal opacity until the
+  replacement is ready. Next/previous navigation must not dim the application
+  or show a save spinner merely because assignment release shares a busy guard;
   routine background reads keep loaded data visible without refresh indicators. Never show zero placeholders
   after failure or present retained contents as newly loaded data. The global
-  top bar stays visible and keeps its layout during loads.
+  top bar stays visible and keeps its layout during loads. Inspect publishes
+  replacement image pixels, identity and annotation state together, including
+  refreshes of the same image. Failed replacements keep the previous coherent
+  display with failure feedback and a retry action. Admin, Export, About and
+  import status reads retain loaded content without refresh spinners; explicit
+  saves, model checks, uploads, imports and exports still show operation progress.
 - Put validation and failures in the affected field, section, or page. Reserve
   global notices for cross-screen events.
 - Hide account-scoped content while authentication is unresolved. Clear stale
@@ -411,6 +418,8 @@ Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
 stops or accessible names. Keep the selected fill/border and semantic selection.
 Saving precedes initial image loading, then a pending transition, then availability.
+Same-view assignment release and reopen requests leave the marker unchanged;
+they do not display a save or loading indicator.
 Once an image is displayed, image loads and availability refreshes are silent.
 Retained known restrictions remain visible during refresh. Unknown or failed
 availability alone never disables selection. A static segmented spinner avoids

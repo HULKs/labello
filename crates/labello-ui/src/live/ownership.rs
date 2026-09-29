@@ -244,6 +244,7 @@ impl LabelloApp {
             }
             UiCommand::LoadAdmin { .. } => {
                 self.loading.admin = false;
+                self.admin.refreshing = false;
                 self.admin.load_error = Some(error.to_string());
             }
             UiCommand::SaveAdmin { .. } => self.loading.admin = false,

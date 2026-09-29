@@ -53,7 +53,6 @@ impl LabelloApp {
         if self.builds.loading {
             return;
         }
-        self.builds.server = None;
         self.builds.copy_feedback = None;
         self.builds.checked = true;
         if self.runtime.api.is_none() {
@@ -111,7 +110,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn build_information_text(&self) -> String {
-        let server = if self.builds.loading {
+        let server = if self.builds.loading && self.builds.server.is_none() {
             "Server: loading".into()
         } else {
             self.builds

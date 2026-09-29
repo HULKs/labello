@@ -64,7 +64,11 @@ impl eframe::App for LabelloApp {
         }
         if self.navigation.statistics.open || self.work.pending_transition.is_some()
             || self.work.automatic_workflow_change.is_some() {
+            let opacity = ui.opacity();
             ui.disable();
+            // Pending navigation also covers silent next/previous image requests.
+            // Actual confirmation dialogs paint their own modal backdrop.
+            ui.set_opacity(opacity);
         }
         crate::pointer_input::set_canvas_rect(ui.ctx(), egui::Rect::NOTHING, ui.layer_id());
         let viewport = ui.available_size();

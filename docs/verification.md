@@ -152,6 +152,18 @@ trusted repeated Space keydowns cannot complete successive images, while release
 and repress can. It reports only browser settings and aggregate counts; shared
 UI tests cover custom shortcuts, focused buttons, review, and migration.
 
+For silent image navigation, run
+`python apps/labello-wasm/tests/silent_loading.py --kind bounding_box` and repeat
+with `--kind skeleton`, with and without `--review`. The procedure uses the same
+private Python environment and disposable production server as the completion
+check. It delays next/previous assignment requests and samples the retained
+image in memory to detect dimmed or blank frames. `--width`, `--height` and
+`--dpr` select the browser matrix; `--zoom` applies actual 200% Chrome tab zoom.
+Optional `--artifacts` captures only the
+application bars for review evidence. It does not prove migration-specific
+transactions, failure recovery or absence of every possible spinner; shared UI
+tests and native inspection cover those presentation states.
+
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
 It includes headless startup, MCP readiness checks, independent parallel

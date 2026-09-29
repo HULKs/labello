@@ -64,7 +64,11 @@ impl LabelloApp {
 
     pub(crate) fn workspace_actions(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         if !self.work_view() || self.workspace_bars_blank() { return; }
-        if self.workspace_bars_loading() { ui.disable(); }
+        if self.workspace_bars_loading() {
+            let opacity = ui.opacity();
+            ui.disable();
+            ui.set_opacity(opacity);
+        }
         if self.navigation.workspace_bars.presentation.is_none() { return; }
         if self.view == AppView::Review {
             self.review_bottom_actions(ui);

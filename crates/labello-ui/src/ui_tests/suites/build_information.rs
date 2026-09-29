@@ -18,7 +18,9 @@ fn build_information_refresh_coalesces_and_rejects_obsolete_endpoint_responses()
     assert!(app.builds_differ());
     app.request_build_information();
     assert!(app.builds.loading);
-    assert!(!app.builds_differ());
+    assert!(app.builds_differ());
+    assert!(app.build_information_text().contains("v1.2.4"));
+    assert!(!app.build_information_text().contains("Server: loading"));
     let request = app.runtime.commands.back().unwrap().request().clone();
     app.request_build_information();
     assert_eq!(app.runtime.commands.len(), 1);

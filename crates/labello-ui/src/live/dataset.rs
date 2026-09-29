@@ -106,6 +106,7 @@ impl LabelloApp {
         }
         self.loading.admin = true;
         self.admin.load_error = None;
+        self.admin.refreshing = self.datasets.admin_config.is_some();
         let request = self.request_identity(Some(self.config.dataset_id.clone()));
         self.queue_command(UiCommand::LoadAdmin {
             request,

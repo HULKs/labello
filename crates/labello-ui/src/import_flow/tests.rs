@@ -2,6 +2,20 @@
 mod tests {
     use super::*;
 
+    #[cfg(feature = "inspector-presets")]
+    #[test]
+    fn loaded_import_status_polls_are_silent_but_operations_keep_progress() {
+        let mut app = crate::inspector_presets::build(
+            crate::inspector_presets::InspectorPreset::ImportReady, &egui::Context::default());
+        assert!(app.import.job.is_some());
+        app.import.busy = false;
+        app.import.active_operations.clear();
+        app.import.active_operations.insert(1, ImportActivity::LoadStatus);
+        assert_eq!(app.current_import_activity(), None);
+        app.import.active_operations.insert(2, ImportActivity::Commit);
+        assert_eq!(app.current_import_activity(), Some(ImportActivity::Commit));
+    }
+
     #[test]
     fn import_idempotency_keys_remain_unique_when_request_counters_restart() {
         let first = import_key("plan", 1);

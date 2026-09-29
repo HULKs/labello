@@ -3,11 +3,14 @@ mod loading_bars {
     use super::*;
     use crate::inspector_presets::{self, InspectorPreset};
 
-    fn presets() -> [InspectorPreset; 14] {
+    fn presets() -> [InspectorPreset; 17] {
         [
             InspectorPreset::Annotation,
             InspectorPreset::Review,
             InspectorPreset::ReviewCorrection,
+            InspectorPreset::OverlayAnnotation,
+            InspectorPreset::OverlayReview,
+            InspectorPreset::OverlayCorrection,
             InspectorPreset::MigrationObject,
             InspectorPreset::MigrationSingleOptional,
             InspectorPreset::MigrationExclusion,
@@ -47,6 +50,58 @@ mod loading_bars {
                 .unwrap()
                 .outer_rect
         })
+    }
+
+    #[test]
+    fn delayed_navigation_does_not_dim_images_or_show_save_markers() {
+        for review in [false, true] {
+            let api = Rc::new(SpyApi::new());
+            let mut h = if review { loaded_review_harness(api) } else { loaded_work_harness(api) };
+            h.run_steps(5);
+            let texture = h.state().work.current_texture.as_ref().unwrap().id();
+            let scheduled = Rc::new(RefCell::new(Vec::new()));
+            let tasks = scheduled.clone();
+            h.state_mut().set_native_task_spawner(move |task| tasks.borrow_mut().push(task));
+            h.state_mut().skip_assignment();
+            h.run_steps(3);
+            assert!(!scheduled.borrow().is_empty());
+            assert!(h.state().loading.saving);
+            let task = h.state().work.selected_task_id.as_ref().unwrap();
+            assert_eq!(h.state().workflow_marker_reason(task), None);
+            let meshes: Vec<_> = h.output().shapes.iter().filter_map(|shape| match &shape.shape {
+                egui::Shape::Mesh(mesh) if mesh.texture_id == texture => Some(mesh),
+                _ => None,
+            }).collect();
+            assert!(!meshes.is_empty());
+            assert!(meshes.iter().all(|mesh| mesh.vertices.iter().all(|vertex| vertex.color == egui::Color32::WHITE)));
+            let other = labello_domain::TaskId::from("bounding_box:vehicle");
+            h.state_mut().work.availability.tasks.insert(other.clone(), false);
+            h.state_mut().work.availability.reasons.insert(other.clone(), labello_domain::WorkflowUnavailableReason::BalanceLimit);
+            assert_eq!(h.state().workflow_marker_reason(&other), Some(crate::panels::WorkflowMarkerReason::Unavailable(labello_domain::WorkflowUnavailableReason::BalanceLimit)));
+            let commands = h.state().runtime.commands.len();
+            h.state_mut().trigger_user_action(labello_domain::UserAction::NextImage);
+            assert_eq!(h.state().runtime.commands.len(), commands);
+        }
+    }
+
+    #[test]
+    fn loaded_admin_and_export_refresh_without_loading_feedback() {
+        let api = Rc::new(SpyApi::new());
+        let mut h = loaded_admin_harness(api);
+        let scheduled = Rc::new(RefCell::new(Vec::new()));
+        let tasks = scheduled.clone();
+        h.state_mut().set_native_task_spawner(move |task| tasks.borrow_mut().push(task));
+        h.state_mut().request_admin_dataset();
+        h.run_steps(3);
+        assert!(h.state().admin.refreshing);
+        assert!(h.query_by_label("Admin changes saved").is_some());
+        assert!(h.query_by_label_contains("Saving or refreshing").is_none());
+        let mut h = harness(InspectorPreset::ExportReady, egui::vec2(1440., 1000.));
+        h.run_steps(3);
+        h.state_mut().admin.export.pending = Some((42, crate::export_flow::ExportAction::Load));
+        h.run_steps(3);
+        assert!(h.query_by_label("Refreshing export data...").is_none());
+        assert!(h.query_by_label("Loading export capabilities and history...").is_none());
     }
 
     #[test]
@@ -250,11 +305,18 @@ mod loading_bars {
                 h.run_steps(4);
                 let before = controls(&h);
                 assert!(!before.is_empty(), "{preset:?}");
-                // The production next-image path clears all assignment and migration state.
-                h.state_mut().clear_current_image();
+                let texture = h.state().work.current_texture.as_ref().unwrap().id();
+                h.state_mut().retire_current_image();
                 h.state_mut().loading.image = true;
                 h.run_steps(4);
                 assert_eq!(controls(&h), before, "{preset:?} at {width}x{height}");
+                let image_meshes: Vec<_> = h.output().shapes.iter().filter_map(|shape| match &shape.shape {
+                    egui::Shape::Mesh(mesh) if mesh.texture_id == texture => Some(mesh),
+                    _ => None,
+                }).collect();
+                assert!(!image_meshes.is_empty(), "{preset:?} at {width}x{height}");
+                assert!(image_meshes.iter().all(|mesh| mesh.vertices.iter().all(|vertex| vertex.color == egui::Color32::WHITE)),
+                    "retained image opacity for {preset:?} at {width}x{height}");
                 for node in h
                     .query_all_by_role(egui::accesskit::Role::Button)
                     .filter(|n| n.rect().top() >= 56.0)
