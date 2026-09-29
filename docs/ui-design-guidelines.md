@@ -398,9 +398,11 @@ confirmation and cancellation apply to this navigation.
 ## Availability fallback feedback
 
 Automatic workflow selection opens a blocking modal titled "Workflow changed".
-Explain that no assignments are currently available in the previous workflow;
-this does not mean all work is permanently complete. Show the previous and new
-task/class names with wrapping text, and emphasize the new workflow. Use one
+Show the previous workflow's captured availability reason as visible wrapping
+text beside the same reason icon used in the workflow selector. Use the generic
+unavailable explanation for missing or mixed reasons; never infer completion
+from temporary unavailability. Show previous and new task/class names and readable
+annotation types with the existing type icons, and emphasize the new workflow. Use one
 44-point primary action, "Acknowledge and continue". Do not provide a close
 control or dismiss on Escape or outside clicks. Work remains blocked until the
 user activates the acknowledgment action.

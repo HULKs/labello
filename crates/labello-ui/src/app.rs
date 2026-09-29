@@ -411,6 +411,9 @@ pub(crate) struct StatisticsOverlayState {
 pub(crate) struct AutomaticWorkflowChange {
     pub(crate) previous: String,
     pub(crate) current: String,
+    pub(crate) previous_type: AnnotationType,
+    pub(crate) current_type: AnnotationType,
+    pub(crate) reason: labello_domain::WorkflowUnavailableReason,
     pub(crate) dataset_id: DatasetId,
     pub(crate) view: AppView,
     pub(crate) focus_pending: bool,

@@ -7,7 +7,11 @@ impl LabelloApp {
             .find(|class| Some(&class.class_id) == task.class_ids.first())
             .map(|class| class.name.as_str())
             .unwrap_or("Unknown class");
-        format!("{} ({class})", task.name)
+        format!(
+            "{} ({class}) · {}",
+            task.name,
+            crate::glossary::annotation_type_name(&task.annotation_type),
+        )
     }
 
     pub(crate) fn clear_workflow_change_outside_scope(&mut self) {

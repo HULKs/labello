@@ -3975,8 +3975,8 @@ fn later_automatic_workflow_change_replaces_the_actual_previous_identity() {
     ]);
     app.request_next_image();
     let notice = app.work.automatic_workflow_change.as_ref().unwrap();
-    assert_eq!(notice.previous, "Vehicle boxes (Vehicle)");
-    assert_eq!(notice.current, "Person boxes (Person)");
+    assert_eq!(notice.previous, "Vehicle boxes (Vehicle) · Bounding box");
+    assert_eq!(notice.current, "Person boxes (Person) · Bounding box");
     assert!(notice.focus_pending);
     assert!(!app.loading.image);
 }
@@ -4568,8 +4568,11 @@ fn workflow_change_blocks_loaded_annotation_review_and_migration_input() {
             .build_eframe(|cc| {
                 let mut app = inspector_presets::build(preset, &cc.egui_ctx);
                 app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
-                    previous: "Previous task (Previous class)".into(),
+                    previous: "Previous task (Previous class) · Bounding box".into(),
                     current: app.workflow_identity_label(app.selected_task().unwrap()),
+                    previous_type: AnnotationType::BoundingBox,
+                    current_type: app.selected_task().unwrap().annotation_type.clone(),
+                    reason: labello_domain::WorkflowUnavailableReason::Unavailable,
                     dataset_id: app.config.dataset_id.clone(),
                     view: app.view,
                     focus_pending: true,
@@ -4616,5 +4619,74 @@ fn workflow_change_blocks_loaded_annotation_review_and_migration_input() {
         assert_eq!(harness.state().work.annotations, annotations, "{preset:?}");
         assert_eq!(harness.state().work.migration.cursor, cursor, "{preset:?}");
         assert!(harness.state().work.pending_transition.is_none());
+    }
+}
+
+#[test]
+fn automatic_workflow_change_explains_the_captured_availability_reason() {
+    use labello_domain::WorkflowUnavailableReason as R;
+    for view in [AppView::Annotate, AppView::Review] {
+        let mut harness = workflow_change_harness(Rc::new(SpyApi::new()), view);
+        for (reason, label) in [
+            (Some(R::BalanceLimit), "Other workflows need to catch up"),
+            (Some(R::AnnotationFinished), "No annotation work remaining"),
+            (Some(R::NothingAwaitingReview), "No work awaiting review"),
+            (Some(R::ClaimedByOthers), "Available work is assigned to others"),
+            (Some(R::Unavailable), "No assignments available"),
+            (None, "No assignments available"),
+        ] {
+            let app = harness.state_mut();
+            let previous = TaskId::from("bounding_box:person");
+            app.select_workflow(&previous);
+            app.work.availability.reasons.clear();
+            if let Some(reason) = reason {
+                app.work.availability.reasons.insert(previous.clone(), reason);
+            }
+            app.request_next_image();
+            // Later refreshes must not rewrite why this particular switch happened.
+            app.work.availability.reasons.insert(previous, R::ReviewDisabled);
+            harness.run();
+            harness.get_by_label(label);
+            harness.get_by_label("Person boxes (Person) · Bounding box");
+            harness.get_by_label("Vehicle boxes (Vehicle) · Bounding box");
+        }
+    }
+}
+
+#[test]
+fn automatic_workflow_change_distinguishes_same_names_and_retains_types() {
+    for view in [AppView::Annotate, AppView::Review] {
+        let mut harness = workflow_change_harness(Rc::new(SpyApi::new()), view);
+        let app = harness.state_mut();
+        let previous = TaskId::from("bounding_box:person");
+        app.select_workflow(&previous);
+        let class = app.selected_task().unwrap().class_ids.clone();
+        for task in &mut app.work.tasks {
+            task.name = "Person".into();
+            task.class_ids = class.clone();
+            if task.task_id != previous {
+                task.annotation_type = AnnotationType::Skeleton;
+                task.manual_box_guide_migration = Some(labello_domain::ManualBoxGuideMigration {
+                    guide_task_id: previous.clone(),
+                    cardinality: labello_domain::MigrationCardinality::ExactlyOne,
+                    allow_exclusion: true,
+                    sequence: labello_domain::MigrationSequence::ImportedSpatialOrderV1,
+                });
+            }
+        }
+        app.request_next_image();
+        let notice = app.work.automatic_workflow_change.as_ref().unwrap();
+        assert_eq!(notice.previous_type, AnnotationType::BoundingBox);
+        assert_eq!(notice.current_type, AnnotationType::Skeleton);
+        // Metadata refresh must not rename or change the icons of a pending transition.
+        for task in &mut app.work.tasks {
+            task.name = "Renamed".into();
+            task.annotation_type = AnnotationType::BoundingBox;
+        }
+        harness.run();
+        harness.get_by_label("Person (Person) · Bounding box");
+        harness.get_by_label("Person (Person) · Skeleton");
+        assert!(harness.query_all_by_label("bounding box annotation type").next().is_some());
+        harness.get_by_label("skeleton annotation type");
     }
 }

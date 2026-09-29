@@ -471,8 +471,11 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             app.clear_current_image();
             app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
-                previous: "Vehicle boxes (Vehicle)".into(),
+                previous: "Vehicle boxes (Vehicle) · Bounding box".into(),
                 current: app.workflow_identity_label(app.selected_task().unwrap()),
+                previous_type: AnnotationType::BoundingBox,
+                current_type: app.selected_task().unwrap().annotation_type.clone(),
+                reason: labello_domain::WorkflowUnavailableReason::BalanceLimit,
                 dataset_id: app.config.dataset_id.clone(),
                 view: app.view,
                 focus_pending: true,

@@ -1466,9 +1466,10 @@ fn automatic_workflow_dialog_is_accessible_with_long_names_and_short_viewports()
         .clone()
         .unwrap();
     notice.previous =
-        "Previous task with a deliberately very long name (Previous class with a long name)".into();
+        "Previous task with a deliberately very long name (Previous class with a long name) · Bounding box".into();
     notice.current =
-        "New task with a deliberately very long name (New class with a long name)".into();
+        "New task with a deliberately very long name (New class with a long name) · Skeleton".into();
+    notice.current_type = AnnotationType::Skeleton;
     for font_size in [16.0, 24.0] {
         harness.ctx.global_style_mut(|style| {
             for text_style in [egui::TextStyle::Body, egui::TextStyle::Button] {

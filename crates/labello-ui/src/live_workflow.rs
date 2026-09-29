@@ -537,6 +537,14 @@ impl LabelloApp {
                 );
                 return;
             };
+            // Retain the cause of this transition even when availability refreshes later.
+            let reason = self
+                .work
+                .availability
+                .reasons
+                .get(&task.task_id)
+                .copied()
+                .unwrap_or(labello_domain::WorkflowUnavailableReason::Unavailable);
             let previous = self.workflow_identity_label(&task);
             self.select_workflow(&next.task_id);
             let current = self.workflow_identity_label(
@@ -546,6 +554,9 @@ impl LabelloApp {
             self.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
                 previous,
                 current,
+                previous_type: task.annotation_type.clone(),
+                current_type: next.annotation_type,
+                reason,
                 dataset_id: self.config.dataset_id.clone(),
                 view: self.view,
                 focus_pending: true,
