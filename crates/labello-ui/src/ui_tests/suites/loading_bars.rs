@@ -67,7 +67,8 @@ mod loading_bars {
             assert!(!scheduled.borrow().is_empty());
             assert!(h.state().loading.saving);
             let task = h.state().work.selected_task_id.as_ref().unwrap();
-            assert_eq!(h.state().workflow_marker_reason(task), None);
+            assert_eq!(h.state().workflow_marker_reason(task),
+                Some(crate::panels::WorkflowMarkerReason::Transition));
             let meshes: Vec<_> = h.output().shapes.iter().filter_map(|shape| match &shape.shape {
                 egui::Shape::Mesh(mesh) if mesh.texture_id == texture => Some(mesh),
                 _ => None,
@@ -77,7 +78,10 @@ mod loading_bars {
             let other = labello_domain::TaskId::from("bounding_box:vehicle");
             h.state_mut().work.availability.tasks.insert(other.clone(), false);
             h.state_mut().work.availability.reasons.insert(other.clone(), labello_domain::WorkflowUnavailableReason::BalanceLimit);
-            assert_eq!(h.state().workflow_marker_reason(&other), Some(crate::panels::WorkflowMarkerReason::Unavailable(labello_domain::WorkflowUnavailableReason::BalanceLimit)));
+            assert_eq!(h.state().workflow_marker_reason(&other),
+                Some(crate::panels::WorkflowMarkerReason::Transition));
+            assert_eq!(h.state().work.availability.reasons.get(&other),
+                Some(&labello_domain::WorkflowUnavailableReason::BalanceLimit));
             let commands = h.state().runtime.commands.len();
             h.state_mut().trigger_user_action(labello_domain::UserAction::NextImage);
             assert_eq!(h.state().runtime.commands.len(), commands);
@@ -409,7 +413,7 @@ mod loading_bars {
             assert!(controls(&h).is_empty());
             assert!(h.query_by_label("Loading assignment image").is_none());
             let task = h.state().work.selected_task_id.as_ref().unwrap();
-            assert_ne!(h.state().workflow_marker_reason(task), Some(crate::panels::WorkflowMarkerReason::ImageLoading));
+            assert_eq!(h.state().workflow_marker_reason(task), Some(crate::panels::WorkflowMarkerReason::ImageLoading));
         }
     }
 }

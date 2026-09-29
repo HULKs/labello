@@ -68,9 +68,10 @@ its selection durably. The first activation starts at that request/submission
 timestamp, never before scoring was enabled. Subsequent selections expire at the
 next `:00`, `:20`, or `:40` boundary. Selection persists across restart and stays
 fixed during the interval even when backlog or configuration changes. Unused
-intervals require no background worker. The annotation workflow selector marks
-the current focus with its +25% bonus and remaining minutes. Failed statistics
-refresh hides the marker, and an expired marker is never shown as active.
+intervals require no background worker. The annotation workflow selector exposes
+the current focus, its +25% bonus, and remaining minutes in the activity tooltip
+and accessible description. Failed statistics refresh hides these details, and
+an expired focus is never shown as active.
 
 The bonus encourages balanced completion across tasks. It does not change
 assignment order or guarantee that nearly complete images are selected first.

@@ -549,16 +549,22 @@ no cross-dataset atomic snapshot or large-server performance guarantee.
 
 ## Class workflow navigation
 
-In Annotate, `panels/task_selector.rs` groups enabled one-class tasks under their
+In Annotate and Review, `panels/task_selector.rs` groups enabled one-class tasks under their
 class identity. Each class is one card with its name above equal-width activity
 columns: bounding-box annotation, migration, missing objects, and direct skeleton
-annotation when applicable. Unconfigured activities do not take up columns;
+annotation when applicable. Review uses bounding-box and skeleton review activities
+and retains its existing task-transition and correction guards. Unconfigured activities do not take up columns;
 multiple tasks within one activity use a single tile with a dropdown chevron.
 The count appears in its tooltip, accessible description, and chooser. Row height
 is measured from the activity labels with a stable status slot and shared padding.
 The bounded chooser wraps full task names, marks the selected task, explains disabled
 options, and restores focus on dismissal. Single-task activities act directly.
-The card shows a visible missing-object phase hint when that activity is blocked. Review keeps its task selector.
+The shared workflow selection guard supplies both disabled state and its reason
+icon for activity tiles and chooser options. Phase restrictions, all blocking
+loads, saving, migration updates, transitions, and modal blocks have state-only
+tooltips and accessible descriptions. No explanatory text or focus-bonus footer
+appears beneath selection buttons. The availability retry control sits above
+the class cards.
 The annotation panel has bounded width; task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
 task. Temporarily blocked configured activities remain disabled with an explanation.

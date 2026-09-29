@@ -53,6 +53,8 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 | Correction | An edit made to address an annotation problem. |
 | Migration | Guided creation of skeleton annotations from existing bounding-box guides. |
 | Bounding box annotation | Create or edit bounding boxes for the selected class. |
+| Bounding box review | Review submitted bounding boxes for the selected class. |
+| Skeleton review | Review submitted skeletons for the selected class, including migrated skeletons. |
 | Skeleton annotation | Create or edit skeletons directly for the selected class. |
 | Add missing objects | Begin a skeleton for an object without a bounding-box guide during migration full-image confirmation. |
 | Boxes | Compact class activity label for bounding box annotation. |

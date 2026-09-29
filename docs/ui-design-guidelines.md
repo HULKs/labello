@@ -445,19 +445,22 @@ notices remain independent.
 ## Current workflow marker
 
 The committed selected workflow has a small bright dot. A reason icon indicates
-restricted, checking, or unable-to-check states. Annotation activities center
-these cues together below the label; review cards reserve a 20-point marker slot
-and place the selected dot at the reason icon's upper right. Available unselected
+restricted, checking, or unable-to-check states. Annotation and review activities center
+these cues together below the label. Available unselected
 workflows have no status cue. Pending candidates, hover and keyboard focus never
 acquire the dot.
 
 Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
 stops or accessible names. Keep the selected fill/border and semantic selection.
-Saving precedes initial image loading, then a pending transition, then availability.
-Same-view assignment release and reopen requests leave the marker unchanged;
-they do not display a save or loading indicator.
-Once an image is displayed, image loads and availability refreshes are silent.
+Every disabled workflow tile and chooser option has a reason icon, including
+saving, session/dataset/image loading, sign-out, migration updates, transitions,
+modal blocks, assignment-resolution barriers, migration phases, and unavailable
+work. Saving precedes loading, migration updates, transitions and modal blocks,
+then activity-phase and availability restrictions. Same-view assignment release
+and reopen requests retain the loaded view at normal opacity and use a static
+transition reason on disabled workflows, without a false save or loading spinner.
+Background availability refreshes remain silent when they do not block interaction.
 Retained known restrictions remain visible during refresh. Unknown or failed
 availability alone never disables selection. A static segmented spinner avoids
 continuous animation. Specific server reasons require a supported workflow-wide
@@ -515,9 +518,9 @@ them through the available height. Conflict feedback names the other action and
 workspace context, with a filter to locate the affected rows. Verify text/control
 non-intersection and scroll reachability as well as viewport containment.
 
-### Annotation class groups
+### Annotation and review class groups
 
-The annotation workflow panel and drawer use one bordered group per class. The
+Annotation and review workflow panels and drawers use one bordered group per class. The
 class name is centered above equal-width activity columns. Center each type icon
 and activity label independently of selection and availability cues. Place those
 cues centered below the rendered label with a small, consistent gap. Measure the
@@ -532,16 +535,22 @@ thirds. Use one compact tile per activity. A small downward chevron indicates
 multiple workflows; keep the count in the chooser, tooltip, and accessible
 description instead of adding another line to the tile. Such tiles open a
 bounded, scrollable chooser with full workflow names and individual availability
-explanations. Single-workflow tiles
-act directly. Explain the blocked missing-object phase visibly. Compact labels retain full activity and
+icons. Single-workflow tiles act directly. Review groups bounding-box and skeleton
+review workflows, including migrated skeletons, without exposing annotation
+migration actions. Show no explanatory text beneath activity or chooser buttons;
+reasons belong in state icons, tooltips, and accessible descriptions. Compact labels retain full activity and
 workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
-remain visible with an explanation. Do not present migration as active on images
+remain visible with a reason icon and state-only tooltip and accessible description. Do not present migration as active on images
 that support only direct skeleton annotation.
 
 The selected marker follows the current activity, including the missing-object
 phase at full-image confirmation. Adding objects cannot skip outstanding guide
 work. Returning to Migration uses the existing revisit and draft-discard flow.
-Preserve task selection and review behavior. Keep the annotation panel bounded
+Preserve task selection and review assignment/correction guards. Keep both panels bounded
 at 340 logical points, cap drawers to the viewport, wrap class headings, and
 retain complete accessible names and task names in tooltips. Focused activities scroll
 into view; long task text must not widen the canvas layout.
+
+Availability failures retain a compact Retry availability button above the class
+cards. Focus-bonus details remain in annotation workflow tooltips and accessible
+descriptions, without adding a footer beneath the buttons.

@@ -313,9 +313,29 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
         app
     });
     harness.run_steps(4);
-    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_some());
+    let workflow = "Person: Bounding box annotation · Person bounding boxes";
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
+        .accesskit_node().description().unwrap().contains("Focus · +25% · 20 min left"));
+    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
     harness.state_mut().datasets.stats.scoring_focus.as_mut().unwrap().ends_at = labello_domain::now();
     harness.run_steps(3);
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
+        .accesskit_node().description().unwrap_or_default().contains("Focus · +25%"));
+    let mut focused = harness.state().work.tasks[0].clone();
+    focused.task_id = "focus-other".into();
+    focused.name = "Other focused boxes".into();
+    harness.state_mut().datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
+        starts_at: labello_domain::now(), ends_at: labello_domain::now() + chrono::Duration::minutes(20),
+        task_id: Some(focused.task_id.clone()),
+    });
+    harness.state_mut().work.tasks.push(focused);
+    harness.run_steps(3);
+    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow");
+    assert!(trigger.accesskit_node().description().unwrap().contains("Other focused boxes: Focus · +25%"));
+    trigger.click();
+    harness.run_steps(3);
+    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Other focused boxes");
+    assert!(option.accesskit_node().description().unwrap().contains("Focus · +25%"));
     assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
 }
 

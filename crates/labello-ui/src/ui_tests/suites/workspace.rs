@@ -1036,7 +1036,7 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
 
     assert_eq!(api.counts().prelabel_suggestions, 0);
     let selected_workflow =
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box review · Person boxes");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
         Some("Loaded assignment queue: 2/2".to_string())
@@ -4454,9 +4454,9 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     app.loading.saving = true;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Saving changes");
     app.loading.saving = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Loading image");
     app.loading.image = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Workflow transition pending");
     app.work.pending_transition = None;
     app.work.availability.loading = true;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Other workflows need to catch up");
@@ -4465,7 +4465,7 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     assert!(app.workflow_marker_reason(&task).is_none());
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.error = Some("failed".into());
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown. You can still try selecting this workflow");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown");
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.loading = false;
     harness.run();

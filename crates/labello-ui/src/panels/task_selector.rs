@@ -37,37 +37,8 @@ impl LabelloApp {
     const WORKFLOW_PILL_HEIGHT: f32 = 52.0;
     const WORKFLOW_MARKER_WIDTH: f32 = 20.0;
 
-    pub(crate) fn workflow_panel_width(&self, ctx: &egui::Context) -> f32 {
-        if self.view == AppView::Annotate {
-            return 340.0;
-        }
-        let workflows = self.workflow_choices();
-        let style = ctx.style_of(ctx.theme());
-        let label_font = egui::TextStyle::Button.resolve(&style);
-        let widest_content = ctx.fonts_mut(|fonts| {
-            workflows
-                .iter()
-                .map(|workflow| {
-                    let label_width = fonts
-                        .layout_no_wrap(workflow.label(), label_font.clone(), theme::TEXT)
-                        .size()
-                        .x;
-                    Self::WORKFLOW_MARKER_WIDTH
-                        + theme::SPACE_2
-                        + Self::WORKFLOW_ICON_SIZE
-                        + theme::SPACE_2
-                        + label_width
-                        + 2.0 * theme::SPACE_3
-                })
-                .fold(0.0, f32::max)
-        });
-
-        let measured_width = widest_content + 2.0 * theme::SPACE_4 + 2.0;
-        if workflows.is_empty() {
-            measured_width.max(LayoutMode::TASK_PANEL_WIDTH)
-        } else {
-            measured_width
-        }
+    pub(crate) fn workflow_panel_width(&self, _ctx: &egui::Context) -> f32 {
+        340.0
     }
 
     pub(crate) fn workflow_queue_status(&self) -> Option<String> {
@@ -126,27 +97,11 @@ impl LabelloApp {
                 "No enabled one-class workflows configured.",
             );
         }
-        if self.view == AppView::Annotate {
-            self.annotation_workflow_groups(ui, &workflows);
-        } else {
-            for workflow in &workflows {
-                ui.push_id(&workflow.task_id, |ui| {
-                    self.workflow_entry(ui, workflow, None, &[], None)
-                });
-            }
+        if self.work.availability.error.is_some() && ui.button("Retry availability").clicked() {
+            self.work.availability.last_attempt = None;
+            self.request_assignment_availability();
         }
-        if let Some(error) = self.work.availability.error.clone() {
-            theme::inline_message(
-                ui,
-                theme::Intent::Warning,
-                "Assignment availability could not be checked. Workflows remain selectable.",
-            );
-            ui.small(error);
-            if ui.button("Retry availability").clicked() {
-                self.work.availability.last_attempt = None;
-                self.request_assignment_availability();
-            }
-        }
+        self.class_workflow_groups(ui, &workflows);
     }
 
     pub(crate) fn workflow_entry_label(
@@ -154,9 +109,8 @@ impl LabelloApp {
         workflow: &crate::app::WorkflowChoice,
         activity: Option<WorkflowActivity>,
     ) -> String {
-        let Some(activity) = activity else {
-            return workflow.label();
-        };
+        let activity = activity.or_else(|| (self.view == AppView::Review).then(|| self.workflow_primary_activity(workflow)));
+        let Some(activity) = activity else { return workflow.label(); };
         format!(
             "{} · {}",
             self.workflow_activity_label(workflow, activity),
@@ -177,27 +131,34 @@ impl LabelloApp {
             .and_then(|task| task.class_ids.first())
             .map(|id| self.class_name(id))
             .unwrap_or_default();
-        format!("{class}: {}", activity.label())
+        let action = if self.view == AppView::Review {
+            match activity {
+                WorkflowActivity::Boxes => crate::glossary::BOUNDING_BOX_REVIEW,
+                _ => crate::glossary::SKELETON_REVIEW,
+            }
+        } else { activity.label() };
+        format!("{class}: {action}")
     }
 
     fn workflow_activity_block(
         &self,
         workflow: &crate::app::WorkflowChoice,
         activity: Option<WorkflowActivity>,
-    ) -> Option<&'static str> {
+    ) -> Option<WorkflowMarkerReason> {
+        if self.view == AppView::Review { return None; }
         match activity {
             Some(WorkflowActivity::MissingObjects) => {
                 if self.work.selected_task_id.as_ref() != Some(&workflow.task_id)
                     || !self.manual_migration_active()
                 {
-                    Some("Open Migration for this workflow and resolve its bounding boxes first.")
+                    Some(WorkflowMarkerReason::MigrationRequired)
                 } else if !matches!(
                     self.work.migration.cursor,
                     Some(labello_domain::MigrationCursor::FullImage)
                 ) {
-                    Some("Resolve the remaining bounding boxes before adding missing objects.")
+                    Some(WorkflowMarkerReason::UnresolvedBoxes)
                 } else if self.work.migration.inspected_group_id.is_some() {
-                    Some("Return to full-image confirmation before adding missing objects.")
+                    Some(WorkflowMarkerReason::FullImageRequired)
                 } else {
                     None
                 }
@@ -216,16 +177,45 @@ impl LabelloApp {
                             .is_none_or(|set| set.targets.is_empty())
                     }) =>
             {
-                Some("This image has no bounding boxes to migrate. Add missing objects instead.")
+                Some(WorkflowMarkerReason::NoMigrationBoxes)
             }
             _ => None,
         }
+    }
+
+    fn workflow_focus_status(&self, task_id: &labello_domain::TaskId) -> Option<String> {
+        if self.view != AppView::Annotate || self.datasets.stats_error.is_some() { return None; }
+        self.datasets.stats.scoring_focus.as_ref()
+            .filter(|focus| focus.task_id.as_ref() == Some(task_id) && focus.contains(labello_domain::now()))
+            .map(|focus| {
+                let minutes = ((focus.ends_at - labello_domain::now()).num_seconds().max(0) as u64).div_ceil(60);
+                format!("Focus · +25% · {minutes} min left")
+            })
+    }
+
+    fn workflow_selection_block(
+        &self,
+        workflow: &crate::app::WorkflowChoice,
+        activity: Option<WorkflowActivity>,
+    ) -> Option<WorkflowMarkerReason> {
+        self.workflow_interaction_block()
+            .or_else(|| self.workflow_activity_block(workflow, activity))
+            .or_else(|| {
+                let current_action = matches!(activity, Some(WorkflowActivity::Migration | WorkflowActivity::MissingObjects))
+                    && self.work.selected_task_id.as_ref() == Some(&workflow.task_id)
+                    && self.manual_migration_active()
+                    && matches!(self.work.migration.cursor, Some(labello_domain::MigrationCursor::FullImage));
+                (!current_action && self.displayed_workflow_availability(&workflow.task_id) == Some(false)).then(|| {
+                    WorkflowMarkerReason::Unavailable(self.work.availability.reasons.get(&workflow.task_id).copied().unwrap_or(labello_domain::WorkflowUnavailableReason::Unavailable))
+                })
+            })
     }
 
     fn workflow_primary_activity(&self, workflow: &crate::app::WorkflowChoice) -> WorkflowActivity {
         if workflow.annotation_type == AnnotationType::BoundingBox {
             return WorkflowActivity::Boxes;
         }
+        if self.view == AppView::Review { return WorkflowActivity::Skeleton; }
         let configured = self
             .work
             .tasks
@@ -242,7 +232,7 @@ impl LabelloApp {
         }
     }
 
-    fn annotation_workflow_groups(
+    fn class_workflow_groups(
         &mut self,
         ui: &mut egui::Ui,
         workflows: &[crate::app::WorkflowChoice],
@@ -295,7 +285,7 @@ impl LabelloApp {
                             .filter(|entry| {
                                 let primary = self.workflow_primary_activity(entry);
                                 primary == activity
-                                    || (activity == WorkflowActivity::MissingObjects
+                                    || (self.view == AppView::Annotate && activity == WorkflowActivity::MissingObjects
                                         && primary == WorkflowActivity::Migration)
                             })
                             .collect();
@@ -352,40 +342,7 @@ impl LabelloApp {
                             });
                         }
                     });
-                    if let Some(migration) = entries
-                        .iter()
-                        .filter(|entry| {
-                            self.workflow_primary_activity(entry) == WorkflowActivity::Migration
-                        })
-                        .min_by_key(|entry| {
-                            self.work.selected_task_id.as_ref() != Some(&entry.task_id)
-                        })
-                        && self
-                            .workflow_activity_block(
-                                migration,
-                                Some(WorkflowActivity::MissingObjects),
-                            )
-                            .is_some()
-                    {
-                        let reason = if self.work.selected_task_id.as_ref()
-                            == Some(&migration.task_id)
-                            && self.manual_migration_active()
-                        {
-                            if self.work.migration.inspected_group_id.is_some() {
-                                "Return to the full image before adding missing objects."
-                            } else {
-                                "Resolve the boxes before adding missing objects."
-                            }
-                        } else {
-                            "Open Migrate before adding missing objects."
-                        };
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(reason).small().color(theme::TEXT_MUTED),
-                            )
-                            .wrap(),
-                        );
-                    }
+
                 });
             });
             ui.add_space(theme::SPACE_2);
@@ -440,11 +397,8 @@ impl LabelloApp {
                 Some(WorkflowActivity::Migration) => !overview,
                 _ => true,
             };
-        let blocked = self.workflow_activity_block(workflow, activity);
-        let ready = !self.saving_blocks_interaction()
-            && !self.loading.image
-            && !self.work.migration.busy
-            && self.work.pending_transition.is_none();
+        let blocked = self.workflow_selection_block(workflow, activity);
+        let ready = self.workflow_interaction_block().is_none();
         let mut label = self.workflow_entry_label(workflow, activity);
         if multiple && let Some(activity) = activity {
             label = format!(
@@ -459,14 +413,11 @@ impl LabelloApp {
                 activity,
                 Some(WorkflowActivity::Migration | WorkflowActivity::MissingObjects)
             );
-        let reason = self
-            .workflow_marker_reason(&workflow.task_id)
-            .filter(|_| !multiple || task_selected)
-            .filter(|reason| {
-                !current_migration_action || !matches!(reason, WorkflowMarkerReason::Unavailable(_))
-            });
-        let unavailable = !current_migration_action
-            && self.displayed_workflow_availability(&workflow.task_id) == Some(false);
+        let reason = if multiple { self.workflow_interaction_block() } else { blocked }
+            .or_else(|| self.workflow_marker_reason(&workflow.task_id).filter(|reason| {
+                !matches!(reason, WorkflowMarkerReason::Unavailable(_))
+                    || ((!multiple || task_selected) && !current_migration_action)
+            }));
         let icon_id = ui.id().with(("workflow-type", &workflow.task_id));
         let marker_id = ui.id().with(("workflow-selection", &workflow.task_id));
         let content_id = ui.id().with("workflow-content");
@@ -503,7 +454,7 @@ impl LabelloApp {
         .truncate();
         let choice = ui
             .add_enabled_ui(
-                ready && (multiple || (!unavailable && blocked.is_none())),
+                ready && (multiple || blocked.is_none()),
                 |ui| button.atom_ui(ui),
             )
             .inner;
@@ -517,19 +468,22 @@ impl LabelloApp {
         });
         let response_id = choice.response.id;
         let queue_status = selected.then(|| self.workflow_queue_status()).flatten();
+        let focus_status = if multiple {
+            choices.iter().find_map(|choice| self.workflow_focus_status(&choice.task_id)
+                .map(|focus| format!("{}: {focus}", choice.label())))
+        } else { self.workflow_focus_status(&workflow.task_id) };
         let mut accessibility_description = match (reason, queue_status.as_ref()) {
             (Some(reason), Some(queue)) => Some(format!("{}. {queue}", reason.label())),
             (Some(reason), None) => Some(reason.label().to_owned()),
             (None, _) => queue_status.clone(),
         };
-        if let Some(blocked) = blocked {
-            accessibility_description = Some(blocked.to_owned());
-        }
         if multiple {
-            accessibility_description = Some(format!(
-                "Choose from {} workflows. Full names and availability are shown in the menu.",
-                choices.len()
-            ));
+            let count = format!("{} workflows", choices.len());
+            accessibility_description = Some(accessibility_description.map_or_else(
+                || count.clone(), |reason| format!("{reason}. {count}")));
+        }
+        if let Some(focus) = &focus_status {
+            accessibility_description = Some(accessibility_description.map_or_else(|| focus.clone(), |description| format!("{description}. {focus}")));
         }
         if let Some(description) = accessibility_description {
             ui.ctx().accesskit_node_builder(response_id, |node| {
@@ -638,15 +592,10 @@ impl LabelloApp {
             hover_text.push('\n');
             hover_text.push_str(queue_status);
         }
-        if let Some(blocked) = blocked {
-            hover_text = blocked.to_owned();
-        }
         if multiple {
-            hover_text = format!(
-                "Choose from {} workflows. The menu shows full names and availability.",
-                choices.len()
-            );
+            hover_text = format!("{} workflows{}", choices.len(), reason.map_or_else(String::new, |reason| format!("\n{}", reason.label())));
         }
+        if let Some(focus) = focus_status { hover_text.push_str(&format!("\n{focus}")); }
         hover_text = format!("{label}\n{hover_text}");
         let show_hover = |ui: &mut egui::Ui| {
             let width = (ui.ctx().content_rect().width() - 2.0 * theme::SPACE_4)
@@ -692,45 +641,38 @@ impl LabelloApp {
                         for choice in choices {
                             let current =
                                 self.work.selected_task_id.as_ref() == Some(&choice.task_id);
-                            let block = self.workflow_activity_block(choice, activity);
-                            let unavailable = self.displayed_workflow_availability(&choice.task_id)
-                                == Some(false)
-                                && !(current
-                                    && self.manual_migration_active()
-                                    && matches!(
-                                        self.work.migration.cursor,
-                                        Some(labello_domain::MigrationCursor::FullImage)
-                                    ));
-                            let enabled = ready && block.is_none() && !unavailable;
-                            let option = ui.add_enabled(
-                                enabled,
-                                egui::Button::new(choice.label())
-                                    .selected(current)
-                                    .wrap()
-                                    .min_size(egui::vec2(ui.available_width(), 44.0)),
-                            );
+                            let block = self.workflow_selection_block(choice, activity);
+                            let enabled = block.is_none();
+                            let marker_id = ui.id().with(("chooser-reason", &choice.task_id));
+                            let option_atoms = ui.add_enabled_ui(enabled, |ui| {
+                                egui::Button::new((
+                                    egui::Atom::custom(marker_id, egui::vec2(20.0, 18.0)),
+                                    choice.label(),
+                                ))
+                                .selected(current)
+                                .wrap()
+                                .min_size(egui::vec2(ui.available_width(), 44.0))
+                                .atom_ui(ui)
+                            }).inner;
+                            if let Some(rect) = option_atoms.rect(marker_id) {
+                                paint_workflow_marker(ui, rect, false, block, if current { theme::TEXT } else { theme::TEXT_MUTED });
+                            }
+                            let option = option_atoms.response;
                             option.widget_info(|| {
                                 egui::WidgetInfo::selected(
                                     egui::WidgetType::Button,
-                                    enabled,
+                                    option.enabled(),
                                     current,
                                     self.workflow_entry_label(choice, activity),
                                 )
                             });
-                            if let Some(reason) = block.or_else(|| {
-                                unavailable.then(|| {
-                                    self.workflow_marker_reason(&choice.task_id)
-                                        .map(|reason| reason.label())
-                                        .unwrap_or("No assignments available")
-                                })
-                            }) {
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(reason).small().color(theme::TEXT_MUTED),
-                                    )
-                                    .wrap(),
-                                );
-                            }
+                            let focus = self.workflow_focus_status(&choice.task_id);
+                            let description = [block.map(|reason| reason.label().to_owned()), focus]
+                                .into_iter().flatten().collect::<Vec<_>>().join(". ");
+                            let option = if description.is_empty() { option } else {
+                                ui.ctx().accesskit_node_builder(option.id, |node| node.set_description(description.as_str()));
+                                option.on_hover_text(&description).on_disabled_hover_text(&description)
+                            };
                             if option.gained_focus() {
                                 option.scroll_to_me(Some(egui::Align::Center));
                             }
@@ -749,19 +691,6 @@ impl LabelloApp {
         } else if response.clicked() {
             self.activate_workflow_entry(workflow, activity);
         }
-        if self.view == AppView::Annotate
-            && activity != Some(WorkflowActivity::MissingObjects)
-            && self.datasets.stats_error.is_none()
-            && let Some(focus) = &self.datasets.stats.scoring_focus
-            && focus.task_id.as_ref() == Some(&workflow.task_id)
-            && focus.contains(labello_domain::now())
-        {
-            let minutes =
-                ((focus.ends_at - labello_domain::now()).num_seconds().max(0) as u64).div_ceil(60);
-            ui.label(
-                RichText::new(format!("Focus · +25% · {minutes} min left")).color(theme::ACCENT),
-            );
-        }
     }
 
     fn activate_workflow_entry(
@@ -778,11 +707,11 @@ impl LabelloApp {
             );
         match activity {
             Some(WorkflowActivity::MissingObjects)
-                if !self.work.migration.adding_missing_object =>
+                if self.view == AppView::Annotate && !self.work.migration.adding_missing_object =>
             {
                 self.trigger_missing_migration_object_action()
             }
-            Some(WorkflowActivity::Migration) if overview => self.revisit_first_migration_object(),
+            Some(WorkflowActivity::Migration) if self.view == AppView::Annotate && overview => self.revisit_first_migration_object(),
             _ if !selected => {
                 self.request_transition(PendingTransition::Workflow(workflow.task_id.clone()))
             }

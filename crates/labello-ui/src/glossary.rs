@@ -35,6 +35,8 @@ glossary! {
     CORRECTION => ("Correction", "An edit made to address an annotation problem."),
     MIGRATION => ("Migration", "Guided creation of skeleton annotations from existing bounding-box guides."),
     BOUNDING_BOX_ANNOTATION => ("Bounding box annotation", "Create or edit bounding boxes for the selected class."),
+    BOUNDING_BOX_REVIEW => ("Bounding box review", "Review submitted bounding boxes for the selected class."),
+    SKELETON_REVIEW => ("Skeleton review", "Review submitted skeletons for the selected class, including migrated skeletons."),
     SKELETON_ANNOTATION => ("Skeleton annotation", "Create or edit skeletons directly for the selected class."),
     ADD_MISSING_OBJECTS => ("Add missing objects", "Begin a skeleton for an object without a bounding-box guide during migration full-image confirmation."),
     BOXES => ("Boxes", "Compact class activity label for bounding box annotation."),

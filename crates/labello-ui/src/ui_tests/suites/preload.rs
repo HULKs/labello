@@ -252,7 +252,7 @@ fn preload_limit_tooltip_keeps_count_and_clears_when_refilling_resumes() {
         assert_eq!(api.counts().get_encoded_image_preview, previews);
         let expected = "Loaded assignment queue: 2/100 (imbalance limit)";
         assert_eq!(harness.state().workflow_queue_status().as_deref(), Some(expected));
-        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person: Bounding box review · Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
         assert_eq!(pill.accesskit_node().description().as_deref(), Some(expected));
         pill.hover();
         harness.run_steps(3);
@@ -260,7 +260,7 @@ fn preload_limit_tooltip_keeps_count_and_clears_when_refilling_resumes() {
         let task_id = harness.state().work.selected_task_id.clone().unwrap();
         harness.state_mut().work.availability.tasks.insert(task_id.clone(), false);
         harness.run_steps(3);
-        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person: Bounding box review · Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
         assert!(pill.accesskit_node().is_disabled());
         pill.hover();
         harness.run_steps(3);
@@ -304,7 +304,7 @@ fn preload_limit_tooltip_wraps_inside_compact_workspaces() {
         harness.run_steps(3);
         click_accesskit_button(&mut harness, "Workflow");
         harness.run_steps(4);
-        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
+        let pill = harness.get_by_role_and_label(egui::accesskit::Role::Button, if harness.state().view == AppView::Review { "Person: Bounding box review · Person boxes" } else { "Person: Bounding box annotation · Person boxes" });
         pill.hover();
         harness.run_steps(3);
         let tooltip = harness.get_by_label_contains("Loaded assignment queue: 0/200 (imbalance limit)");
