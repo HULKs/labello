@@ -327,7 +327,7 @@ fn long_status_messages_keep_their_complete_accessible_text() {
         let status = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, &status_label)
             .rect();
-        let right_navigation = harness
+        let navigation = harness
             .query_by_label("Open navigation")
             .or_else(|| {
                 harness
@@ -338,8 +338,12 @@ fn long_status_messages_keep_their_complete_accessible_text() {
             .rect();
         assert!(presence.top() >= 0.0 && presence.bottom() <= 56.0);
         assert!(presence.right() <= status.left() + 0.5);
-        assert!(status.right() <= right_navigation.left() + 0.5);
-        assert!(right_navigation.right() <= width + 0.5);
+        if harness.query_by_label("Open navigation").is_some() {
+            assert!(navigation.right() < presence.left());
+        } else {
+            assert!(status.right() <= navigation.left() + 0.5);
+        }
+        assert!(navigation.right() <= width + 0.5);
         assert!(harness.query_by_label("Admin User").is_none());
         assert_visible_controls_clamped(&harness, width, height);
     }

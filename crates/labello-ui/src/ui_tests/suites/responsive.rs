@@ -364,7 +364,7 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
         );
         assert!(status_badge.height() > 0.0);
         let layout = LayoutMode::for_width(width);
-        let right_navigation = harness
+        let navigation = harness
             .query_by_label("Open navigation")
             .or_else(|| {
                 harness.query_all_by_role_and_label(egui::accesskit::Role::Button, "Sign out").next()
@@ -373,10 +373,14 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
             .rect();
         assert!(presence.top() >= 0.0 && presence.bottom() <= 56.0);
         assert!(presence.right() <= status_badge.left() + 0.5);
-        assert!(status_badge.right() <= right_navigation.left() + 0.5);
+        if harness.query_by_label("Open navigation").is_some() {
+            assert!(navigation.right() < presence.left());
+        } else {
+            assert!(status_badge.right() <= navigation.left() + 0.5);
+        }
         assert!(
-            right_navigation.left() >= -0.5 && right_navigation.right() <= width + 0.5,
-            "top-bar navigation control is outside the viewport at {width}x{height}: {right_navigation:?}",
+            navigation.left() >= -0.5 && navigation.right() <= width + 0.5,
+            "top-bar navigation control is outside the viewport at {width}x{height}: {navigation:?}",
         );
         assert!(
             harness.query_by_label("Admin User").is_none(),
