@@ -45,6 +45,7 @@ pub enum InspectorPreset {
     WorkflowChange,
     WorkflowReasons,
     WorkflowAvailability,
+    WorkflowBoost,
     Admin,
     PrelabelsDisabled,
     PrelabelsDisabledAnnotation,
@@ -98,7 +99,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 71] = [
+    pub const ALL: [Self; 72] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -120,6 +121,7 @@ impl InspectorPreset {
         Self::WorkflowChange,
         Self::WorkflowReasons,
         Self::WorkflowAvailability,
+        Self::WorkflowBoost,
         Self::Admin,
         Self::PrelabelsDisabled,
         Self::PrelabelsDisabledAnnotation,
@@ -193,6 +195,7 @@ impl InspectorPreset {
             Self::ReviewNextImage => "review-next-image",
             Self::MigrationNextImage => "migration-next-image",
             Self::WorkflowAvailability => "workflow-availability",
+            Self::WorkflowBoost => "workflow-boost",
             Self::WorkflowChange => "workflow-change",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
@@ -292,6 +295,24 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::WorkflowBoost => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            let mut class = app.work.classes[0].clone();
+            class.class_id = "goal-post".into();
+            class.name = "Goal post".into();
+            let mut task = app.work.tasks[0].clone();
+            task.task_id = "goal-post-boxes".into();
+            task.name = "Goal post boxes".into();
+            task.class_ids = vec![class.class_id.clone()];
+            app.datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
+                starts_at: labello_domain::now(),
+                ends_at: labello_domain::now() + chrono::Duration::minutes(20),
+                task_id: Some(task.task_id.clone()),
+            });
+            app.work.classes.push(class);
+            app.work.tasks.push(task);
+            app
+        }
         InspectorPreset::OverlappingBoxes | InspectorPreset::OverlappingBoxesUnfiltered => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             let mut duplicate = app.work.annotations[0].clone();

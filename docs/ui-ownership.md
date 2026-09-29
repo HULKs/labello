@@ -565,6 +565,12 @@ loads, saving, migration updates, transitions, and modal blocks have state-only
 tooltips and accessible descriptions. No explanatory text or focus-bonus footer
 appears beneath selection buttons. The availability retry control sits above
 the class cards.
+`panels/workflow_boost.rs` paints the boosted activity and matching chooser option
+without changing layout or native button state. It uses the shared reduced-motion
+preference, defaults to static rendering without an adapter, and requests frames
+only during its bounded activation/hover/focus shimmer. The scoring window remains
+authoritative; failed statistics or expiry remove the cue. Class cards use the
+ordinary item spacing without an extra spacer between groups.
 The annotation panel has bounded width; task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
 task. Temporarily blocked configured activities remain disabled with an explanation.

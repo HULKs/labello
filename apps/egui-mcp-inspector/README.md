@@ -232,6 +232,11 @@ The `workflow-availability` preset shows all ten server restriction icons,
 including a selected unavailable workflow, without image or annotation content.
 Use it to inspect disabled tooltips, marker alignment, and the workflow drawer.
 
+The `workflow-boost` preset shows an unselected boosted workflow beneath another
+class. Its amber rim and sparkle use the production renderer; the native preset
+keeps the default static reduced-motion presentation. Chromium exercises the
+activation and hover shimmer with the browser motion preference.
+
 The `workflow-change` preset shows the blocking automatic workflow-change dialog
 without image content. Check the explanation, keyboard acknowledgment, Escape and
 outside-click behavior, and short-screen scrolling. It uses the shared production

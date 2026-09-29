@@ -551,6 +551,13 @@ at 340 logical points, cap drawers to the viewport, wrap class headings, and
 retain complete accessible names and task names in tooltips. Focused activities scroll
 into view; long task text must not widen the canvas layout.
 
-Availability failures retain a compact Retry availability button above the class
-cards. Focus-bonus details remain in annotation workflow tooltips and accessible
-descriptions, without adding a footer beneath the buttons.
+Class cards use the ordinary eight-point vertical gap without an additional
+spacer. Availability failures retain a compact Retry availability button above
+the cards. A boosted annotation workflow has a soft amber glow, inner rim, and sparkle,
+including the matching option inside a grouped chooser. A brief shimmer runs
+when the boost appears or the button receives hover or keyboard focus; it then
+settles to the persistent highlight. Reduced-motion and disabled controls keep
+the highlight static. Native selection, focus, and availability remain distinct.
+Tooltips and accessible descriptions identify the boosted workflow without a
+percentage, countdown, focus label, or footer. Expired or unreliable boost data
+removes the highlight.

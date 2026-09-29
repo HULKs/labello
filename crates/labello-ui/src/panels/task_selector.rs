@@ -183,14 +183,11 @@ impl LabelloApp {
         }
     }
 
-    fn workflow_focus_status(&self, task_id: &labello_domain::TaskId) -> Option<String> {
+    fn workflow_boost_window(&self, task_id: &labello_domain::TaskId) -> Option<i64> {
         if self.view != AppView::Annotate || self.datasets.stats_error.is_some() { return None; }
         self.datasets.stats.scoring_focus.as_ref()
             .filter(|focus| focus.task_id.as_ref() == Some(task_id) && focus.contains(labello_domain::now()))
-            .map(|focus| {
-                let minutes = ((focus.ends_at - labello_domain::now()).num_seconds().max(0) as u64).div_ceil(60);
-                format!("Focus · +25% · {minutes} min left")
-            })
+            .map(|focus| focus.starts_at.timestamp_millis())
     }
 
     fn workflow_selection_block(
@@ -345,7 +342,6 @@ impl LabelloApp {
 
                 });
             });
-            ui.add_space(theme::SPACE_2);
         }
     }
 
@@ -468,10 +464,11 @@ impl LabelloApp {
         });
         let response_id = choice.response.id;
         let queue_status = selected.then(|| self.workflow_queue_status()).flatten();
-        let focus_status = if multiple {
-            choices.iter().find_map(|choice| self.workflow_focus_status(&choice.task_id)
-                .map(|focus| format!("{}: {focus}", choice.label())))
-        } else { self.workflow_focus_status(&workflow.task_id) };
+        let boosted = choices.iter().find_map(|choice| self.workflow_boost_window(&choice.task_id)
+            .map(|window| (window, choice.label())));
+        let boost_description = boosted.as_ref().map(|(_, name)| if multiple {
+            format!("{}: {name}", crate::glossary::BOOSTED_WORKFLOW)
+        } else { crate::glossary::BOOSTED_WORKFLOW.to_owned() });
         let mut accessibility_description = match (reason, queue_status.as_ref()) {
             (Some(reason), Some(queue)) => Some(format!("{}. {queue}", reason.label())),
             (Some(reason), None) => Some(reason.label().to_owned()),
@@ -482,8 +479,8 @@ impl LabelloApp {
             accessibility_description = Some(accessibility_description.map_or_else(
                 || count.clone(), |reason| format!("{reason}. {count}")));
         }
-        if let Some(focus) = &focus_status {
-            accessibility_description = Some(accessibility_description.map_or_else(|| focus.clone(), |description| format!("{description}. {focus}")));
+        if let Some(boost) = &boost_description {
+            accessibility_description = Some(accessibility_description.map_or_else(|| boost.clone(), |description| format!("{description}. {boost}")));
         }
         if let Some(description) = accessibility_description {
             ui.ctx().accesskit_node_builder(response_id, |node| {
@@ -579,6 +576,7 @@ impl LabelloApp {
                 paint_workflow_marker(ui, marker_rect, selected, reason, theme::TEXT_MUTED);
             }
         }
+        paint_workflow_boost(ui, &choice.response, boosted.map(|(window, _)| window), None);
         let mut hover_text = format!(
             "{} workflow\nPrevious: {} · Next: {}",
             annotation_type_label(&workflow.annotation_type),
@@ -595,7 +593,7 @@ impl LabelloApp {
         if multiple {
             hover_text = format!("{} workflows{}", choices.len(), reason.map_or_else(String::new, |reason| format!("\n{}", reason.label())));
         }
-        if let Some(focus) = focus_status { hover_text.push_str(&format!("\n{focus}")); }
+        if let Some(boost) = boost_description { hover_text.push_str(&format!("\n{boost}")); }
         hover_text = format!("{label}\n{hover_text}");
         let show_hover = |ui: &mut egui::Ui| {
             let width = (ui.ctx().content_rect().width() - 2.0 * theme::SPACE_4)
@@ -644,10 +642,12 @@ impl LabelloApp {
                             let block = self.workflow_selection_block(choice, activity);
                             let enabled = block.is_none();
                             let marker_id = ui.id().with(("chooser-reason", &choice.task_id));
+                            let boost_id = ui.id().with(("chooser-boost", &choice.task_id));
                             let option_atoms = ui.add_enabled_ui(enabled, |ui| {
                                 egui::Button::new((
                                     egui::Atom::custom(marker_id, egui::vec2(20.0, 18.0)),
                                     choice.label(),
+                                    egui::Atom::custom(boost_id, egui::vec2(16.0, 16.0)),
                                 ))
                                 .selected(current)
                                 .wrap()
@@ -657,6 +657,8 @@ impl LabelloApp {
                             if let Some(rect) = option_atoms.rect(marker_id) {
                                 paint_workflow_marker(ui, rect, false, block, if current { theme::TEXT } else { theme::TEXT_MUTED });
                             }
+                            let boost = self.workflow_boost_window(&choice.task_id);
+                            paint_workflow_boost(ui, &option_atoms.response, boost, option_atoms.rect(boost_id).map(|rect| rect.center()));
                             let option = option_atoms.response;
                             option.widget_info(|| {
                                 egui::WidgetInfo::selected(
@@ -666,8 +668,7 @@ impl LabelloApp {
                                     self.workflow_entry_label(choice, activity),
                                 )
                             });
-                            let focus = self.workflow_focus_status(&choice.task_id);
-                            let description = [block.map(|reason| reason.label().to_owned()), focus]
+                            let description = [block.map(|reason| reason.label().to_owned()), boost.map(|_| crate::glossary::BOOSTED_WORKFLOW.to_owned())]
                                 .into_iter().flatten().collect::<Vec<_>>().join(". ");
                             let option = if description.is_empty() { option } else {
                                 ui.ctx().accesskit_node_builder(option.id, |node| node.set_description(description.as_str()));

@@ -35,6 +35,7 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 <!-- glossary:start -->
 | Name | Meaning |
 | --- | --- |
+| Boosted workflow | A workflow whose annotations currently earn a scoring bonus. |
 | Dataset | Images, workflow configuration, annotations, and their history managed together. |
 | Workflow | A configured labeling process for one annotation type and class. Stored as a task in the API and dataset configuration. |
 | Assignment | Work claimed by one person for an image and workflow. |

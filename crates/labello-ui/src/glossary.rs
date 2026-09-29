@@ -17,6 +17,7 @@ macro_rules! glossary {
 }
 
 glossary! {
+    BOOSTED_WORKFLOW => ("Boosted workflow", "A workflow whose annotations currently earn a scoring bonus."),
     DATASET => ("Dataset", "Images, workflow configuration, annotations, and their history managed together."),
     WORKFLOW => ("Workflow", "A configured labeling process for one annotation type and class. Stored as a task in the API and dataset configuration."),
     ASSIGNMENT => ("Assignment", "Work claimed by one person for an image and workflow."),
