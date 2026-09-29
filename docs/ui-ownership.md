@@ -38,7 +38,7 @@ inspector. See the [product glossary](glossary.md).
 | Module | Responsibility |
 | --- | --- |
 | `setup.rs` | Login, advanced connection, pre-authentication About, dataset setup and schema-copy preview |
-| `panels/app_bar.rs` | Measured global navigation, utilities, account controls, drawer collapse; remains visible during loading |
+| `panels/app_bar.rs` | Measured global navigation, expanding collapsed-header dataset identity, bounded presence, grouped navigation drawer; remains visible during loading |
 | `panels/loading_bars.rs` | Scoped retained bars and validated inspector context during image loads |
 | `app/shell.rs` | Layout, persistent bottom action panel, resize repaint |
 | `panels/workspace.rs` | Canvas area, second-bar context, canvas controls |
@@ -48,7 +48,7 @@ inspector. See the [product glossary](glossary.md).
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
 | `prelabel_flow.rs`, `live/prelabels.rs` | Explicit model choice, item-scoped retained-hint defaults, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
 | `prelabel_review.rs` | Pending editable prelabels, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
-| `panels/review_context_bar.rs`, `review_context.rs` | Shared context summary/layout and height; exact review target identity, type, phase and version |
+| `panels/review_context_bar.rs`, `review_context.rs` | Measured inline/stacked context summary, compact progress presentation and height; exact review target identity, type, phase and version |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
 | `review_corrections.rs` | Accumulated drafts, canvas previews, immutable retries, object/disposition editing |
 | `review_revision.rs` | Locally staged replacement decisions and stable commit retries |

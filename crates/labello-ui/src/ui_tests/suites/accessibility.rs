@@ -327,7 +327,7 @@ fn long_status_messages_keep_their_complete_accessible_text() {
         let status = harness
             .get_by_role_and_label(egui::accesskit::Role::Button, &status_label)
             .rect();
-        let right_navigation = harness
+        let navigation = harness
             .query_by_label("Open navigation")
             .or_else(|| {
                 harness
@@ -338,8 +338,12 @@ fn long_status_messages_keep_their_complete_accessible_text() {
             .rect();
         assert!(presence.top() >= 0.0 && presence.bottom() <= 56.0);
         assert!(presence.right() <= status.left() + 0.5);
-        assert!(status.right() <= right_navigation.left() + 0.5);
-        assert!(right_navigation.right() <= width + 0.5);
+        if harness.query_by_label("Open navigation").is_some() {
+            assert!(navigation.right() < presence.left());
+        } else {
+            assert!(status.right() <= navigation.left() + 0.5);
+        }
+        assert!(navigation.right() <= width + 0.5);
         assert!(harness.query_by_label("Admin User").is_none());
         assert_visible_controls_clamped(&harness, width, height);
     }
@@ -573,4 +577,56 @@ fn throughput_chart_exposes_each_daily_value_to_accessibility() {
             );
         }
     }
+}
+
+#[test]
+fn navigation_drawer_orders_utilities_before_account_and_keeps_selected_state() {
+    let mut h = loaded_work_harness(Rc::new(SpyApi::new()));
+    h.set_size(egui::vec2(390.0, 844.0));
+    h.run_steps(4);
+    click_accesskit_button(&mut h, "Open navigation");
+    let mut last = 0.0;
+    for label in ["Annotate", "Review", "Inspect", "Statistics", "Settings", "Tutorial", "Admin", "Setup", "Admin User", "Sign out"] {
+        let node = h.get_by_label(label);
+        let rect = node.rect();
+        assert!(rect.top() > last, "{label} should follow the preceding group");
+        last = rect.bottom();
+        if label != "Admin User" {
+            assert!(rect.height() >= 44.0);
+            assert!((rect.left() - h.get_by_label("Annotate").rect().left()).abs() < 1.0);
+            if label == "Annotate" { assert_eq!(node.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True)); }
+        }
+    }
+    h.key_press(egui::Key::Escape);
+    h.run_steps(4);
+    assert!(h.get_by_label("Open navigation").is_focused());
+    click_accesskit_button(&mut h, "Open navigation");
+    click_accesskit_button(&mut h, "Settings");
+    assert!(h.state().work.show_settings);
+    assert!(!h.state().navigation.drawer_open);
+}
+
+#[test]
+fn short_navigation_drawer_keyboard_reaches_account_action_and_restores_trigger() {
+    let mut h = loaded_work_harness(Rc::new(SpyApi::new()));
+    h.set_size(egui::vec2(320.0, 320.0));
+    h.run_steps(4);
+    click_accesskit_button(&mut h, "Open navigation");
+    let mut reached = false;
+    for _ in 0..15 {
+        h.key_press(egui::Key::Tab);
+        h.run_steps(4);
+        let action = h.get_by_role_and_label(egui::accesskit::Role::Button, "Sign out");
+        if action.is_focused() {
+            let rect = action.rect();
+            assert!(rect.top() >= 0.0 && rect.bottom() <= 320.0, "{rect:?}");
+            reached = true;
+            break;
+        }
+    }
+    assert!(reached, "account action must be reachable by keyboard in the scrolled drawer");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(4);
+    assert!(!h.state().navigation.drawer_open);
+    assert!(h.get_by_label("Open navigation").is_focused());
 }

@@ -145,7 +145,8 @@ impl LabelloApp {
                     // Reserve the normal two-line workspace summary without showing a placeholder.
                     WorkspaceSummary {
                         progress: " ".into(),
-                        identity_and_type: Some((" ".into(), " ".into())),
+                        identity: Some(" ".into()),
+                        annotation_type: None,
                         accessible: String::new(),
                         submitter: None,
                         show_avatar: self.view == AppView::Review,
