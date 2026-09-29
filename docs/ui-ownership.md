@@ -9,7 +9,7 @@ acceptance, and [architecture](architecture.md) for crate boundaries.
 | Owner | State |
 | --- | --- |
 | `runtime` | API transport, command queue, responses, active requests, repainting, persistence scheduling, presence |
-| `auth` | Sign-in options, session discovery, server prelabel availability, failures, account-bound recovery |
+| `auth` | Sign-in options, session discovery, server prelabel availability, failures, account-bound recovery, global preference loading and legacy choices |
 | `datasets` | Dataset metadata/users, statistics, leaderboard selection, dataset request identities |
 | `admin` | Filters, snapshots, roles, staged configuration, export |
 | `import` | Wizard, source registration, planning, durable job progress |
@@ -516,3 +516,30 @@ catalog for display and search. This presentation catalog does not change domain
 action IDs, conflict eligibility, dispatch or persisted bindings. Row text receives
 bounded width before controls, with stacked controls below 600 content points.
 The existing shortcut draft/save/reducer owner remains authoritative for settings.
+
+
+## Global preferences and statistics scope
+
+`preferences.rs` owns account preference loading and the legacy-source selector.
+The existing shortcut draft/save reducer remains the editing owner. Global loads
+use account-bound requests without dataset identity. Accepted loads preserve an
+already edited settings draft. Dataset loads do not replace shortcuts; they ensure
+account preferences have loaded.
+Workspace/authentication invalidation rejects obsolete requests.
+
+`statistics/overview.rs` owns the modal's independent scope, request identity,
+remote state and authorized dataset projections. `datasets.stats` remains the
+active dataset projection used by the workspace streak. Scope selection starts
+no workspace epoch and never replaces work metadata, annotations or assignments.
+The domain aggregates counts, raw score components and contributor UTC days;
+rankings, acceptance percentages and streaks derive from that combined history.
+Matching task/class identifiers remain in separate source-dataset breakdowns.
+Global views omit dataset scoring multipliers, focus and assignment balance.
+
+The active dataset keeps its existing coalesced refresh path. Other scopes refresh
+through the overview owner while the modal is visible. Scope changes clear the
+old view before loading; accepted failures clear overview data because its
+authorized membership could have changed. Authentication/workspace invalidation
+clears the overview and dismisses the modal. The global endpoint fails closed
+rather than returning partial aggregates. Dataset reads are sequential; there is
+no cross-dataset atomic snapshot or large-server performance guarantee.

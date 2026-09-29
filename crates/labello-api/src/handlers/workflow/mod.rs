@@ -1643,7 +1643,13 @@ pub(crate) async fn get_keybindings(
     let repo = state.repo(&dataset_id)?;
     let metadata = repo.load_dataset_config().await?;
     ensure_any_dataset_role(&metadata, &actor)?;
-    Ok(Json(repo.load_keybindings(&actor.user_id).await?))
+    Ok(Json(
+        state
+            .preferences
+            .load(&actor.user_id)
+            .await?
+            .unwrap_or_else(|| KeybindingSet::defaults_for(actor.user_id)),
+    ))
 }
 
 pub(crate) async fn put_keybindings(
@@ -1676,6 +1682,6 @@ pub(crate) async fn put_keybindings(
     bindings
         .validate()
         .map_err(labello_storage::StorageError::from)?;
-    repo.save_keybindings(&bindings).await?;
+    state.preferences.save(&bindings).await?;
     Ok(Json(bindings))
 }

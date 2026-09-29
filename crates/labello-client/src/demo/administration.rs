@@ -1,4 +1,16 @@
 impl StatsApi for DemoLabelloApi {
+    fn statistics_overview(&self) -> crate::ApiFuture<'_, Vec<crate::DatasetStatistics>> {
+        Box::pin(async move {
+            let mut rows = Vec::new();
+            for dataset in self.list_datasets().await? {
+                let metadata = self.get_dataset(&dataset.dataset_id).await?;
+                rows.push(crate::DatasetStatistics { dataset_id: metadata.dataset_id, name: metadata.name,
+                    tasks: metadata.tasks, classes: metadata.label_classes, imbalance: metadata.imbalance, stats: DatasetStats::default() });
+            }
+            Ok(rows)
+        })
+    }
+
     fn server_presence(&self) -> crate::ApiFuture<'_, crate::ServerPresence> {
         Box::pin(async { Ok(crate::ServerPresence { users: Vec::new() }) })
     }
@@ -23,9 +35,12 @@ impl StatsApi for DemoLabelloApi {
 }
 
 impl KeybindingApi for DemoLabelloApi {
+    fn legacy_keybindings(&self) -> crate::ApiFuture<'_, Vec<crate::LegacyKeybindings>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
     fn get_keybindings<'a>(
         &'a self,
-        _dataset_id: &'a DatasetId,
         user_id: &'a UserId,
     ) -> crate::ApiFuture<'a, KeybindingSet> {
         Box::pin(async move {
@@ -43,7 +58,6 @@ impl KeybindingApi for DemoLabelloApi {
 
     fn save_keybindings<'a>(
         &'a self,
-        _dataset_id: &'a DatasetId,
         mut keybindings: KeybindingSet,
     ) -> crate::ApiFuture<'a, KeybindingSet> {
         Box::pin(async move {

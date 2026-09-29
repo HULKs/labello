@@ -2232,6 +2232,8 @@ impl OfflineApi for SpyApi {
 }
 
 impl StatsApi for SpyApi {
+    fn statistics_overview(&self) -> ApiFuture<'_, Vec<labello_client::DatasetStatistics>> { ready(Ok(Vec::new())) }
+
     fn server_presence(&self) -> ApiFuture<'_, labello_client::ServerPresence> { ready(Ok(labello_client::ServerPresence { users: Vec::new() })) }
 
     fn current_user_activity<'a>(&'a self, dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_client::CurrentUserActivity> {
@@ -2252,9 +2254,10 @@ impl StatsApi for SpyApi {
 }
 
 impl KeybindingApi for SpyApi {
+    fn legacy_keybindings(&self) -> ApiFuture<'_, Vec<labello_client::LegacyKeybindings>> { ready(Ok(Vec::new())) }
+
     fn get_keybindings<'a>(
         &'a self,
-        _dataset_id: &'a DatasetId,
         user_id: &'a UserId,
     ) -> ApiFuture<'a, KeybindingSet> {
         self.state.borrow_mut().counts.get_keybindings += 1;
@@ -2263,7 +2266,6 @@ impl KeybindingApi for SpyApi {
 
     fn save_keybindings<'a>(
         &'a self,
-        _dataset_id: &'a DatasetId,
         keybindings: KeybindingSet,
     ) -> ApiFuture<'a, KeybindingSet> {
         self.state.borrow_mut().counts.save_keybindings += 1;

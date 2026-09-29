@@ -17,6 +17,7 @@ impl LabelloApp {
         if self.work.show_settings {
             return;
         }
+        self.request_preferences();
         let mut draft = self.work.keybindings.clone();
         draft.normalize();
         self.work.shortcut_settings.baseline = Some(draft.clone());

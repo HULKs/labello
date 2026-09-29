@@ -311,8 +311,12 @@ has been recorded.
 - **Statistics:** use a bar-chart icon in the app bar's right-side utility group,
   with a 44-point target, an `Open statistics` accessible name, and a tooltip.
   Keep a labeled Statistics action in the collapsed navigation drawer.
-  Open a dataset-scoped modal above the current workspace or
-  setup. Opening, refreshing, and closing it preserve the assignment, image,
+  Open a statistics modal above the current workspace or Setup, including
+  when no dataset has been opened. Place a bounded, keyboard-accessible
+  Statistics for selector above the content, offering individual authorized
+  datasets and All accessible datasets. Scope selection preserves the work
+  dataset and assignment. Group aggregate task/class breakdowns by source dataset;
+  keep balance and scoring-focus information in individual dataset views. Opening, refreshing, and closing it preserve the assignment, image,
   draft, selection, canvas transform, and workspace epoch. Continue legitimate
   in-flight workflow results and expose recovery when ownership becomes invalid.
   Block background input, provide Close and Escape dismissal, restore focus to
@@ -468,7 +472,8 @@ application errors, and keyboard activation.
 
 ## Shortcut editor
 
-Group each shortcut category once. Match ordinary button vocabulary and expose
+Show that shortcuts apply to all datasets. Offer explicit selection of preserved
+legacy settings before the first global save. Group each shortcut category once. Match ordinary button vocabulary and expose
 context-dependent button names in searchable help. Keep current binding and reset
 controls visually separate from bounded, wrapping text; stack them below text
 when columns would crowd. Long key combinations must wrap without obscuring names

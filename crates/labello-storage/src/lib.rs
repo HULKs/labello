@@ -22,3 +22,5 @@ pub use import::*;
 pub use ingest::*;
 pub use preview::{EncodedPreview, PreviewCache, PreviewConfig, PreviewError, PreviewProfile};
 pub use repository::*;
+
+pub use keybindings::UserPreferencesStore;

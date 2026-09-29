@@ -57,6 +57,8 @@ pub enum InspectorPreset {
     ExportSuccess,
     ExportRequestFailure,
     Statistics,
+    StatisticsGlobal,
+    GlobalShortcuts,
     StreakLit,
     DialogSettings,
     DialogTransition,
@@ -96,7 +98,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 69] = [
+    pub const ALL: [Self; 71] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -130,6 +132,8 @@ impl InspectorPreset {
         Self::ExportSuccess,
         Self::ExportRequestFailure,
         Self::Statistics,
+        Self::StatisticsGlobal,
+        Self::GlobalShortcuts,
         Self::StreakLit,
         Self::DialogSettings,
         Self::DialogTransition,
@@ -204,6 +208,8 @@ impl InspectorPreset {
             Self::ExportRequestFailure => "export-request-failure",
 
             Self::Statistics => "statistics",
+            Self::StatisticsGlobal => "statistics-global",
+            Self::GlobalShortcuts => "global-shortcuts",
             Self::StreakLit => "streak-lit",
             Self::DialogSettings => "dialog-settings",
             Self::DialogTransition => "dialog-transition",
@@ -564,6 +570,41 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::ExportRequestFailure => export_preset(preset),
 
         InspectorPreset::Statistics => statistics_preset(),
+        InspectorPreset::StatisticsGlobal => {
+            let mut app = statistics_preset();
+            let rows = ["Training", "Validation"]
+                .into_iter()
+                .map(|name| labello_client::DatasetStatistics {
+                    dataset_id: labello_domain::DatasetId::from(name.to_lowercase()),
+                    name: name.into(),
+                    tasks: app.work.tasks.clone(),
+                    classes: app.work.classes.clone(),
+                    imbalance: None,
+                    stats: app.datasets.stats.clone(),
+                })
+                .collect::<Vec<_>>();
+            app.datasets.overview.scope = crate::statistics::StatisticsScope::All;
+            app.datasets.overview.total =
+                labello_domain::aggregate_statistics(rows.iter().map(|row| &row.stats));
+            app.datasets.overview.rows = rows;
+            app.datasets.overview.completed = Some(web_time::Instant::now());
+            app
+        }
+        InspectorPreset::GlobalShortcuts => {
+            let mut app = setup_preset();
+            app.open_shortcut_settings();
+            let mut bindings = app.work.keybindings.clone();
+            bindings.pan_drag_modifier = labello_domain::PanDragModifier::Alt;
+            app.auth
+                .preferences
+                .legacy
+                .push(labello_client::LegacyKeybindings {
+                    dataset_id: labello_domain::DatasetId::from("training"),
+                    name: "Training".into(),
+                    bindings,
+                });
+            app
+        }
         InspectorPreset::StreakLit => {
             let mut app = statistics_preset();
             let people = app.datasets.stats.contributors.as_mut().unwrap();

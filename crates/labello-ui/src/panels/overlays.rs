@@ -475,6 +475,7 @@ impl LabelloApp {
             });
             let content_height = (max_height - header.response.rect.height() - ui.spacing().item_spacing.y).max(64.0);
             let mut contents = |ui: &mut egui::Ui| {
+                self.preference_controls(ui);
                 ui.label(
                     RichText::new("Record a key, right-click, or mouse button 4/5.")
                         .color(theme::MUTED),
@@ -719,7 +720,7 @@ impl LabelloApp {
                 let mut decision_actions = |ui: &mut egui::Ui| {
                     if theme::primary_button(
                         ui,
-                        dirty && conflicts.is_empty() && !self.loading.keybindings,
+                        (dirty || !self.auth.preferences.legacy.is_empty()) && conflicts.is_empty() && !self.loading.keybindings && self.auth.preferences.pending.is_none() && self.auth.preferences.error.is_none(),
                         egui::Button::new(if self.loading.keybindings {
                             "Saving…"
                         } else {

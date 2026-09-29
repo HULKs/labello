@@ -790,7 +790,7 @@ impl LabelloApp {
             );
             return;
         }
-        if view == AppView::Stats && self.datasets.metadata.is_some() {
+        if view == AppView::Stats && self.auth.account.is_some() {
             self.open_statistics();
             return;
         }

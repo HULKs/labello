@@ -105,6 +105,7 @@ impl LabelloApp {
             setup,
             import: ImportFlowState::default(),
             auth: AuthState {
+                preferences: Default::default(),
                 account: None,
                 can_create_datasets: false,
                 prelabel_available: true,

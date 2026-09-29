@@ -349,6 +349,7 @@ impl LeaderboardState {
         ui: &mut egui::Ui,
         stats: &DatasetStats,
         identity: (&DatasetId, &UserId, u64),
+        aggregate: bool,
     ) {
         if self.identity.as_ref().is_none_or(|(dataset, user, epoch)| {
             dataset != identity.0 || user != identity.1 || *epoch != identity.2
@@ -376,7 +377,7 @@ impl LeaderboardState {
         }
         let metrics: &[usize] = if scoring { &[3, 0, 1, 2] } else { &[0, 1, 2] };
         let mut daily_status = None;
-        if scoring {
+        if scoring && !aggregate {
             let labels = contributors
                 .get(identity.1)
                 .and_then(|person| {

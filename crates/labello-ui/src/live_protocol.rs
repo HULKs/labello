@@ -387,6 +387,14 @@ pub(crate) enum UiMessage {
         result: Result<labello_client::ServerPresence, UiRequestError>,
     },
     PresenceVisibilityRegained,
+    OverviewLoaded {
+        request: RequestIdentity,
+        result: Result<Vec<labello_client::DatasetStatistics>, UiRequestError>,
+    },
+    PreferencesLoaded {
+        request: RequestIdentity,
+        result: Result<(KeybindingSet, Vec<labello_client::LegacyKeybindings>), UiRequestError>,
+    },
     StatsLoaded {
         request: RequestIdentity,
         result: Result<DatasetStats, UiRequestError>,
@@ -553,7 +561,6 @@ pub(crate) enum UiCommand {
     LoadDataset {
         request: RequestIdentity,
         dataset_id: DatasetId,
-        user_id: UserId,
     },
     LoadAdmin {
         request: RequestIdentity,
@@ -600,6 +607,13 @@ pub(crate) enum UiCommand {
     Presence {
         request: RequestIdentity,
     },
+    Overview {
+        request: RequestIdentity,
+    },
+    Preferences {
+        request: RequestIdentity,
+        user_id: UserId,
+    },
     Stats {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -612,7 +626,6 @@ pub(crate) enum UiCommand {
     },
     SaveKeybindings {
         request: RequestIdentity,
-        dataset_id: DatasetId,
         keybindings: KeybindingSet,
     },
     ClaimAssignment {
@@ -750,6 +763,8 @@ impl UiCommand {
             | Self::Ingest { request, .. }
             | Self::PollIngest { request, .. }
             | Self::Presence { request }
+            | Self::Overview { request, .. }
+            | Self::Preferences { request, .. }
             | Self::Stats { request, .. }
             | Self::AssignmentAvailability { request, .. }
             | Self::SaveKeybindings { request, .. }
@@ -975,6 +990,14 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
+            Self::OverviewLoaded { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
+            Self::PreferencesLoaded { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
             Self::StatsLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -1041,6 +1064,8 @@ impl UiMessage {
             | Self::CorrectionFinished { request, .. }
             | Self::IngestJobLoaded { request, .. }
             | Self::PresenceLoaded { request, .. }
+            | Self::OverviewLoaded { request, .. }
+            | Self::PreferencesLoaded { request, .. }
             | Self::StatsLoaded { request, .. }
             | Self::AssignmentAvailabilityLoaded { request, .. }
             | Self::KeybindingsSaved { request, .. }
@@ -1078,7 +1103,6 @@ impl UiMessage {
 #[derive(Debug)]
 pub(crate) struct LoadedDataset {
     pub metadata: DatasetMetadata,
-    pub keybindings: KeybindingSet,
 }
 
 #[derive(Debug)]

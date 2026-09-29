@@ -33,6 +33,7 @@ use crate::{
 
 mod deployment;
 mod exports;
+mod global;
 mod imports;
 mod ingest;
 mod oauth_routes;
@@ -301,6 +302,12 @@ pub fn router(state: ApiState) -> Router {
             "/datasets/{dataset_id}/stats/me",
             get(workflow::current_user_activity),
         )
+        .route("/stats", get(global::statistics))
+        .route(
+            "/keybindings",
+            get(global::keybindings).put(global::save_keybindings),
+        )
+        .route("/keybindings/legacy", get(global::legacy_keybindings))
         .route(
             "/datasets/{dataset_id}/keybindings",
             get(workflow::get_keybindings).put(workflow::put_keybindings),

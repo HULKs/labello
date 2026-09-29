@@ -5,6 +5,8 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+            UiMessage::OverviewLoaded { request, result } => { self.accept_overview(request.request_id, result); }
+            UiMessage::PreferencesLoaded { request, result } => { self.accept_preferences(request.request_id, result); }
             UiMessage::Inspected { request, result } => self.accept_inspection(ctx, request, result),
             UiMessage::PresenceLoaded { request, result } => self.accept_presence(request, result),
             UiMessage::PresenceVisibilityRegained => self.request_presence(),
@@ -109,6 +111,8 @@ impl LabelloApp {
                     match result {
                         Ok(keybindings) => {
                             self.work.keybindings = keybindings;
+                            self.auth.preferences.legacy.clear();
+                            self.auth.preferences.loaded = true;
                             self.work.show_settings = false;
                             self.work.shortcut_settings = Default::default();
                             self.runtime.notice = Some("Keyboard shortcuts saved".to_string());

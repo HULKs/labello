@@ -3,8 +3,7 @@ impl LabelloApp {
         self.clear_previous_assignment();
         self.clear_current_image();
         self.sync_work_config(loaded.metadata);
-        self.work.keybindings = loaded.keybindings;
-        self.work.keybindings.normalize();
+        self.request_preferences();
         self.work.shortcut_settings = Default::default();
         let requested = self.datasets.requested_view.take().unwrap_or_else(|| {
             [AppView::Annotate, AppView::Review]

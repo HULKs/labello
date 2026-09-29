@@ -249,7 +249,7 @@ impl LabelloApp {
             actions.push(AppBarAction::Admin);
         }
         actions.push(AppBarAction::Settings);
-        if self.datasets.metadata.is_some() {
+        if self.auth.account.is_some() {
             actions.push(AppBarAction::Statistics);
         }
         actions

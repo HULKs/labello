@@ -241,6 +241,7 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
                 assert!(
                     harness.get_by_label("Close statistics").is_focused()
                         || harness.get_by_label("Refresh now").is_focused()
+                        || harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_focused()
                 );
             }
             assert!(
@@ -825,6 +826,7 @@ fn statistics_overlay_remote_states_and_close_fit_supported_viewports() {
         let mut app = LabelloApp::default();
         app.datasets.last_stats_completion = None;
         app.open_statistics();
+        app.datasets.overview.scope = crate::statistics::StatisticsScope::Workspace;
         app.loading.stats = true;
         let mut harness = Harness::builder()
             .with_size(egui::vec2(width, height))
@@ -1288,4 +1290,93 @@ fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() 
         assert_label_inside(&harness, "Statistics", width, height);
 
     }
+}
+
+#[test]
+fn global_statistics_scope_preserves_work_and_rejects_obsolete_results() {
+    use crate::statistics::StatisticsScope;
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.loading.stats && app.auth.preferences.pending.is_none());
+    harness.state_mut().runtime.api = None;
+    let dataset = harness.state().config.dataset_id.clone();
+    let assignment = harness.state().work.assignment.clone();
+    let epoch = harness.state().workspace_epoch;
+    let annotations = harness.state().work.annotations.clone();
+    harness.state_mut().open_statistics();
+    harness.state_mut().select_statistics_scope(StatisticsScope::All);
+    harness.state_mut().datasets.overview.pending = Some(700);
+    let mut row = labello_client::DatasetStatistics {
+        dataset_id: DatasetId::from("other"), name: "Another dataset with a long name".into(),
+        tasks: harness.state().work.tasks.clone(), classes: harness.state().work.classes.clone(),
+        imbalance: None, stats: stats(30),
+    };
+    harness.state_mut().accept_overview(699, Ok(vec![row.clone()]));
+    assert!(harness.state().datasets.overview.rows.is_empty());
+    harness.state_mut().accept_overview(700, Ok(vec![row.clone()]));
+    harness.step();
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_some());
+    for (width, height) in [(320., 320.), (320., 568.), (390., 844.), (600., 800.), (1288., 820.), (1440., 1000.)] {
+        harness.set_size(egui::vec2(width, height));
+        harness.step();
+        assert_visible_controls_clamped(&harness, width, height);
+    }
+    harness.state_mut().select_statistics_scope(StatisticsScope::Dataset(row.dataset_id.clone()));
+    harness.state_mut().datasets.overview.pending = Some(701);
+    harness.state_mut().accept_overview(701, Ok(vec![row.clone()]));
+    assert_eq!(harness.state().datasets.overview.rows[0].stats, row.stats);
+    assert_eq!(harness.state().config.dataset_id, dataset);
+    assert_eq!(harness.state().work.assignment, assignment);
+    assert_eq!(harness.state().work.annotations, annotations);
+    assert_eq!(harness.state().workspace_epoch, epoch);
+    // A successful refresh that no longer contains the selected dataset revokes it.
+    harness.state_mut().datasets.overview.pending = Some(702);
+    row.dataset_id = DatasetId::from("different");
+    harness.state_mut().accept_overview(702, Ok(vec![row]));
+    assert!(harness.state().datasets.overview.rows.is_empty());
+    assert!(harness.state().datasets.overview.completed.is_none());
+    assert!(harness.state().datasets.overview.error.is_some());
+    harness.state_mut().begin_auth_epoch();
+    assert!(!harness.state().navigation.statistics.open);
+    assert!(harness.state().datasets.overview.rows.is_empty());
+}
+
+#[test]
+fn global_statistics_open_without_loading_a_work_dataset() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().datasets.metadata = None;
+    harness.state_mut().view = AppView::Setup;
+    harness.state_mut().runtime.commands.clear();
+    harness.state_mut().open_view(AppView::Stats);
+    assert_eq!(harness.state().view, AppView::Setup);
+    assert!(harness.state().navigation.statistics.open);
+    assert_eq!(harness.state().datasets.overview.scope, crate::statistics::StatisticsScope::All);
+    assert!(harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::Overview { .. })));
+    assert!(!harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::LoadDataset { .. })));
+}
+
+#[test]
+fn global_shortcut_migration_is_explicit_and_preserves_unsaved_edits() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| app.auth.preferences.pending.is_none());
+    harness.state_mut().runtime.api = None;
+    harness.state_mut().open_shortcut_settings();
+    let old = harness.state().work.keybindings.clone();
+    let mut saved = old.clone();
+    saved.pan_drag_modifier = labello_domain::PanDragModifier::Alt;
+    harness.state_mut().auth.preferences.pending = Some(800);
+    harness.state_mut().accept_preferences(800, Ok((old.clone(), vec![labello_client::LegacyKeybindings {
+        dataset_id: DatasetId::from("old"), name: "Previous dataset".into(), bindings: saved.clone(),
+    }])));
+    harness.step();
+    harness.step();
+    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Choose saved shortcuts").click();
+    harness.step();
+    harness.get_by_label("Previous dataset (old)").click();
+    harness.step();
+    assert_eq!(harness.state().work.shortcut_settings.draft.as_ref(), Some(&saved));
+    assert_eq!(harness.state().work.keybindings, old);
+    // A delayed account load cannot discard the user's chosen migration draft.
+    harness.state_mut().auth.preferences.pending = Some(801);
+    harness.state_mut().accept_preferences(801, Ok((old, Vec::new())));
+    assert_eq!(harness.state().work.shortcut_settings.draft.as_ref(), Some(&saved));
 }

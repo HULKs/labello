@@ -8,6 +8,8 @@ use crate::{
     theme,
 };
 
+mod overview;
+pub(crate) use overview::{OverviewState, StatisticsScope};
 mod avatar;
 mod leaderboard;
 mod streak;
@@ -39,6 +41,9 @@ impl LabelloApp {
             focus_close: true,
             restore_focus: None,
         };
+        if self.datasets.metadata.is_none() {
+            self.datasets.overview.scope = StatisticsScope::All;
+        }
         self.request_stats();
     }
 
@@ -146,8 +151,23 @@ impl LabelloApp {
     pub(crate) fn stats_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         ui.spacing_mut().interact_size.y = 44.0;
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-        let has_data = self.datasets.last_stats_completion.is_some();
-        let initial_loading = self.loading.stats && !has_data;
+        self.statistics_scope_selector(ui);
+        let alternate = self.datasets.overview.scope != StatisticsScope::Workspace;
+        let (completed, loading, error) = if alternate {
+            (
+                self.datasets.overview.completed,
+                self.datasets.overview.pending.is_some(),
+                self.datasets.overview.error.clone(),
+            )
+        } else {
+            (
+                self.datasets.last_stats_completion,
+                self.loading.stats,
+                self.datasets.stats_error.clone(),
+            )
+        };
+        let has_data = completed.is_some();
+        let initial_loading = loading && !has_data;
         ui.horizontal_wrapped(|ui| {
             if layout != LayoutMode::Compact || !self.navigation.statistics.open {
                 ui.label(
@@ -157,7 +177,7 @@ impl LabelloApp {
                 );
             }
             if has_data
-                && theme::quiet_button(ui, !self.loading.stats, egui::Button::new("Refresh now"))
+                && theme::quiet_button(ui, !loading, egui::Button::new("Refresh now"))
                     .on_hover_text(
                         "Refresh statistics immediately. They also refresh automatically.",
                     )
@@ -174,13 +194,14 @@ impl LabelloApp {
                     ui.label(RichText::new("Loading statistics...").strong());
                 });
                 ui.label(
-                    RichText::new("Fetching the first dataset summary.").color(theme::TEXT_MUTED),
+                    RichText::new("Fetching statistics for this selection.")
+                        .color(theme::TEXT_MUTED),
                 );
             });
             return;
         }
         if !has_data {
-            let (title, explanation, action) = if let Some(error) = &self.datasets.stats_error {
+            let (title, explanation, action) = if let Some(error) = &error {
                 (
                     "Statistics unavailable",
                     format!("The first statistics request failed: {error}"),
@@ -189,7 +210,7 @@ impl LabelloApp {
             } else {
                 (
                     "Statistics have not loaded",
-                    "Load the current dataset summary and activity history.".to_string(),
+                    "Load summary and activity history for this selection.".to_string(),
                     "Load statistics",
                 )
             };
@@ -199,7 +220,7 @@ impl LabelloApp {
             return;
         }
         ui.horizontal_wrapped(|ui| {
-            if let Some(completed) = self.datasets.last_stats_completion {
+            if let Some(completed) = completed {
                 let seconds = completed.elapsed().as_secs();
                 ui.small(match seconds {
                     0 => "Updated just now".to_string(),
@@ -208,7 +229,7 @@ impl LabelloApp {
                 });
             }
         });
-        if let Some(error) = &self.datasets.stats_error {
+        if let Some(error) = &error {
             theme::inline_message(
                 ui,
                 theme::Intent::Warning,
@@ -216,52 +237,73 @@ impl LabelloApp {
             );
         }
         let compact = layout == LayoutMode::Compact;
-        let task_names = self
-            .work
-            .tasks
+        let rows = &self.datasets.overview.rows;
+        let selected = match &self.datasets.overview.scope {
+            StatisticsScope::Dataset(id) => rows.iter().find(|row| &row.dataset_id == id),
+            _ => None,
+        };
+        let aggregate = self.datasets.overview.scope == StatisticsScope::All;
+        let stats = if aggregate {
+            &self.datasets.overview.total
+        } else if let Some(row) = selected {
+            &row.stats
+        } else {
+            &self.datasets.stats
+        };
+        let tasks = selected
+            .map(|row| row.tasks.as_slice())
+            .unwrap_or(&self.work.tasks);
+        let classes = selected
+            .map(|row| row.classes.as_slice())
+            .unwrap_or(&self.work.classes);
+        let task_names = tasks
             .iter()
             .map(|task| (task.task_id.clone(), task.name.clone()))
             .collect::<BTreeMap<_, _>>();
-        let class_names = self
-            .work
-            .classes
+        let class_names = classes
             .iter()
             .map(|class| (class.class_id.clone(), class.name.clone()))
             .collect::<BTreeMap<_, _>>();
+        let imbalance = if aggregate {
+            None
+        } else if let Some(row) = selected {
+            row.imbalance.as_ref()
+        } else {
+            self.datasets
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.imbalance.as_ref())
+        };
+        let identity = selected
+            .map(|row| row.dataset_id.clone())
+            .unwrap_or_else(|| self.config.dataset_id.clone());
         ui.add_space(8.0);
         self.datasets.leaderboard.show(
             ui,
-            &self.datasets.stats,
-            (
-                &self.config.dataset_id,
-                &self.config.user_id,
-                self.auth_epoch,
-            ),
+            stats,
+            (&identity, &self.config.user_id, self.auth_epoch),
+            aggregate,
         );
         ui.add_space(theme::SPACE_5);
-        self.datasets
-            .leaderboard
-            .show_activity(ui, &self.datasets.stats);
+        self.datasets.leaderboard.show_activity(ui, stats);
         ui.add_space(theme::SPACE_5);
-        ui.heading("Dataset totals");
+        ui.heading(if aggregate {
+            "All accessible datasets"
+        } else {
+            "Dataset totals"
+        });
         let metrics = [
-            (crate::glossary::IMAGES, self.datasets.stats.total_images),
-            (
-                crate::glossary::COMPLETED,
-                self.datasets.stats.completed_tasks,
-            ),
-            (crate::glossary::PENDING, self.datasets.stats.pending_tasks),
-            (
-                crate::glossary::IN_PROGRESS,
-                self.datasets.stats.in_progress_tasks,
-            ),
+            (crate::glossary::IMAGES, stats.total_images),
+            (crate::glossary::COMPLETED, stats.completed_tasks),
+            (crate::glossary::PENDING, stats.pending_tasks),
+            (crate::glossary::IN_PROGRESS, stats.in_progress_tasks),
             (
                 crate::glossary::AWAITING_REVIEW,
-                self.datasets.stats.awaiting_review_tasks,
+                stats.awaiting_review_tasks,
             ),
             (
                 crate::glossary::NEEDS_CORRECTION,
-                self.datasets.stats.needs_correction_tasks,
+                stats.needs_correction_tasks,
             ),
         ];
         let minimum_card_width = if compact { 148.0 } else { 160.0 };
@@ -276,13 +318,7 @@ impl LabelloApp {
             });
         }
         ui.add_space(12.0);
-        if let (Some(imbalance), Some(balance)) = (
-            self.datasets
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.imbalance.as_ref()),
-            self.datasets.stats.assignment_balance.as_ref(),
-        ) {
+        if let (Some(imbalance), Some(balance)) = (imbalance, stats.assignment_balance.as_ref()) {
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.heading("Assignment Balance");
@@ -326,93 +362,32 @@ impl LabelloApp {
                 }
             });
         }
-        theme::card_frame().show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.heading(crate::glossary::PER_WORKFLOW);
-            let rows = &self.datasets.stats.per_task;
-            if rows.is_empty() {
-                theme::empty_state(
-                    ui,
-                    "No enabled workflows",
-                    "Enable a labeling workflow to collect workflow statistics.",
-                    None,
-                );
-            } else if compact {
-                for (task_id, stats) in rows {
-                    theme::inset_frame().show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.label(
-                            RichText::new(
-                                task_names
-                                    .get(task_id)
-                                    .map(String::as_str)
-                                    .unwrap_or(task_id.as_str()),
-                            )
-                            .strong(),
-                        );
-                        for (label, value) in [
-                            (crate::glossary::PENDING, stats.pending),
-                            (crate::glossary::IN_PROGRESS, stats.in_progress),
-                            (crate::glossary::AWAITING_REVIEW, stats.awaiting_review),
-                            (crate::glossary::NEEDS_CORRECTION, stats.needs_correction),
-                            (crate::glossary::COMPLETED, stats.completed),
-                        ] {
-                            ui.label(format!("{label}: {value}"));
-                        }
-                    });
-                }
-            } else {
-                egui::ScrollArea::horizontal()
-                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
-                    .id_salt("stats_tasks_horizontal")
-                    .show(ui, |ui| {
-                        stats_task_grid(ui, rows, &task_names);
-                    });
+        if aggregate {
+            ui.label(format!("{} accessible datasets. Images are counted within each dataset, including copies in other datasets.", rows.len()));
+            ui.label("Assignment balance and scoring focus are available when selecting an individual dataset.");
+            for row in rows {
+                ui.push_id(&row.dataset_id, |ui| {
+                    ui.heading(format!("{} ({})", row.name, row.dataset_id));
+                    let task_names = row
+                        .tasks
+                        .iter()
+                        .map(|task| (task.task_id.clone(), task.name.clone()))
+                        .collect();
+                    let class_names = row
+                        .classes
+                        .iter()
+                        .map(|class| (class.class_id.clone(), class.name.clone()))
+                        .collect();
+                    stats_breakdowns(ui, compact, &row.stats, &task_names, &class_names);
+                });
             }
-        });
-        theme::card_frame().show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.heading("Per Class");
-            let rows = &self.datasets.stats.per_class;
-            if rows.is_empty() {
-                theme::empty_state(
-                    ui,
-                    "No classes configured",
-                    "Add a class to collect class-level statistics.",
-                    None,
-                );
-            } else if compact {
-                for (class_id, stats) in rows {
-                    theme::inset_frame().show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.label(
-                            RichText::new(
-                                class_names
-                                    .get(class_id)
-                                    .map(String::as_str)
-                                    .unwrap_or(class_id.as_str()),
-                            )
-                            .strong(),
-                        );
-                        ui.label(format!(
-                            "Annotations: {}  Completed workflows: {}",
-                            stats.annotations, stats.completed_tasks
-                        ));
-                    });
-                }
-            } else {
-                egui::ScrollArea::horizontal()
-                    .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
-                    .id_salt("stats_classes_horizontal")
-                    .show(ui, |ui| {
-                        stats_class_grid(ui, rows, &class_names);
-                    });
-            }
-        });
+        } else {
+            stats_breakdowns(ui, compact, stats, &task_names, &class_names);
+        }
         theme::card_frame().show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.heading("Throughput");
-            if self.datasets.stats.throughput.is_empty() {
+            if stats.throughput.is_empty() {
                 theme::empty_state(
                     ui,
                     "No recorded activity",
@@ -420,7 +395,7 @@ impl LabelloApp {
                     None,
                 );
             } else {
-                stats_throughput_chart(ui, &self.datasets.stats.throughput);
+                stats_throughput_chart(ui, &stats.throughput);
             }
         });
     }
@@ -672,6 +647,98 @@ fn stats_throughput_chart(ui: &mut egui::Ui, points: &[labello_domain::Throughpu
 
 fn stats_axis_width(maximum: usize) -> f32 {
     (maximum.to_string().len() as f32 * 8.0 + 12.0).max(34.0)
+}
+
+fn stats_breakdowns(
+    ui: &mut egui::Ui,
+    compact: bool,
+    stats: &labello_domain::DatasetStats,
+    task_names: &BTreeMap<TaskId, String>,
+    class_names: &BTreeMap<ClassId, String>,
+) {
+    theme::card_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.heading(crate::glossary::PER_WORKFLOW);
+        let rows = &stats.per_task;
+        if rows.is_empty() {
+            theme::empty_state(
+                ui,
+                "No enabled workflows",
+                "Enable a labeling workflow to collect workflow statistics.",
+                None,
+            );
+        } else if compact {
+            for (task_id, stats) in rows {
+                theme::inset_frame().show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.label(
+                        RichText::new(
+                            task_names
+                                .get(task_id)
+                                .map(String::as_str)
+                                .unwrap_or(task_id.as_str()),
+                        )
+                        .strong(),
+                    );
+                    for (label, value) in [
+                        (crate::glossary::PENDING, stats.pending),
+                        (crate::glossary::IN_PROGRESS, stats.in_progress),
+                        (crate::glossary::AWAITING_REVIEW, stats.awaiting_review),
+                        (crate::glossary::NEEDS_CORRECTION, stats.needs_correction),
+                        (crate::glossary::COMPLETED, stats.completed),
+                    ] {
+                        ui.label(format!("{label}: {value}"));
+                    }
+                });
+            }
+        } else {
+            egui::ScrollArea::horizontal()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+                .id_salt("stats_tasks_horizontal")
+                .show(ui, |ui| {
+                    stats_task_grid(ui, rows, task_names);
+                });
+        }
+    });
+    theme::card_frame().show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.heading("Per Class");
+        let rows = &stats.per_class;
+        if rows.is_empty() {
+            theme::empty_state(
+                ui,
+                "No classes configured",
+                "Add a class to collect class-level statistics.",
+                None,
+            );
+        } else if compact {
+            for (class_id, stats) in rows {
+                theme::inset_frame().show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.label(
+                        RichText::new(
+                            class_names
+                                .get(class_id)
+                                .map(String::as_str)
+                                .unwrap_or(class_id.as_str()),
+                        )
+                        .strong(),
+                    );
+                    ui.label(format!(
+                        "Annotations: {}  Completed workflows: {}",
+                        stats.annotations, stats.completed_tasks
+                    ));
+                });
+            }
+        } else {
+            egui::ScrollArea::horizontal()
+                .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
+                .id_salt("stats_classes_horizontal")
+                .show(ui, |ui| {
+                    stats_class_grid(ui, rows, class_names);
+                });
+        }
+    });
 }
 
 #[cfg(test)]

@@ -328,6 +328,7 @@ pub(crate) struct SessionRecovery {
 }
 
 pub(crate) struct AuthState {
+    pub preferences: crate::preferences::PreferencesState,
     pub account: Option<UserAccount>,
     pub can_create_datasets: bool,
     pub prelabel_available: bool,
@@ -343,6 +344,7 @@ pub(crate) struct AuthState {
 }
 
 pub(crate) struct DatasetState {
+    pub overview: crate::statistics::OverviewState,
     pub summaries: Vec<DatasetSummary>,
     pub summaries_loaded: bool,
     pub summaries_error: Option<String>,
@@ -365,6 +367,7 @@ pub(crate) struct DatasetState {
 impl DatasetState {
     fn new() -> Self {
         Self {
+            overview: Default::default(),
             summaries: Vec::new(),
             summaries_loaded: false,
             summaries_error: None,
