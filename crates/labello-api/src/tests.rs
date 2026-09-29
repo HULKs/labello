@@ -1007,3 +1007,5 @@ include!("tests/presence.rs");
 include!("tests/workflow_reasons.rs");
 
 mod polling_performance;
+
+include!("tests/global.rs");

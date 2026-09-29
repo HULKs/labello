@@ -311,25 +311,33 @@ has been recorded.
 - **Statistics:** use a bar-chart icon in the app bar's right-side utility group,
   with a 44-point target, an `Open statistics` accessible name, and a tooltip.
   Keep a labeled Statistics action in the collapsed navigation drawer.
-  Open a dataset-scoped modal above the current workspace or
-  setup. Opening, refreshing, and closing it preserve the assignment, image,
+  Open a statistics modal above the current workspace or Setup, including
+  when no dataset has been opened. Place a bounded, keyboard-accessible
+  Statistics for selector in the fixed modal header, offering individual authorized
+  datasets and All accessible datasets. Scope selection preserves the work
+  dataset and assignment. Group aggregate task/class breakdowns by source dataset;
+  keep balance and scoring-focus information in individual dataset views. Opening, refreshing, and closing it preserve the assignment, image,
   draft, selection, canvas transform, and workspace epoch. Continue legitimate
   in-flight workflow results and expose recovery when ownership becomes invalid.
   Block background input, provide Close and Escape dismissal, restore focus to
   the invoking control, and constrain the content to a scrollable viewport.
-  Keep real data visible during refresh, order columns by the workflow, align
-  numeric comparisons, and expose an accessible value for every chart item.
+  Refresh silently without a refresh button or routine update timestamp; retain
+  loading, failure, and retry states. Keep real data visible during refresh,
+  order columns by the workflow, align numeric comparisons, and expose an
+  accessible value for every chart item.
   Lead with the full-width score podium and rankings, then Daily activity,
   dataset totals, assignment balance, task/class breakdowns, and throughput.
   Keep Score first in metric choices and its podium expanded on mobile. Put
   other highlights below Rankings in a disclosure; stack chart cards below
   850 content points, retaining values, units, and empty states.
-  Keep period controls beside activity and rankings; they share
-  the selected period. Provide a keyboard- and touch-operated Activity day
-  selector and Previous/Next day buttons with visible counts, alongside calendar
-  hover details. At enlarged browser zoom, stack the modal header and selector
-  labels. Compact rankings use a bounded sort picker, a 44-point direction
-  button, and wrapping score-first summaries. Keep flame and day count beside each contributor. Keep history
+  Put the Leaderboard heading and Leaderboard/History graph switch on one row,
+  with the period selector aligned right. Omit the visible Period label and date
+  range caption; retain the selector's accessible name and UTC tooltip. Wrap these
+  controls on narrow screens. Activity and rankings share the selected period.
+  Provide a keyboard- and touch-operated Activity day selector and Previous/Next
+  day buttons with visible counts, alongside calendar hover details. At enlarged
+  browser zoom, stack the modal header controls. Compact rankings use a bounded
+  sort picker, a 44-point direction button, and wrapping score-first summaries. Keep flame and day count beside each contributor. Keep history
   comparison controls below the metric choices and selected names in bounded rows.
   Show acceptance as a percentage with review counts.
   Show avatars beside names with initials
@@ -468,7 +476,8 @@ application errors, and keyboard activation.
 
 ## Shortcut editor
 
-Group each shortcut category once. Match ordinary button vocabulary and expose
+Show that shortcuts apply to all datasets. Offer explicit selection of preserved
+legacy settings before the first global save. Group each shortcut category once. Match ordinary button vocabulary and expose
 context-dependent button names in searchable help. Keep current binding and reset
 controls visually separate from bounded, wrapping text; stack them below text
 when columns would crowd. Long key combinations must wrap without obscuring names

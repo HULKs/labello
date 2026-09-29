@@ -240,7 +240,7 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
                 harness.step();
                 assert!(
                     harness.get_by_label("Close statistics").is_focused()
-                        || harness.get_by_label("Refresh now").is_focused()
+                        || harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_focused()
                 );
             }
             assert!(
@@ -825,6 +825,7 @@ fn statistics_overlay_remote_states_and_close_fit_supported_viewports() {
         let mut app = LabelloApp::default();
         app.datasets.last_stats_completion = None;
         app.open_statistics();
+        app.datasets.overview.scope = crate::statistics::StatisticsScope::Workspace;
         app.loading.stats = true;
         let mut harness = Harness::builder()
             .with_size(egui::vec2(width, height))
@@ -1117,7 +1118,7 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
         });
         harness.run_steps(4);
         for (before, after) in [
-            ("Contributor leaderboard", "Highest score"),
+            ("Leaderboard", "Highest score"),
             ("Highest score", "Rankings"),
             ("Rankings", "Daily activity"),
             ("Daily activity", "Dataset totals"),
@@ -1126,14 +1127,28 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
             ("Per Class", "Throughput"),
         ] {
             assert!(
-                harness.get_by_label(before).rect().bottom()
+                harness.get_by_role_and_label(egui::accesskit::Role::Label, before).rect().bottom()
                     < harness.get_by_label(after).rect().top(),
                 "{before} must precede {after} at {size:?}"
             );
         }
+        let heading = harness.get_by_role_and_label(egui::accesskit::Role::Label, "Leaderboard").rect();
+        let scope = harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").rect();
+        let close = harness.get_by_label("Close statistics").rect();
+        assert!(scope.bottom() <= heading.top(), "dataset scope belongs in the fixed header at {size:?}");
+        if size.x >= 1288.0 {
+            let history = harness.get_by_label("History graph").rect();
+            let period = harness.get_by_label("Period").rect();
+            assert!((scope.center().y - close.center().y).abs() <= 1.0);
+            assert!((heading.center().y - history.center().y).abs() <= 1.0);
+            assert!((heading.center().y - period.center().y).abs() <= 1.0);
+            assert!(heading.right() < history.left() && history.right() < period.left());
+            assert!((period.right() - close.right()).abs() < 40.0,
+                "period selector belongs at the right edge");
+        }
         assert!(harness.query_by_label("Most labeled").is_none(), "secondary podiums start collapsed");
         assert!(harness.get_by_label("Highest score").rect().top()
-            - harness.get_by_label("Contributor leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
+            - harness.get_by_role_and_label(egui::accesskit::Role::Label, "Leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
             "score chart must lead without expanding a disclosure at {size:?}");
         let score_bar = harness.get_by_label("Score: rank 1, Taylor, 1627").rect();
         assert!(score_bar.width() > (size.x.min(1050.0) - 100.0) / 4.0,
@@ -1288,4 +1303,120 @@ fn populated_statistics_preset_keeps_five_state_counts_inside_resized_overlay() 
         assert_label_inside(&harness, "Statistics", width, height);
 
     }
+}
+
+#[test]
+fn global_statistics_scope_preserves_work_and_rejects_obsolete_results() {
+    use crate::statistics::StatisticsScope;
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.loading.stats && app.auth.preferences.pending.is_none());
+    harness.state_mut().runtime.api = None;
+    let dataset = harness.state().config.dataset_id.clone();
+    let assignment = harness.state().work.assignment.clone();
+    let epoch = harness.state().workspace_epoch;
+    let annotations = harness.state().work.annotations.clone();
+    harness.state_mut().open_statistics();
+    harness.state_mut().select_statistics_scope(StatisticsScope::All);
+    harness.state_mut().datasets.overview.pending = Some(700);
+    let mut row = labello_client::DatasetStatistics {
+        dataset_id: DatasetId::from("other"), name: "Another dataset with a long name".into(),
+        tasks: harness.state().work.tasks.clone(), classes: harness.state().work.classes.clone(),
+        imbalance: None, stats: stats(30),
+    };
+    harness.state_mut().accept_overview(699, Ok(vec![row.clone()]));
+    assert!(harness.state().datasets.overview.rows.is_empty());
+    harness.state_mut().accept_overview(700, Ok(vec![row.clone()]));
+    harness.step();
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_some());
+    for (width, height) in [(320., 320.), (320., 568.), (390., 844.), (600., 800.), (1288., 820.), (1440., 1000.)] {
+        harness.set_size(egui::vec2(width, height));
+        harness.step();
+        assert_visible_controls_clamped(&harness, width, height);
+    }
+    harness.state_mut().select_statistics_scope(StatisticsScope::Dataset(row.dataset_id.clone()));
+    harness.state_mut().datasets.overview.pending = Some(701);
+    harness.state_mut().accept_overview(701, Ok(vec![row.clone()]));
+    assert_eq!(harness.state().datasets.overview.rows[0].stats, row.stats);
+    assert_eq!(harness.state().config.dataset_id, dataset);
+    assert_eq!(harness.state().work.assignment, assignment);
+    assert_eq!(harness.state().work.annotations, annotations);
+    assert_eq!(harness.state().workspace_epoch, epoch);
+    // A successful refresh that no longer contains the selected dataset revokes it.
+    harness.state_mut().datasets.overview.pending = Some(702);
+    row.dataset_id = DatasetId::from("different");
+    harness.state_mut().accept_overview(702, Ok(vec![row]));
+    assert!(harness.state().datasets.overview.rows.is_empty());
+    assert!(harness.state().datasets.overview.completed.is_none());
+    assert!(harness.state().datasets.overview.error.is_some());
+    harness.state_mut().begin_auth_epoch();
+    assert!(!harness.state().navigation.statistics.open);
+    assert!(harness.state().datasets.overview.rows.is_empty());
+}
+
+#[test]
+fn global_statistics_open_without_loading_a_work_dataset() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.state_mut().datasets.metadata = None;
+    harness.state_mut().view = AppView::Setup;
+    harness.state_mut().runtime.commands.clear();
+    harness.state_mut().open_view(AppView::Stats);
+    assert_eq!(harness.state().view, AppView::Setup);
+    assert!(harness.state().navigation.statistics.open);
+    assert_eq!(harness.state().datasets.overview.scope, crate::statistics::StatisticsScope::All);
+    assert!(harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::Overview { .. })));
+    assert!(!harness.state().runtime.commands.iter().any(|command| matches!(command, UiCommand::LoadDataset { .. })));
+}
+
+#[test]
+fn global_shortcut_migration_is_explicit_and_preserves_unsaved_edits() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| app.auth.preferences.pending.is_none());
+    harness.state_mut().runtime.api = None;
+    harness.state_mut().open_shortcut_settings();
+    let old = harness.state().work.keybindings.clone();
+    let mut saved = old.clone();
+    saved.pan_drag_modifier = labello_domain::PanDragModifier::Alt;
+    harness.state_mut().auth.preferences.pending = Some(800);
+    harness.state_mut().accept_preferences(800, Ok((old.clone(), vec![labello_client::LegacyKeybindings {
+        dataset_id: DatasetId::from("old"), name: "Previous dataset".into(), bindings: saved.clone(),
+    }])));
+    harness.step();
+    harness.step();
+    harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Choose saved shortcuts").click();
+    harness.step();
+    harness.get_by_label("Previous dataset (old)").click();
+    harness.step();
+    assert_eq!(harness.state().work.shortcut_settings.draft.as_ref(), Some(&saved));
+    assert_eq!(harness.state().work.keybindings, old);
+    // A delayed account load cannot discard the user's chosen migration draft.
+    harness.state_mut().auth.preferences.pending = Some(801);
+    harness.state_mut().accept_preferences(801, Ok((old, Vec::new())));
+    assert_eq!(harness.state().work.shortcut_settings.draft.as_ref(), Some(&saved));
+}
+
+#[test]
+fn global_statistics_failure_waits_for_overview_retry_without_a_work_dataset() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.loading.stats && app.auth.preferences.pending.is_none());
+    let app = harness.state_mut();
+    app.datasets.metadata = None;
+    app.datasets.summaries.clear();
+    app.datasets.last_stats_attempt = None;
+    app.open_statistics();
+    let first = app.datasets.overview.pending.unwrap();
+    app.accept_overview(first, Err("Service unavailable".to_owned().into()));
+    app.runtime.commands.clear();
+    app.refresh_stats_if_due();
+    assert!(app.datasets.overview.pending.is_none(), "the workspace timer must not immediately hide an overview failure");
+    assert!(app.runtime.commands.is_empty());
+    assert!(app.datasets.overview.error.is_some());
+    app.datasets.overview.attempted = Some(Instant::now() - Duration::from_secs(4));
+    app.refresh_stats_if_due();
+    assert_eq!(app.runtime.commands.iter().filter(|command| matches!(command, UiCommand::Overview { .. })).count(), 1);
+    let retry = app.datasets.overview.pending.unwrap();
+    app.accept_overview(retry, Err("Service unavailable".to_owned().into()));
+    app.runtime.api = None;
+    harness.step();
+    harness.get_by_label("Statistics unavailable");
+    harness.get_by_label("Retry statistics");
 }

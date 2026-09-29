@@ -1,4 +1,5 @@
 pub trait StatsApi {
+    fn statistics_overview(&self) -> ApiFuture<'_, Vec<crate::DatasetStatistics>>;
     fn server_presence(&self) -> ApiFuture<'_, crate::ServerPresence>;
     fn current_user_activity<'a>(
         &'a self,
@@ -8,15 +9,15 @@ pub trait StatsApi {
 }
 
 pub trait KeybindingApi {
+    fn legacy_keybindings(&self) -> ApiFuture<'_, Vec<crate::LegacyKeybindings>>;
+
     fn get_keybindings<'a>(
         &'a self,
-        dataset_id: &'a DatasetId,
         user_id: &'a UserId,
     ) -> ApiFuture<'a, KeybindingSet>;
 
     fn save_keybindings<'a>(
         &'a self,
-        dataset_id: &'a DatasetId,
         keybindings: KeybindingSet,
     ) -> ApiFuture<'a, KeybindingSet>;
 }

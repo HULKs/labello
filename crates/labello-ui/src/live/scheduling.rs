@@ -145,6 +145,12 @@ impl LabelloApp {
     }
 
     pub(crate) fn refresh_stats_if_due(&mut self) {
+        self.refresh_overview_if_due();
+        if self.datasets.overview.scope != crate::statistics::StatisticsScope::Workspace
+            && !self.streak_available()
+        {
+            return;
+        }
         if self.runtime.api.is_none()
             || self.loading.stats
             || (!self.statistics_visible() && !self.streak_available())

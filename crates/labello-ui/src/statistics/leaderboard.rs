@@ -349,6 +349,7 @@ impl LeaderboardState {
         ui: &mut egui::Ui,
         stats: &DatasetStats,
         identity: (&DatasetId, &UserId, u64),
+        aggregate: bool,
     ) {
         if self.identity.as_ref().is_none_or(|(dataset, user, epoch)| {
             dataset != identity.0 || user != identity.1 || *epoch != identity.2
@@ -358,8 +359,8 @@ impl LeaderboardState {
                 ..Default::default()
             };
         }
-        ui.heading("Contributor leaderboard");
         let Some(contributors) = &stats.contributors else {
+            ui.heading(crate::glossary::LEADERBOARD);
             ui.label("Contributor statistics are unavailable from this server.");
             return;
         };
@@ -376,7 +377,7 @@ impl LeaderboardState {
         }
         let metrics: &[usize] = if scoring { &[3, 0, 1, 2] } else { &[0, 1, 2] };
         let mut daily_status = None;
-        if scoring {
+        if scoring && !aggregate {
             let labels = contributors
                 .get(identity.1)
                 .and_then(|person| {
@@ -396,18 +397,34 @@ impl LeaderboardState {
                 labello_domain::daily_multiplier(labels) as f64 / 100.0
             ));
         }
-        ui.horizontal_wrapped(|ui| {
+        let mut view_selector = |ui: &mut egui::Ui| {
             ui.selectable_value(&mut self.history, false, crate::glossary::LEADERBOARD);
             ui.selectable_value(&mut self.history, true, "History graph");
-        });
-        period_selector(ui, &mut self.period, "Period");
-        ui.horizontal_wrapped(|ui| {
-            ui.small(if self.period == 5 {
-                "(All recorded activity · UTC)".into()
-            } else {
-                format!("({} – {today} · UTC)", period_start(self.period, today))
+        };
+        if ui.available_width() >= 520.0 {
+            ui.horizontal(|ui| {
+                ui.heading(crate::glossary::LEADERBOARD);
+                view_selector(ui);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    period_selector(ui, &mut self.period, "Period", false);
+                });
             });
-        });
+        } else {
+            if ui.available_width() >= 280.0 {
+                ui.horizontal(|ui| {
+                    ui.heading(crate::glossary::LEADERBOARD);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        period_selector(ui, &mut self.period, "Period", false);
+                    });
+                });
+            } else {
+                ui.heading(crate::glossary::LEADERBOARD);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    period_selector(ui, &mut self.period, "Period", false);
+                });
+            }
+            ui.horizontal_wrapped(view_selector);
+        }
         let start = period_start(self.period, today);
         let rows: Vec<_> = contributors
             .iter()
@@ -707,8 +724,10 @@ impl LeaderboardState {
     }
 }
 
-fn period_selector(ui: &mut egui::Ui, period: &mut usize, label: &str) {
-    let combo = if ui.available_width() < 260.0 {
+fn period_selector(ui: &mut egui::Ui, period: &mut usize, label: &str, show_label: bool) {
+    let combo = if !show_label {
+        egui::ComboBox::from_id_salt(label)
+    } else if ui.available_width() < 260.0 {
         ui.label(format!("{label}:"));
         egui::ComboBox::from_id_salt(label)
     } else {
@@ -756,7 +775,7 @@ fn activity_chart(
     theme::card_frame().show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.heading("Daily activity");
-        period_selector(ui, period, "Activity period");
+        period_selector(ui, period, "Activity period", true);
         let start = period_start(*period, today);
         let menu_width = ui.available_width().min(300.0);
         let (daily, start, maximum) = ui

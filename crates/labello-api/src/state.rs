@@ -21,6 +21,7 @@ pub struct ApiState {
     browser_origins: Arc<Vec<String>>,
     session_cookie_secure: bool,
     pub(crate) server_store: ServerStore,
+    pub(crate) preferences: labello_storage::UserPreferencesStore,
     ingest_jobs: Arc<RwLock<BTreeMap<String, IngestJob>>>,
     repositories: Arc<Mutex<BTreeMap<DatasetId, Arc<DatasetRepository>>>>,
     import_service: Option<Arc<ImportService>>,
@@ -82,6 +83,7 @@ impl ApiState {
         let datasets_root = datasets_root.into();
         Self {
             server_store: ServerStore::new(&datasets_root),
+            preferences: labello_storage::UserPreferencesStore::new(&datasets_root),
             previews: labello_storage::PreviewCache::new(
                 datasets_root.join(".labello-server/previews"),
                 Default::default(),

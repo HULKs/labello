@@ -1,4 +1,8 @@
 impl StatsApi for HttpLabelloApi {
+    fn statistics_overview(&self) -> crate::ApiFuture<'_, Vec<crate::DatasetStatistics>> {
+        Box::pin(async move { Self::json(self.request(Method::GET, "/stats")?.timeout(STATS_REQUEST_TIMEOUT).send().await?).await })
+    }
+
     fn server_presence(&self) -> crate::ApiFuture<'_, crate::ServerPresence> {
         Box::pin(async move {
             Self::json(
@@ -43,14 +47,17 @@ impl StatsApi for HttpLabelloApi {
 }
 
 impl KeybindingApi for HttpLabelloApi {
+    fn legacy_keybindings(&self) -> crate::ApiFuture<'_, Vec<crate::LegacyKeybindings>> {
+        Box::pin(async move { Self::json(self.request(Method::GET, "/keybindings/legacy")?.send().await?).await })
+    }
+
     fn get_keybindings<'a>(
         &'a self,
-        dataset_id: &'a DatasetId,
         _user_id: &'a UserId,
     ) -> crate::ApiFuture<'a, KeybindingSet> {
         Box::pin(async move {
             Self::json(
-                self.request(Method::GET, &format!("/datasets/{dataset_id}/keybindings"))?
+                self.request(Method::GET, "/keybindings")?
                     .send()
                     .await?,
             )
@@ -60,12 +67,11 @@ impl KeybindingApi for HttpLabelloApi {
 
     fn save_keybindings<'a>(
         &'a self,
-        dataset_id: &'a DatasetId,
         keybindings: KeybindingSet,
     ) -> crate::ApiFuture<'a, KeybindingSet> {
         Box::pin(async move {
             Self::send_json(
-                self.request(Method::PUT, &format!("/datasets/{dataset_id}/keybindings"))?,
+                self.request(Method::PUT, "/keybindings")?,
                 &keybindings,
             )
             .await

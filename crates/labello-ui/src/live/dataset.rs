@@ -82,7 +82,6 @@ impl LabelloApp {
         self.queue_command(UiCommand::LoadDataset {
             request,
             dataset_id: self.config.dataset_id.clone(),
-            user_id: self.config.user_id.clone(),
         });
     }
 
@@ -348,6 +347,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_stats(&mut self) {
+        if self.statistics_visible() { self.request_overview(); }
+        if self.datasets.overview.scope != crate::statistics::StatisticsScope::Workspace && !self.streak_available() { return; }
         if self.runtime.api.is_none()
             || (!self.statistics_visible() && !self.streak_available())
         {
@@ -388,10 +389,9 @@ impl LabelloApp {
         }
         self.loading.keybindings = true;
         self.work.shortcut_settings.error = None;
-        let request = self.request_identity(Some(self.config.dataset_id.clone()));
+        let request = self.request_identity(None);
         self.queue_command(UiCommand::SaveKeybindings {
             request,
-            dataset_id: self.config.dataset_id.clone(),
             keybindings,
         });
     }

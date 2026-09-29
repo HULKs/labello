@@ -9,6 +9,8 @@ use crate::{
 };
 
 mod activity;
+mod aggregate;
+pub use aggregate::aggregate_statistics;
 pub mod scoring;
 pub use activity::{DailyActivityCounts, UtcActivityWindow, daily_activity_from_events};
 pub use scoring::{FocusWindow, ScoreDay, ScoringProjection, daily_multiplier, displayed_score};

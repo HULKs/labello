@@ -43,14 +43,11 @@ impl LabelloApp {
             UiCommand::LoadDataset {
                 request,
                 dataset_id,
-                user_id,
             } => self.spawn_message(request.clone(), async move {
                 let result = async {
                     let metadata = api.get_dataset(&dataset_id).await?;
-                    let keybindings = api.get_keybindings(&dataset_id, &user_id).await?;
                     Ok::<_, labello_client::ClientError>(LoadedDataset {
                         metadata,
-                        keybindings,
                     })
                 }
                 .await

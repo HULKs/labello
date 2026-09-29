@@ -155,6 +155,7 @@ impl LabelloApp {
                                     self.runtime.notice = Some("Session restored. Your draft is unchanged.".to_string());
                                     self.runtime.persistence.restoration_attempted = true;
                                     self.request_dataset_list();
+                                    self.request_preferences();
                                     return None;
                                 }
                                 self.clear_authenticated_state();
@@ -178,6 +179,7 @@ impl LabelloApp {
                             self.runtime.error = None;
                             self.initialize_browser_workspace();
                             self.request_dataset_list();
+                                    self.request_preferences();
                         }
                         Err(error) => {
                             let had_account = self.auth.account.take().is_some();

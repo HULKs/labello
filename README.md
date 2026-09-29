@@ -11,7 +11,7 @@ images, annotations, reviews, and audit history on the filesystem.
 
 ## What it does
 
-- Annotate boxes and keypoints with autosave, undo/redo, configurable shortcuts,
+- Annotate boxes and keypoints with autosave, undo/redo, personal shortcuts shared across datasets,
   prepared image queues, and account-scoped browser draft recovery.
 - Review each object and the full image. Reviewers can correct geometry or add
   missing objects; one reviewer approves the resulting round to complete it.
@@ -24,7 +24,8 @@ images, annotations, reviews, and audit history on the filesystem.
   [round-trip guarantees](docs/export.md).
 - Convert imported boxes into skeletons through guided migration, with recorded
   exclusions and linked boxes for newly discovered objects.
-- Track task completion, contributor activity, scores, streaks, and leaderboards. Download
+- Track task completion, contributor activity, scores, streaks, and leaderboards
+  for one dataset or all accessible datasets. Download
   annotation snapshots and retain replayable event history.
 
 ## Run locally

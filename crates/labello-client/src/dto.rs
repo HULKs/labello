@@ -299,3 +299,22 @@ mod tests {
         ));
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatasetStatistics {
+    pub dataset_id: DatasetId,
+    pub name: String,
+    pub tasks: Vec<TaskDefinition>,
+    pub classes: Vec<LabelClass>,
+    pub imbalance: Option<ImbalanceConfig>,
+    pub stats: labello_domain::DatasetStats,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyKeybindings {
+    pub dataset_id: DatasetId,
+    pub name: String,
+    pub bindings: labello_domain::KeybindingSet,
+}

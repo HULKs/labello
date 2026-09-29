@@ -276,6 +276,14 @@ impl LabelloApp {
                 self.runtime.presence.failed(error.to_string());
                 return;
             }
+            UiCommand::Overview { .. } => {
+                self.datasets.overview.pending = None;
+                self.datasets.overview.error = Some(error.to_owned());
+            }
+            UiCommand::Preferences { .. } => {
+                self.auth.preferences.pending = None;
+                self.auth.preferences.error = Some(error.to_owned());
+            }
             UiCommand::Stats { .. } => {
                 self.loading.stats = false;
                 self.datasets.active_stats_request = None;
@@ -443,6 +451,8 @@ impl LabelloApp {
         self.setup.schema_copy.pending = None;
         self.setup.schema_copy.preview = None;
         self.navigation.statistics = Default::default();
+        self.datasets.overview = Default::default();
+        self.auth.preferences.pending = None;
         self.runtime.presence = Default::default();
         self.builds.copying = false;
         let build_request = self.builds.pending_request_id;
@@ -497,6 +507,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_auth_epoch(&mut self) {
+        self.auth.preferences = Default::default();
         self.auth.prelabel_available = false;
         self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;

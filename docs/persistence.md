@@ -12,6 +12,7 @@ workflow events, exact retries, and historical replay compatibility.
 <datasetsRoot>/
   .labello-server/
     auth.json
+    users/<user-id>/keybindings.toml
     imports/
     exports/<job-id>/
     prelabels/<dataset-id>/
@@ -57,7 +58,8 @@ or external integrations.
 | `annotations/<image-id>/events.jsonl` | Authoritative append-only audit and workflow history | Replay in sequence; never truncate, reorder, merge, or edit by hand |
 | `annotations/<image-id>/state.json` | Derived, rebuildable cache | Rebuilt automatically when absent, stale by event sequence, on a supported older schema, or with an older review projection generation |
 | `labello.schema.json` | Generated schema bundle | Regenerated during supported artifact migration, configuration saves, and before the first event publication by each repository instance; do not treat it as annotation authority |
-| `users/<user-id>/keybindings.toml` | Authoritative keyboard, mouse-button, and pan-drag user shortcuts, not workflow state | Back up separately from Labello snapshots; normalize missing current bindings through storage |
+| `.labello-server/users/<user-id>/keybindings.toml` | Authoritative personal keyboard, mouse-button, and pan-drag shortcuts shared across datasets | Include in full-root backups; omitted from dataset snapshots |
+| `<dataset-id>/users/<user-id>/keybindings.toml` | Preserved legacy dataset-specific shortcuts | Retain for explicit migration and rollback; never overwrite from global settings |
 | `.labello/imports/<import-id>/manifest.json` | Authoritative committed import provenance | Must match the dataset and directory import ID |
 | `.labello/imports/<import-id>/source-objects.jsonl` | Authoritative committed source-object audit record | Preserve with its manifest and event history |
 | `.labello/migrations/...` | Durable migration journal and staged generation | Recovery state until migration completion; do not remove during an interrupted migration |
@@ -68,6 +70,22 @@ or external integrations.
 Browser IndexedDB/local-storage drafts and availability caches are recoverable
 client conveniences. They are outside the server root and never authoritative
 workflow state.
+
+Global shortcuts use the existing versioned TOML `KeybindingSet` shape. Reads
+validate the owner and normalize supported missing bindings. Writes validate the
+current schema, serialize through a shared process-local lock, and use the
+existing atomic replacement primitive. One server process per root is required.
+An interrupted replacement leaves either the previous complete value or the new
+complete value; temporary artifacts are not authoritative.
+
+Before a global save, the client uses defaults and opens Settings when saved
+shortcuts are available from accessible datasets. The user explicitly selects a
+saved set or saves the current settings for all datasets. Conflicting copies
+never depend on traversal order. Existing dataset files remain untouched by
+this selection, apart from their normal supported schema migration. Copies in
+inaccessible datasets are preserved but not offered. The first global save ends
+legacy discovery; later dataset changes cannot override it. An older server
+continues using its dataset-local copies and does not see global edits.
 
 Mouse-button shortcuts retain the existing keybinding record shape and schema
 version. The `key` strings `MouseRight`, `MouseExtra1`, and `MouseExtra2` identify

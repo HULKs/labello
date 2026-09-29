@@ -91,6 +91,10 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
+| `GET /stats` | Session; each included dataset requires any role | No input → `DatasetStatistics[]`, each with dataset identity/name, task/class definitions, imbalance configuration, and unchanged `DatasetStats`; `Cache-Control: no-store` |
+| `GET /keybindings` | Session, own account | No input → global `KeybindingSet`, defaults when not saved; `Cache-Control: no-store` |
+| `PUT /keybindings` | Session, same user; CSRF | `KeybindingSet` → normalized global `KeybindingSet` |
+| `GET /keybindings/legacy` | Session, own account; any role in source dataset | No input → saved `LegacyKeybindings[]` for explicit migration; empty after a global save; `Cache-Control: no-store` |
 | `GET /presence` | Authenticated, server-wide | No input → active lease holders, optional GitHub logins/account IDs, and their dataset IDs/names; `ServerPresence`, `Cache-Control: no-store` |
 | `GET /health` | Public | No input → `{"ok":true,"service":"labello"}` |
 | `GET /build-information` | Public, no session or CSRF token | No input → compiled artifact `releaseTag` and `sourceCommit`, independently of readiness; `Cache-Control: no-store` |
@@ -122,8 +126,8 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `GET /datasets/{dataset_id}/images` | Any role | `ImageExplorerQuery` → `ImageExplorerPage` |
 | `GET /datasets/{dataset_id}/stats` | Any role | No input → `DatasetStats` |
 | `GET /datasets/{dataset_id}/stats/me` | Any role | No user selector → `CurrentUserActivity` for the authenticated account and server UTC day; `Cache-Control: no-store` |
-| `GET /datasets/{dataset_id}/keybindings` | Any role | No input → authenticated user's `KeybindingSet` |
-| `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | `KeybindingSet` → normalized `KeybindingSet` |
+| `GET /datasets/{dataset_id}/keybindings` | Any role | Compatibility alias for the authenticated user's global `KeybindingSet` |
+| `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | Compatibility alias saving the global `KeybindingSet` |
 | `POST /datasets/{dataset_id}/prelabel-model-check` | Data admin | Unsaved `{ location }` managed filename → `PrelabelModelInspection`; control JSON limited to 4 KiB; no inference image, configuration save, or hint mutation |
 | `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest { imageId, taskId, configId }` → `PrelabelResponse` |
 | `GET /datasets/{dataset_id}/prelabel-retained` | Annotator | `PrelabelItemRequest { imageId, taskId }` → first compatible nonempty `RetainedPrelabels { configId, response }` in configuration order, or null; validates current bindings, expiry and reset state; never executes a model; private, no-store |
@@ -138,6 +142,22 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 defaults to `control`. Middle-button drag is always available. Older requests
 that omit `panDragModifier` remain valid and receive the default during
 deserialization.
+
+`GET /stats` enumerates managed datasets and applies the same role check as the
+individual statistics route. Bootstrap-admin status alone grants no statistics
+access. It returns a complete authorized set or an error; unreadable dataset
+configuration or statistics cannot silently reduce the total. This is a sequential
+read of dataset projections, not a transactionally synchronized server snapshot.
+The client aggregates additive totals and UTC contributor days by stable user ID.
+Task/class breakdowns, assignment balance, daily scoring multipliers and focus
+remain dataset-scoped. Images present in two datasets count in both.
+
+Global shortcut saving needs no dataset membership. Before the first global save,
+the legacy route lists only the user's saved bindings in currently authorized
+datasets. The UI offers an explicit source selection or saving new settings;
+GET never chooses one dataset's preferences or overwrites old files. Supported
+legacy records normalize through the existing storage migration. Once saved,
+the global value wins on every route; see [persistence](persistence.md).
 
 Optional `DatasetStats.contributors` maps user IDs to `displayName`, optional
 `githubUserId` for avatars, and chronological UTC `history` rows containing

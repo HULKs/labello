@@ -148,7 +148,7 @@ another frozen state.
 
 Available presets are `dataset-gallery`, `dataset-inspection`, `annotation`, `overlapping-boxes`, `overlapping-boxes-unfiltered`, `prelabel-boxes`, `presence`, `presence-fallback`, `setup`, `about`, `build-mismatch`,
 `build-unavailable`, `build-update-failed`, `review`, `review-correction`,
-`admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `dialog-settings`, `dialog-transition`,
+`admin`, `prelabels-disabled`, `prelabels-disabled-annotation`, `statistics`, `statistics-global`, `global-shortcuts`, `dialog-settings`, `dialog-transition`,
 `dialog-admin-discard`, `setup-failure`, `admin-failure`,
 `statistics-failure`, `streak-lit`, `assignment-failure`, `image-failure`, `import-source`,
 `import-preflight`, `import-ready`, `import-running`, `import-failure`,
@@ -236,3 +236,7 @@ The `workflow-change` preset shows the blocking automatic workflow-change dialog
 without image content. Check the explanation, keyboard acknowledgment, Escape and
 outside-click behavior, and short-screen scrolling. It uses the shared production
 modal; live availability fallback and browser behavior require separate checks.
+
+`statistics-global` renders the aggregate of two synthetic dataset projections.
+`global-shortcuts` renders the explicit legacy preference selection above Setup.
+Both use the shared production renderers without account or image data.

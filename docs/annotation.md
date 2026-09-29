@@ -48,6 +48,12 @@ bonus workflow without changing assignment order.
 
 ## Canvas and shortcuts
 
+Shortcut settings are personal and apply to every dataset on the same server.
+They are available from Setup before opening a dataset. When older saved
+shortcuts exist, Settings offers a dataset source to copy into the global draft.
+Choose a source and save, or save the current settings. The original copies
+remain preserved; changing datasets never replaces saved global shortcuts.
+
 Open Settings with `Ctrl+,` on Windows/Linux or `Cmd+,` on macOS. Search actions,
 record bindings, resolve contextual conflicts, and choose **Save changes**.
 Settings are staged until saved and can be restored to defaults.
