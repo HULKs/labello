@@ -49,6 +49,10 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
         let details = harness.get_by_label_contains("Review details: Workflow:");
         let label = details.accesskit_node().label().unwrap().to_string();
         assert!(label.contains("Bounding boxes") && label.contains("Object 1 of 1"));
+        let context = harness.state().review_context().unwrap();
+        let identity = if context.workflow_name == context.class_name { context.workflow_name.clone() }
+            else { format!("{} · {}", context.workflow_name, context.class_name) };
+        assert_review_bar_paints(&harness, &format!("Boxes · {identity}"));
         let rect = details.rect();
         assert!(
             egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height))
@@ -719,6 +723,9 @@ fn annotation_context_uses_review_hierarchy_and_retains_summary_during_loads() {
         let summary = h.get_by_label_contains("Annotation details:");
         let label = summary.accesskit_node().label().unwrap().to_owned();
         assert!(label.contains(progress) && label.contains(kind), "{preset:?}: {label}");
+        if preset == Annotation {
+            assert_review_bar_paints(&h, "Boxes · Person bounding boxes · Person");
+        }
         assert_eq!(summary.accesskit_node().role(), egui::accesskit::Role::Label);
         let rect = summary.rect();
         h.state_mut().clear_current_image();

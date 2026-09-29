@@ -133,9 +133,10 @@ impl WorkspaceSummaryText {
             ctx.fonts_mut(|fonts| fonts.layout_job(job))
         };
         let mut lines = vec![layout(Self::progress(content, compact), true)];
-        if let Some((kind, phase)) = &content.identity_and_type {
+        if let Some((identity, kind)) = &content.identity_and_type {
             // Full identity remains available through the tooltip and inspector.
-            lines.push(layout(format!("{phase} · {kind}"), false));
+            let kind = if kind == "Bounding boxes" { "Boxes" } else { kind };
+            lines.push(layout(format!("{kind} · {identity}"), false));
         }
         let height = lines.iter().map(|line| line.size().y).sum::<f32>().max(32.0);
         let content_width = lines.iter().enumerate().map(|(index, line)| {

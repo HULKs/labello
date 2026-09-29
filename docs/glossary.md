@@ -27,6 +27,8 @@ action. Contextual explanatory prose stays with the rendering owner.
 
 Compact item progress may display `3 / 12` for `Item 3 / 12` or prelabel
 `Object 3 of 12`. Full phase and progress wording remains accessible.
+The context widget uses `Boxes` for the bounding-box task type; its tooltip and
+accessible description retain `Bounding boxes`.
 
 ## Names and meanings
 

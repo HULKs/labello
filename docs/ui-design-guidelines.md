@@ -59,11 +59,14 @@ qualify a term; compact synonyms must be listed in the glossary.
   presence, connection, and navigation targets. Drawer destinations retain their
   wide-bar order. Utilities read Statistics, Settings, contextual Tutorial, Admin,
   then Setup, subject to access. Account identity and Sign out come last. Use aligned
-  icon/label rows with shared selection and focus states.
+  icon/label rows with shared selection and focus states. Inspect uses stacked
+  image frames with landscape details in both the bar and drawer.
 - The second bar measures progress and its controls before stacking. Use a single
   control row when the summary fits between the edge panel toggles and canvas
   controls. Compact item progress uses `3 / 12`; complete item/phase wording stays
-  in the accessible description and tooltip. Keep workflow/type/class context and
+  in the accessible description and tooltip. The task-type label uses `Boxes`
+  while the tooltip and accessible description retain `Bounding boxes`.
+  Keep workflow/type/class context and
   review attribution in the summary. Stack only when progress, attribution, or
   enlarged text needs more room; retain every control and its 44-point target.
   If the control group cannot fit between the panel toggles, put it beneath them.

@@ -118,7 +118,7 @@ impl LabelloApp {
             );
             response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, self.view == view, label));
             if navigation_icons {
-                paint_workspace_action_icon(&left_ui, &response, if view == AppView::Review { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Save });
+                Self::paint_navigation_destination_icon(&left_ui, &response, view);
             }
             if response.on_hover_text(label).clicked() {
                 self.open_view(view);
@@ -281,14 +281,36 @@ impl LabelloApp {
             else if let Some(view) = view {
                 let mut icon_response = response.response.clone();
                 icon_response.rect = rect;
-                paint_workspace_action_icon(ui, &icon_response, if view == AppView::Review {
-                    WorkspaceActionIcon::Approve
-                } else { WorkspaceActionIcon::Save });
+                Self::paint_navigation_destination_icon(ui, &icon_response, view);
             }
         }
         if response.response.has_focus() { response.response.scroll_to_me(None); }
         response.response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, label));
         response.response
+    }
+
+    fn paint_navigation_destination_icon(ui: &egui::Ui, response: &egui::Response, view: AppView) {
+        if view != AppView::Inspect {
+            paint_workspace_action_icon(ui, response, if view == AppView::Review {
+                WorkspaceActionIcon::Approve
+            } else { WorkspaceActionIcon::Save });
+            return;
+        }
+        let painter = ui.painter();
+        let center = response.rect.center();
+        let point = |x, y| center + egui::vec2(x, y);
+        let color = ui.style().interact(response).fg_stroke.color;
+        let stroke = egui::Stroke::new(1.7, color);
+        // The rear image's visible edges and landscape remain clear of the front image.
+        painter.add(egui::Shape::line(vec![point(-7.0, 3.0), point(-11.0, 3.0),
+            point(-11.0, -10.0), point(6.0, -10.0), point(6.0, -5.0)], stroke));
+        painter.add(egui::Shape::line(vec![point(-9.0, -3.0), point(-6.0, -6.0), point(-3.0, -3.0)], stroke));
+        painter.circle_filled(point(1.0, -7.0), 1.2, color);
+        painter.rect_stroke(egui::Rect::from_min_max(point(-5.0, -3.0), point(11.0, 10.0)),
+            1.0, stroke, egui::StrokeKind::Inside);
+        painter.add(egui::Shape::line(vec![point(-3.0, 7.0), point(1.0, 2.0),
+            point(4.0, 5.0), point(6.0, 3.0), point(9.0, 7.0)], stroke));
+        painter.circle_filled(point(6.0, 0.0), 1.2, color);
     }
 
     fn app_bar_action_selected(&self, action: AppBarAction) -> bool {
