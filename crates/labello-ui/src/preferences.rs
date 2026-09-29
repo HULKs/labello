@@ -59,7 +59,6 @@ impl LabelloApp {
     }
 
     pub(crate) fn preference_controls(&mut self, ui: &mut egui::Ui) {
-        ui.label("Your shortcuts apply to all datasets.");
         if self.auth.preferences.pending.is_some() {
             ui.label("Loading your shortcuts…");
         }

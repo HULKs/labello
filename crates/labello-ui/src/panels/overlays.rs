@@ -476,10 +476,6 @@ impl LabelloApp {
             let content_height = (max_height - header.response.rect.height() - ui.spacing().item_spacing.y).max(64.0);
             let mut contents = |ui: &mut egui::Ui| {
                 self.preference_controls(ui);
-                ui.label(
-                    RichText::new("Record a key, right-click, or mouse button 4/5.")
-                        .color(theme::MUTED),
-                ).on_hover_text("Mouse bindings work over the canvas. Left and middle buttons stay reserved for editing and panning.");
                 if let Some(error) = &self.work.shortcut_settings.error {
                     theme::inline_message(
                         ui,
