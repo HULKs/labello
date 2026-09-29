@@ -214,6 +214,7 @@ impl LabelloApp {
             .active_operations
             .values()
             .copied()
+            .filter(|activity| *activity != ImportActivity::LoadStatus || self.import.job.is_none())
             .max_by_key(|activity| activity.priority())
             .or_else(|| {
                 self.import

@@ -415,7 +415,7 @@ impl LabelloApp {
                 "Available datasets will appear here after you sign in.",
                 None,
             );
-        } else if self.loading.datasets && !has_datasets {
+        } else if self.loading.datasets && !has_datasets && !self.datasets.summaries_loaded {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(RichText::new("Loading datasets...").color(theme::TEXT_MUTED));
@@ -683,7 +683,10 @@ impl LabelloApp {
         if selected != self.setup.schema_copy.source {
             self.select_schema_source(selected);
         }
-        if self.loading.datasets {
+        if self.loading.datasets
+            && !self.datasets.summaries_loaded
+            && self.datasets.summaries.is_empty()
+        {
             ui.label("Loading schema sources…");
         } else if self.datasets.summaries_error.is_some() {
             ui.colored_label(theme::DANGER, "Could not load schema sources.");

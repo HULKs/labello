@@ -3,7 +3,7 @@ impl LabelloApp {
         let config_dirty = self.datasets.admin_config != self.datasets.admin_baseline;
         let permissions_dirty = self.datasets.users != self.datasets.users_baseline;
         let changes_dirty = config_dirty || permissions_dirty;
-        let admin_busy = self.loading.admin || self.loading.roles_user.is_some();
+        let admin_busy = (self.loading.admin && !self.admin.refreshing) || self.loading.roles_user.is_some();
         let load_error = self.admin.load_error.clone();
         let issues = self
             .staged_admin_config()
@@ -11,10 +11,8 @@ impl LabelloApp {
             .map(|config| config_issues(config, &self.config.user_id))
             .unwrap_or_default();
         let mut status_text = if admin_busy {
-            if self.loading.roles_user.is_some() {
+            if self.loading.roles_user.is_some() || self.datasets.admin_config.is_some() {
                 "Saving Admin changes".to_string()
-            } else if self.datasets.admin_config.is_some() {
-                "Saving or refreshing Admin changes".to_string()
             } else {
                 "Loading Admin configuration".to_string()
             }

@@ -26,7 +26,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn right_panel(&mut self, ui: &mut egui::Ui, show_primary_actions: bool) {
-        if self.workspace_bars_loading() { ui.disable(); }
+        if self.workspace_bars_loading() {
+            let opacity = ui.opacity();
+            ui.disable();
+            ui.set_opacity(opacity);
+        }
         ui.heading(RichText::new(crate::glossary::INSPECTOR).color(theme::TEXT));
         if self.view == AppView::Review && !self.review_context_section(ui) {
             return;

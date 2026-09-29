@@ -79,7 +79,11 @@ impl LabelloApp {
     }
 
     pub(crate) fn task_panel(&mut self, ui: &mut egui::Ui) {
-        if self.workspace_bars_loading() { ui.disable(); }
+        if self.workspace_bars_loading() {
+            let opacity = ui.opacity();
+            ui.disable();
+            ui.set_opacity(opacity);
+        }
         let workflows = self.workflow_choices();
         if workflows.is_empty() {
             theme::inline_message(

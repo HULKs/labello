@@ -97,7 +97,9 @@ impl LabelloApp {
             return;
         }
         ui.spacing_mut().interact_size.x = ui.spacing().interact_size.x.max(44.0);
-        let navigation_allowed = self.inspection.reason.is_empty()
+        let navigation_allowed = (self.inspection.replacement.is_none()
+            || self.inspection.image_error.is_some())
+            && self.inspection.reason.is_empty()
             && !self.inspection.busy()
             && !self
                 .inspection
@@ -240,12 +242,8 @@ impl LabelloApp {
                 )
             });
             if refresh.on_hover_text("Refresh image").clicked() {
-                let record = self.inspection.selected.clone().unwrap();
-                self.inspection.error = None;
-                self.inspection.preview_loaded = false;
-                self.inspection.image_error = None;
-                self.inspection.retry = None;
-                self.inspect_request(InspectorAction::State(record.image_id));
+                let record = self.inspection.requested_image().cloned().unwrap();
+                self.select_inspection_image(record);
             }
         });
     }
@@ -256,6 +254,7 @@ impl LabelloApp {
         }
         if let Some(record) = self.inspection.selected.clone() {
             let busy = self.inspection.busy()
+                || self.inspection.replacement.is_some()
                 || self.inspection.state.is_none()
                 || self
                     .inspection

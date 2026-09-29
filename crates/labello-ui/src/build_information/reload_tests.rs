@@ -134,7 +134,7 @@ fn manual_retry_rechecks_identity_before_bypassing_attempt_guard() {
     });
     let server = app.builds.server.clone();
     app.retry_build_reload();
-    assert!(app.builds.server.is_none());
+    assert_eq!(app.builds.server, server);
     app.builds.loading = true;
     app.advance_build_reload(&egui::Context::default());
     assert!(!manual_attempt.get());

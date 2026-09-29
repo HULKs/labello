@@ -38,6 +38,12 @@ pub(crate) enum InspectorReply {
     Returned(Box<ImageState>),
 }
 
+struct PendingInspectionImage {
+    record: ImageRecord,
+    state: Option<ImageState>,
+    texture: Option<egui::TextureHandle>,
+}
+
 pub(crate) struct InspectorState {
     transfers: crate::image_transfer::ImageTransfers,
     query: ImageExplorerQuery,
@@ -47,6 +53,7 @@ pub(crate) struct InspectorState {
     thumbnails: BTreeMap<ImageId, egui::TextureHandle>,
     thumbnail_errors: BTreeSet<ImageId>,
     selected: Option<ImageRecord>,
+    replacement: Option<PendingInspectionImage>,
     state: Option<ImageState>,
     texture: Option<egui::TextureHandle>,
     canvas: CanvasState,
@@ -94,6 +101,7 @@ impl Default for InspectorState {
             thumbnails: BTreeMap::new(),
             thumbnail_errors: BTreeSet::new(),
             selected: None,
+            replacement: None,
             state: None,
             texture: None,
             canvas: CanvasState::default(),
@@ -129,7 +137,37 @@ impl InspectorState {
     pub(crate) fn suspend_requests(&mut self) {
         self.transfers.cancel_all();
         self.pending.clear();
+        self.replacement = None;
     }
+    fn requested_image(&self) -> Option<&ImageRecord> {
+        self.replacement
+            .as_ref()
+            .map(|load| &load.record)
+            .or(self.selected.as_ref())
+    }
+
+    fn publish_replacement(&mut self) {
+        if self
+            .replacement
+            .as_ref()
+            .is_some_and(|load| load.state.is_some() && load.texture.is_some())
+        {
+            let load = self.replacement.take().unwrap();
+            let changed = self
+                .selected
+                .as_ref()
+                .is_none_or(|record| record.image_id != load.record.image_id);
+            self.selected = Some(load.record);
+            self.state = load.state;
+            self.texture = load.texture;
+            self.preview_loaded = true;
+            if changed {
+                self.canvas = CanvasState::default();
+                self.canvas.require_pan_mode(true);
+            }
+        }
+    }
+
     fn busy(&self) -> bool {
         self.pending
             .values()
@@ -230,7 +268,7 @@ impl LabelloApp {
     }
     pub(crate) fn fail_inspection(&mut self, request: u64, error: String) {
         if let Some(action) = self.inspection.pending.remove(&request) {
-            if matches!(&action, InspectorAction::Image(id) | InspectorAction::State(id) if self.inspection.selected.as_ref().is_none_or(|r| r.image_id != *id))
+            if matches!(&action, InspectorAction::Image(id) | InspectorAction::State(id) if self.inspection.requested_image().is_none_or(|r| r.image_id != *id))
             {
                 return;
             }
@@ -340,6 +378,13 @@ impl LabelloApp {
                 }
             }
             InspectorReply::State(id, state) => {
+                if let Some(load) = &mut self.inspection.replacement {
+                    if load.record.image_id == id {
+                        load.state = Some(*state);
+                    }
+                    self.inspection.publish_replacement();
+                    return;
+                }
                 if self
                     .inspection
                     .selected
@@ -350,6 +395,13 @@ impl LabelloApp {
                 }
             }
             InspectorReply::Image(id, preview) => {
+                if let Some(load) = &mut self.inspection.replacement {
+                    if load.record.image_id == id {
+                        load.texture = Some(texture(preview));
+                    }
+                    self.inspection.publish_replacement();
+                    return;
+                }
                 if self
                     .inspection
                     .selected
@@ -408,10 +460,22 @@ impl LabelloApp {
         if self.inspection.busy() || !self.inspection.reason.is_empty() {
             return;
         }
-        self.cancel_obsolete_inspection_previews(
-            &BTreeSet::from([record.image_id.clone()]),
-            Some(&record.image_id),
-        );
+        self.cancel_obsolete_inspection_previews(&BTreeSet::from([record.image_id.clone()]), None);
+        if self.inspection.preview_loaded && self.inspection.state.is_some() {
+            self.inspection.replacement = Some(PendingInspectionImage {
+                record: record.clone(),
+                state: None,
+                texture: None,
+            });
+            self.inspection.image_error = None;
+            self.inspection.error = None;
+            self.inspection.notice = None;
+            self.inspection.return_tasks.clear();
+            self.inspection.retry = None;
+            self.inspect_request(InspectorAction::State(record.image_id));
+            self.inspection.drawer = None;
+            return;
+        }
         self.inspection.texture = self.inspection.thumbnails.get(&record.image_id).cloned();
         self.inspection.preview_loaded = false;
         self.inspection.image_error = None;
@@ -438,7 +502,7 @@ impl LabelloApp {
             .filter_map(|(request, action)| {
                 let obsolete = match action {
                     InspectorAction::Thumbnail(id) => !visible.contains(id) && selected != Some(id),
-                    InspectorAction::Image(id) => selected != Some(id),
+                    InspectorAction::Image(id) | InspectorAction::State(id) => selected != Some(id),
                     _ => false,
                 };
                 obsolete.then_some(*request)
@@ -451,9 +515,29 @@ impl LabelloApp {
         }
     }
     fn schedule_inspection_image(&mut self) {
-        let Some(record) = self.inspection.selected.clone() else {
+        let Some(record) = self.inspection.requested_image().cloned() else {
             return;
         };
+        if let Some(load) = &self.inspection.replacement {
+            if load.texture.is_none()
+                && self.inspection.image_error.is_none()
+                && !self
+                    .inspection
+                    .pending
+                    .values()
+                    .any(|action| matches!(action, InspectorAction::Image(_)))
+                && self
+                    .inspection
+                    .pending
+                    .values()
+                    .filter(|action| matches!(action, InspectorAction::Thumbnail(_)))
+                    .count()
+                    < MAX_IMAGE_REQUESTS
+            {
+                self.inspect_request(InspectorAction::Image(record.image_id));
+            }
+            return;
+        }
         if !self.inspection.preview_loaded
             && self.inspection.texture.is_none()
             && !self.inspection.thumbnail_errors.contains(&record.image_id)
@@ -1623,6 +1707,118 @@ mod tests {
     }
 
     #[test]
+    fn subsequent_inspection_publishes_image_and_state_together_in_either_order() {
+        for image_first in [false, true] {
+            let mut app = app();
+            let original = app.inspection.selected.clone().unwrap();
+            let texture = app.inspection.texture.as_ref().unwrap().id();
+            let target = app.inspection.page.as_ref().unwrap().items[1].image.clone();
+            app.select_inspection_image(target.clone());
+            app.schedule_inspection_image();
+            for image in [image_first, !image_first] {
+                assert_eq!(app.inspection.selected.as_ref(), Some(&original));
+                assert_eq!(app.inspection.texture.as_ref().unwrap().id(), texture);
+                let id = *app
+                    .inspection
+                    .pending
+                    .iter()
+                    .find(|(_, action)| {
+                        if image {
+                            matches!(action, InspectorAction::Image(id) if id == &target.image_id)
+                        } else {
+                            matches!(action, InspectorAction::State(id) if id == &target.image_id)
+                        }
+                    })
+                    .unwrap()
+                    .0;
+                let request = RequestIdentity {
+                    request_id: id,
+                    ..app.request_identity(Some(app.config.dataset_id.clone()))
+                };
+                let reply = if image {
+                    InspectorReply::Image(
+                        target.image_id.clone(),
+                        ImagePreview {
+                            image_id: target.image_id.clone(),
+                            width: 1,
+                            height: 1,
+                            rgba: vec![255; 4],
+                        },
+                    )
+                } else {
+                    InspectorReply::State(
+                        target.image_id.clone(),
+                        Box::new(ImageState::new(target.image_id.clone())),
+                    )
+                };
+                app.accept_inspection(&egui::Context::default(), request, Ok(reply));
+            }
+            assert_eq!(app.inspection.selected.as_ref(), Some(&target));
+            assert_eq!(
+                app.inspection.state.as_ref().unwrap().image_id,
+                target.image_id
+            );
+            assert!(app.inspection.replacement.is_none());
+        }
+    }
+
+    #[test]
+    fn inspection_replacement_failure_and_obsolete_responses_preserve_display() {
+        let mut app = app();
+        let original = app.inspection.selected.clone().unwrap();
+        let target = app.inspection.page.as_ref().unwrap().items[1].image.clone();
+        app.select_inspection_image(target.clone());
+        app.schedule_inspection_image();
+        let request_id = *app
+            .inspection
+            .pending
+            .iter()
+            .find(|(_, action)| matches!(action, InspectorAction::State(_)))
+            .unwrap()
+            .0;
+        app.fail_inspection(request_id, "Synthetic failure".into());
+        assert_eq!(app.inspection.selected.as_ref(), Some(&original));
+        assert!(app.inspection.image_error.is_some());
+        let old_image_request = *app
+            .inspection
+            .pending
+            .iter()
+            .find(|(_, action)| matches!(action, InspectorAction::Image(_)))
+            .unwrap()
+            .0;
+        app.select_inspection_image(target.clone());
+        assert!(!app.inspection.pending.contains_key(&old_image_request));
+        let obsolete = RequestIdentity {
+            request_id: old_image_request,
+            ..app.request_identity(Some(app.config.dataset_id.clone()))
+        };
+        app.accept_inspection(
+            &egui::Context::default(),
+            obsolete,
+            Ok(InspectorReply::Image(
+                target.image_id.clone(),
+                ImagePreview {
+                    image_id: target.image_id.clone(),
+                    width: 1,
+                    height: 1,
+                    rgba: vec![255; 4],
+                },
+            )),
+        );
+        assert!(
+            app.inspection
+                .replacement
+                .as_ref()
+                .unwrap()
+                .texture
+                .is_none()
+        );
+        assert_eq!(app.inspection.selected.as_ref(), Some(&original));
+        app.inspection.suspend_requests();
+        assert!(app.inspection.replacement.is_none());
+    }
+
+    #[test]
     fn inspector_keeps_thumbnail_while_state_and_large_preview_load_independently() {
         let mut app = app();
         let record = app.inspection.page.as_ref().unwrap().items[0].image.clone();
@@ -1632,6 +1828,9 @@ mod tests {
             .get(&record.image_id)
             .unwrap()
             .id();
+        app.inspection.selected = None;
+        app.inspection.state = None;
+        app.inspection.preview_loaded = false;
         app.select_inspection_image(record.clone());
         assert_eq!(app.inspection.texture.as_ref().unwrap().id(), proxy);
         assert!(app.inspection.state.is_none());
@@ -1785,7 +1984,7 @@ mod tests {
             Ok(InspectorReply::List(page)),
         );
         assert_eq!(app.inspection.page.as_ref().unwrap().items.len(), 25);
-        assert_eq!(app.inspection.selected.as_ref().unwrap().image_id, expected);
+        assert_eq!(app.inspection.requested_image().unwrap().image_id, expected);
         assert!(app.inspection.navigate_page.is_none());
     }
 

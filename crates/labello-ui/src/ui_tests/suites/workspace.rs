@@ -2877,7 +2877,15 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
 
     fn has_texture(shape: &egui::epaint::Shape, texture_id: egui::TextureId) -> bool {
         match shape {
-            egui::epaint::Shape::Mesh(mesh) => mesh.texture_id == texture_id,
+            egui::epaint::Shape::Mesh(mesh) => {
+                if mesh.texture_id == texture_id {
+                    assert!(mesh.vertices.iter().all(|vertex| vertex.color == egui::Color32::WHITE),
+                        "image navigation must not fade the retained canvas");
+                    true
+                } else {
+                    false
+                }
+            }
             egui::epaint::Shape::Vec(shapes) => {
                 shapes.iter().any(|shape| has_texture(shape, texture_id))
             }

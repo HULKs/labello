@@ -64,7 +64,9 @@ inspector. See the [product glossary](glossary.md).
 view, dataset and selected workflow. It stores only display data and migration
 action descriptions, never assignments, image state, drafts or command ownership.
 Shell rendering refreshes it after accepted responses and navigation. Loading
-disables retained controls and keyboard actions. Empty/error completion and
+disables retained controls and keyboard actions without reducing the opacity
+of the containing panel or image. The shell applies the same rule to pending
+navigation; actual confirmation dialogs retain their modal backdrops. Empty/error completion and
 scope changes discard the presentation. The global app bar is outside this
 blank/retained policy.
 
@@ -80,6 +82,16 @@ validated `ReviewContext`, while live target validation remains unchanged.
 Statistics, Setup lists, admin image/backup catalogs and incremental inspection
 pages retain loaded data without routine refresh indicators. Errors, retries,
 explicit filter changes and operation progress keep their existing feedback.
+Inspect stages subsequent image pixels and annotation state in one replacement
+until both requests succeed. The displayed identity, texture, state and canvas
+change together; same-image refresh preserves pan and zoom. Replacement failures
+keep the previous display and retry target. New selections and auth suspension
+cancel obsolete requests. Return-to-review actions remain disabled during a
+replacement. Admin distinguishes refresh requests from saves; an empty loaded
+Setup catalog remains settled during refresh. About retains server identity
+while checking it again, but the browser reload coordinator waits for the new
+response before preparing or navigating. Import job status polls remain silent
+while explicit operation progress remains visible.
 
 `canvas.rs` keeps public entry points; rendering, painting, interaction,
 hit-testing, and viewport geometry remain separate internal concerns. Painting

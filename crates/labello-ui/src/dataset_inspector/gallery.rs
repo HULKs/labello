@@ -15,8 +15,7 @@ impl LabelloApp {
         }
         let selected = self
             .inspection
-            .selected
-            .as_ref()
+            .requested_image()
             .map(|r| r.image_id.clone());
         self.cancel_obsolete_inspection_previews(&BTreeSet::new(), selected.as_ref());
         self.inspection.navigate_page = None;
@@ -356,8 +355,7 @@ impl LabelloApp {
         self.inspection.scroll = output.state.offset.y;
         let selected = self
             .inspection
-            .selected
-            .as_ref()
+            .requested_image()
             .map(|r| r.image_id.clone());
         self.cancel_obsolete_inspection_previews(&visible, selected.as_ref());
         // Texture memory follows the visible rows, not the ever-growing result list.

@@ -23,7 +23,7 @@ impl LabelloApp {
                     .hint_text("Name, login, or user ID"),
             )
             .labelled_by(search_label.id);
-            if self.loading.admin && self.datasets.users.is_empty() {
+            if self.loading.admin && !self.admin.refreshing && self.datasets.users.is_empty() {
                 ui.spinner();
                 return;
             }

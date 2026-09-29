@@ -43,10 +43,10 @@ impl LabelloApp {
 
     pub(crate) fn advance_build_reload(&mut self, ctx: &egui::Context) {
         let Some(adapter) = self.builds.reload.adapter.clone() else { return };
+        // Retained identity is display data until the refresh validates it.
+        if self.builds.loading { return; }
         if !self.builds_differ() {
-            // A refresh clears the displayed server while loading. Keep a prepared
-            // attempt until a current reply confirms or rejects its target.
-            if !self.builds.loading { self.reset_build_reload(); }
+            self.reset_build_reload();
             return;
         }
         if self.builds.reload.target != self.builds.server {

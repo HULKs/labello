@@ -1710,6 +1710,7 @@ fn dataset_states_distinguish_loading_and_stale_refresh_failure() {
     harness.step();
 
     harness.state_mut().datasets.summaries.clear();
+    harness.state_mut().datasets.summaries_loaded = false;
     harness.state_mut().loading.datasets = true;
     harness.step();
     assert!(harness.query_by_label("Loading datasets...").is_some());
@@ -1719,6 +1720,11 @@ fn dataset_states_distinguish_loading_and_stale_refresh_failure() {
             .is_none()
     );
 
+    harness.state_mut().datasets.summaries_loaded = true;
+    harness.step();
+    assert!(harness.query_by_label("Loading datasets...").is_none(),
+        "an empty successful catalog must also refresh silently");
+    harness.state_mut().datasets.summaries_loaded = false;
     harness.state_mut().loading.datasets = false;
     harness.state_mut().datasets.summaries_error = Some("initial failure".to_string());
     harness.step();

@@ -255,6 +255,7 @@ pub(crate) struct AdminToolsState {
     pub export: crate::export_flow::ExportState,
     pub prelabels: crate::prelabel_flow::PrelabelAdminUi,
     pub load_error: Option<String>,
+    pub refreshing: bool,
     pub upload_error: Option<String>,
     pub people_search: String,
     pub image_query: ImageExplorerQuery,
@@ -280,6 +281,7 @@ impl Default for AdminToolsState {
             export: Default::default(),
             prelabels: Default::default(),
             load_error: None,
+            refreshing: false,
             upload_error: None,
             people_search: String::new(),
             image_query: ImageExplorerQuery {
@@ -342,6 +344,7 @@ pub(crate) struct AuthState {
 
 pub(crate) struct DatasetState {
     pub summaries: Vec<DatasetSummary>,
+    pub summaries_loaded: bool,
     pub summaries_error: Option<String>,
     pub metadata: Option<DatasetMetadata>,
     pub admin_config: Option<DatasetMetadata>,
@@ -363,6 +366,7 @@ impl DatasetState {
     fn new() -> Self {
         Self {
             summaries: Vec::new(),
+            summaries_loaded: false,
             summaries_error: None,
             metadata: None,
             admin_config: None,
