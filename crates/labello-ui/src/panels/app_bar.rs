@@ -63,13 +63,17 @@ impl LabelloApp {
                 total_navigation_width > dataset_rect.left() - bar_rect.left() - side_gap
                     || required_right_width > bar_rect.right() - dataset_rect.right() - side_gap
             };
+        if drawer_navigation {
+            self.collapsed_app_bar(ui, bar_rect, &dataset_name);
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Application bar"));
+            return;
+        }
         let show_workspace_dataset = self.work_view()
             && layout == LayoutMode::Wide
-            && !drawer_navigation
             && total_navigation_width <= dataset_rect.left() - bar_rect.left() - side_gap
             && required_right_width + 180.0 <= bar_rect.right() - dataset_rect.right() - side_gap;
         let left_width = if self.work_view() {
-            if drawer_navigation { 0.0 } else { total_navigation_width }
+            total_navigation_width
         } else {
             dataset_rect.left() - side_gap - bar_rect.left()
         };
@@ -105,75 +109,25 @@ impl LabelloApp {
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
         );
 
-        if drawer_navigation {
-            let drawer_open = self.navigation.drawer_open;
-            let navigation_ui = if self.work_view() { &mut right_ui } else { &mut left_ui };
-            let trigger = navigation_ui
-                .push_id("application-navigation-trigger", |ui| {
-                    ui.add_sized(
-                        [44.0, 44.0],
-                        egui::Button::new("").selected(drawer_open),
-                    )
-                })
-                .inner
-                .on_hover_text(if drawer_open {
-                    "Close application navigation."
-                } else {
-                    "Open application navigation."
-                });
-            trigger.widget_info(|| {
-                egui::WidgetInfo::selected(
-                    egui::WidgetType::Button,
-                    true,
-                    drawer_open,
-                    if drawer_open {
-                        "Close navigation"
-                    } else {
-                        "Open navigation"
-                    },
-                )
-            });
-            Self::paint_navigation_icon(
-                navigation_ui,
-                trigger.rect,
-                navigation_ui.style().interact(&trigger).fg_stroke.color,
+        self.navigation.drawer_open = false;
+        self.navigation.restore_drawer_trigger_focus = false;
+        for (view, label) in destinations {
+            let response = left_ui.add_sized(
+                [if navigation_icons { 44.0 } else { navigation_width(label) }, 44.0],
+                egui::Button::selectable(self.view == view, if navigation_icons { "" } else { label }),
             );
-            if !drawer_open
-                && std::mem::take(&mut self.navigation.restore_drawer_trigger_focus)
-            {
-                trigger.request_focus();
+            response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, self.view == view, label));
+            if navigation_icons {
+                paint_workspace_action_icon(&left_ui, &response, if view == AppView::Review { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Save });
             }
-            if trigger.clicked() {
-                self.navigation.drawer_open = !drawer_open;
-                self.navigation.restore_drawer_trigger_focus = false;
-                self.work.drawer = None;
-                self.work.show_tutorial = false;
-            }
-        } else {
-            self.navigation.drawer_open = false;
-            self.navigation.restore_drawer_trigger_focus = false;
-            for (view, label) in destinations {
-                let response = left_ui.add_sized(
-                    [if navigation_icons { 44.0 } else { navigation_width(label) }, 44.0],
-                    egui::Button::selectable(self.view == view, if navigation_icons { "" } else { label }),
-                );
-                response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, self.view == view, label));
-                if navigation_icons {
-                    paint_workspace_action_icon(&left_ui, &response, if view == AppView::Review { WorkspaceActionIcon::Approve } else { WorkspaceActionIcon::Save });
-                }
-                if response.on_hover_text(label).clicked() {
-                    self.open_view(view);
-                }
-            }
-            for action in &actions {
-                self.app_bar_icon_button(&mut right_ui, *action);
+            if response.on_hover_text(label).clicked() {
+                self.open_view(view);
             }
         }
-        if drawer_navigation && !self.work_view() {
-            self.streak_indicator(&mut left_ui);
-        } else {
-            self.streak_indicator(&mut right_ui);
+        for action in &actions {
+            self.app_bar_icon_button(&mut right_ui, *action);
         }
+        self.streak_indicator(&mut right_ui);
         self.connection_indicator(&mut right_ui);
         if self.work_view() {
             self.presence_summary(&mut right_ui);
@@ -181,6 +135,81 @@ impl LabelloApp {
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Application bar")
         });
+    }
+
+    fn collapsed_app_bar(&mut self, ui: &mut egui::Ui, rect: egui::Rect, dataset: &str) {
+        let mut controls = ui.new_child(egui::UiBuilder::new()
+            .id_salt("collapsed-app-bar")
+            .max_rect(rect)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)));
+        controls.spacing_mut().item_spacing.x = if rect.width() < 200.0 { 0.0 } else { theme::SPACE_1 };
+        self.navigation_trigger(&mut controls);
+        if self.collapsed_header_has_streak(rect.width()) { self.streak_indicator(&mut controls); }
+        self.connection_indicator(&mut controls);
+        if self.work_view() {
+            // Bound avatar overflow and status text so the dataset keeps a useful share.
+            let remaining = controls.available_rect_before_wrap();
+            let width = (remaining.width() - 80.0).clamp(44.0, 128.0);
+            let presence = egui::Rect::from_min_max(
+                egui::pos2(remaining.right() - width, remaining.top()), remaining.max);
+            controls.scope_builder(egui::UiBuilder::new().max_rect(presence), |ui| self.presence_summary(ui));
+        }
+        let available = controls.available_rect_before_wrap();
+        let mut dataset_ui = ui.new_child(egui::UiBuilder::new().max_rect(available)
+            .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)));
+        dataset_ui.set_clip_rect(available.intersect(ui.clip_rect()));
+        let response = theme::bounded_badge(&mut dataset_ui, dataset, theme::Intent::Info,
+            (available.width() - 20.0).max(1.0)).on_hover_text(dataset);
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Dataset {dataset}")));
+    }
+
+    fn collapsed_header_has_streak(&self, width: f32) -> bool {
+        width >= 80.0 + (if self.work_view() { 4.0 } else { 3.0 }) * (44.0 + theme::SPACE_1)
+    }
+
+    fn navigation_trigger(&mut self, ui: &mut egui::Ui) {
+        let drawer_open = self.navigation.drawer_open;
+        let trigger = ui
+            .push_id("application-navigation-trigger", |ui| {
+                ui.add_sized(
+                    [44.0, 44.0],
+                    egui::Button::new("").selected(drawer_open),
+                )
+            })
+            .inner
+            .on_hover_text(if drawer_open {
+                "Close application navigation."
+            } else {
+                "Open application navigation."
+            });
+        trigger.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::Button,
+                true,
+                drawer_open,
+                if drawer_open {
+                    "Close navigation"
+                } else {
+                    "Open navigation"
+                },
+            )
+        });
+        Self::paint_navigation_icon(
+            ui,
+            trigger.rect,
+            ui.style().interact(&trigger).fg_stroke.color,
+        );
+        if !drawer_open
+            && std::mem::take(&mut self.navigation.restore_drawer_trigger_focus)
+        {
+            trigger.request_focus();
+        }
+        if trigger.clicked() {
+            self.navigation.drawer_open = !drawer_open;
+            self.navigation.restore_drawer_trigger_focus = false;
+            self.work.drawer = None;
+            self.work.show_tutorial = false;
+        }
     }
 
     fn application_navigation_contents(
@@ -191,52 +220,86 @@ impl LabelloApp {
         account: Option<&str>,
     ) -> bool {
         let mut action_taken = false;
-        ui.set_min_width(theme::MENU_WIDTH);
-        let item_width = ui.available_width().max(theme::MENU_WIDTH);
+        ui.spacing_mut().item_spacing.y = theme::SPACE_1;
         for (view, label) in destinations {
-            let response = ui.add(
-                egui::Button::selectable(self.view == *view, *label)
-                    .min_size(egui::vec2(item_width, 44.0)),
-            );
+            let response = self.navigation_row(ui, label, self.view == *view, true, None, Some(*view));
             if response.clicked() {
                 self.open_view(*view);
-                ui.close();
                 action_taken = true;
             }
         }
-
-        for action in actions {
-            let response = ui
-                .add_enabled(
-                    *action != AppBarAction::SignOut || !self.loading.logout,
-                    egui::Button::new(action.label()).min_size(egui::vec2(item_width, 44.0)),
-                );
-            if *action == AppBarAction::Statistics
+        ui.add_space(theme::SPACE_2);
+        ui.separator();
+        for action in [AppBarAction::Statistics, AppBarAction::Settings, AppBarAction::Tutorial,
+            AppBarAction::Admin, AppBarAction::Setup] {
+            if !actions.contains(&action) { continue; }
+            let response = self.navigation_row(ui, action.label(), self.app_bar_action_selected(action), true, Some(action), None)
+                .on_hover_text(action.tooltip());
+            if action == AppBarAction::Statistics
                 && self.navigation.statistics.restore_focus == Some(response.id)
-                && ui
-                    .ctx()
-                    .memory(|memory| memory.allows_interaction(response.layer_id))
-            {
+                && ui.ctx().memory(|memory| memory.allows_interaction(response.layer_id)) {
                 response.request_focus();
                 self.navigation.statistics.restore_focus = None;
             }
             if response.clicked() {
-                self.perform_app_bar_action(*action);
-                if *action == AppBarAction::Statistics {
-                    self.navigation.statistics.invoker = Some(response.id);
-                }
-                ui.close();
+                self.perform_app_bar_action(action);
+                if action == AppBarAction::Statistics { self.navigation.statistics.invoker = Some(response.id); }
                 action_taken = true;
             }
         }
+        if self.streak_available() && !self.collapsed_header_has_streak(ui.ctx().content_rect().width() - 30.0) {
+            ui.horizontal(|ui| {
+                self.streak_indicator(ui);
+                ui.label("Your streak");
+            });
+        }
         if let Some(account) = account {
+            ui.add_space(theme::SPACE_2);
             ui.separator();
-            ui.add_sized(
-                [item_width, 44.0],
-                egui::Label::new(RichText::new(account).strong()).truncate(),
-            );
+            ui.add(egui::Label::new(RichText::new(account).color(theme::TEXT_MUTED)).wrap());
+        }
+        if actions.contains(&AppBarAction::SignOut)
+            && self.navigation_row(ui, AppBarAction::SignOut.label(), false, !self.loading.logout,
+                Some(AppBarAction::SignOut), None).clicked() {
+            self.perform_app_bar_action(AppBarAction::SignOut);
+            action_taken = true;
         }
         action_taken
+    }
+
+    fn navigation_row(&self, ui: &mut egui::Ui, label: &str, selected: bool, enabled: bool,
+        action: Option<AppBarAction>, view: Option<AppView>) -> egui::Response {
+        let icon = ui.id().with(("navigation-icon", label));
+        let response = ui.add_enabled_ui(enabled, |ui| {
+            egui::Button::selectable(selected, (egui::Atom::custom(icon, egui::vec2(24.0, 24.0)), label))
+                .min_size(egui::vec2(ui.available_width(), 44.0))
+                .atom_ui(ui)
+        }).inner;
+        if let Some(rect) = response.rect(icon) {
+            let color = ui.style().interact(&response.response).fg_stroke.color;
+            if let Some(action) = action { Self::paint_app_bar_action_icon(ui, rect, action, color); }
+            else if let Some(view) = view {
+                let mut icon_response = response.response.clone();
+                icon_response.rect = rect;
+                paint_workspace_action_icon(ui, &icon_response, if view == AppView::Review {
+                    WorkspaceActionIcon::Approve
+                } else { WorkspaceActionIcon::Save });
+            }
+        }
+        if response.response.has_focus() { response.response.scroll_to_me(None); }
+        response.response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, selected, label));
+        response.response
+    }
+
+    fn app_bar_action_selected(&self, action: AppBarAction) -> bool {
+        match action {
+            AppBarAction::Statistics => self.navigation.statistics.open,
+            AppBarAction::Admin => self.view == AppView::Admin,
+            AppBarAction::Setup => self.view == AppView::Setup,
+            AppBarAction::Tutorial => self.work.show_tutorial,
+            AppBarAction::Settings => self.work.show_settings,
+            AppBarAction::SignOut => false,
+        }
     }
 
     fn app_bar_actions(&self) -> Vec<AppBarAction> {
@@ -257,14 +320,7 @@ impl LabelloApp {
 
     fn app_bar_icon_button(&mut self, ui: &mut egui::Ui, action: AppBarAction) {
         let enabled = action != AppBarAction::SignOut || !self.loading.logout;
-        let selected = match action {
-            AppBarAction::Statistics => self.navigation.statistics.open,
-            AppBarAction::Admin => self.view == AppView::Admin,
-            AppBarAction::Setup => self.view == AppView::Setup,
-            AppBarAction::Tutorial => self.work.show_tutorial,
-            AppBarAction::Settings => self.work.show_settings,
-            AppBarAction::SignOut => false,
-        };
+        let selected = self.app_bar_action_selected(action);
         let response = ui
             .add_enabled_ui(enabled, |ui| {
                 ui.add_sized(
@@ -310,7 +366,7 @@ impl LabelloApp {
             return;
         }
         let screen = ctx.content_rect();
-        let width = 304.0_f32.min((screen.width() - 48.0).max(240.0));
+        let width = 304.0_f32.min((screen.width() - 48.0).max(44.0));
         let max_height = (screen.height() - 48.0).max(180.0);
         let id = egui::Id::new("application-navigation-drawer");
         let area = egui::Modal::default_area(id)
@@ -333,10 +389,17 @@ impl LabelloApp {
             ui.set_width(width);
             ui.set_max_height(max_height);
             ui.horizontal(|ui| {
-                ui.heading("Navigation");
+                let compact = width < 240.0;
+                if compact { ui.spacing_mut().item_spacing.x = theme::SPACE_1; }
+                if compact {
+                    ui.add_sized([(width - 48.0).max(1.0), 44.0],
+                        egui::Label::new(RichText::new("Navigation").strong()).truncate());
+                } else { ui.heading("Navigation"); }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let button =
-                        ui.add(egui::Button::new(crate::glossary::CLOSE).min_size(egui::vec2(64.0, 44.0)));
+                        ui.add(egui::Button::new(if compact { "×" } else { crate::glossary::CLOSE })
+                            .min_size(egui::vec2(if compact { 44.0 } else { 64.0 }, 44.0)))
+                            .on_hover_text(crate::glossary::CLOSE);
                     button.widget_info(|| {
                         egui::WidgetInfo::labeled(
                             egui::WidgetType::Button,

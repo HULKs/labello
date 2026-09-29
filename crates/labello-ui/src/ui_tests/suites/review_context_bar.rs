@@ -81,8 +81,7 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
             let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
             let refocus = harness.get_by_label_contains("Refocus object").rect();
             assert!((fit.center().y - refocus.center().y).abs() < 1.0);
-            if width < 600.0 { assert!(fit.top() >= rect.bottom()); }
-            else { assert!((fit.center().y - rect.center().y).abs() < 8.0); }
+            assert!(fit.top() >= rect.bottom() || (fit.center().y - rect.center().y).abs() < 1.0);
             assert_control_inside(
                 &harness,
                 "Workflow",
@@ -224,10 +223,10 @@ fn review_bar_tracks_correction_final_loading_and_missing_preview_without_stale_
     let mut harness = loaded_review_harness(api);
     harness.set_size(egui::vec2(320.0, 320.0));
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Item 1 / 1");
+    assert_review_bar_paints(&harness, if harness.ctx.content_rect().width() < 600.0 { "1 / 1" } else { "Item 1 / 1" });
     harness.state_mut().start_correction();
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Item 1 / 1");
+    assert_review_bar_paints(&harness, if harness.ctx.content_rect().width() < 600.0 { "1 / 1" } else { "Item 1 / 1" });
     assert!(harness.get_by_label("Annotation canvas").rect().height() >= 44.0);
     harness.state_mut().discard_correction();
     harness.state_mut().work.review_index = 1;
@@ -286,7 +285,7 @@ fn review_bar_wraps_measured_type_and_phase_when_text_grows() {
         .size = 20.0;
     harness.ctx.set_global_style(style);
     harness.run_steps(4);
-    assert_review_bar_paints(&harness, "Item 1 / 1");
+    assert_review_bar_paints(&harness, if harness.ctx.content_rect().width() < 600.0 { "1 / 1" } else { "Item 1 / 1" });
     assert!(
         harness
             .get_by_label("Workspace context bar")
@@ -350,7 +349,7 @@ fn review_bar_uses_canonical_migration_context_for_excluded_discovered_and_final
                 observed.push("Final check");
                 break;
             }
-            assert_review_bar_paints(&harness, &match context.phase { crate::review_context::ReviewContextPhase::Object { number, total, .. } => format!("Item {number} / {total}"), _ => "Image overview".into() });
+            assert_review_bar_paints(&harness, &match context.phase { crate::review_context::ReviewContextPhase::Object { number, total, .. } => format!("{number} / {total}"), _ => "Image overview".into() });
             let ReviewContextPhase::Object { number, kind, .. } = context.phase else {
                 unreachable!()
             };
@@ -440,7 +439,7 @@ fn review_bar_distinguishes_duplicate_workflow_types_and_rejects_stale_task_data
         harness.state_mut().work.tasks.push(other);
         harness.set_size(egui::vec2(320.0, 568.0));
         harness.run_steps(3);
-        let expected = "Item 1 / 1";
+        let expected = "1 / 1";
         assert_review_bar_paints(&harness, expected);
         harness.state_mut().work.selected_task_id = Some(other_id);
         harness.run_steps(3);
@@ -477,7 +476,7 @@ fn review_summary_is_passive_and_separate_wide_inspector_toggles() {
         harness.get_by_label(if collapsed { "Collapse inspector panel" } else { "Expand inspector panel" }).click();
         harness.run_steps(3);
         assert_eq!(harness.state().work.inspector_panel_collapsed, collapsed);
-        assert_review_bar_paints(&harness, "Item 1 / 1");
+        assert_review_bar_paints(&harness, if harness.ctx.content_rect().width() < 600.0 { "1 / 1" } else { "Item 1 / 1" });
     }
 }
 
@@ -506,8 +505,7 @@ fn mobile_review_footer_stays_visible_across_review_kinds_and_phases() {
                 }
                 let indicator = harness.get_by_label_contains("Review details:").rect();
                 let fit = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Fit").rect();
-                if width < 600.0 { assert!(fit.top() >= indicator.bottom()); }
-                else { assert!((indicator.center().y - fit.center().y).abs() < 8.0); }
+                assert!(fit.top() >= indicator.bottom() || (indicator.center().y - fit.center().y).abs() < 1.0);
             }
         }
     }
@@ -677,7 +675,7 @@ fn review_submitter_profile_loads_through_the_assignment_request() {
 #[test]
 fn workspace_context_centers_content_between_edge_toggles() {
     use crate::inspector_presets::{self, InspectorPreset::*};
-    for preset in [Annotation, PrelabelBoxes, Review, ReviewCorrection, MigrationObject, MigrationFullImage, MigrationReview, MigrationCompanionAnnotation] {
+    for preset in [Annotation, OverlayAnnotation, PrelabelBoxes, Review, ReviewCorrection, OverlayReview, MigrationObject, MigrationSingleOptional, MigrationExclusion, MigrationPass, MigrationFullImage, MigrationReview, MigrationCompanionAnnotation, MigrationDiscovery, MigrationDiscoveryReview, MigrationAnnotatedEdit, MigrationGuideDeleted] {
         let app = inspector_presets::build(preset, &egui::Context::default());
         let mut h = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
         for (width, height) in [(1440.0, 1000.0), (1288.0, 820.0), (600.0, 800.0), (390.0, 844.0), (320.0, 320.0)] {
@@ -696,11 +694,11 @@ fn workspace_context_centers_content_between_edge_toggles() {
             let summary = h.get_by_label_contains(if h.state().view == AppView::Review { "Review details:" } else { "Annotation details:" }).rect();
             let first = h.get_by_label_contains(if h.state().view == AppView::Review { "Refocus object" } else { "Pan" }).rect();
             let controls = first.union(fit);
-            let compact = LayoutMode::for_width(width) == LayoutMode::Compact;
-            let group = if compact { controls } else { summary.union(controls) };
+            let stacked = summary.bottom() <= fit.top();
+            let group = if stacked { controls } else { summary.union(controls) };
             assert!((group.center().x - width * 0.5).abs() <= 1.0, "{preset:?} {width}: {group:?}");
             assert!(left.right() < group.left() && group.right() < right.left());
-            if compact {
+            if stacked {
                 assert!((summary.center().x - width * 0.5).abs() <= 1.0);
                 assert!(summary.bottom() <= fit.top());
             }
@@ -727,5 +725,91 @@ fn annotation_context_uses_review_hierarchy_and_retains_summary_during_loads() {
         h.state_mut().loading.image = true;
         h.run_steps(4);
         assert_eq!(h.get_by_label(&label).rect(), rect);
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn mobile_context_uses_one_row_when_compact_progress_and_controls_fit() {
+    use crate::inspector_presets::{self, InspectorPreset::*};
+    for preset in [Annotation, PrelabelBoxes, Review, MigrationObject, MigrationReview, MigrationCompanionAnnotation] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut h = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
+        h.run_steps(4);
+        let summary = h.get_by_label_contains(if h.state().view == AppView::Review { "Review details:" } else { "Annotation details:" }).rect();
+        let fit = h.get_by_label("Fit").rect();
+        let bar = h.get_by_label("Workspace context bar").rect();
+        assert!(bar.height() <= 44.0, "{preset:?} wasted a row: {bar:?}");
+        assert!((summary.center().y - fit.center().y).abs() < 1.0, "{preset:?}");
+        assert!(summary.right() < fit.left());
+    }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn mobile_context_reflows_at_measured_boundary_and_preserves_focus_and_identity() {
+    let app = crate::inspector_presets::build(crate::inspector_presets::InspectorPreset::MigrationObject, &egui::Context::default());
+    let mut h = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
+    h.run_steps(4);
+    let identity = h.get_by_label_contains("Annotation details:").accesskit_node().label().unwrap().to_owned();
+    h.get_by_label("Fit").focus();
+    let mut saw_stacked = false;
+    let mut saw_inline = false;
+    for width in (320..=420).step_by(2) {
+        h.set_size(egui::vec2(width as f32, 568.0));
+        h.run_steps(3);
+        let summary = h.get_by_label(&identity).rect();
+        let fit = h.get_by_label("Fit").rect();
+        let pan = h.get_by_label("Pan").rect();
+        let refocus = h.get_by_label_contains("Refocus object").rect();
+        let bar = h.get_by_label("Workspace context bar").rect();
+        let stacked = summary.bottom() <= pan.top();
+        saw_stacked |= stacked;
+        saw_inline |= !stacked;
+        assert!(h.get_by_label("Fit").is_focused());
+        for control in [pan, refocus, fit, h.get_by_label("Workflow").rect(), h.get_by_label("Inspector").rect()] {
+            assert!(bar.contains_rect(control));
+            assert!(control.width() >= 44.0 && control.height() >= 44.0);
+            assert!(!summary.intersects(control));
+        }
+        h.run_steps(3);
+        assert_eq!(h.get_by_label("Workspace context bar").rect(), bar);
+    }
+    assert!(saw_stacked && saw_inline);
+    let mut style = (*h.ctx.global_style()).clone();
+    for font in style.text_styles.values_mut() { font.size *= 1.5; }
+    h.ctx.set_global_style(style);
+    h.set_size(egui::vec2(390.0, 844.0));
+    h.run_steps(4);
+    let summary = h.get_by_label(&identity).rect();
+    assert!(h.get_by_label("Workspace context bar").rect().contains_rect(summary));
+    assert!(!summary.intersects(h.get_by_label("Fit").rect()));
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn mobile_zoom_preserves_header_and_context_targets_without_overlap() {
+    use crate::inspector_presets::{self, InspectorPreset::*};
+    for preset in [Annotation, Review, MigrationObject, MigrationFullImage] {
+        let app = inspector_presets::build(preset, &egui::Context::default());
+        let mut h = Harness::builder().with_size(egui::vec2(195.0, 422.0)).build_eframe(|_| app);
+        h.run_steps(4);
+        let header = h.get_by_label("Application bar").rect();
+        assert!(header.contains_rect(h.get_by_label("Dataset Demo Dataset").rect()));
+        let context = h.get_by_label("Workspace context bar").rect();
+        let labels = ["Open navigation", "Connection status:", "Labelling presence:", "Workflow", "Inspector", "Fit"];
+        let rects: Vec<_> = labels.iter().map(|name| h.query_all_by_role(egui::accesskit::Role::Button)
+            .find(|node| node.accesskit_node().label().is_some_and(|label| label.starts_with(name))).unwrap().rect()).collect();
+        for (i, rect) in rects.iter().enumerate() {
+            assert!(header.union(context).contains_rect(*rect), "{preset:?} {} {rect:?}", labels[i]);
+            assert!(rect.width() >= 44.0 && rect.height() >= 44.0);
+            for other in &rects[i+1..] {
+                let overlap = rect.intersect(*other);
+                assert!(overlap.width() <= 0.0 || overlap.height() <= 0.0, "{preset:?}: {rect:?} {other:?}");
+            }
+        }
+        assert!(h.query_by_label_contains("streak").is_none());
+        click_accesskit_button(&mut h, "Open navigation");
+        assert!(h.query_all_by_label_contains("streak").next().is_some());
     }
 }

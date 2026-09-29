@@ -51,6 +51,22 @@ qualify a term; compact synonyms must be listed in the glossary.
   app bar, replace all of them with one modal left-drawer trigger. The drawer
   owns its dismiss action, closes after navigation, and restores focus to its
   trigger when dismissed without navigation.
+  In the collapsed header, keep the dataset pill in the space left after the
+  navigation trigger, streak, connection dot, and workspace presence. Bound avatar
+  overflow so it cannot consume the dataset's share; let the pill expand and retain
+  its full name in a tooltip and accessible label. At very narrow effective widths
+  such as 200% mobile browser zoom, move the streak into the drawer to preserve
+  presence, connection, and navigation targets. Drawer destinations retain their
+  wide-bar order. Utilities read Statistics, Settings, contextual Tutorial, Admin,
+  then Setup, subject to access. Account identity and Sign out come last. Use aligned
+  icon/label rows with shared selection and focus states.
+- The second bar measures progress and its controls before stacking. Use a single
+  control row when the summary fits between the edge panel toggles and canvas
+  controls. Compact item progress uses `3 / 12`; complete item/phase wording stays
+  in the accessible description and tooltip. Keep workflow/type/class context and
+  review attribution in the summary. Stack only when progress, attribution, or
+  enlarged text needs more room; retain every control and its 44-point target.
+  If the control group cannot fit between the panel toggles, put it beneath them.
 - Render each action once per layout. Keep primary work actions visible and move
   secondary actions to overflow when space is limited.
 - Wide work views use workflow, canvas, and inspector panes; Medium and Compact
@@ -454,7 +470,7 @@ dot immediately before the navigation action icons. The signed-in account has no
 separate username label; qualifying active leases include it in presence.
 Navigation icons run right to left: Logout, Home/Setup, authorized Admin,
 shortcut settings, and statistics. Keep the dataset pill centered when space
-permits; on narrow screens it yields to presence. Preserve one header row,
+permits; with collapsed navigation it uses the remaining space beside bounded presence. Preserve one header row,
 primary action targets, canvas space and keyboard focus through resizing.
 
 Avatars are 28 points inside a single focusable target at least 44 points high

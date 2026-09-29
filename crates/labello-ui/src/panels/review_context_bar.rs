@@ -86,10 +86,33 @@ struct WorkspaceSummaryText {
     width: f32,
     height: f32,
     availability_loading: bool,
+    stacked: bool,
+    controls_below_toggles: bool,
 }
 
 impl WorkspaceSummaryText {
-    fn measure(ctx: &egui::Context, content: &WorkspaceSummary, width: f32, availability_loading: bool) -> Self {
+    fn progress(content: &WorkspaceSummary, compact: bool) -> String {
+        if compact {
+            if let Some(progress) = content.progress.strip_prefix("Item ") {
+                return progress.to_owned();
+            }
+            if let Some(progress) = content.progress.strip_prefix("Object ") {
+                return progress.replace(" of ", " / ");
+            }
+        }
+        content.progress.clone()
+    }
+
+    fn minimum_width(ctx: &egui::Context, content: &WorkspaceSummary, compact: bool, loading: bool) -> f32 {
+        let progress = Self::progress(content, compact);
+        let font = egui::TextStyle::Button.resolve(&ctx.global_style());
+        let width = ctx.fonts_mut(|fonts| fonts.layout_no_wrap(progress, font, theme::TEXT).size().x);
+        // Keep progress legible and a useful part of workflow identity beside its avatar.
+        width.max(64.0) + 8.0 + if content.show_avatar { 36.0 } else { 0.0 }
+            + if loading { 24.0 } else { 0.0 }
+    }
+
+    fn measure(ctx: &egui::Context, content: &WorkspaceSummary, width: f32, availability_loading: bool, compact: bool) -> Self {
         let width = width.floor().max(44.0);
         let inset = if content.show_avatar { 36.0 } else { 0.0 };
         let inner_width = (width - inset - 8.0).max(1.0);
@@ -109,7 +132,7 @@ impl WorkspaceSummaryText {
             }
             ctx.fonts_mut(|fonts| fonts.layout_job(job))
         };
-        let mut lines = vec![layout(content.progress.clone(), true)];
+        let mut lines = vec![layout(Self::progress(content, compact), true)];
         if let Some((kind, phase)) = &content.identity_and_type {
             // Full identity remains available through the tooltip and inspector.
             lines.push(layout(format!("{phase} · {kind}"), false));
@@ -124,6 +147,8 @@ impl WorkspaceSummaryText {
             width,
             height,
             availability_loading,
+            stacked: false,
+            controls_below_toggles: false,
         }
     }
 }
@@ -139,18 +164,24 @@ impl LabelloApp {
     }
 
     fn context_summary_text(&self, ctx: &egui::Context, layout: LayoutMode, available: f32) -> WorkspaceSummaryText {
-        let spacing = ctx.global_style().spacing.item_spacing.x;
-        let width = if layout == LayoutMode::Compact {
-            available
-        } else {
-            (available - 2.0 * (44.0 + spacing) - self.context_controls_width(spacing) - spacing).min(380.0)
-        };
-        WorkspaceSummaryText::measure(ctx, &self.displayed_workspace_summary(), width, self.bar_availability_loading())
+        let compact = layout == LayoutMode::Compact;
+        let spacing = if compact { theme::SPACE_1 } else { ctx.global_style().spacing.item_spacing.x };
+        let content = self.displayed_workspace_summary();
+        let loading = self.bar_availability_loading();
+        let inline_width = available - 2.0 * (44.0 + spacing) - self.context_controls_width(spacing) - spacing;
+        let stacked = inline_width < WorkspaceSummaryText::minimum_width(ctx, &content, compact, loading);
+        let width = if stacked { available } else { inline_width.min(380.0) };
+        let mut text = WorkspaceSummaryText::measure(ctx, &content, width, loading, compact);
+        text.stacked = stacked;
+        text.controls_below_toggles = available < 2.0 * (44.0 + spacing) + self.context_controls_width(spacing);
+        text
     }
 
     pub(crate) fn workspace_summary_height(&self, ctx: &egui::Context, layout: LayoutMode, viewport_width: f32) -> f32 {
-        let text = self.context_summary_text(ctx, layout, viewport_width - 28.0);
-        if layout == LayoutMode::Compact { text.height + 46.0 } else { text.height.max(44.0) + 14.0 }
+        let text = self.context_summary_text(ctx, layout, viewport_width - 30.0);
+        let height = if text.stacked { text.height + 46.0 } else { text.height.max(44.0) };
+        height + if text.controls_below_toggles { 44.0 + theme::SPACE_1 } else { 0.0 }
+            + if layout == LayoutMode::Compact { 0.0 } else { 14.0 }
     }
 
     fn shared_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
@@ -160,23 +191,26 @@ impl LabelloApp {
         if !valid || self.work.drawer == Some(Drawer::Workflow) {
             self.work.review_details_focus_return = None;
         }
-        let compact = layout == LayoutMode::Compact;
-        let height = if compact { text.height + 46.0 } else { text.height.max(44.0) };
+        if layout == LayoutMode::Compact { ui.spacing_mut().item_spacing.x = theme::SPACE_1; }
+        let stacked = text.stacked;
+        let height = if stacked { text.height + 46.0 } else { text.height.max(44.0) }
+            + if text.controls_below_toggles { 44.0 + theme::SPACE_1 } else { 0.0 };
         let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
         let spacing = ui.spacing().item_spacing.x;
         let controls_width = self.context_controls_width(spacing);
-        let row_y = if compact { rect.bottom() - 22.0 } else { rect.center().y };
-        let group_width = if compact { controls_width } else { text.width + spacing + controls_width };
+        let row_y = if stacked { rect.bottom() - 22.0 } else { rect.center().y };
+        let group_width = if stacked { controls_width } else { text.width + spacing + controls_width };
         let group_left = rect.center().x - group_width * 0.5;
         let summary_rect = egui::Rect::from_min_size(
-            egui::pos2(if compact { rect.center().x - text.width * 0.5 } else { group_left },
-                if compact { rect.top() } else { row_y - text.height * 0.5 }),
+            egui::pos2(if stacked { rect.center().x - text.width * 0.5 } else { group_left },
+                if stacked { rect.top() } else { row_y - text.height * 0.5 }),
             egui::vec2(text.width, text.height));
         let controls_rect = egui::Rect::from_min_size(
-            egui::pos2(if compact { group_left } else { group_left + text.width + spacing }, row_y - 22.0),
+            egui::pos2(if stacked { group_left } else { group_left + text.width + spacing }, row_y - 22.0),
             egui::vec2(controls_width, 44.0));
-        let left = egui::Rect::from_min_size(egui::pos2(rect.left(), row_y - 22.0), egui::vec2(44.0, 44.0));
-        let right = egui::Rect::from_min_size(egui::pos2(rect.right() - 44.0, row_y - 22.0), egui::vec2(44.0, 44.0));
+        let toggle_y = if text.controls_below_toggles { row_y - 44.0 - theme::SPACE_1 } else { row_y };
+        let left = egui::Rect::from_min_size(egui::pos2(rect.left(), toggle_y - 22.0), egui::vec2(44.0, 44.0));
+        let right = egui::Rect::from_min_size(egui::pos2(rect.right() - 44.0, toggle_y - 22.0), egui::vec2(44.0, 44.0));
         // Stable child IDs preserve keyboard focus and retained loading geometry.
         ui.scope_builder(egui::UiBuilder::new().id_salt("workflow-toggle").max_rect(left), |ui| {
             if layout == LayoutMode::Wide { self.workflow_panel_toggle(ui); }

@@ -25,6 +25,9 @@ to have entries, and reject copied catalog labels and retired terms in productio
 UI source. Add or update the entry before introducing a new product concept or
 action. Contextual explanatory prose stays with the rendering owner.
 
+Compact item progress may display `3 / 12` for `Item 3 / 12` or prelabel
+`Object 3 of 12`. Full phase and progress wording remains accessible.
+
 ## Names and meanings
 
 <!-- glossary:start -->

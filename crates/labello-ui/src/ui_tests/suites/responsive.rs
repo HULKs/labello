@@ -783,7 +783,7 @@ fn review_primary_decisions_stay_visible_at_supported_viewports() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.run_steps(4);
-        assert_review_bar_paints(&harness, "Item 1 / 1");
+        assert_review_bar_paints(&harness, if width < 600.0 { "1 / 1" } else { "Item 1 / 1" });
         assert_control_inside(&harness, "Fit", egui::accesskit::Role::Button, width, height);
         let context = harness.get_by_label("Workspace context bar").rect();
         let refocus = harness

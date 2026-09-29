@@ -347,3 +347,54 @@ fn connection_dot_and_refresh_are_available_in_every_authenticated_view() {
         }
     }
 }
+
+#[test]
+fn mobile_bar_keeps_dataset_beside_presence_and_uses_free_width() {
+    let mut h = loaded_work_harness(Rc::new(SpyApi::new()));
+    h.state_mut().runtime.presence.value = Some(presence_sample());
+    let name = "Training images from the walking robot";
+    h.state_mut().datasets.metadata.as_mut().unwrap().name = name.into();
+    let mut previous_width = 0.0;
+    for width in [320.0, 390.0, 600.0] {
+        h.set_size(egui::vec2(width, 844.0));
+        h.run_steps(4);
+        let dataset = h.get_by_label(&format!("Dataset {name}")).rect();
+        let presence = h.get_by_label_contains("Labelling presence:").rect();
+        let dot = h.get_by_label_contains("Connection status:").rect();
+        let trigger = h.get_by_label("Open navigation").rect();
+        assert!(dataset.left() >= 14.0 && dataset.right() < presence.left());
+        assert!(presence.right() <= dot.left() && dot.right() <= trigger.left());
+        assert!(dataset.width() > previous_width, "dataset did not use the extra space at {width}");
+        previous_width = dataset.width();
+    }
+    assert!(previous_width > 280.0, "dataset is still capped at a fixed width");
+}
+
+#[test]
+fn collapsed_header_bounds_presence_in_every_state_and_keeps_dataset_context() {
+    let mut h = loaded_work_harness(Rc::new(SpyApi::new()));
+    for view in [AppView::Annotate, AppView::Review, AppView::Setup, AppView::Admin, AppView::Inspect] {
+        h.state_mut().view = view;
+        for users in [0, 1, 30] {
+            h.state_mut().runtime.presence.value = Some(labello_client::ServerPresence {
+                users: (0..users).map(|i| labello_client::PresentUser {
+                    user_id: format!("person-{i}").into(), github_login: None, github_user_id: None, datasets: vec![],
+                }).collect(),
+            });
+            for failures in [0, 3] {
+                h.state_mut().runtime.presence.failures = failures;
+                h.set_size(egui::vec2(320.0, 568.0));
+                h.run_steps(4);
+                let dataset = h.get_by_label("Dataset Demo Dataset").rect();
+                assert!(dataset.width() >= 44.0 && dataset.left() >= 14.0, "{view:?} {users} {failures}: {dataset:?}");
+                for prefix in ["Connection status:", "Open navigation", "Labelling presence:"] {
+                    if let Some(node) = h.query_by_label_contains(prefix) {
+                        let rect = node.rect();
+                        assert!(rect.width() >= 44.0 && rect.height() >= 44.0);
+                        assert!(rect.left() > dataset.right() && rect.right() <= 306.0);
+                    }
+                }
+            }
+        }
+    }
+}
