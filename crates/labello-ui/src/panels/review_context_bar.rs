@@ -182,7 +182,7 @@ impl LabelloApp {
         let text = self.context_summary_text(ctx, layout, viewport_width - 30.0);
         let height = if text.stacked { text.height + 46.0 } else { text.height.max(44.0) };
         height + if text.controls_below_toggles { 44.0 + theme::SPACE_1 } else { 0.0 }
-            + if layout == LayoutMode::Compact { 0.0 } else { 14.0 }
+            + 14.0
     }
 
     fn shared_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {

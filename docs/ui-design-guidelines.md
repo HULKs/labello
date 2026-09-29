@@ -61,7 +61,8 @@ qualify a term; compact synonyms must be listed in the glossary.
   then Setup, subject to access. Account identity and Sign out come last. Use aligned
   icon/label rows with shared selection and focus states. Inspect uses stacked
   image frames with landscape details in both the bar and drawer.
-- The second bar measures progress and its controls before stacking. Use a single
+- The second bar measures progress and its controls before stacking. Keep six-point
+  vertical frame padding at every width, including stacked compact bars. Use one
   control row when the summary fits between the edge panel toggles and canvas
   controls. Compact item progress uses `3 / 12`; complete item/phase wording stays
   in the accessible description and tooltip. The task-type label uses `Boxes`
@@ -70,6 +71,8 @@ qualify a term; compact synonyms must be listed in the glossary.
   review attribution in the summary. Stack only when progress, attribution, or
   enlarged text needs more room; retain every control and its 44-point target.
   If the control group cannot fit between the panel toggles, put it beneath them.
+  On short compact workspaces, use six-point outer canvas gutters vertically to
+  retain image space; keep the migration canvas's inner scan gutter fixed.
 - Render each action once per layout. Keep primary work actions visible and move
   secondary actions to overflow when space is limited.
 - Wide work views use workflow, canvas, and inspector panes; Medium and Compact

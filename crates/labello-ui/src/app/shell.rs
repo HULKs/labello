@@ -87,7 +87,7 @@ impl eframe::App for LabelloApp {
                 .frame(
                     theme::top_bar_frame()
                         .fill(theme::PANEL)
-                        .inner_margin(egui::Margin::symmetric(14, if layout == LayoutMode::Compact { 0 } else { 6 })),
+                        .inner_margin(egui::Margin::symmetric(14, 6)),
                 )
                 .show(ui, |ui| self.workspace_context_bar(ui, layout));
         }
@@ -176,10 +176,14 @@ impl eframe::App for LabelloApp {
                 ui.skip_ahead_auto_ids(1);
             }
         }
+        // Recover canvas space beside the padded bars on short mobile workspaces.
+        let canvas_vertical_margin = if layout == LayoutMode::Compact && Self::short_viewport(viewport) {
+            6.0
+        } else { theme::SPACE_2 };
         let central_frame = if self.work_view() {
             theme::central_frame()
                 .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin::same(theme::SPACE_2 as i8))
+                .inner_margin(egui::Margin::symmetric(theme::SPACE_2 as i8, canvas_vertical_margin as i8))
         } else {
             theme::central_frame()
         };
@@ -189,7 +193,7 @@ impl eframe::App for LabelloApp {
                 let mut work_rect = ui.available_rect_before_wrap();
                 if let Some(action_height) = compact_action_height {
                     let action_top = ui.ctx().content_rect().bottom() - action_height;
-                    work_rect.max.y = work_rect.max.y.min(action_top - theme::SPACE_2);
+                    work_rect.max.y = work_rect.max.y.min(action_top - canvas_vertical_margin);
                 }
                 if let Some(inspector_left) = inspector_left {
                     work_rect.max.x = work_rect.max.x.min(inspector_left);

@@ -707,7 +707,13 @@ fn workspace_context_centers_content_between_edge_toggles() {
                 assert!(summary.bottom() <= fit.top());
             }
             assert!(h.get_by_label("Workspace context bar").rect().contains_rect(summary));
-            assert!(h.get_by_label("Annotation canvas").rect().height() >= 44.0);
+            let bar = h.get_by_label("Workspace context bar").rect();
+            let panel = egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("workspace_context")).unwrap().outer_rect;
+            // Six points of frame padding plus its one-point border on each side.
+            assert!((bar.top() - panel.top() - 7.0).abs() <= 0.5, "{preset:?} {width}: top padding");
+            assert!((panel.bottom() - bar.bottom() - 7.0).abs() <= 0.5, "{preset:?} {width}: bottom padding");
+            assert!((panel.height() - h.state().workspace_context_height(&h.ctx, LayoutMode::for_width(width), egui::vec2(width, height))).abs() <= 0.5);
+            assert!(h.get_by_label("Annotation canvas").rect().height() >= 44.0, "{preset:?} {width}x{height}: {:?}", h.get_by_label("Annotation canvas").rect());
         }
     }
 }
