@@ -930,11 +930,10 @@ fn stats_geometry_keeps_header_actions_and_equal_cards_in_view() {
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
         harness.step();
-        assert_label_inside(&harness, "Live Statistics", width, height);
         assert_control_inside(
             &harness,
-            "Refresh now",
-            egui::accesskit::Role::Button,
+            "Statistics for",
+            egui::accesskit::Role::ComboBox,
             width,
             height,
         );
@@ -1335,10 +1334,10 @@ fn stats_and_responsive_layouts_render_without_losing_primary_actions() {
     assert_eq!(harness.state().view, AppView::Annotate);
     assert_eq!(api.counts().release_assignment, 0);
     harness.step();
-    assert!(harness.query_by_label("Live Statistics").is_some());
-    click(&mut harness, "Refresh now");
-    step_until(&mut harness, 8, |app| !app.loading.stats);
-    assert!(api.counts().dataset_stats >= 1);
+    assert!(harness.query_by_label("Live Statistics").is_none());
+    assert!(harness.query_by_label("Refresh now").is_none());
+    assert!(harness.query_by_label_contains("Updated just now").is_none());
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_some());
 
     harness.set_size(egui::vec2(390.0, 760.0));
     harness.step();

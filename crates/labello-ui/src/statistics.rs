@@ -87,28 +87,35 @@ impl LabelloApp {
         let response = theme::modal(ctx, id).area(area).show(ctx, |ui| {
             ui.set_width(width);
             ui.set_max_height(max_height);
+            ui.spacing_mut().interact_size.y = 44.0;
+            let focus_close = std::mem::take(&mut self.navigation.statistics.focus_close);
             let mut close_button = |ui: &mut egui::Ui| {
                 let button =
                     ui.add(egui::Button::new("Close statistics").min_size(egui::vec2(120.0, 44.0)));
-                if std::mem::take(&mut self.navigation.statistics.focus_close) {
+                if focus_close {
                     button.request_focus();
                 }
                 close = button.clicked();
             };
-            let header = if width < 260.0 {
-                ui.vertical(|ui| {
+            let header = ui.vertical(|ui| {
+                if width < 260.0 {
                     ui.heading(crate::glossary::STATISTICS);
                     close_button(ui);
-                })
-            } else {
-                ui.horizontal(|ui| {
-                    ui.heading(crate::glossary::STATISTICS);
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        close_button,
-                    );
-                })
-            };
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.heading(crate::glossary::STATISTICS);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            close_button(ui);
+                            if width >= 520.0 {
+                                self.statistics_scope_selector(ui);
+                            }
+                        });
+                    });
+                }
+                if width < 520.0 {
+                    self.statistics_scope_selector(ui);
+                }
+            });
             egui::ScrollArea::vertical()
                 .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
                 .id_salt("statistics-overlay-scroll")
@@ -151,7 +158,9 @@ impl LabelloApp {
     pub(crate) fn stats_view(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         ui.spacing_mut().interact_size.y = 44.0;
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-        self.statistics_scope_selector(ui);
+        if !self.navigation.statistics.open {
+            self.statistics_scope_selector(ui);
+        }
         let alternate = self.datasets.overview.scope != StatisticsScope::Workspace;
         let (completed, loading, error) = if alternate {
             (
@@ -168,24 +177,6 @@ impl LabelloApp {
         };
         let has_data = completed.is_some();
         let initial_loading = loading && !has_data;
-        ui.horizontal_wrapped(|ui| {
-            if layout != LayoutMode::Compact || !self.navigation.statistics.open {
-                ui.label(
-                    RichText::new("Live Statistics")
-                        .size(theme::PAGE_TITLE_SIZE)
-                        .strong(),
-                );
-            }
-            if has_data
-                && theme::quiet_button(ui, !loading, egui::Button::new("Refresh now"))
-                    .on_hover_text(
-                        "Refresh statistics immediately. They also refresh automatically.",
-                    )
-                    .clicked()
-            {
-                self.request_stats();
-            }
-        });
         if initial_loading {
             theme::card_frame().show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
@@ -219,16 +210,6 @@ impl LabelloApp {
             }
             return;
         }
-        ui.horizontal_wrapped(|ui| {
-            if let Some(completed) = completed {
-                let seconds = completed.elapsed().as_secs();
-                ui.small(match seconds {
-                    0 => "Updated just now".to_string(),
-                    1 => "Updated 1 second ago".to_string(),
-                    _ => format!("Updated {seconds} seconds ago"),
-                });
-            }
-        });
         if let Some(error) = &error {
             theme::inline_message(
                 ui,

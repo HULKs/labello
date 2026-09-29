@@ -41,7 +41,6 @@ impl LabelloApp {
                 .map(|row| row.name.clone())
                 .unwrap_or_else(|| id.to_string()),
         };
-        ui.label("Statistics for");
         egui::ComboBox::from_id_salt("statistics-scope")
             .selected_text(label)
             .width(ui.available_width().min(400.0))

@@ -240,7 +240,6 @@ fn statistics_overlay_preserves_annotation_and_review_work_and_restores_focus() 
                 harness.step();
                 assert!(
                     harness.get_by_label("Close statistics").is_focused()
-                        || harness.get_by_label("Refresh now").is_focused()
                         || harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").is_focused()
                 );
             }
@@ -1119,7 +1118,7 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
         });
         harness.run_steps(4);
         for (before, after) in [
-            ("Contributor leaderboard", "Highest score"),
+            ("Leaderboard", "Highest score"),
             ("Highest score", "Rankings"),
             ("Rankings", "Daily activity"),
             ("Daily activity", "Dataset totals"),
@@ -1128,14 +1127,28 @@ fn statistics_score_chart_leads_and_mobile_controls_are_reachable() {
             ("Per Class", "Throughput"),
         ] {
             assert!(
-                harness.get_by_label(before).rect().bottom()
+                harness.get_by_role_and_label(egui::accesskit::Role::Label, before).rect().bottom()
                     < harness.get_by_label(after).rect().top(),
                 "{before} must precede {after} at {size:?}"
             );
         }
+        let heading = harness.get_by_role_and_label(egui::accesskit::Role::Label, "Leaderboard").rect();
+        let scope = harness.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Statistics for").rect();
+        let close = harness.get_by_label("Close statistics").rect();
+        assert!(scope.bottom() <= heading.top(), "dataset scope belongs in the fixed header at {size:?}");
+        if size.x >= 1288.0 {
+            let history = harness.get_by_label("History graph").rect();
+            let period = harness.get_by_label("Period").rect();
+            assert!((scope.center().y - close.center().y).abs() <= 1.0);
+            assert!((heading.center().y - history.center().y).abs() <= 1.0);
+            assert!((heading.center().y - period.center().y).abs() <= 1.0);
+            assert!(heading.right() < history.left() && history.right() < period.left());
+            assert!((period.right() - close.right()).abs() < 40.0,
+                "period selector belongs at the right edge");
+        }
         assert!(harness.query_by_label("Most labeled").is_none(), "secondary podiums start collapsed");
         assert!(harness.get_by_label("Highest score").rect().top()
-            - harness.get_by_label("Contributor leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
+            - harness.get_by_role_and_label(egui::accesskit::Role::Label, "Leaderboard").rect().top() < if size.x < 260.0 { 320.0 } else { 230.0 },
             "score chart must lead without expanding a disclosure at {size:?}");
         let score_bar = harness.get_by_label("Score: rank 1, Taylor, 1627").rect();
         assert!(score_bar.width() > (size.x.min(1050.0) - 100.0) / 4.0,
