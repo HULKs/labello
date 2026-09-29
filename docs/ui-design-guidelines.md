@@ -444,11 +444,12 @@ notices remain independent.
 
 ## Current workflow marker
 
-The workflow selector reserves a fixed 20-point marker slot on every card. An
-available unselected workflow leaves it empty; the committed selected workflow
-has a small bright dot. A reason icon occupies the slot when restricted,
-checking, or unable to check. When selected, the dot moves to the icon's upper
-right. Pending candidates, hover and keyboard focus never acquire the dot.
+The committed selected workflow has a small bright dot. A reason icon indicates
+restricted, checking, or unable-to-check states. Annotation activities center
+these cues together below the label; review cards reserve a 20-point marker slot
+and place the selected dot at the reason icon's upper right. Available unselected
+workflows have no status cue. Pending candidates, hover and keyboard focus never
+acquire the dot.
 
 Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
@@ -519,15 +520,19 @@ non-intersection and scroll reachability as well as viewport containment.
 The annotation workflow panel and drawer use one bordered group per class. The
 class name is centered above equal-width activity columns. Center each type icon
 and activity label independently of selection and availability cues. Place those
-cues centered below the rendered label with a small, consistent gap, rather than
-anchoring them to the bottom of the tile. Give the type icon room above it; status
-cues must never shift its horizontal alignment. Order configured
+cues centered below the rendered label with a small, consistent gap. Measure the
+tallest label in each row and use equal tile heights with 12-point top padding
+and 8-point bottom padding around the 18-point status row. Reserve that status
+row even when empty so selection and availability changes do not shift controls.
+Status cues must never shift the type icon's horizontal alignment. Order configured
 activities left to right: bounding-box annotation, migration, adding missing
 objects, then direct skeleton annotation when applicable. Omit unconfigured
 activities: one activity fills the card, two share it equally, and three use
-thirds. Use one compact tile per activity, with a visible option count when it contains
-multiple workflows. Such tiles open a bounded, scrollable chooser with full
-workflow names and individual availability explanations. Single-workflow tiles
+thirds. Use one compact tile per activity. A small downward chevron indicates
+multiple workflows; keep the count in the chooser, tooltip, and accessible
+description instead of adding another line to the tile. Such tiles open a
+bounded, scrollable chooser with full workflow names and individual availability
+explanations. Single-workflow tiles
 act directly. Explain the blocked missing-object phase visibly. Compact labels retain full activity and
 workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
 remain visible with an explanation. Do not present migration as active on images

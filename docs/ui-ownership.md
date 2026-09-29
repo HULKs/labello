@@ -553,8 +553,10 @@ In Annotate, `panels/task_selector.rs` groups enabled one-class tasks under thei
 class identity. Each class is one card with its name above equal-width activity
 columns: bounding-box annotation, migration, missing objects, and direct skeleton
 annotation when applicable. Unconfigured activities do not take up columns;
-multiple tasks within one activity use a single tile with an option count. Its
-bounded chooser wraps full task names, marks the selected task, explains disabled
+multiple tasks within one activity use a single tile with a dropdown chevron.
+The count appears in its tooltip, accessible description, and chooser. Row height
+is measured from the activity labels with a stable status slot and shared padding.
+The bounded chooser wraps full task names, marks the selected task, explains disabled
 options, and restores focus on dismissal. Single-task activities act directly.
 The card shows a visible missing-object phase hint when that activity is blocked. Review keeps its task selector.
 The annotation panel has bounded width; task names wrap or truncate without

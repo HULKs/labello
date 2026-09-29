@@ -3061,20 +3061,21 @@ fn class_workflow_configured_activities_share_width_evenly() {
     use crate::panels::WorkflowActivity;
     for (width, height) in [(320.0, 568.0), (390.0, 844.0), (1440.0, 1000.0)] {
         let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
-        let selected = app.work.selected_task_id.clone().unwrap();
-        app.work.tasks.retain(|task| task.task_id == selected || task.annotation_type == AnnotationType::BoundingBox);
         app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
         let migration = app.selected_workflow().unwrap();
+        let skeleton = app.workflow_choices().into_iter()
+            .find(|choice| choice.task_id == TaskId::from("skeleton:person_refinement")).unwrap();
         let labels = [
             "Person: Bounding box annotation · Choose workflow".to_string(),
             app.workflow_entry_label(&migration, Some(WorkflowActivity::Migration)),
             app.workflow_entry_label(&migration, Some(WorkflowActivity::MissingObjects)),
+            app.workflow_entry_label(&skeleton, Some(WorkflowActivity::Skeleton)),
         ];
         let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
         harness.run();
         let rects = labels.map(|label| harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect());
         let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person").rect();
-        assert!((heading.center().x - (rects[0].left() + rects[2].right()) / 2.0).abs() <= 1.0);
+        assert!((heading.center().x - (rects[0].left() + rects[3].right()) / 2.0).abs() <= 1.0);
         for label in ["bounding box annotation type", "skeleton annotation type"] {
             for icon in harness.query_all_by_label(label) {
                 let icon = icon.rect();
@@ -3090,8 +3091,53 @@ fn class_workflow_configured_activities_share_width_evenly() {
             assert_eq!(pair[0].height(), pair[1].height());
             assert!(pair[0].right() < pair[1].left(), "{rects:?}");
         }
-        assert!(rects[0].left() >= 0.0 && rects[2].right() <= width, "{rects:?}");
+        assert!(rects[0].height() >= 44.0 && rects[0].height() <= 94.0, "{rects:?}");
+        assert!(rects[0].left() >= 0.0 && rects[3].right() <= width, "{rects:?}");
     }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn class_workflow_selected_reason_and_chooser_cues_fit_four_columns() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    use labello_domain::WorkflowUnavailableReason;
+
+    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
+    let boxes = app.workflow_choices().into_iter().find(|choice| choice.annotation_type == AnnotationType::BoundingBox).unwrap();
+    app.work.selected_task_id = Some(boxes.task_id.clone());
+    app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+    app.work.availability.kind = Some(AssignmentKind::Annotation);
+    app.work.availability.resolved = true;
+    app.work.availability.tasks.insert(boxes.task_id.clone(), false);
+    app.work.availability.reasons.insert(boxes.task_id, WorkflowUnavailableReason::BalanceLimit);
+    app.work.drawer = Some(Drawer::Workflow);
+    let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0)).build_eframe(|_| app);
+    harness.run();
+
+    let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow").rect();
+    let mut dots = Vec::new();
+    let mut segments = Vec::new();
+    fn collect(shape: &egui::Shape, tile: egui::Rect, dots: &mut Vec<egui::Pos2>, segments: &mut Vec<[egui::Pos2; 2]>) {
+        match shape {
+            egui::Shape::Circle(circle) if circle.radius == 4.0 && tile.contains(circle.center) => dots.push(circle.center),
+            egui::Shape::LineSegment { points, .. } if points.iter().all(|point| tile.contains(*point)) => segments.push(*points),
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes { collect(shape, tile, dots, segments); }
+            }
+            _ => {}
+        }
+    }
+    for shape in &harness.output().shapes {
+        collect(&shape.shape, tile, &mut dots, &mut segments);
+    }
+    assert_eq!(dots.len(), 1, "selected status dot must remain visible in {tile:?}");
+    let dot = dots[0];
+    let chevron: Vec<_> = segments.into_iter().filter(|points| {
+        points.iter().all(|point| point.x > tile.center().x + 10.0 && (point.y - dot.y).abs() <= 3.0)
+    }).collect();
+    assert_eq!(chevron.len(), 2, "chooser chevron must fit beside selected and reason cues in {tile:?}");
+    assert!(dot.x > tile.left() + 4.0 && chevron.iter().flatten().all(|point| point.x < tile.right() - 4.0));
+    assert!(tile.height() <= 94.0, "four-activity row should fit its measured content: {tile:?}");
 }
 
 #[cfg(feature = "inspector-presets")]

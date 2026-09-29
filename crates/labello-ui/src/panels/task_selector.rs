@@ -15,6 +15,21 @@ impl WorkflowActivity {
             Self::Skeleton => crate::glossary::SKELETON_ANNOTATION,
         }
     }
+
+    fn short_label(self) -> &'static str {
+        match self {
+            Self::Boxes => crate::glossary::BOXES,
+            Self::Migration => crate::glossary::MIGRATE,
+            Self::MissingObjects => crate::glossary::MISSING_OBJECTS,
+            Self::Skeleton => crate::glossary::SKELETON,
+        }
+    }
+}
+
+struct WorkflowTileLayout {
+    galley: std::sync::Arc<egui::Galley>,
+    label_row_height: f32,
+    button_height: f32,
 }
 
 impl LabelloApp {
@@ -116,7 +131,7 @@ impl LabelloApp {
         } else {
             for workflow in &workflows {
                 ui.push_id(&workflow.task_id, |ui| {
-                    self.workflow_entry(ui, workflow, None, &[])
+                    self.workflow_entry(ui, workflow, None, &[], None)
                 });
             }
         }
@@ -289,7 +304,30 @@ impl LabelloApp {
                     .collect();
                     ui.spacing_mut().item_spacing.x = theme::SPACE_1;
                     ui.columns(activities.len(), |columns| {
-                        for (column, (activity, matching)) in columns.iter_mut().zip(activities) {
+                        let galleys: Vec<_> = columns
+                            .iter_mut()
+                            .zip(&activities)
+                            .map(|(column, (activity, _))| {
+                                column.spacing_mut().button_padding =
+                                    egui::vec2(theme::SPACE_1, theme::SPACE_1);
+                                Self::workflow_tile_galley(column, *activity)
+                            })
+                            .collect();
+                        let label_row_height = galleys
+                            .iter()
+                            .map(|galley| galley.size().y)
+                            .fold(0.0, f32::max);
+                        let button_height = 2.0 * theme::SPACE_1
+                            + theme::SPACE_2
+                            + Self::WORKFLOW_ICON_SIZE
+                            + theme::SPACE_1
+                            + label_row_height
+                            + theme::SPACE_1
+                            + 18.0
+                            + theme::SPACE_1;
+                        for ((column, (activity, matching)), galley) in
+                            columns.iter_mut().zip(activities).zip(galleys)
+                        {
                             column.spacing_mut().button_padding =
                                 egui::vec2(theme::SPACE_1, theme::SPACE_1);
                             let workflow = matching
@@ -299,7 +337,18 @@ impl LabelloApp {
                                 })
                                 .unwrap_or(&matching[0]);
                             column.push_id(activity.label(), |ui| {
-                                self.workflow_entry(ui, workflow, Some(activity), &matching)
+                                let layout = WorkflowTileLayout {
+                                    galley,
+                                    label_row_height,
+                                    button_height,
+                                };
+                                self.workflow_entry(
+                                    ui,
+                                    workflow,
+                                    Some(activity),
+                                    &matching,
+                                    Some(&layout),
+                                )
                             });
                         }
                     });
@@ -343,12 +392,39 @@ impl LabelloApp {
         }
     }
 
+    fn workflow_tile_galley(
+        ui: &mut egui::Ui,
+        activity: WorkflowActivity,
+    ) -> std::sync::Arc<egui::Galley> {
+        let width = (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0);
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = width;
+        job.wrap.max_rows = 3;
+        job.halign = egui::Align::Center;
+        job.append(
+            activity.short_label(),
+            0.0,
+            egui::TextFormat {
+                font_id: if ui.available_width() < 75.0 {
+                    egui::TextStyle::Small
+                } else {
+                    egui::TextStyle::Button
+                }
+                .resolve(ui.style()),
+                color: egui::Color32::PLACEHOLDER,
+                ..Default::default()
+            },
+        );
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    }
+
     fn workflow_entry(
         &mut self,
         ui: &mut egui::Ui,
         workflow: &crate::app::WorkflowChoice,
         activity: Option<WorkflowActivity>,
         choices: &[&crate::app::WorkflowChoice],
+        tile_layout: Option<&WorkflowTileLayout>,
     ) {
         let multiple = choices.len() > 1;
         let task_selected = self.work.selected_task_id.as_ref() == Some(&workflow.task_id);
@@ -376,46 +452,7 @@ impl LabelloApp {
                 self.workflow_activity_label(workflow, activity)
             );
         }
-        let text: egui::WidgetText = if let Some(activity) = activity {
-            let width = (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0);
-            let mut job = egui::text::LayoutJob::default();
-            job.wrap.max_width = width;
-            job.wrap.max_rows = 3;
-            job.halign = egui::Align::Center;
-            job.append(
-                match activity {
-                    WorkflowActivity::Boxes => crate::glossary::BOXES,
-                    WorkflowActivity::Migration => crate::glossary::MIGRATE,
-                    WorkflowActivity::MissingObjects => crate::glossary::MISSING_OBJECTS,
-                    WorkflowActivity::Skeleton => crate::glossary::SKELETON,
-                },
-                0.0,
-                egui::TextFormat {
-                    font_id: if ui.available_width() < 75.0 {
-                        egui::TextStyle::Small
-                    } else {
-                        egui::TextStyle::Button
-                    }
-                    .resolve(ui.style()),
-                    color: egui::Color32::PLACEHOLDER,
-                    ..Default::default()
-                },
-            );
-            if multiple {
-                job.append(
-                    &format!("\n{} options", choices.len()),
-                    0.0,
-                    egui::TextFormat {
-                        font_id: egui::TextStyle::Small.resolve(ui.style()),
-                        color: egui::Color32::PLACEHOLDER,
-                        ..Default::default()
-                    },
-                );
-            }
-            ui.fonts_mut(|fonts| fonts.layout_job(job)).into()
-        } else {
-            RichText::new(workflow.label()).strong().into()
-        };
+        let text: egui::WidgetText = RichText::new(workflow.label()).strong().into();
         // These controls operate on the current assignment, not a new queue claim.
         let current_migration_action = overview
             && matches!(
@@ -433,20 +470,12 @@ impl LabelloApp {
         let icon_id = ui.id().with(("workflow-type", &workflow.task_id));
         let marker_id = ui.id().with(("workflow-selection", &workflow.task_id));
         let content_id = ui.id().with("workflow-content");
-        let galley = activity.map(|_| {
-            text.clone().into_galley(
-                ui,
-                Some(egui::TextWrapMode::Truncate),
-                ui.available_width(),
-                egui::TextStyle::Button,
-            )
-        });
-        let button = if activity.is_some() {
+        let button = if let Some(layout) = tile_layout {
             egui::Button::new(egui::Atom::custom(
                 content_id,
                 egui::vec2(
                     (ui.available_width() - 2.0 * ui.spacing().button_padding.x).max(1.0),
-                    104.0,
+                    layout.button_height - 2.0 * ui.spacing().button_padding.y,
                 ),
             ))
         } else {
@@ -468,11 +497,7 @@ impl LabelloApp {
         .corner_radius(theme::SURFACE_RADIUS)
         .min_size(egui::vec2(
             ui.available_width(),
-            if activity.is_some() {
-                112.0
-            } else {
-                Self::WORKFLOW_PILL_HEIGHT
-            },
+            tile_layout.map_or(Self::WORKFLOW_PILL_HEIGHT, |layout| layout.button_height),
         ))
         .gap(theme::SPACE_2)
         .truncate();
@@ -511,9 +536,12 @@ impl LabelloApp {
                 node.set_description(description);
             });
         }
-        if let Some(rect) = choice.rect(content_id) {
+        if let (Some(rect), Some(layout)) = (choice.rect(content_id), tile_layout) {
             let icon_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + theme::SPACE_2 + Self::WORKFLOW_ICON_SIZE / 2.0),
+                egui::pos2(
+                    rect.center().x,
+                    rect.top() + theme::SPACE_2 + Self::WORKFLOW_ICON_SIZE / 2.0,
+                ),
                 egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE),
             );
             workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
@@ -521,44 +549,74 @@ impl LabelloApp {
                 paint_workflow_activity_badge(ui, icon_rect, activity);
             }
             let label_top = icon_rect.bottom() + theme::SPACE_1;
-            let label_height = galley.as_ref().map_or(0.0, |galley| galley.size().y);
-            let status_center = egui::pos2(
-                rect.center().x,
-                label_top + label_height + theme::SPACE_1 + 9.0,
-            );
-            let reason_center = if selected && reason.is_some() {
-                status_center + egui::vec2(6.0, 0.0)
+            let status_y = label_top + layout.label_row_height + theme::SPACE_1 + 9.0;
+            let cue_count =
+                usize::from(selected) + usize::from(reason.is_some()) + usize::from(multiple);
+            let cue_width = if cue_count == 0 {
+                0.0
             } else {
-                status_center
+                (if selected { 8.0 } else { 0.0 })
+                    + (if reason.is_some() { 18.0 } else { 0.0 })
+                    + (if multiple { 8.0 } else { 0.0 })
+                    + (cue_count - 1) as f32 * theme::SPACE_1
             };
-            paint_workflow_marker(
-                ui,
-                egui::Rect::from_center_size(reason_center, egui::vec2(18.0, 18.0)),
-                false,
-                reason,
-                if selected { theme::TEXT } else { theme::TEXT_MUTED },
-            );
+            let mut cue_x = rect.center().x - cue_width / 2.0;
             if selected {
-                let dot_center = if reason.is_some() {
-                    status_center - egui::vec2(11.0, 0.0)
-                } else {
-                    status_center
-                };
-                ui.painter().circle_filled(dot_center, 4.0, theme::TEXT);
+                ui.painter()
+                    .circle_filled(egui::pos2(cue_x + 4.0, status_y), 4.0, theme::TEXT);
+                cue_x += 8.0 + theme::SPACE_1;
             }
-            if let Some(galley) = galley {
-                let position = egui::pos2(rect.center().x, label_top);
-                let color = ui.style().interact(&choice.response).fg_stroke.color;
-                ui.painter().galley(
-                    position,
-                    galley,
-                    if choice.response.enabled() {
-                        color
+            if reason.is_some() {
+                paint_workflow_marker(
+                    ui,
+                    egui::Rect::from_center_size(
+                        egui::pos2(cue_x + 9.0, status_y),
+                        egui::vec2(18.0, 18.0),
+                    ),
+                    false,
+                    reason,
+                    if selected {
+                        theme::TEXT
                     } else {
-                        ui.visuals().disable(color)
+                        theme::TEXT_MUTED
                     },
                 );
+                cue_x += 18.0 + theme::SPACE_1;
             }
+            if multiple {
+                let center = egui::pos2(cue_x + 4.0, status_y);
+                let color = ui.style().interact(&choice.response).fg_stroke.color;
+                let color = if choice.response.enabled() {
+                    color
+                } else {
+                    ui.visuals().disable(color)
+                };
+                let stroke = egui::Stroke::new(1.5, color);
+                ui.painter().line_segment(
+                    [
+                        center + egui::vec2(-3.0, -1.0),
+                        center + egui::vec2(0.0, 2.0),
+                    ],
+                    stroke,
+                );
+                ui.painter().line_segment(
+                    [
+                        center + egui::vec2(0.0, 2.0),
+                        center + egui::vec2(3.0, -1.0),
+                    ],
+                    stroke,
+                );
+            }
+            let color = ui.style().interact(&choice.response).fg_stroke.color;
+            ui.painter().galley(
+                egui::pos2(rect.center().x, label_top),
+                layout.galley.clone(),
+                if choice.response.enabled() {
+                    color
+                } else {
+                    ui.visuals().disable(color)
+                },
+            );
         } else {
             if let Some(icon_rect) = choice.rect(icon_id) {
                 workflow_type_icon(ui, icon_id, icon_rect, &workflow.annotation_type);
@@ -625,6 +683,7 @@ impl LabelloApp {
                     )
                     .wrap(),
                 );
+                ui.small(format!("{} workflows", choices.len()));
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .scroll_source(crate::pointer_input::scroll_source(ui.ctx()))

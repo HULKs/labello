@@ -209,7 +209,7 @@ fn workflow_selector_divides_each_class_into_equal_activity_columns() {
         bounding_box.width() <= 340.0,
         "long task names must not expand the panel: {bounding_box:?}"
     );
-    assert!(bounding_box.height() <= 112.0);
+    assert!(bounding_box.height() <= 94.0);
     assert!(
         skeleton.left() > bounding_box.right() && skeleton.top() == bounding_box.top(),
         "bounding_box={bounding_box:?} skeleton={skeleton:?}"
