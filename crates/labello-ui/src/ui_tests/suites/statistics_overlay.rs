@@ -1380,3 +1380,30 @@ fn global_shortcut_migration_is_explicit_and_preserves_unsaved_edits() {
     harness.state_mut().accept_preferences(801, Ok((old, Vec::new())));
     assert_eq!(harness.state().work.shortcut_settings.draft.as_ref(), Some(&saved));
 }
+
+#[test]
+fn global_statistics_failure_waits_for_overview_retry_without_a_work_dataset() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    step_until(&mut harness, 20, |app| !app.loading.stats && app.auth.preferences.pending.is_none());
+    let app = harness.state_mut();
+    app.datasets.metadata = None;
+    app.datasets.summaries.clear();
+    app.datasets.last_stats_attempt = None;
+    app.open_statistics();
+    let first = app.datasets.overview.pending.unwrap();
+    app.accept_overview(first, Err("Service unavailable".to_owned().into()));
+    app.runtime.commands.clear();
+    app.refresh_stats_if_due();
+    assert!(app.datasets.overview.pending.is_none(), "the workspace timer must not immediately hide an overview failure");
+    assert!(app.runtime.commands.is_empty());
+    assert!(app.datasets.overview.error.is_some());
+    app.datasets.overview.attempted = Some(Instant::now() - Duration::from_secs(4));
+    app.refresh_stats_if_due();
+    assert_eq!(app.runtime.commands.iter().filter(|command| matches!(command, UiCommand::Overview { .. })).count(), 1);
+    let retry = app.datasets.overview.pending.unwrap();
+    app.accept_overview(retry, Err("Service unavailable".to_owned().into()));
+    app.runtime.api = None;
+    harness.step();
+    harness.get_by_label("Statistics unavailable");
+    harness.get_by_label("Retry statistics");
+}
