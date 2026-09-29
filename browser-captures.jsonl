@@ -1,0 +1,4 @@
+{"result": "passed", "browser": "HeadlessChrome/149.0.7827.55", "kind": "bounding_box", "workflow": "annotation", "viewport": [1288, 820], "dpr": 1, "zoom": 1, "delayed_transitions": 4, "pixel_samples": 20}
+{"result": "passed", "browser": "HeadlessChrome/149.0.7827.55", "kind": "bounding_box", "workflow": "review", "viewport": [1288, 820], "dpr": 1, "zoom": 1, "delayed_transitions": 4, "pixel_samples": 20}
+{"result": "passed", "browser": "HeadlessChrome/149.0.7827.55", "kind": "skeleton", "workflow": "review", "viewport": [390, 844], "dpr": 3.0, "zoom": 1, "delayed_transitions": 4, "pixel_samples": 20}
+{"result": "passed", "browser": "Chrome/149.0.7827.55", "kind": "bounding_box", "workflow": "review", "viewport": [1288, 820], "dpr": 1, "zoom": 2, "delayed_transitions": 4, "pixel_samples": 20}
