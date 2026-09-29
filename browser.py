@@ -6,6 +6,7 @@ from playwright.async_api import async_playwright
 from stylus_input import Scenario, application, require, until
 
 OUT=Path('/tmp/labello-220-evidence')
+OUT.mkdir(parents=True, exist_ok=True)
 async def run(mode):
     with application() as (origin, api, server):
         async with async_playwright() as p:
