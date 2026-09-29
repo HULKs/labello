@@ -1,7 +1,8 @@
 #[derive(Clone)]
 pub(crate) struct WorkspaceSummary {
     progress: String,
-    identity_and_type: Option<(String, String)>,
+    identity: Option<String>,
+    annotation_type: Option<AnnotationType>,
     accessible: String,
     submitter: Option<(String, Option<String>)>,
     show_avatar: bool,
@@ -24,16 +25,18 @@ impl WorkspaceSummary {
                 .map(|index| format!("Item {} / {}", index + 1, objects.len()))
                 .unwrap_or_else(|| "Image overview".into())
         };
-        let identity_and_type = task.filter(|_| current.is_some()).map(|task| {
+        let annotation_type = task.filter(|_| current.is_some()).map(|task| task.annotation_type.clone());
+        let identity = task.filter(|_| current.is_some()).map(|task| {
             let class = task.class_ids.first().map(|id| app.class_name(id)).unwrap_or_default();
-            let identity = if task.name == class { task.name.clone() } else { format!("{} · {class}", task.name) };
-            let kind = match task.annotation_type { AnnotationType::BoundingBox => "Bounding boxes", AnnotationType::Skeleton => "Skeletons" };
-            (identity, kind.to_string())
+            if task.name == class { task.name.clone() } else { format!("{} · {class}", task.name) }
         });
         let mut accessible = format!("Annotation details: {progress}");
-        if let Some((identity, kind)) = &identity_and_type { accessible.push_str(&format!(". {kind} · {identity}")); }
+        if let (Some(identity), Some(kind)) = (&identity, &annotation_type) {
+            let kind = match kind { AnnotationType::BoundingBox => "Bounding boxes", AnnotationType::Skeleton => "Skeletons" };
+            accessible.push_str(&format!(". {kind} · {identity}"));
+        }
         if let Some(current) = current { accessible.push_str(&format!(". Image: {} · {} x {}", current.image.file_name, current.image.width, current.image.height)); }
-        Self { progress, identity_and_type, accessible, submitter: None, show_avatar: false }
+        Self { progress, identity, annotation_type, accessible, submitter: None, show_avatar: false }
     }
 
     fn from_review(app: &LabelloApp) -> Self {
@@ -61,7 +64,8 @@ impl WorkspaceSummary {
                 submitter,
                 show_avatar: true,
                 progress: phase,
-                identity_and_type: Some((identity, context.type_label().to_string())),
+                identity: Some(identity),
+                annotation_type: Some(context.annotation_type.clone()),
                 accessible: format!("Review details: {}.{attribution}", context.accessible_summary()) + &image,
             }
         } else {
@@ -74,7 +78,8 @@ impl WorkspaceSummary {
                 submitter: None,
                 show_avatar: false,
                 progress: message.to_string(),
-                identity_and_type: None,
+                identity: None,
+                annotation_type: None,
                 accessible: message.to_string(),
             }
         }
@@ -103,18 +108,22 @@ impl WorkspaceSummaryText {
         content.progress.clone()
     }
 
+    fn type_inset(content: &WorkspaceSummary) -> f32 {
+        if content.annotation_type.is_some() { 32.0 } else { 0.0 }
+    }
+
     fn minimum_width(ctx: &egui::Context, content: &WorkspaceSummary, compact: bool, loading: bool) -> f32 {
         let progress = Self::progress(content, compact);
         let font = egui::TextStyle::Button.resolve(&ctx.global_style());
         let width = ctx.fonts_mut(|fonts| fonts.layout_no_wrap(progress, font, theme::TEXT).size().x);
         // Keep progress legible and a useful part of workflow identity beside its avatar.
-        width.max(64.0) + 8.0 + if content.show_avatar { 36.0 } else { 0.0 }
+        width.max(64.0 - Self::type_inset(content)) + Self::type_inset(content) + 8.0 + if content.show_avatar { 36.0 } else { 0.0 }
             + if loading { 24.0 } else { 0.0 }
     }
 
     fn measure(ctx: &egui::Context, content: &WorkspaceSummary, width: f32, availability_loading: bool, compact: bool) -> Self {
         let width = width.floor().max(44.0);
-        let inset = if content.show_avatar { 36.0 } else { 0.0 };
+        let inset = if content.show_avatar { 36.0 } else { 0.0 } + Self::type_inset(content);
         let inner_width = (width - inset - 8.0).max(1.0);
 
         let layout = |text: String, truncate: bool| {
@@ -133,10 +142,9 @@ impl WorkspaceSummaryText {
             ctx.fonts_mut(|fonts| fonts.layout_job(job))
         };
         let mut lines = vec![layout(Self::progress(content, compact), true)];
-        if let Some((identity, kind)) = &content.identity_and_type {
+        if let Some(identity) = &content.identity {
             // Full identity remains available through the tooltip and inspector.
-            let kind = if kind == "Bounding boxes" { "Boxes" } else { kind };
-            lines.push(layout(format!("{kind} · {identity}"), false));
+            lines.push(layout(identity.clone(), false));
         }
         let height = lines.iter().map(|line| line.size().y).sum::<f32>().max(32.0);
         let content_width = lines.iter().enumerate().map(|(index, line)| {
@@ -188,7 +196,7 @@ impl LabelloApp {
     fn shared_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
         let content = self.displayed_workspace_summary();
         let text = self.context_summary_text(ui.ctx(), layout, ui.available_width());
-        let valid = content.identity_and_type.is_some();
+        let valid = content.identity.is_some();
         if !valid || self.work.drawer == Some(Drawer::Workflow) {
             self.work.review_details_focus_return = None;
         }
@@ -236,13 +244,19 @@ impl LabelloApp {
         let (rect, response) = ui.allocate_exact_size(egui::vec2(text.width, text.height), egui::Sense::hover());
         let avatar_rect = egui::Rect::from_center_size(
             egui::pos2(rect.left() + 14.0, rect.center().y), egui::Vec2::splat(24.0));
-        if content.show_avatar && content.identity_and_type.is_some() && !content.accessible.is_empty() {
+        if content.show_avatar && content.identity.is_some() && !content.accessible.is_empty() {
             let (name, github_id) = content.submitter.as_ref()
                 .map(|(name, id)| (name.as_str(), id.as_deref()))
                 .unwrap_or(("?", None));
             crate::avatar::paint(ui, github_id, name, avatar_rect);
         }
         let mut pos = rect.min + egui::vec2(if content.show_avatar { 36.0 } else { 0.0 }, 0.0);
+        if let Some(kind) = &content.annotation_type {
+            let icon_rect = egui::Rect::from_center_size(
+                egui::pos2(pos.x + 14.0, rect.center().y), egui::Vec2::splat(28.0));
+            workflow_type_icon(ui, response.id.with("task-type"), icon_rect, kind);
+            pos.x += WorkspaceSummaryText::type_inset(content);
+        }
         for line in &text.lines {
             ui.painter().galley(pos, line.clone(), theme::TEXT);
             pos.y += line.size().y;

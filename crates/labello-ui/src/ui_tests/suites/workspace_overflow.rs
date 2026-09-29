@@ -304,7 +304,7 @@ fn short_review_revision_keeps_mode_in_context_without_a_canvas_caption_row() {
     let identity = if context.workflow_name == context.class_name {
         context.workflow_name.clone()
     } else { format!("{} · {}", context.workflow_name, context.class_name) };
-    assert_review_bar_paints(&harness, &format!("Boxes · Revising · {identity}"));
+    assert_review_bar_paints(&harness, &format!("Revising · {identity}"));
     assert_review_bar_paints(&harness, "1 / 1");
     let details = harness.get_by_label_contains("Review details: Workflow:");
     assert!(details.accesskit_node().label().unwrap().contains("Review revision mode"));

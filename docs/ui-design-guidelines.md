@@ -61,12 +61,16 @@ qualify a term; compact synonyms must be listed in the glossary.
   then Setup, subject to access. Account identity and Sign out come last. Use aligned
   icon/label rows with shared selection and focus states. Inspect uses stacked
   image frames with landscape details in both the bar and drawer.
+- Collapsed navigation places its menu button on the left. Dataset pills use
+  available space up to the natural text width plus padding; truncate only when
+  the name does not fit.
 - The second bar measures progress and its controls before stacking. Keep six-point
   vertical frame padding at every width, including stacked compact bars. Use one
   control row when the summary fits between the edge panel toggles and canvas
   controls. Compact item progress uses `3 / 12`; complete item/phase wording stays
-  in the accessible description and tooltip. The task-type label uses `Boxes`
-  while the tooltip and accessible description retain `Bounding boxes`.
+  in the accessible description and tooltip. Use the shared task-type icon
+  beside progress and workflow identity at every width; keep the full task-type
+  name in the tooltip and accessible description.
   Keep workflow/type/class context and
   review attribution in the summary. Stack only when progress, attribution, or
   enlarged text needs more room; retain every control and its 44-point target.

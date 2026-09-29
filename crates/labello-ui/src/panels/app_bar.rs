@@ -42,7 +42,8 @@ impl LabelloApp {
             .sum::<f32>()
             + spacing * destinations.len().saturating_sub(1) as f32;
         let status_width = 44.0;
-        let dataset_width = if layout == LayoutMode::Compact { 46.0 } else { 142.0 };
+        let dataset_width = Self::dataset_text_width(ui, &dataset_name)
+            .min(if layout == LayoutMode::Compact { 46.0 } else { 142.0 });
         let dataset_rect = egui::Rect::from_center_size(
             bar_rect.center(),
             egui::vec2(dataset_width + 18.0, bar_rect.height()),
@@ -138,12 +139,19 @@ impl LabelloApp {
     }
 
     fn collapsed_app_bar(&mut self, ui: &mut egui::Ui, rect: egui::Rect, dataset: &str) {
+        let gap = if rect.width() < 200.0 { 0.0 } else { theme::SPACE_1 };
+        let trigger_rect = egui::Rect::from_min_size(rect.min, egui::vec2(44.0, rect.height()));
+        let mut trigger_ui = ui.new_child(egui::UiBuilder::new()
+            .id_salt("collapsed-navigation-trigger")
+            .max_rect(trigger_rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)));
+        self.navigation_trigger(&mut trigger_ui);
         let mut controls = ui.new_child(egui::UiBuilder::new()
             .id_salt("collapsed-app-bar")
-            .max_rect(rect)
+            .max_rect(egui::Rect::from_min_max(
+                egui::pos2(trigger_rect.right() + gap, rect.top()), rect.max))
             .layout(egui::Layout::right_to_left(egui::Align::Center)));
-        controls.spacing_mut().item_spacing.x = if rect.width() < 200.0 { 0.0 } else { theme::SPACE_1 };
-        self.navigation_trigger(&mut controls);
+        controls.spacing_mut().item_spacing.x = gap;
         if self.collapsed_header_has_streak(rect.width()) { self.streak_indicator(&mut controls); }
         self.connection_indicator(&mut controls);
         if self.work_view() {
@@ -154,13 +162,20 @@ impl LabelloApp {
                 egui::pos2(remaining.right() - width, remaining.top()), remaining.max);
             controls.scope_builder(egui::UiBuilder::new().max_rect(presence), |ui| self.presence_summary(ui));
         }
-        let available = controls.available_rect_before_wrap();
+        let mut available = controls.available_rect_before_wrap();
+        available.max.x = available.max.x.min(available.min.x + Self::dataset_text_width(ui, dataset) + 20.0);
         let mut dataset_ui = ui.new_child(egui::UiBuilder::new().max_rect(available)
             .layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight)));
         dataset_ui.set_clip_rect(available.intersect(ui.clip_rect()));
         let response = theme::bounded_badge(&mut dataset_ui, dataset, theme::Intent::Info,
             (available.width() - 20.0).max(1.0)).on_hover_text(dataset);
         response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Dataset {dataset}")));
+    }
+
+    fn dataset_text_width(ui: &egui::Ui, dataset: &str) -> f32 {
+        egui::WidgetText::from(egui::RichText::new(dataset).strong())
+            .into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body)
+            .size().x.ceil()
     }
 
     fn collapsed_header_has_streak(&self, width: f32) -> bool {

@@ -96,7 +96,7 @@ fn presence_header_overflows_and_exposes_details_without_a_footer() {
 }
 
 #[test]
-fn presence_and_dot_are_right_aligned_before_navigation_without_topbar_username() {
+fn presence_and_dot_keep_their_order_beside_navigation_without_topbar_username() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     harness.state_mut().runtime.presence.value = Some(presence_sample());
 
@@ -118,14 +118,18 @@ fn presence_and_dot_are_right_aligned_before_navigation_without_topbar_username(
                     .query_all_by_role_and_label(egui::accesskit::Role::Button, "Sign out")
                     .next()
             })
-            .expect("work header must expose a right-side navigation control")
+            .expect("work header must expose navigation")
             .rect();
 
         assert!(presence.left() >= -0.5 && presence.right() <= width + 0.5);
         assert!(dot.left() >= -0.5 && dot.right() <= width + 0.5);
         assert!(navigation.left() >= -0.5 && navigation.right() <= width + 0.5);
         assert!(presence.right() <= dot.left() + 0.5);
-        assert!(dot.right() <= navigation.left() + 0.5);
+        if harness.query_by_label("Open navigation").is_some() {
+            assert!(navigation.right() < presence.left());
+        } else {
+            assert!(dot.right() <= navigation.left() + 0.5);
+        }
         assert!(
             harness.query_by_label("Admin User").is_none(),
             "the signed-in username must not be rendered in the work top bar at {width}x{height}",
@@ -362,12 +366,12 @@ fn mobile_bar_keeps_dataset_beside_presence_and_uses_free_width() {
         let presence = h.get_by_label_contains("Labelling presence:").rect();
         let dot = h.get_by_label_contains("Connection status:").rect();
         let trigger = h.get_by_label("Open navigation").rect();
-        assert!(dataset.left() >= 14.0 && dataset.right() < presence.left());
-        assert!(presence.right() <= dot.left() && dot.right() <= trigger.left());
+        assert!(trigger.left() >= 14.0 && trigger.right() < dataset.left());
+        assert!(dataset.right() < presence.left() && presence.right() <= dot.left());
         assert!(dataset.width() > previous_width, "dataset did not use the extra space at {width}");
         previous_width = dataset.width();
     }
-    assert!(previous_width > 280.0, "dataset is still capped at a fixed width");
+    assert!(previous_width > 240.0, "dataset did not expose the long name: {previous_width}");
 }
 
 #[test]
@@ -391,10 +395,28 @@ fn collapsed_header_bounds_presence_in_every_state_and_keeps_dataset_context() {
                     if let Some(node) = h.query_by_label_contains(prefix) {
                         let rect = node.rect();
                         assert!(rect.width() >= 44.0 && rect.height() >= 44.0);
-                        assert!(rect.left() > dataset.right() && rect.right() <= 306.0);
+                        if prefix == "Open navigation" {
+                            assert!(rect.right() < dataset.left());
+                        } else {
+                            assert!(rect.left() > dataset.right() && rect.right() <= 306.0);
+                        }
                     }
                 }
             }
         }
     }
+}
+
+#[test]
+fn dataset_pill_stops_growing_when_its_name_fits() {
+    let mut h = loaded_work_harness(Rc::new(SpyApi::new()));
+    h.state_mut().datasets.metadata.as_mut().unwrap().name = "Demo".into();
+    let mut widths = Vec::new();
+    for width in [390.0, 600.0, 1440.0] {
+        h.set_size(egui::vec2(width, 844.0));
+        h.run_steps(4);
+        widths.push(h.get_by_label("Dataset Demo").rect().width());
+    }
+    assert!(widths.iter().all(|width| *width < 60.0), "{widths:?}");
+    assert!(widths.iter().all(|width| (width - widths[0]).abs() <= 1.0), "{widths:?}");
 }

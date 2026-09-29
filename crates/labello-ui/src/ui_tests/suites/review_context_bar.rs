@@ -52,7 +52,7 @@ fn review_bar_allocates_type_phase_controls_and_canvas_at_each_viewport() {
         let context = harness.state().review_context().unwrap();
         let identity = if context.workflow_name == context.class_name { context.workflow_name.clone() }
             else { format!("{} · {}", context.workflow_name, context.class_name) };
-        assert_review_bar_paints(&harness, &format!("Boxes · {identity}"));
+        assert_review_bar_paints(&harness, &identity);
         let rect = details.rect();
         assert!(
             egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, height))
@@ -696,6 +696,10 @@ fn workspace_context_centers_content_between_edge_toggles() {
             assert!((left.center().y - fit.center().y).abs() <= 1.0);
             assert!((right.center().y - fit.center().y).abs() <= 1.0);
             let summary = h.get_by_label_contains(if h.state().view == AppView::Review { "Review details:" } else { "Annotation details:" }).rect();
+            let kind = h.state().selected_task().unwrap().annotation_type.clone();
+            let icon_label = format!("{} annotation type", crate::app::annotation_type_label(&kind));
+            let icon = h.query_all_by_label(&icon_label).find(|icon| summary.contains_rect(icon.rect())).expect("task type icon inside summary");
+            assert_eq!(icon.rect().size(), egui::Vec2::splat(28.0));
             let first = h.get_by_label_contains(if h.state().view == AppView::Review { "Refocus object" } else { "Pan" }).rect();
             let controls = first.union(fit);
             let stacked = summary.bottom() <= fit.top();
@@ -730,7 +734,7 @@ fn annotation_context_uses_review_hierarchy_and_retains_summary_during_loads() {
         let label = summary.accesskit_node().label().unwrap().to_owned();
         assert!(label.contains(progress) && label.contains(kind), "{preset:?}: {label}");
         if preset == Annotation {
-            assert_review_bar_paints(&h, "Boxes · Person bounding boxes · Person");
+            assert_review_bar_paints(&h, "Person bounding boxes · Person");
         }
         assert_eq!(summary.accesskit_node().role(), egui::accesskit::Role::Label);
         let rect = summary.rect();
