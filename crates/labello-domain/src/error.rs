@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum DomainError {
+    #[error("invalid workflow transition: {0}")]
+    InvalidWorkflow(String),
     #[error("unsupported schema version {found}; supported version is {supported}")]
     UnsupportedSchemaVersion { found: u32, supported: u32 },
 

@@ -12,8 +12,8 @@ use crate::{
     AssignmentAvailability, AssignmentAvailabilityRequest, AssignmentRevalidation, AuthOptions,
     ClientError, ClientResult, CorrectionRequest, CreateDatasetRequest, DatasetSummary,
     DatasetUser, ImageExplorerQuery, ImageFile, ImagePreview, IngestJob, IngestReport,
-    OAuthCallbackRequest, OAuthLoginRequest, OfflineBundleRequest, PrelabelSuggestionRequest,
-    SessionInfo, SetDatasetRolesRequest, UpdateDatasetConfigRequest,
+    OAuthCallbackRequest, OAuthLoginRequest, OfflineBundleRequest, SessionInfo,
+    SetDatasetRolesRequest, UpdateDatasetConfigRequest,
 };
 
 pub type ApiFuture<'a, T> = Pin<Box<dyn Future<Output = ClientResult<T>> + 'a>>;

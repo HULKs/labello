@@ -155,10 +155,15 @@ demonstrated need.
 ## Prelabel execution
 
 `labello-inference` owns image preprocessing, the supported YOLO tensor contract,
-shared decoding, native ONNX execution, and the browser worker adapter.
-`labello-storage::prelabel` owns managed acquisition, durable derived results,
-runs, signing and reset generations through an injected runner. The server app
-provides the bounded child-process runner. The browser HTTP client obtains a
-signed grant, runs inference in a worker, and submits browser-reported candidates
-for validation. Pure IoU policy stays in the domain. API acceptance verifies
-signed evidence before the existing assignment transaction commits provenance.
+shared decoding and native ONNX execution. `labello-storage::prelabel` owns
+managed acquisition, durable derived results, runs, signing and reset generations
+through an injected runner. The server app provides the bounded child-process
+runner; API maintenance prepares work from each workflow's administrator-selected
+configuration. Unseen work refreshes under that configuration while displayed and
+started work keeps its captured hints and provenance.
+
+The browser consumes prepared work items and submits accepted suggestions; it has
+no inference worker, model delivery or personal configuration. Pure IoU policy
+stays in the domain. API acceptance verifies signed evidence before the assignment
+transaction commits provenance. Historical browser-reported evidence remains
+readable without being treated as server execution.

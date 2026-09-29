@@ -12,7 +12,7 @@ impl LabelloApp {
             );
             status_row(
                 ui,
-                "Objects",
+                crate::glossary::OBJECTS,
                 format!(
                     "{} of {}",
                     job.progress.processed_objects, job.progress.total_objects

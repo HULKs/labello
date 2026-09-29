@@ -31,8 +31,15 @@ impl ImageState {
         }
         event.validate_shape()?;
         match &event.payload {
+            EventPayload::Workflow { event: workflow } => {
+                self.apply_workflow_event(workflow, event)?;
+            }
             EventPayload::WorkReturnedToReview { request, tasks } => {
-                self.apply_return_to_review(request, tasks, event)?
+                self.apply_return_to_review(request, tasks, event)?;
+                for task in &request.task_ids {
+                    self.workflow_review_barriers
+                        .insert(task.clone(), event.event_sequence);
+                }
             }
             EventPayload::MigrationCompanionLinked { companion } => {
                 self.apply_migration_companion(companion)?
@@ -309,6 +316,7 @@ impl ImageState {
         for task_id in crate::review::submitted_review_tasks(event) {
             self.capture_review_round(task_id, event);
         }
+        self.observe_workflow_contribution(event);
         self.current_sequence = event.event_sequence;
         Ok(())
     }

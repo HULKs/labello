@@ -296,33 +296,17 @@ version-2 and version-3 representations. Missing values mean two; current storag
 reads and writes validate the supported range. Snapshots retain the configured
 value. This change adds no assignment or workflow event fields.
 
-## Previous-review history index
+## Workflow history index
 
-Each repository and its clones share an in-memory index derived from per-image
-assignment history. It stores the latest completed or intentionally cancelled
-review per image, reviewer and task, plus event sequences and aggregate latest
-candidates. Cancellation at or after lease expiry is maintenance and does not
-advance this history. The index is not an authority or a persisted artifact.
+The process-local review history cache also indexes displayed workflow visits by
+user, task, assignment kind and variant. It reads committed `ItemSeen` events and
+root visit identities. Reopening retains the original visit's order. The configured
+history depth plus the current visit bounds the returned window. Leases remain
+ordinary persisted assignments; history does not authorize stale or foreign work.
+The index is rebuilt on demand after restart and updated after committed changes.
 
-Initialization reads replay-validated states with at most 32 concurrent workers.
-Review claims warm the index before returning an assignment. Concurrent committed
-observations supersede older scan results by image event sequence. A membership
-generation prevents publishing a scan against an obsolete image index. Restart,
-explicit state repair, and image membership changes require rebuilding; the first
-review operation can therefore incur initialization cost.
-
-Ordinary event transactions and offline synchronization observe committed history
-synchronously after event publication and before derived state-cache publication.
-A failure or interruption during a history-changing publication invalidates the
-index because the event log may already have been renamed. Failed state-cache
-publication after observation does not lose the committed history.
-
-Lock order is configuration guards where applicable, image lock, history
-membership read guard, then sorted reviewer/task guards. No history guard holder
-acquires another image lock or initializes the index. Membership publication and
-explicit repair take the history membership write guard. Reopening checks the
-latest candidate under the same reviewer/task guard used by terminal review
-publication and retains it through event publication and index observation.
+Legacy terminal review/revision indexing remains for older image assignments.
+Neither index is an on-disk authority. Explicit state rebuild refreshes both.
 
 ## Export capture and recovery
 
@@ -438,7 +422,9 @@ lightweight metadata in memory; this does not claim constant-time queries.
 ## Prelabel hints and accepted annotations
 
 [Model prelabels](prelabels.md) owns the model contract, result publication,
-retention, reset, and recovery details. Hints never write workflow events.
+retention, reset, and recovery details. Private generation results are derived
+data. Queue preparation captures the predictions and their evidence in `Prepared`
+events so displayed work remains reproducible after a reset.
 Acceptance holds the prelabel control guard before taking the image transaction
 lock; reset and API configuration writes use the same control guard. The normal
 lock/reload/validate/append/replay path rejects duplicate or suppressed acceptance.
@@ -451,3 +437,16 @@ explicit model-to-dataset mappings and model digest to dataset configuration.
 Historical positional mappings remain readable without rewriting their meaning.
 The private hint index records the successful server provider; historical index
 entries without that field default to server CPU. Neither change rewrites events.
+
+## Durable queue work
+
+Schema-3 workflow events preserve source preparation, seen markers, item contexts,
+partial object geometry, provisional Overview/reviewer edits, exact confirmations
+and review exceptions. All are derived into `state.json` with projection version 2.
+A cache using an earlier projection is replayed even if its event sequence matches.
+Snapshots and offline bundles retain these fields. See
+[workflow events](event-history.md#objects-and-overview-events) for replay semantics.
+
+Unused prediction files remain private derived data. Seen prediction geometry and
+signed evidence are captured in the image's authoritative preparation events, so
+reset, expiry or removal of private result files cannot erase displayed work.

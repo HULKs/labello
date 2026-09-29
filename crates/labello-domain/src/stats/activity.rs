@@ -52,6 +52,22 @@ pub fn daily_activity_from_events(
         .filter(|event| window.contains(event.timestamp))
     {
         match &event.payload {
+            EventPayload::Workflow { event: workflow } => {
+                if let crate::WorkflowEvent::ItemConfirmed { confirmation } = workflow.as_ref()
+                    && let Some(review) = &confirmation.review
+                    && review.reviewer_user_id == event.actor_user_id
+                    && matches!(
+                        review.target,
+                        ReviewTarget::Task { .. } | ReviewTarget::MigrationConfirmation { .. }
+                    )
+                {
+                    reviews.insert((
+                        event.actor_user_id.clone(),
+                        event.image_id.clone(),
+                        confirmation.task_id.clone(),
+                    ));
+                }
+            }
             EventPayload::TaskStateChanged { task_state }
                 if task_state.completed_by.as_ref() == Some(&event.actor_user_id)
                     && task_state.completed_at.is_some()

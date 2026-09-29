@@ -12,8 +12,8 @@ or an audited whole-object exclusion, followed by a full-image confirmation.
    Not present for an optional point without coordinates.
 3. Save the skeleton, or choose Exclude object with a category and any required
    note. Not present applies to one keypoint; exclusion applies to the whole object.
-4. Continue through unresolved or changed targets, then inspect the full image
-   for missing objects and confirm it.
+4. Continue directly to the next Objects item, including across images. Select
+   Overview separately to inspect eligible full images for missing objects.
 
 A newly saved, added, or edited migration skeleton needs at least one positioned
 Visible or Occluded keypoint. Historical all-absent versions still replay, but
@@ -22,22 +22,19 @@ seeds are derived pending work, not authoritative skeleton ground truth.
 
 ## Revisit a resolved object
 
-From full-image confirmation, select an overview entry, completed canonical
-skeleton, or excluded guide. The server records the revisit and returns the
-current cursor. Saving returns to the overview if all other targets remain fresh;
-otherwise changed dependencies take precedence. Failed activation or saving
-preserves the workspace and draft for retry.
+Use Previous in Objects to revisit an eligible earlier guide. Saved partial
+keypoints remain one object draft. Previous retains the forward path; Skip saves
+the draft and releases the unfinished object. Reacquisition validates the guide,
+disposition, task and current ownership before allowing edits.
 
-The UI does not start global correction passes. Existing historical passes remain
-readable and resume their outstanding decisions through the normal keep, edit,
-and exclude controls. Only the latest pass for an assignment gates completion;
-older passes stay historical.
+Historical image assignments retain their direct-revisit dependency and correction
+pass events. New item queues use their exact object lease rather than a global pass.
 
 ## Add a missing object
 
 A prominent blue double frame around the canvas marks the full-image scan phase
-in migration annotation and review. It appears after the last object advances to
-full-image confirmation, including workflows with no imported guides. Scan for
+in migration annotation and review. It appears in the separately selected Overview queue, including workflows
+with no imported guides. Scan for
 missing objects before finishing. Zooming or panning within this phase keeps the
 frame visible; fitting an unfinished object to the image does not activate it.
 Returning to a focused guide or review item clears it. The frame remains outside
@@ -112,16 +109,16 @@ unsaved skeleton input.
 
 ## Review migration work
 
-Review defaults to canonical dispositions, then discovered skeletons in stable ID
-order, then full-image confirmation. Every decision binds the current disposition
-or annotation version. Unchanged objects can be approved while earlier corrections
-remain local. Final approval requires this reviewer to approve every current item
-in the current round.
+Review waits for annotation Overview. Objects contains canonical dispositions and
+discovered skeletons as separate items. Each decision binds the current disposition
+or annotation version and advances directly to the next Objects item. Overview is
+available after all object decisions and checks missing objects in place.
 
 Focus uses a valid companion box, then positioned-keypoint bounds, then the full
-image for historical objects without positions. Corrections use the same
-[overview submission](annotation.md#review-and-correct) as ordinary review and
-start a fresh review round. Companion boxes keep their separate guide-task review.
+image for historical objects without positions. Corrections submit on the current
+item. Added objects require Objects review; movement or edits require Overview,
+with unchanged approvals preserved. Companion boxes retain their separate guide-task
+review. Normal reviewer exclusions and the recorded dataset-wide fallback apply.
 
 For transaction, retry, and compatibility details, see
 [assignment](assignment.md#migration-companions),

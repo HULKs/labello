@@ -9,15 +9,14 @@ impl eframe::App for LabelloApp {
         ui.painter()
             .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
         self.process_messages(ui.ctx());
-        self.clear_workflow_change_outside_scope();
         if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
             // Navigation is asynchronous. Do not accept edits after the final
             // persistence check while the browser replaces this document.
             ui.centered_and_justified(|ui| { ui.label("Updating Labello..."); });
             return;
         }
-        if self.view != AppView::Review {
-            self.work.review_details_focus_return = None;
+        if !self.work_view() {
+            self.work.work_panel_focus_return = None;
         }
         self.retry_prefetch_if_due(ui.ctx());
         if !self.work.retired_image {
@@ -62,8 +61,7 @@ impl eframe::App for LabelloApp {
                 ui.ctx().request_repaint();
             }
         }
-        if self.navigation.statistics.open || self.work.pending_transition.is_some()
-            || self.work.automatic_workflow_change.is_some() {
+        if self.navigation.statistics.open || self.work.pending_transition.is_some() {
             let opacity = ui.opacity();
             ui.disable();
             // Pending navigation also covers silent next/previous image requests.

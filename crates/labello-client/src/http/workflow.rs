@@ -29,6 +29,40 @@ impl TaskApi for HttpLabelloApi {
 }
 
 impl ImageApi for HttpLabelloApi {
+    fn workflow_availability<'a>(&'a self, dataset_id: &'a DatasetId, kind: labello_domain::AssignmentKind) -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowAvailability>> {
+        Box::pin(async move { Self::json(self.request(Method::GET, &format!("/datasets/{dataset_id}/work-items/availability"))?.query(&crate::AssignmentAvailabilityRequest { kind }).send().await?).await })
+    }
+
+    fn workflow_history<'a>(&'a self, dataset_id: &'a DatasetId, selection: labello_domain::WorkflowSelection) -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowHistoryEntry>> {
+        Box::pin(async move { Self::json(self.request(Method::GET, &format!("/datasets/{dataset_id}/work-items/history"))?.query(&selection).send().await?).await })
+    }
+
+    fn reopen_workflow_item<'a>(&'a self, dataset_id: &'a DatasetId, request: AssignmentActionRequest) -> crate::ApiFuture<'a, Assignment> {
+        Box::pin(async move { Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/work-items/reopen"))?, &request).await })
+    }
+
+    fn leave_workflow<'a>(&'a self, dataset_id: &'a DatasetId, selection: labello_domain::WorkflowSelection) -> crate::ApiFuture<'a, ()> {
+        Box::pin(async move { Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/work-items/leave"))?, &selection).await })
+    }
+
+    fn claim_workflow_item<'a>(&'a self, dataset_id: &'a DatasetId, request: crate::ClaimWorkflowRequest) -> crate::ApiFuture<'a, Option<Assignment>> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/work-items/claim"))?, &request).await
+        })
+    }
+
+    fn display_workflow_item<'a>(&'a self, dataset_id: &'a DatasetId, request: AssignmentActionRequest) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/work-items/display"))?, &request).await
+        })
+    }
+
+    fn save_workflow_draft<'a>(&'a self, dataset_id: &'a DatasetId, request: crate::SaveWorkflowDraftRequest) -> crate::ApiFuture<'a, ImageState> {
+        Box::pin(async move {
+            Self::send_json(self.request(Method::POST, &format!("/datasets/{dataset_id}/work-items/draft"))?, &request).await
+        })
+    }
+
     fn return_to_review<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

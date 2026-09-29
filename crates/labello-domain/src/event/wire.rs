@@ -163,7 +163,8 @@ impl Serialize for EventLogEntry {
         if self.schema_version == crate::LEGACY_SCHEMA_VERSION
             && matches!(
                 self.payload,
-                EventPayload::WorkReturnedToReview { .. }
+                EventPayload::Workflow { .. }
+                    | EventPayload::WorkReturnedToReview { .. }
                     | EventPayload::ReviewAssignmentOpened { .. }
                     | EventPayload::MissingObjectEvidenceRecorded { .. }
                     | EventPayload::ReviewAssignmentFinished { .. }

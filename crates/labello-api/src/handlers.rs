@@ -149,6 +149,34 @@ pub fn router(state: ApiState) -> Router {
             post(workflow::assign_next),
         )
         .route(
+            "/datasets/{dataset_id}/work-items/claim",
+            post(workflow::claim_workflow_item),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/availability",
+            get(workflow::workflow_availability),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/history",
+            get(workflow::workflow_history),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/reopen",
+            post(workflow::reopen_workflow_item),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/leave",
+            post(workflow::leave_workflow),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/display",
+            post(workflow::display_workflow_item),
+        )
+        .route(
+            "/datasets/{dataset_id}/work-items/draft",
+            post(workflow::save_workflow_draft),
+        )
+        .route(
             "/datasets/{dataset_id}/assignments/availability",
             get(workflow::assignment_availability),
         )
@@ -311,26 +339,6 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/datasets/{dataset_id}/keybindings",
             get(workflow::get_keybindings).put(workflow::put_keybindings),
-        )
-        .route(
-            "/datasets/{dataset_id}/prelabel-suggestions",
-            post(prelabels::suggestions),
-        )
-        .route(
-            "/datasets/{dataset_id}/prelabel-retained",
-            get(prelabels::retained),
-        )
-        .route(
-            "/datasets/{dataset_id}/prelabel-generation",
-            get(prelabels::generation),
-        )
-        .route(
-            "/datasets/{dataset_id}/prelabel-browser-result",
-            post(prelabels::browser_result),
-        )
-        .route(
-            "/datasets/{dataset_id}/prelabels/{config_id}/model",
-            get(prelabels::model),
         )
         .route(
             "/datasets/{dataset_id}/prelabel-model-check",
@@ -784,10 +792,15 @@ async fn update_dataset_config(
     metadata.role_assignments = request.role_assignments;
     metadata.imbalance = request.imbalance;
     metadata.preload_queue_size = request.preload_queue_size;
+    metadata.workflow_queue = request.workflow_queue;
     metadata.bounding_box_visibility = request.bounding_box_visibility;
     metadata.prelabel_configs = request.prelabel_configs;
     metadata.updated_at = labello_domain::now();
     repo.save_dataset(&metadata).await?;
+    drop(_prelabel_guard);
+    state
+        .synchronize_workflow_prelabels(&dataset_id, &repo, true)
+        .await?;
     tracing::info!(
         event = "dataset.configuration.updated",
         dataset_id = %dataset_id,
@@ -1022,6 +1035,7 @@ async fn add_task(
     let mut metadata = repo.load_dataset_config().await?;
     ensure_dataset_role(&metadata, &actor, DatasetRole::DataAdmin)?;
     validate_enabled_task(&task)?;
+    validate_prelabel_selection(&task, None)?;
     for class_id in &task.class_ids {
         if !metadata
             .label_classes
@@ -1040,6 +1054,10 @@ async fn add_task(
     metadata.tasks.push(task.clone());
     metadata.updated_at = labello_domain::now();
     repo.save_dataset(&metadata).await?;
+    drop(_prelabel_guard);
+    state
+        .synchronize_workflow_prelabels(&dataset_id, &repo, true)
+        .await?;
     Ok(Json(task))
 }
 
@@ -1092,6 +1110,10 @@ async fn add_prelabel_config(
     metadata.prelabel_configs.push(config.clone());
     metadata.updated_at = labello_domain::now();
     repo.save_dataset(&metadata).await?;
+    drop(_prelabel_guard);
+    state
+        .synchronize_workflow_prelabels(&dataset_id, &repo, true)
+        .await?;
     Ok(Json(config))
 }
 
@@ -1134,6 +1156,10 @@ fn validate_config_update(
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     labello_domain::validate_preload_queue_size(request.preload_queue_size)
         .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+    request
+        .workflow_queue
+        .validate()
+        .map_err(|error| ApiError::BadRequest(error.to_string()))?;
     if request.name.trim().is_empty() {
         return Err(ApiError::BadRequest(
             "dataset name cannot be empty".to_string(),
@@ -1149,6 +1175,9 @@ fn validate_config_update(
         ));
     }
     validate_annotation_schema(&request.label_classes, &request.tasks)?;
+    for task in &request.tasks {
+        validate_prelabel_selection(task, metadata.task(&task.task_id))?;
+    }
     let mut prelabel_ids = BTreeSet::new();
     for config in &request.prelabel_configs {
         if !prelabel_ids.insert(&config.config_id) {
@@ -1259,6 +1288,20 @@ fn validate_annotation_schema(
             task.validate_manual_migration(guide)
                 .map_err(|_| ApiError::BadRequest("invalid migration guide workflow".into()))?;
         }
+    }
+    Ok(())
+}
+
+fn validate_prelabel_selection(
+    task: &TaskDefinition,
+    previous: Option<&TaskDefinition>,
+) -> ApiResult<()> {
+    if task.prelabel_config_ids.len() > 1
+        && previous.is_none_or(|old| old.prelabel_config_ids != task.prelabel_config_ids)
+    {
+        return Err(ApiError::BadRequest(
+            "select at most one prelabel configuration per workflow".into(),
+        ));
     }
     Ok(())
 }

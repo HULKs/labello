@@ -26,6 +26,7 @@ pub mod state;
 pub mod stats;
 pub mod task;
 pub mod user;
+pub mod workflow;
 
 pub use annotation::*;
 pub use assignment::*;
@@ -47,6 +48,7 @@ pub use state::*;
 pub use stats::*;
 pub use task::*;
 pub use user::*;
+pub use workflow::*;
 
 pub const LEGACY_SCHEMA_VERSION: u32 = 2;
 pub const SCHEMA_VERSION: u32 = 3;

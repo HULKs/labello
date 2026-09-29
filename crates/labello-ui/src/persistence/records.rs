@@ -49,12 +49,14 @@ pub(crate) struct WorkspacePreference {
     #[serde(default)]
     pub availability: Option<StoredAssignmentAvailability>,
     #[serde(default)]
-    pub prelabel_choices: BTreeMap<String, Option<labello_domain::PrelabelConfigId>>,
+    pub workflow_variant: labello_domain::WorkflowVariant,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StoredAssignmentAvailability {
+    #[serde(default)]
+    pub workflows: Vec<labello_domain::WorkflowAvailability>,
     pub kind: AssignmentKind,
     pub tasks: BTreeMap<TaskId, bool>,
     #[serde(default)]

@@ -179,7 +179,62 @@ struct Fixture {
     _temp: tempfile::TempDir,
     app: axum::Router,
     repo: labello_storage::DatasetRepository,
+    service: PrelabelService,
     assignment: Value,
+}
+
+#[tokio::test]
+async fn workflow_model_selection_rejects_new_multiple_models_but_preserves_legacy_lists() {
+    let fixture = Fixture::new().await;
+    let mut metadata = fixture.repo.load_dataset_config().await.unwrap();
+    let mut second = metadata.prelabel_configs[0].clone();
+    second.config_id = "second".into();
+    metadata.prelabel_configs.push(second);
+    fixture.repo.save_dataset(&metadata).await.unwrap();
+    metadata.tasks[0].prelabel_config_ids.push("second".into());
+    let update = serde_json::to_value(&metadata).unwrap();
+    assert_eq!(
+        fixture
+            .request("PUT", "/datasets/ds/admin", "admin", update.clone())
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    // Old datasets can retain their ordered list until an admin chooses a replacement.
+    fixture.repo.save_dataset(&metadata).await.unwrap();
+    assert_eq!(
+        fixture
+            .request("PUT", "/datasets/ds/admin", "admin", update)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    metadata.tasks[0].prelabel_config_ids.reverse();
+    assert_eq!(
+        fixture
+            .request(
+                "PUT",
+                "/datasets/ds/admin",
+                "admin",
+                serde_json::to_value(&metadata).unwrap()
+            )
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    metadata.tasks[0].prelabel_config_ids.truncate(1);
+    assert_eq!(
+        fixture
+            .request(
+                "PUT",
+                "/datasets/ds/admin",
+                "admin",
+                serde_json::to_value(&metadata).unwrap()
+            )
+            .await
+            .status(),
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -240,6 +295,9 @@ impl Fixture {
         Self::with_execution(PrelabelExecutionKind::ServerCpu).await
     }
     async fn with_execution(execution: PrelabelExecutionKind) -> Self {
+        Self::with_configuration(execution, ReviewWorkflow::Approval).await
+    }
+    async fn with_configuration(execution: PrelabelExecutionKind, review: ReviewWorkflow) -> Self {
         let temp = tempfile::tempdir().unwrap();
         std::fs::create_dir(temp.path().join("models")).unwrap();
         std::fs::write(temp.path().join("models/model.onnx"), b"test runner model").unwrap();
@@ -251,12 +309,14 @@ impl Fixture {
         )
         .await
         .unwrap();
-        let app = router(ApiState::new(temp.path()).with_prelabel_service(service));
+        let state = ApiState::new(temp.path()).with_prelabel_service(service.clone());
+        let app = router(state.clone());
         create_dataset(&app).await;
         configure_pixel_task(&app).await;
         upload_test_image(&app, "prelabel.png", &png_bytes(100, 100)).await;
-        let repo = labello_storage::DatasetRepository::new(temp.path().join("ds"));
+        let repo = state.repo(&"ds".into()).unwrap().as_ref().clone();
         let mut metadata = repo.load_dataset_config().await.unwrap();
+        metadata.tasks[0].review.workflow = review;
         metadata.tasks[0].prelabel_config_ids = vec!["model".into()];
         metadata.prelabel_configs = vec![PrelabelConfig {
             config_id: "model".into(),
@@ -281,11 +341,50 @@ impl Fixture {
             }),
         }];
         repo.save_dataset(&metadata).await.unwrap();
+        // Exercise backward-compatible saves for leases opened by an older
+        // client. These hints come from an admin batch, never a user route.
         let assignment = claim_assignment(&app, "admin", "annotation").await;
+        assert!(!assignment.is_null());
+        let prepared = service
+            .command(
+                &"ds".into(),
+                repo.clone(),
+                PrelabelAdminCommand::Preflight {
+                    mappings: BTreeMap::new(),
+                },
+            )
+            .await
+            .unwrap();
+        service
+            .command(
+                &"ds".into(),
+                repo.clone(),
+                PrelabelAdminCommand::Start {
+                    run_id: prepared.runs[0].run_id.clone(),
+                },
+            )
+            .await
+            .unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let jobs = service.admin_state(&"ds".into()).await.unwrap();
+                if jobs
+                    .runs
+                    .iter()
+                    .all(|run| run.phase == PrelabelRunPhase::Completed)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
         Self {
             _temp: temp,
             app,
             repo,
+            service,
             assignment,
         }
     }
@@ -314,9 +413,30 @@ impl Fixture {
             .unwrap()
     }
     async fn hints(&self) -> PrelabelResponse {
-        let response = self.request("POST", "/datasets/ds/prelabel-suggestions", "admin", json!({"imageId": self.image(), "taskId": "bounding_box:pixel", "configId": "model"})).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        serde_json::from_value(response_json(response).await).unwrap()
+        if let Some(retained) = self
+            .service
+            .retained_suggestions(
+                &"ds".into(),
+                &self.repo,
+                &self.image(),
+                &"bounding_box:pixel".into(),
+            )
+            .await
+            .unwrap()
+        {
+            return retained.response;
+        }
+        PrelabelResponse {
+            suggestions: Vec::new(),
+            generation: self
+                .service
+                .generation_status(&"ds".into(), &"bounding_box:pixel".into(), &"model".into())
+                .await
+                .unwrap(),
+            execution: None,
+            from_batch: true,
+            browser_grant: None,
+        }
     }
     async fn reset(&self) {
         let response = self
@@ -370,15 +490,148 @@ impl Fixture {
         &self,
         batch: &labello_client::AnnotationBatchRequest,
     ) -> axum::response::Response {
+        self.save_for(&self.assignment, batch).await
+    }
+    async fn save_for(
+        &self,
+        assignment: &Value,
+        batch: &labello_client::AnnotationBatchRequest,
+    ) -> axum::response::Response {
+        let image = assignment["imageId"].as_str().unwrap();
         let path = format!(
             "/datasets/ds/images/{}/annotation-batch?assignmentId={}&imageId={}&taskId=bounding_box%3Apixel&kind=annotation",
-            self.image(),
-            self.assignment["assignmentId"].as_str().unwrap(),
-            self.image()
+            image,
+            assignment["assignmentId"].as_str().unwrap(),
+            image
         );
         self.request("POST", &path, "admin", serde_json::to_value(batch).unwrap())
             .await
     }
+}
+
+#[tokio::test]
+async fn managed_prediction_acceptance_survives_reset_and_waits_for_overview_before_review() {
+    let f = Fixture::new().await;
+    upload_test_image(&f.app, "queued.png", &png_bytes(101, 100)).await;
+    f.service
+        .synchronize_workflows(&"ds".into(), f.repo.clone(), true)
+        .await
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let jobs = f.service.admin_state(&"ds".into()).await.unwrap();
+            if jobs
+                .runs
+                .iter()
+                .all(|run| run.phase == PrelabelRunPhase::Completed)
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let selection = |kind: &str, variant: &str| json!({"selection": {"taskId": "bounding_box:pixel", "kind": kind, "variant": variant}});
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/claim",
+            "admin",
+            selection("annotation", "objects"),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let object = response_json(response).await;
+    assert!(!object.is_null());
+    let action = |assignment: &Value| json!({"assignmentId": assignment["assignmentId"], "imageId": assignment["imageId"], "taskId": assignment["taskId"], "kind": assignment["kind"]});
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/display",
+            "admin",
+            action(&object),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let state: ImageState = serde_json::from_value(response_json(response).await).unwrap();
+    let hint = state.workflow_preparations[&"bounding_box:pixel".into()].prelabels[0].clone();
+    f.reset().await;
+    let response = f
+        .save_for(&object, &f.batch("queued-object", &hint, false, true))
+        .await;
+    let status = response.status();
+    let value = response_json(response).await;
+    assert_eq!(status, StatusCode::OK, "{value}");
+    let saved: ImageState = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        saved.task_states[&hint.task_id].status,
+        TaskStatus::InProgress
+    );
+    assert!(saved.workflow_pending_objects(&hint.task_id).is_empty());
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/claim",
+            "reviewer_2",
+            selection("review", "objects"),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response_json(response).await.is_null());
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/claim",
+            "admin",
+            selection("annotation", "overview"),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let overview = response_json(response).await;
+    assert_eq!(overview["imageId"], object["imageId"]);
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/display",
+            "admin",
+            action(&overview),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = f
+        .save_for(
+            &overview,
+            &labello_client::AnnotationBatchRequest {
+                payloads: vec![],
+                prelabel_acceptances: BTreeMap::new(),
+                complete: true,
+            },
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let completed: ImageState = serde_json::from_value(response_json(response).await).unwrap();
+    assert_eq!(
+        completed.task_states[&hint.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_eq!(
+        f.repo
+            .rebuild_image_state(&hint.evidence.as_ref().unwrap().provenance.image_id)
+            .await
+            .unwrap(),
+        completed
+    );
+    let response = f
+        .request(
+            "POST",
+            "/datasets/ds/work-items/claim",
+            "reviewer_2",
+            selection("review", "objects"),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_json(response).await["imageId"], object["imageId"]);
 }
 
 #[tokio::test]
@@ -479,7 +732,9 @@ async fn reset_and_tampering_reject_new_acceptance_without_writing_events() {
         .provenance
         .model_id = "forged".into();
     assert_eq!(f.save(&forged).await.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(f.repo.load_events(&f.image()).await.unwrap(), events);
     f.reset().await;
+    let events = f.repo.load_events(&f.image()).await.unwrap();
     assert_eq!(
         f.save(&f.batch("stale", &hint, false, false))
             .await
@@ -504,97 +759,46 @@ async fn prelabel_acceptance_rechecks_boxes_committed_after_inference() {
 }
 
 #[tokio::test]
-async fn prelabel_routes_enforce_roles_csrf_and_dataset_boundaries() {
+async fn annotators_cannot_select_models_generate_hints_or_download_models() {
     let f = Fixture::new().await;
-    let query = json!({"imageId": f.image(), "taskId": "bounding_box:pixel", "configId": "model"});
-    for user in ["reviewer_2", "outsider"] {
+    for (method, route) in [
+        ("POST", "/datasets/ds/prelabel-suggestions"),
+        ("GET", "/datasets/ds/prelabel-retained"),
+        ("GET", "/datasets/ds/prelabel-generation"),
+        ("POST", "/datasets/ds/prelabel-browser-result"),
+        ("GET", "/datasets/ds/prelabels/model/model"),
+    ] {
+        for actor in ["admin", "other_annotator"] {
+            assert_eq!(
+                f.request(method, route, actor, json!({})).await.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {route}"
+            );
+        }
+    }
+    for actor in ["other_annotator", "outsider"] {
         assert_eq!(
             f.request(
                 "POST",
-                "/datasets/ds/prelabel-suggestions",
-                user,
-                query.clone()
-            )
-            .await
-            .status(),
-            StatusCode::UNAUTHORIZED,
-            "{user}"
-        );
-    }
-    for method in ["GET", "POST"] {
-        let command = serde_json::to_value(PrelabelAdminCommand::Reset {
-            scope: Default::default(),
-        })
-        .unwrap();
-        assert_eq!(
-            f.request(
-                method,
                 "/datasets/ds/prelabel-management",
-                "other_annotator",
-                command
+                actor,
+                serde_json::to_value(PrelabelAdminCommand::Reset {
+                    scope: Default::default()
+                })
+                .unwrap()
             )
             .await
             .status(),
             StatusCode::UNAUTHORIZED
         );
     }
-    assert_eq!(
-        f.request(
-            "GET",
-            "/datasets/ds/prelabels/model/model",
-            "outsider",
-            Value::Null
-        )
-        .await
-        .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    let model = f
-        .request(
-            "GET",
-            "/datasets/ds/prelabels/model/model",
-            "other_annotator",
-            Value::Null,
-        )
-        .await;
-    assert_eq!(model.status(), StatusCode::OK);
-    assert_eq!(model.headers()[header::CACHE_CONTROL], "private, no-store");
-    let response = f
-        .app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/datasets/ds/prelabel-suggestions")
-                .header("x-test-user-id", "admin")
-                .header(crate::csrf::HEADER, "invalid")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(query.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(
-        f.request(
-            "POST",
-            "/datasets/missing/prelabel-suggestions",
-            "admin",
-            query
-        )
-        .await
-        .status(),
-        StatusCode::NOT_FOUND
-    );
 }
 
 #[tokio::test]
 async fn accepted_prelabel_survives_later_edits_snapshots_offline_statistics_and_ground_truth_export()
  {
-    let f = Fixture::new().await;
-    let mut metadata = f.repo.load_dataset_config().await.unwrap();
-    metadata.tasks[0].review.workflow = ReviewWorkflow::None;
-    f.repo.save_dataset(&metadata).await.unwrap();
+    let f =
+        Fixture::with_configuration(PrelabelExecutionKind::ServerCpu, ReviewWorkflow::None).await;
     let hint = f.hints().await.suggestions.remove(0);
     let response = f.save(&f.batch("accepted", &hint, false, false)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -781,43 +985,4 @@ async fn sessions_report_prelabel_availability_without_requiring_generation() {
             .unwrap();
         assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
     }
-}
-
-#[tokio::test]
-async fn retained_prelabels_are_read_only_annotator_scoped_and_validate_the_item() {
-    let f = Fixture::new().await;
-    let route = "/datasets/ds/prelabel-retained?imageId=img&taskId=boxes";
-    for user in ["reviewer_2", "outsider"] {
-        assert_eq!(
-            f.request("GET", route, user, Value::Null).await.status(),
-            StatusCode::UNAUTHORIZED
-        );
-    }
-    // No model execution or browser grant is needed when there is no retained result.
-    let query = json!({"imageId": f.image(), "taskId": "bounding_box:pixel"});
-    let route = format!(
-        "/datasets/ds/prelabel-retained?imageId={}&taskId={}",
-        query["imageId"].as_str().unwrap(),
-        query["taskId"].as_str().unwrap()
-    );
-    let response = f
-        .request("GET", &route, "other_annotator", Value::Null)
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers()[header::CACHE_CONTROL],
-        "private, no-store"
-    );
-    assert!(response_json(response).await.is_null());
-    assert_eq!(
-        f.request(
-            "GET",
-            "/datasets/ds/prelabel-retained?imageId=missing&taskId=boxes",
-            "admin",
-            Value::Null
-        )
-        .await
-        .status(),
-        StatusCode::BAD_REQUEST
-    );
 }

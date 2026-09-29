@@ -991,6 +991,7 @@ include!("tests/ingest.rs");
 include!("tests/imports.rs");
 include!("tests/snapshots.rs");
 include!("tests/workflow.rs");
+include!("tests/workflow_items.rs");
 include!("tests/logging_redaction.rs");
 include!("tests/deployment_readiness.rs");
 include!("tests/previews.rs");

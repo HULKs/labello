@@ -105,7 +105,7 @@ impl LabelloApp {
     }
 
     pub(crate) fn can_submit_review_corrections(&self) -> bool {
-        self.review_overview()
+        (self.review_overview() || self.workflow_context().is_some())
             && self.all_review_items_decided()
             && self.has_review_corrections()
             && self.review_editor_valid()

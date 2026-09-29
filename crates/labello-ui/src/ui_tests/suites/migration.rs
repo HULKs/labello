@@ -76,12 +76,12 @@ fn active_migration_discards_stale_availability_without_rechecking() {
     harness.step();
     harness.get_by_role_and_label(
         egui::accesskit::Role::Button,
-        "Person: Bounding box annotation · Choose workflow",
+        "Person: Bounding box annotation · Annotate · Choose workflow",
     ).click();
     harness.run_steps(2);
     let unavailable_workflow = harness.get_by_role_and_label(
         egui::accesskit::Role::Button,
-        "Person: Bounding box annotation · Imported person bounding-box cleanup",
+        "Person: Bounding box annotation · Imported person bounding-box cleanup · Annotate",
     );
     assert!(
         unavailable_workflow.accesskit_node().is_disabled(),
@@ -2059,68 +2059,6 @@ fn companion_reconciliation_escape_restores_invoking_button_focus() {
 }
 
 #[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_revisit_saves_non_final_target_and_restores_focus() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    let api = Rc::new(SpyApi::new());
-    let mut app = inspector_presets::build(
-        InspectorPreset::MigrationFullImage,
-        &egui::Context::default(),
-    );
-    api.set_image_state(app.work.current_state.clone().unwrap());
-    app.runtime.api = Some(api.clone());
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(1440.0, 1000.0))
-        .with_max_steps(40)
-        .build_eframe(|_| app);
-    harness.state_mut().work.inspector_panel_collapsed = false;
-    harness.step();
-    click(&mut harness, "Review 2 resolved objects");
-    let entry = harness.get_by_role_and_label(
-        egui::accesskit::Role::Button,
-        "Person: Migration · Person skeleton migration",
-    );
-    entry.click();
-    harness.step();
-    step_until(&mut harness, 10, |app| !app.work.migration.busy);
-    assert!(
-        matches!(harness.state().work.migration.cursor, Some(labello_domain::MigrationCursor::Object { ref object_group_id, .. }) if object_group_id.as_str() == "group-left")
-    );
-    let mut saved_state = harness.state().work.current_state.clone().unwrap();
-    saved_state
-        .migration_dependencies
-        .get_mut(&TaskId::from("skeleton:person"))
-        .unwrap()
-        .remove(&labello_domain::ObjectGroupId::from("group-left"));
-    api.respond_to_next_migration_with(labello_client::ManualMigrationCommandResult {
-        image_state: saved_state,
-        cursor: Some(labello_domain::MigrationCursor::FullImage),
-        progress: labello_client::ManualMigrationProgress {
-            expected: 2,
-            annotated: 1,
-            excluded: 1,
-            pending: 0,
-        },
-        active_pass: None,
-        confirmation: None,
-        assignment: harness.state().work.assignment.clone(),
-        annotation_id: None,
-    });
-    click_accesskit_button(&mut harness, "Save object changes");
-    step_until(&mut harness, 10, |app| !app.work.migration.busy);
-    harness.step();
-    assert_eq!(
-        harness.state().work.migration.cursor,
-        Some(labello_domain::MigrationCursor::FullImage)
-    );
-    assert_eq!(api.counts().migration_commands, 2);
-    assert!(
-        harness
-            .get_by_label("Guide 1: Skeleton annotated; Guide present")
-            .is_focused()
-    );
-}
-
 #[cfg(feature = "inspector-presets")]
 #[test]
 fn direct_revisit_canvas_selects_completed_skeleton_without_drag_activation() {
@@ -2952,199 +2890,6 @@ fn export_keypoint_migration_browser_fixture() {
 
 #[cfg(feature = "inspector-presets")]
 #[test]
-fn class_workflow_missing_objects_respects_migration_phase_and_preserves_drafts() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    use crate::panels::WorkflowActivity;
-    for preset in [InspectorPreset::MigrationObject, InspectorPreset::MigrationFullImage] {
-        let app = inspector_presets::build(preset, &egui::Context::default());
-        let workflow = app.selected_workflow().unwrap();
-        let missing = app.workflow_entry_label(&workflow, Some(WorkflowActivity::MissingObjects));
-        let migration = app.workflow_entry_label(&workflow, Some(WorkflowActivity::Migration));
-        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
-        harness.run();
-        let is_overview = preset == InspectorPreset::MigrationFullImage;
-        let node = harness.get_by_role_and_label(egui::accesskit::Role::Button, &missing);
-        assert_eq!(node.accesskit_node().is_disabled(), !is_overview);
-        assert_eq!(node.accesskit_node().toggled(), Some(if is_overview {
-            egui::accesskit::Toggled::True
-        } else { egui::accesskit::Toggled::False }));
-        if !is_overview {
-            assert!(!harness.state().work.migration.adding_missing_object);
-            continue;
-        }
-        click_accesskit_button(&mut harness, &missing);
-        assert!(harness.state().work.migration.adding_missing_object);
-        let draft = harness.state().work.migration.draft.clone();
-        click_accesskit_button(&mut harness, &missing);
-        assert_eq!(harness.state().work.migration.draft, draft);
-        assert!(harness.state().work.migration.adding_missing_object, "reselecting the activity must not cancel the draft");
-        harness.state_mut().work.migration.draft_dirty = true;
-        click_accesskit_button(&mut harness, &migration);
-        assert!(harness.state().work.migration.pending_revisit_target.is_some());
-        assert_eq!(harness.state().work.migration.draft, draft);
-        harness.state_mut().cancel_pending_migration_revisit();
-        assert!(harness.state().work.migration.draft_dirty);
-        assert_eq!(harness.state().work.migration.draft, draft);
-    }
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_phase_blocks_have_icons_and_no_explanation_rows() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    use crate::panels::WorkflowActivity;
-
-    fn has_status_icon(shape: &egui::Shape, tile: egui::Rect) -> bool {
-        match shape {
-            egui::Shape::Rect(rect) => tile.contains_rect(rect.rect) && rect.rect.center().y > tile.center().y,
-            egui::Shape::Vec(shapes) => shapes.iter().any(|shape| has_status_icon(shape, tile)),
-            _ => false,
-        }
-    }
-
-    for case in 0..4 {
-        let preset = if case == 1 { InspectorPreset::MigrationObject } else { InspectorPreset::MigrationFullImage };
-        let mut app = inspector_presets::build(preset, &egui::Context::default());
-        let migration = app.selected_workflow().unwrap();
-        let (activity, reason) = match case {
-            0 => {
-                app.work.selected_task_id = Some(TaskId::from("bounding_box:person"));
-                (WorkflowActivity::MissingObjects, "No active migration assignment for this workflow")
-            }
-            1 => (WorkflowActivity::MissingObjects, "Bounding boxes remain unresolved"),
-            2 => {
-                app.work.migration.inspected_group_id = Some("group-left".into());
-                (WorkflowActivity::MissingObjects, "An individual object is being inspected")
-            }
-            _ => {
-                app.work.current_state.as_mut().unwrap().migration_target_sets
-                    .get_mut(&migration.task_id).unwrap().targets.clear();
-                (WorkflowActivity::Migration, "This image has no bounding boxes to migrate")
-            }
-        };
-        let label = app.workflow_entry_label(&migration, Some(activity));
-        app.work.drawer = Some(Drawer::Workflow);
-        let mut harness = Harness::builder().with_size(egui::vec2(320.0, 568.0)).build_eframe(|_| app);
-        harness.run();
-        let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
-        assert!(tile.accesskit_node().is_disabled(), "case {case}");
-        assert!(tile.accesskit_node().description().unwrap().starts_with(reason), "case {case}");
-        let rect = tile.rect();
-        assert!(harness.output().shapes.iter().any(|shape| has_status_icon(&shape.shape, rect)), "missing painted status icon in case {case}");
-        assert!(harness.query_by_label(reason).is_none(), "phase explanation leaked below tile in case {case}");
-    }
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_overview_actions_do_not_depend_on_new_assignment_availability() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    use crate::panels::WorkflowActivity;
-    let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
-    let workflow = app.selected_workflow().unwrap();
-    let missing = app.workflow_entry_label(&workflow, Some(WorkflowActivity::MissingObjects));
-    app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
-    app.work.availability.kind = Some(AssignmentKind::Annotation);
-    app.work.availability.resolved = true;
-    app.work.availability.tasks.insert(workflow.task_id.clone(), false);
-    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
-    harness.run();
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, &missing).accesskit_node().is_disabled());
-    harness.state_mut().work.migration.busy = true;
-    harness.run();
-    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, &missing).accesskit_node().is_disabled());
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_migration_configuration_keeps_direct_skeleton_assignments_accessible() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    let mut app = inspector_presets::build(InspectorPreset::MigrationObject, &egui::Context::default());
-    app.work.current_state.as_mut().unwrap().migration_target_sets.clear();
-    assert!(!app.manual_migration_active());
-    let label = app.workflow_entry_label(&app.selected_workflow().unwrap(), Some(crate::panels::WorkflowActivity::Skeleton));
-    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
-    harness.run();
-    let chooser = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Skeleton annotation · Choose workflow");
-    assert_eq!(chooser.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
-    chooser.click();
-    harness.run();
-    let entry = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
-    assert!(!entry.accesskit_node().is_disabled());
-    assert_eq!(entry.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
-    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Migration").is_none());
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_missing_objects_is_keyboard_reachable_in_scrolling_drawers() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    for (width, height) in [(320.0, 320.0), (320.0, 568.0), (390.0, 844.0), (600.0, 800.0), (1288.0, 820.0), (1440.0, 1000.0)] {
-        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
-        app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
-        let workflow = app.selected_workflow().unwrap();
-        let label = app.workflow_entry_label(&workflow, Some(crate::panels::WorkflowActivity::MissingObjects));
-        let migration = app.workflow_entry_label(&workflow, Some(crate::panels::WorkflowActivity::Migration));
-        let mut harness = Harness::builder().with_size(egui::vec2(width, height)).with_max_steps(40).build_eframe(|_| app);
-        harness.run();
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, &migration).focus();
-        harness.run();
-        harness.key_press(egui::Key::Tab);
-        harness.run();
-        let entry = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label);
-        assert!(entry.accesskit_node().is_focused(), "missing-object entry must follow Migration at {width}x{height}");
-        let rect = entry.rect();
-        assert!(rect.left() >= 0.0 && rect.right() <= width && rect.top() >= 0.0 && rect.bottom() <= height, "focused activity outside viewport at {width}x{height}: {rect:?}");
-        harness.key_press(egui::Key::Enter);
-        harness.run();
-        assert!(harness.state().work.migration.adding_missing_object);
-    }
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
-fn class_workflow_configured_activities_share_width_evenly() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    use crate::panels::WorkflowActivity;
-    for (width, height) in [(320.0, 568.0), (390.0, 844.0), (1440.0, 1000.0)] {
-        let mut app = inspector_presets::build(InspectorPreset::MigrationFullImage, &egui::Context::default());
-        app.work.drawer = (LayoutMode::for_width(width) != LayoutMode::Wide).then_some(Drawer::Workflow);
-        let migration = app.selected_workflow().unwrap();
-        let skeleton = app.workflow_choices().into_iter()
-            .find(|choice| choice.task_id == TaskId::from("skeleton:person_refinement")).unwrap();
-        let labels = [
-            "Person: Bounding box annotation · Choose workflow".to_string(),
-            app.workflow_entry_label(&migration, Some(WorkflowActivity::Migration)),
-            app.workflow_entry_label(&migration, Some(WorkflowActivity::MissingObjects)),
-            app.workflow_entry_label(&skeleton, Some(WorkflowActivity::Skeleton)),
-        ];
-        let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
-        harness.run();
-        let rects = labels.map(|label| harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect());
-        let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person").rect();
-        assert!((heading.center().x - (rects[0].left() + rects[3].right()) / 2.0).abs() <= 1.0);
-        for label in ["bounding box annotation type", "skeleton annotation type"] {
-            for icon in harness.query_all_by_label(label) {
-                let icon = icon.rect();
-                if let Some(tile) = rects.iter().find(|tile| tile.contains_rect(icon)) {
-                    assert!((icon.center().x - tile.center().x).abs() <= 1.0, "icon {icon:?} is off-center in {tile:?}");
-                    assert!(icon.top() - tile.top() >= 12.0, "icon {icon:?} needs top padding in {tile:?}");
-                }
-            }
-        }
-        for pair in rects.windows(2) {
-            assert!((pair[0].width() - pair[1].width()).abs() <= 1.0, "{rects:?}");
-            assert_eq!(pair[0].top(), pair[1].top());
-            assert_eq!(pair[0].height(), pair[1].height());
-            assert!(pair[0].right() < pair[1].left(), "{rects:?}");
-        }
-        assert!(rects[0].height() >= 44.0 && rects[0].height() <= 94.0, "{rects:?}");
-        assert!(rects[0].left() >= 0.0 && rects[3].right() <= width, "{rects:?}");
-    }
-}
-
-#[cfg(feature = "inspector-presets")]
-#[test]
 fn review_uses_equal_class_activities_and_guarded_workflow_chooser() {
     use crate::inspector_presets::{self, InspectorPreset};
     use labello_domain::WorkflowUnavailableReason;
@@ -3167,8 +2912,8 @@ fn review_uses_equal_class_activities_and_guarded_workflow_chooser() {
         let mut harness = Harness::builder().with_size(egui::vec2(width, height)).build_eframe(|_| app);
         harness.run();
 
-        let boxes = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box review · Choose workflow");
-        let skeletons = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Skeleton review · Choose workflow");
+        let boxes = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box review · Review · Choose workflow");
+        let skeletons = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Skeleton review · Objects · Choose workflow");
         let left = boxes.rect();
         let right = skeletons.rect();
         assert!((left.width() - right.width()).abs() <= 1.0 && left.top() == right.top() && left.height() == right.height());
@@ -3191,7 +2936,7 @@ fn review_uses_equal_class_activities_and_guarded_workflow_chooser() {
 
 #[cfg(feature = "inspector-presets")]
 #[test]
-fn class_workflow_selected_reason_and_chooser_cues_fit_four_columns() {
+fn class_workflow_selected_and_chooser_cues_fit_the_shared_status_row() {
     use crate::inspector_presets::{self, InspectorPreset};
     use labello_domain::WorkflowUnavailableReason;
 
@@ -3207,7 +2952,7 @@ fn class_workflow_selected_reason_and_chooser_cues_fit_four_columns() {
     let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0)).build_eframe(|_| app);
     harness.run();
 
-    let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow").rect();
+    let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Annotate · Choose workflow").rect();
     let mut dots = Vec::new();
     let mut segments = Vec::new();
     fn collect(shape: &egui::Shape, tile: egui::Rect, dots: &mut Vec<egui::Pos2>, segments: &mut Vec<[egui::Pos2; 2]>) {
@@ -3226,7 +2971,7 @@ fn class_workflow_selected_reason_and_chooser_cues_fit_four_columns() {
     assert_eq!(dots.len(), 1, "selected status dot must remain visible in {tile:?}");
     let dot = dots[0];
     let chevron: Vec<_> = segments.into_iter().filter(|points| {
-        points.iter().all(|point| point.x > tile.center().x + 10.0 && (point.y - dot.y).abs() <= 3.0)
+        points.iter().all(|point| point.x > dot.x + 5.0 && (point.y - dot.y).abs() <= 3.0)
     }).collect();
     assert_eq!(chevron.len(), 2, "chooser chevron must fit beside selected and reason cues in {tile:?}");
     assert!(dot.x > tile.left() + 4.0 && chevron.iter().flatten().all(|point| point.x < tile.right() - 4.0));
@@ -3247,7 +2992,7 @@ fn class_workflow_chooser_shows_full_names_and_preserves_work_on_cancel() {
         let cursor = app.work.migration.cursor.clone();
         let mut harness = Harness::builder().with_size(egui::vec2(width, height)).with_max_steps(40).build_eframe(|_| app);
         harness.run();
-        let trigger = "Person: Bounding box annotation · Choose workflow";
+        let trigger = "Person: Bounding box annotation · Annotate · Choose workflow";
         harness.get_by_role_and_label(egui::accesskit::Role::Button, trigger).focus();
         harness.key_press(egui::Key::Enter);
         harness.run();
@@ -3288,7 +3033,7 @@ fn class_workflow_chooser_explains_unavailable_options_and_guards_dirty_switches
     let selected = app.work.selected_task_id.clone();
     let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
     harness.run();
-    let trigger = "Person: Bounding box annotation · Choose workflow";
+    let trigger = "Person: Bounding box annotation · Annotate · Choose workflow";
     let button = harness.get_by_role_and_label(egui::accesskit::Role::Button, trigger);
     assert!(!button.accesskit_node().is_disabled());
     button.click();
@@ -3324,10 +3069,10 @@ fn class_workflow_chooser_pointer_hits_options_above_compact_drawer() {
     let draft = app.work.migration.draft.clone();
     let mut harness = Harness::builder().with_size(egui::vec2(320.0, 320.0)).with_max_steps(40).build_eframe(|_| app);
     harness.run();
-    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow").rect().center();
+    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Annotate · Choose workflow").rect().center();
     click_at(&mut harness, trigger);
     harness.run();
-    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person bounding boxes").rect().center();
+    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person bounding boxes · Annotate").rect().center();
     click_at(&mut harness, option);
     harness.run();
     assert!(harness.state().work.pending_transition.is_some());
@@ -3364,7 +3109,7 @@ fn class_workflow_global_blocks_explain_unselected_groups() {
             assert_eq!(app.workflow_interaction_block().unwrap().label(), reason);
             let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|_| app);
             harness.run();
-            let label = if review { "Person: Bounding box review · Choose workflow" } else { "Person: Bounding box annotation · Choose workflow" };
+            let label = if review { "Person: Bounding box review · Review · Choose workflow" } else { "Person: Bounding box annotation · Annotate · Choose workflow" };
             let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label);
             assert!(tile.accesskit_node().is_disabled(), "review={review} case={case}");
             assert!(tile.accesskit_node().description().unwrap().starts_with(reason), "review={review} case={case}");

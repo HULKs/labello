@@ -58,6 +58,8 @@ pub struct UpdateDatasetConfigRequest {
     #[serde(default = "labello_domain::default_preload_queue_size")]
     pub preload_queue_size: usize,
     #[serde(default)]
+    pub workflow_queue: labello_domain::WorkflowQueueConfig,
+    #[serde(default)]
     pub bounding_box_visibility: labello_domain::BoundingBoxVisibility,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
@@ -72,6 +74,7 @@ impl UpdateDatasetConfigRequest {
             role_assignments: metadata.role_assignments.clone(),
             imbalance: metadata.imbalance.clone(),
             preload_queue_size: metadata.preload_queue_size,
+            workflow_queue: metadata.workflow_queue.clone(),
             bounding_box_visibility: metadata.bounding_box_visibility,
             prelabel_configs: metadata.prelabel_configs.clone(),
         }
@@ -85,13 +88,6 @@ impl UpdateDatasetConfigRequest {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PrelabelSuggestionRequest {
-    pub image_id: ImageId,
-    pub config_id: PrelabelConfigId,
-    pub task_id: TaskId,
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -124,11 +120,4 @@ pub struct DatasetUser {
 pub struct SetDatasetRolesRequest {
     pub user_id: UserId,
     pub roles: Vec<DatasetRole>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PrelabelItemRequest {
-    pub image_id: ImageId,
-    pub task_id: TaskId,
 }

@@ -7,11 +7,6 @@ pub(crate) enum WorkflowMarkerReason {
     SigningOut,
     MigrationBusy,
     StatisticsOpen,
-    WorkflowChangeNotice,
-    MigrationRequired,
-    UnresolvedBoxes,
-    FullImageRequired,
-    NoMigrationBoxes,
     Transition,
     Checking,
     CheckFailed,
@@ -29,11 +24,6 @@ impl WorkflowMarkerReason {
             Self::SigningOut => "Signing out",
             Self::MigrationBusy => "Updating migration",
             Self::StatisticsOpen => "Statistics dialog open",
-            Self::WorkflowChangeNotice => "Workflow change notice open",
-            Self::MigrationRequired => "No active migration assignment for this workflow",
-            Self::UnresolvedBoxes => "Bounding boxes remain unresolved",
-            Self::FullImageRequired => "An individual object is being inspected",
-            Self::NoMigrationBoxes => "This image has no bounding boxes to migrate",
             Self::Transition => "Workflow transition pending",
             Self::Checking => "Checking for available work",
             Self::CheckFailed => "Availability unknown",
@@ -47,6 +37,12 @@ impl WorkflowMarkerReason {
                 R::ReviewRevision => "Work is locked for review revision",
                 R::ImportExcluded => "Imported images are excluded from annotation",
                 R::ReviewFinalized => "Review is already complete",
+                R::WorkflowDisabled => "This workflow is disabled",
+                R::ObjectsPending => "Objects must be finished before Overview",
+                R::PreparationPending => "Dataset model is preparing objects",
+                R::PreparationFailed => "Dataset model needs administrator attention",
+                R::OverviewLimit => "Finish pending Overview work first",
+                R::NoObjects => "No objects remaining",
                 R::Unavailable => "No assignments available",
             },
         }
@@ -69,7 +65,6 @@ impl LabelloApp {
         if self.work.migration.busy { return Some(M::MigrationBusy); }
         if self.work.pending_transition.is_some() { return Some(M::Transition); }
         if self.navigation.statistics.open { return Some(M::StatisticsOpen); }
-        if self.work.automatic_workflow_change.is_some() { return Some(M::WorkflowChangeNotice); }
         self.workspace_bars_loading().then_some(M::Checking)
     }
 
@@ -189,17 +184,9 @@ fn paint_workflow_marker(
                 );
             }
         }
-        Some(M::MigrationRequired | M::UnresolvedBoxes | M::FullImageRequired) => {
-            painter.rect_stroke(egui::Rect::from_min_max(point(3.0, 8.0), point(15.0, 16.0)), 2.0, stroke, egui::StrokeKind::Inside);
-            path(&[(5.0, 8.0), (5.0, 5.0), (7.0, 2.0), (11.0, 2.0), (13.0, 5.0), (13.0, 8.0)], false);
-        }
-        Some(M::StatisticsOpen | M::WorkflowChangeNotice) => {
+        Some(M::StatisticsOpen) => {
             painter.rect_stroke(egui::Rect::from_min_max(point(2.0, 3.0), point(16.0, 15.0)), 2.0, stroke, egui::StrokeKind::Inside);
             line((2.0, 7.0), (16.0, 7.0));
-        }
-        Some(M::NoMigrationBoxes) => {
-            image();
-            line((2.0, 16.0), (16.0, 2.0));
         }
         Some(M::Transition) => {
             path(
@@ -231,7 +218,7 @@ fn paint_workflow_marker(
             );
             painter.circle_filled(point(9.0, 14.0), 0.9, reason_color);
         }
-        Some(M::Unavailable(R::BalanceLimit)) => {
+        Some(M::Unavailable(R::BalanceLimit | R::OverviewLimit)) => {
             line((9.0, 1.0), (9.0, 16.0));
             line((4.0, 16.0), (14.0, 16.0));
             line((2.0, 4.0), (16.0, 4.0));
@@ -239,13 +226,13 @@ fn paint_workflow_marker(
                 path(&[(x, 4.0), (x - 3.0, 11.0), (x + 3.0, 11.0)], true);
             }
         }
-        Some(M::Unavailable(R::ReviewDisabled)) => {
+        Some(M::Unavailable(R::ReviewDisabled | R::WorkflowDisabled)) => {
             shield();
             let cross_stroke = egui::Stroke::new(2.0, theme::TEXT);
             painter.line_segment([point(6.5, 6.0), point(11.5, 11.0)], cross_stroke);
             painter.line_segment([point(11.5, 6.0), point(6.5, 11.0)], cross_stroke);
         }
-        Some(M::Unavailable(R::EmptyDataset)) => {
+        Some(M::Unavailable(R::EmptyDataset | R::NoObjects)) => {
             line((0.0, 6.0), (0.0, 18.0));
             line((0.0, 18.0), (13.0, 18.0));
             image();
@@ -289,7 +276,7 @@ fn paint_workflow_marker(
             );
             lock();
         }
-        Some(M::Unavailable(R::ReviewRevision)) => {
+        Some(M::Unavailable(R::ReviewRevision | R::ObjectsPending)) => {
             shield();
             lock();
         }
@@ -304,7 +291,7 @@ fn paint_workflow_marker(
                 egui::Stroke::new(2.0, theme::TEXT),
             ));
         }
-        Some(M::Unavailable(R::Unavailable)) => {
+        Some(M::Unavailable(R::Unavailable | R::PreparationPending | R::PreparationFailed)) => {
             painter.circle_stroke(center, 8.0, stroke);
             line((5.0, 9.0), (13.0, 9.0));
         }

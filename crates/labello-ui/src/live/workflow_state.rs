@@ -227,6 +227,7 @@ impl LabelloApp {
         }
         self.work.canvas.clear_review_focus();
         self.apply_assignment_preferences();
+        self.install_workflow_item();
         if self.view == AppView::Annotate && self.work.selected_annotation.is_none() {
             self.work.selected_annotation = self.work.annotations.iter().find(|annotation| {
                 self.annotation_matches_selected_workflow(annotation)
@@ -278,6 +279,10 @@ impl LabelloApp {
         ctx: &egui::Context,
         released_image_id: Option<labello_domain::ImageId>,
     ) {
+        if let Some(entry) = self.forward_work_item().cloned() {
+            self.request_history_item(entry);
+            return;
+        }
         if self.promote_prepared_assignment(ctx, released_image_id) {
             return;
         }
@@ -302,7 +307,7 @@ impl LabelloApp {
             if loaded.assignment.kind == kind
                 && loaded.assignment.status == labello_domain::AssignmentStatus::Active
             {
-                if kind == labello_domain::AssignmentKind::Review {
+                if kind == labello_domain::AssignmentKind::Review || loaded.workflow_item().is_some() {
                     return self.revalidate_prepared_review(loaded);
                 }
                 self.apply_loaded_image(ctx, loaded);
@@ -318,6 +323,8 @@ impl LabelloApp {
         self.work.persisted_annotations = state.annotations.keys().cloned().collect();
         self.work.current_state = Some(state);
         self.work.modified_annotations.clear();
+        self.scope_workflow_annotations();
+        self.restore_workflow_edits();
     }
 
     pub(crate) fn sync_review_selection(&mut self) {
@@ -341,7 +348,8 @@ impl LabelloApp {
             return;
         };
         let renewed = state.assignments.iter().find(|candidate| {
-            candidate.image_id == current.image_id
+            candidate.assignment_id == current.assignment_id
+                && candidate.image_id == current.image_id
                 && candidate.task_id == current.task_id
                 && candidate.kind == current.kind
                 && candidate.assigned_to == self.config.user_id

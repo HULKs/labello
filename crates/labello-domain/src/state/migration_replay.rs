@@ -470,7 +470,7 @@ fn is_discovered_migration_skeleton(annotation: &AnnotationVersion) -> bool {
         && annotation.annotation_type == AnnotationType::Skeleton
         && matches!(
             annotation.origin,
-            AnnotationOrigin::Native { legacy_v2: false }
+            AnnotationOrigin::Native { legacy_v2: false } | AnnotationOrigin::Prelabel { .. }
         )
         && matches!(
             annotation.revision_source,

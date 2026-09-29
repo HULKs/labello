@@ -65,8 +65,10 @@ async def run(args):
                     await scenario.request("PUT", "/datasets/stylus/admin", data={key: metadata[key] for key in
                         ["name", "imageRoots", "labelClasses", "tasks", "roleAssignments", "imbalance", "prelabelConfigs"]})
                     for _ in range(4):
-                        assignment = await scenario.request("POST", "/datasets/stylus/images/next",
-                            data={"taskId": f"{args.kind}:fixture", "kind": "annotation"})
+                        assignment = await scenario.request("POST", "/datasets/stylus/work-items/claim",
+                            data={"selection": {"taskId": f"{args.kind}:fixture", "kind": "annotation", "variant": "overview"}})
+                        await scenario.request("POST", "/datasets/stylus/work-items/display",
+                            data={key: assignment[key] for key in ["assignmentId", "imageId", "taskId", "kind"]})
                         await scenario.request("POST", "/datasets/stylus/assignments/complete",
                             data={key: assignment[key] for key in ["assignmentId", "imageId", "taskId", "kind"]})
                     scenario.page = await context.new_page()
@@ -100,6 +102,8 @@ async def run(args):
                 tree = await cdp.send("Accessibility.getFullAXTree")
                 require(any(node.get("role", {}).get("value") == "Canvas" for node in tree["nodes"]), "canvas-accessibility-node")
                 inflight = set()
+                displays = []
+                scenario.page.on("requestfinished", lambda request: displays.append(True) if urlsplit(request.url).path.endswith("/work-items/display") else None)
                 scenario.page.on("request", lambda request: inflight.add(request) if request.url.startswith(api) else None)
                 scenario.page.on("requestfinished", lambda request: inflight.discard(request))
                 scenario.page.on("requestfailed", lambda request: inflight.discard(request))
@@ -125,8 +129,8 @@ async def run(args):
 
                 await scenario.page.route(api + "/**", delayed)
                 samples = 0
-                for index, (key, suffix) in enumerate([("x", "/assignments/release"), ("ArrowLeft", "/assignments/reopen"),
-                                                       ("x", "/assignments/release"), ("ArrowLeft", "/assignments/reopen")]):
+                for index, (key, suffix) in enumerate([("x", "/assignments/release"), ("ArrowLeft", "/work-items/reopen"),
+                                                       ("x", "/assignments/release"), ("ArrowLeft", "/work-items/reopen")]):
                     await until(requests_settled, "previous-transition-not-settled")
                     held.clear()
                     release.clear()
@@ -134,10 +138,13 @@ async def run(args):
                     bounds = await until(lambda: scenario.color_bounds(COLOR), "ready-image-not-rendered")
                     # A flat-color interior point detects blank or opacity-faded frames.
                     point = (int((bounds[0] + bounds[2]) / 2), int((bounds[1] + bounds[3]) / 2))
+                    before_display = len(displays)
                     await scenario.page.keyboard.press(key)
                     try:
                         await asyncio.wait_for(held.wait(), timeout=15)
                     except TimeoutError:
+                        history = await scenario.request("GET", f"/datasets/stylus/work-items/history?taskId={args.kind}:fixture&kind={'review' if args.review else 'annotation'}&variant=overview")
+                        print(json.dumps({"failed_transition": index, "displayed_transitions": len(displays), "server_history_depth": len(history)}), flush=True)
                         raise AssertionError(f"transition-request-not-started-{index}") from None
                     try:
                         for _ in range(5):
@@ -153,7 +160,9 @@ async def run(args):
                                 clip={"x": 0, "y": 0, "width": args.width, "height": 114 if args.width >= 1288 else 140}, scale="css")
                     finally:
                         release.set()
-                    await until(requests_settled, "transition-did-not-settle")
+                    async def next_displayed():
+                        return len(displays) > before_display and await requests_settled()
+                    await until(next_displayed, f"transition-did-not-settle-{index}")
                 require(not scenario.errors, "browser-page-error")
                 print(json.dumps({"result": "passed", "browser": version, "kind": args.kind,
                     "workflow": "review" if args.review else "annotation", "viewport": [args.width, args.height],

@@ -164,6 +164,13 @@ application bars for review evidence. It does not prove migration-specific
 transactions, failure recovery or absence of every possible spinner; shared UI
 tests and native inspection cover those presentation states.
 
+For Objects/Overview queues, run `python apps/labello-wasm/tests/workflow_items.py
+--kind bounding_box` and repeat with `--kind skeleton`. It uses disposable
+production data to check cross-image Objects work, C → B → A → B → C history,
+separate annotation Overview completion, and focused review. Optional `--artifacts`
+captures only the workflow selector. Storage tests cover multi-user handoff,
+prelabel replacement, migration transactions, and exact score/replay invariants.
+
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
 It includes headless startup, MCP readiness checks, independent parallel

@@ -54,6 +54,8 @@ impl DatasetRepository {
         let previous_state = next_state.clone();
         let previous_completion = self.completion_observation(&next_state);
         let timestamp = labello_domain::now();
+        let item_confirmation = payloads.iter().any(|payload| matches!(payload,
+            EventPayload::Workflow { event } if matches!(event.as_ref(), labello_domain::WorkflowEvent::ItemConfirmed { .. })));
         // 2. Let assignment/migration policy finish the complete event batch.
         crate::assignment::append_guide_invalidation_payloads(
             &next_state,
@@ -63,8 +65,18 @@ impl DatasetRepository {
         // 3. Validate the entire planned batch against a cloned next state.
         let mut events = Vec::with_capacity(payloads.len());
         for mut payload in payloads {
+            if item_confirmation && let EventPayload::ReviewRecorded { review } = &mut payload {
+                review.timestamp = timestamp;
+            }
             if let EventPayload::MissingObjectEvidenceRecorded { evidence, .. } = &mut payload {
                 evidence.timestamp = timestamp;
+            }
+            if let EventPayload::Workflow { event } = &mut payload
+                && let labello_domain::WorkflowEvent::ItemConfirmed { confirmation } =
+                    event.as_mut()
+                && let Some(review) = &mut confirmation.review
+            {
+                review.timestamp = timestamp;
             }
             let mut event = EventLogEntry::new(
                 next_state.current_sequence + 1,

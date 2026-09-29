@@ -37,7 +37,7 @@ impl LabelloApp {
             }
             ui.label(RichText::new("Preflight summary").strong());
             status_row(ui, crate::glossary::IMAGES, report.source.images.to_string());
-            status_row(ui, "Objects", report.source.objects.to_string());
+            status_row(ui, crate::glossary::OBJECTS, report.source.objects.to_string());
             status_row(
                 ui,
                 "Output annotations",

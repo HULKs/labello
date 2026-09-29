@@ -1,6 +1,5 @@
 impl LabelloApp {
     pub(crate) fn central(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        self.clear_workflow_change_outside_scope();
         match self.view {
             AppView::Inspect => { self.dataset_inspector(ui); return; }
             AppView::Setup => {
@@ -19,7 +18,37 @@ impl LabelloApp {
         }
         let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
+        self.workflow_change_notice(ui.ctx(), canvas_rect);
         self.saved_workflow_reason_notice(ui.ctx(), canvas_rect);
+    }
+
+    fn workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        let Some(message) = self.work.workflow.change_notice.clone() else { return; };
+        let frame = theme::inset_frame();
+        let width = (canvas.width() - 16.0 - frame.total_margin().sum().x).clamp(80.0, 480.0);
+        let height = (canvas.height() - 16.0 - frame.total_margin().sum().y).clamp(44.0, 160.0);
+        let notice = egui::Area::new(egui::Id::new("workflow-change-notice"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(egui::pos2(canvas.center().x, canvas.top() + 8.0))
+            .pivot(egui::Align2::CENTER_TOP)
+            .constrain_to(canvas)
+            .show(ctx, |ui| {
+                frame.show(ui, |ui| {
+                    ui.set_width(width);
+                    ui.horizontal_top(|ui| {
+                        let close = ui.add_sized(egui::vec2(44.0, 44.0), egui::Button::new("×")).on_hover_text("Dismiss workflow change");
+                        close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dismiss workflow change"));
+                        if close.clicked() { self.work.workflow.change_notice = None; }
+                        egui::ScrollArea::vertical().max_height(height).min_scrolled_height(height)
+                            .scroll_source(crate::pointer_input::scroll_source(ctx))
+                            .show(ui, |ui| {
+                                let label = ui.add(egui::Label::new(message).wrap());
+                                ctx.accesskit_node_builder(label.id, |node| node.set_role(egui::accesskit::Role::Status));
+                            });
+                    });
+                });
+            });
+        notice.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Workflow change notice"));
     }
 
     fn saved_workflow_reason_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
@@ -34,98 +63,6 @@ impl LabelloApp {
                 ui.set_width(width);
                 self.reason_notice_contents(ui, width, canvas.height());
             });
-    }
-
-    fn automatic_workflow_change_modal(&mut self, ctx: &egui::Context) {
-        let Some(notice) = self.work.automatic_workflow_change.clone() else {
-            return;
-        };
-        let screen = ctx.content_rect();
-        let width = (screen.width() - 48.0).clamp(160.0, 520.0);
-        let max_height = (screen.height() - 48.0).max(80.0);
-        let gap = if Self::short_viewport(screen.size()) {
-            0.0
-        } else {
-            theme::SPACE_2
-        };
-        let mut acknowledged = false;
-        let mut presented = false;
-        let response =
-            theme::modal(ctx, egui::Id::new("automatic-workflow-change-modal")).show(ctx, |ui| {
-                ui.set_width(width);
-                ui.set_max_height(max_height);
-                egui::ScrollArea::vertical()
-                    .scroll_source(crate::pointer_input::scroll_source(ctx))
-                    .max_height(max_height)
-                    .show(ui, |ui| {
-                        let title = ui.add(
-                            egui::Label::new(RichText::new("Workflow changed").heading())
-                                .sense(egui::Sense::focusable_noninteractive()),
-                        );
-                        if title.gained_focus() {
-                            title.scroll_to_me(None);
-                        }
-                        if notice.focus_pending && ui.is_visible() {
-                            // Focus the explanation, not a button that a completion key could activate.
-                            title.request_focus();
-                            presented = true;
-                        }
-                        ui.add_space(gap);
-                        let reason = WorkflowMarkerReason::Unavailable(notice.reason);
-                        ui.horizontal_top(|ui| {
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::Vec2::splat(Self::WORKFLOW_MARKER_WIDTH), egui::Sense::hover(),
-                            );
-                            paint_workflow_marker(ui, rect, false, Some(reason));
-                            ui.add(egui::Label::new(reason.label()).wrap());
-                        });
-                        for (heading, label, annotation_type, emphasize) in [
-                            (crate::glossary::PREVIOUS_WORKFLOW, &notice.previous, &notice.previous_type, false),
-                            ("New workflow", &notice.current, &notice.current_type, true),
-                        ] {
-                            ui.add_space(gap);
-                            ui.label(RichText::new(heading).weak());
-                            ui.horizontal_top(|ui| {
-                                let (rect, response) = ui.allocate_exact_size(
-                                    egui::Vec2::splat(Self::WORKFLOW_ICON_SIZE), egui::Sense::hover(),
-                                );
-                                workflow_type_icon(ui, response.id, rect, annotation_type);
-                                let text = RichText::new(label);
-                                ui.add(egui::Label::new(if emphasize { text.strong() } else { text }).wrap());
-                            });
-                        }
-                        ui.add_space(gap + theme::SPACE_1);
-                        let button = theme::primary_button(
-                            ui,
-                            !notice.focus_pending,
-                            egui::Button::new("Acknowledge and continue")
-                                .wrap()
-                                .min_size(egui::vec2(44.0, 44.0)),
-                        );
-                        if button.gained_focus() {
-                            button.scroll_to_me(None);
-                        }
-                        if button.clicked() {
-                            button.surrender_focus();
-                            acknowledged = true;
-                        }
-                    });
-            });
-        response.response.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::WidgetType::Window, true, "Workflow changed")
-        });
-        ctx.accesskit_node_builder(response.response.id, |node| {
-            node.set_role(egui::accesskit::Role::Dialog);
-            node.set_modal();
-        });
-        // Deliberately ignore should_close: neither Escape nor the backdrop acknowledges a change.
-        if acknowledged {
-            self.acknowledge_workflow_change();
-            ctx.request_repaint();
-        } else if presented && let Some(notice) = self.work.automatic_workflow_change.as_mut() {
-            notice.focus_pending = false;
-            ctx.request_repaint();
-        }
     }
 
     pub(crate) fn overlays(&mut self, ctx: &egui::Context, layout: LayoutMode) {
@@ -143,10 +80,6 @@ impl LabelloApp {
             self.migration_companion_reconciliation_modal(ctx);
             return;
         }
-        if self.work.automatic_workflow_change.is_some() {
-            self.automatic_workflow_change_modal(ctx);
-            return;
-        }
         if self.navigation.statistics.open {
             self.statistics_overlay(ctx);
             return;
@@ -155,7 +88,7 @@ impl LabelloApp {
             self.migration_revisit_discard_modal(ctx);
             return;
         }
-        if self.work.pending_transition.is_some() {
+        if self.work.pending_transition.is_some() && self.workflow_context().is_none() {
             self.transition_modal(ctx);
             return;
         }
@@ -221,8 +154,7 @@ impl LabelloApp {
                                     format!("Close {title}"),
                                 )
                             });
-                            if drawer == Drawer::Inspector
-                                && let Some(invoker) = self.work.review_details_focus_return
+                            if let Some(invoker) = self.work.work_panel_focus_return
                                 && ui.ctx().memory(|memory| memory.focused()).is_none_or(|focused| focused == invoker)
                             {
                                 button.request_focus();
@@ -249,7 +181,6 @@ impl LabelloApp {
     }
 
     pub(crate) fn workspace_context_bar(&mut self, ui: &mut egui::Ui, layout: LayoutMode) {
-        self.clear_workflow_change_outside_scope();
         if self.workspace_bars_blank() { return; }
         if self.workspace_bars_loading() {
             let opacity = ui.opacity();

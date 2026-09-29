@@ -29,6 +29,298 @@ struct MigrationPair {
     targets: Vec<MigrationTarget>,
 }
 
+#[tokio::test]
+async fn migration_pose_item_preserves_prediction_origin_and_updates_its_companion() {
+    use labello_domain::*;
+    let f = fixture(ReviewWorkflow::Approval, 0).await;
+    let repo = &f.repository;
+    let metadata = repo.load_dataset().await.unwrap();
+    let task = metadata.task(&f.task_id).unwrap();
+    let geometry = AnnotationGeometry::Skeleton(skeleton(0.4));
+    let provenance = PrelabelProvenance {
+        dataset_id: metadata.dataset_id.clone(),
+        image_id: f.image_id.clone(),
+        image_hash: metadata.images[&f.image_id].blake3.clone(),
+        task_id: f.task_id.clone(),
+        class_id: task.class_ids[0].clone(),
+        config_id: "pose".into(),
+        config_digest: "a".repeat(64),
+        model_id: "pose".into(),
+        model_version: Some("1".into()),
+        model_digest: "b".repeat(64),
+        execution: PrelabelExecutionKind::ServerCpu,
+        trust: PredictionTrust::ServerGenerated,
+        processing: OutputProcessing {
+            confidence_threshold: 0.25,
+            suppress_overlaps_iou: None,
+        },
+        generation: 0,
+        scope_generation: 0,
+        suggestion_id: "pose-object".into(),
+        confidence: 0.9,
+    };
+    let hint = PrelabelSuggestion {
+        suggestion_id: provenance.suggestion_id.clone(),
+        config_id: provenance.config_id.clone(),
+        task_id: f.task_id.clone(),
+        class_id: provenance.class_id.clone(),
+        confidence: 0.9,
+        geometry: geometry.clone(),
+        evidence: Some(Box::new(PrelabelEvidence {
+            provenance: provenance.clone(),
+            predicted_geometry: geometry.clone(),
+            signature: "fixture".into(),
+        })),
+    };
+    repo.prepare_workflow_predictions(
+        &f.image_id,
+        &f.task_id,
+        None,
+        None,
+        WorkflowPreparationStatus::Ready,
+        vec![hint],
+    )
+    .await
+    .unwrap();
+    let selection = WorkflowSelection {
+        task_id: f.task_id.clone(),
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Objects,
+    };
+    let item = repo
+        .claim_workflow_item(&f.annotator, &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(&f.annotator, context(&item))
+        .await
+        .unwrap();
+    let mut annotation = AnnotationVersion::native(
+        "accepted-pose".into(),
+        f.task_id.clone(),
+        provenance.class_id.clone(),
+        AnnotationType::Skeleton,
+        geometry.clone(),
+        f.annotator.clone(),
+        now(),
+    );
+    annotation.origin = AnnotationOrigin::Prelabel {
+        prelabel: Box::new(AcceptedPrelabel {
+            provenance,
+            predicted_geometry: geometry,
+        }),
+    };
+    annotation.revision_source = RevisionSource::Human {
+        action: HumanRevisionKind::AcceptedUnchanged,
+    };
+    let saved = repo
+        .apply_annotation_batch(
+            &f.annotator,
+            context(&item),
+            vec![EventPayload::AnnotationVersionCreated {
+                annotation: annotation.clone(),
+                previous_version: None,
+                reason: None,
+            }],
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        saved
+            .current_annotation(&annotation.annotation_id)
+            .unwrap()
+            .origin,
+        annotation.origin
+    );
+    let companion = saved
+        .migration_companion_box(&annotation.annotation_id)
+        .unwrap();
+    assert_eq!(companion.task_id, f.guide_task_id);
+    assert_eq!(saved.migration_discovered_skeletons(&f.task_id).len(), 1);
+    assert_eq!(saved.task_states[&f.task_id].status, TaskStatus::InProgress);
+    let history = repo
+        .reopen_workflow_item(&f.annotator, context(&item))
+        .await
+        .unwrap();
+    repo.display_workflow_item(&f.annotator, context(&history))
+        .await
+        .unwrap();
+    annotation.version = 2;
+    annotation.geometry = AnnotationGeometry::Skeleton(skeleton(0.6));
+    annotation.revision_source = RevisionSource::Human {
+        action: HumanRevisionKind::Edited,
+    };
+    let edited = repo
+        .apply_annotation_batch(
+            &f.annotator,
+            context(&history),
+            vec![EventPayload::AnnotationVersionCreated {
+                annotation: annotation.clone(),
+                previous_version: Some(1),
+                reason: None,
+            }],
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        edited
+            .migration_companion_box(&annotation.annotation_id)
+            .unwrap()
+            .version,
+        2
+    );
+    assert_ne!(
+        saved.current_migration_state_hash(&f.task_id).unwrap(),
+        edited.current_migration_state_hash(&f.task_id).unwrap()
+    );
+    assert_eq!(repo.rebuild_image_state(&f.image_id).await.unwrap(), edited);
+}
+
+#[tokio::test]
+async fn workflow_objects_migrate_out_of_image_order_and_require_a_separate_overview() {
+    use labello_domain::{
+        WorkflowItem, WorkflowItemRef, WorkflowObject, WorkflowSelection, WorkflowVariant,
+    };
+    let fixture = fixture(ReviewWorkflow::Approval, 2).await;
+    let repo = &fixture.repository;
+    let selection = WorkflowSelection {
+        task_id: fixture.task_id.clone(),
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Objects,
+    };
+    let first = repo
+        .claim_workflow_item(&fixture.annotator, &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(&fixture.annotator, context(&first))
+        .await
+        .unwrap();
+    let second = repo
+        .claim_workflow_item(
+            &fixture.annotator,
+            &selection,
+            &[WorkflowItemRef {
+                image_id: fixture.image_id.clone(),
+                item: WorkflowItem::Object {
+                    object: WorkflowObject::Migration {
+                        object_group_id: fixture.targets[0].object_group_id.clone(),
+                    },
+                },
+            }],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&fixture.annotator, context(&second))
+        .await
+        .unwrap();
+    let expected = expectation(&state, &fixture.task_id, &fixture.targets[1]);
+    let result = repo
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&second),
+            None,
+            &expected,
+            skeleton(0.6),
+            "second-object",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.assignment.as_ref().unwrap().status,
+        AssignmentStatus::Completed
+    );
+    assert_eq!(
+        result.image_state.task_states[&fixture.task_id].status,
+        TaskStatus::InProgress
+    );
+    assert!(
+        matches!(result.cursor, MigrationCursor::Object { object_group_id, .. } if object_group_id == fixture.targets[1].object_group_id)
+    );
+    let retried = repo
+        .save_migration_skeleton(
+            &fixture.annotator,
+            context(&second),
+            None,
+            &expected,
+            skeleton(0.6),
+            "second-object",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retried.image_state, result.image_state);
+    let overview_selection = WorkflowSelection {
+        variant: WorkflowVariant::Overview,
+        ..selection.clone()
+    };
+    assert!(
+        repo.claim_workflow_item(&fixture.annotator, &overview_selection, &[])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let state = repo.load_image_state(&fixture.image_id).await.unwrap();
+    let expected = expectation(&state, &fixture.task_id, &fixture.targets[0]);
+    repo.save_migration_skeleton(
+        &fixture.annotator,
+        context(&first),
+        None,
+        &expected,
+        skeleton(0.4),
+        "first-object",
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.claim_workflow_item(&fixture.annotator, &selection, &[])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let overview = repo
+        .claim_workflow_item(&fixture.annotator, &overview_selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&fixture.annotator, context(&overview))
+        .await
+        .unwrap();
+    let target_hash = &state.migration_target_sets[&fixture.task_id].target_set_hash;
+    let state_hash = state
+        .current_migration_state_hash(&fixture.task_id)
+        .unwrap();
+    let confirmation_hash = migration_confirmation_hash(target_hash, &state_hash).unwrap();
+    let result = repo
+        .confirm_and_submit_migration(
+            &fixture.annotator,
+            context(&overview),
+            target_hash,
+            &state_hash,
+            &confirmation_hash,
+            "overview",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.image_state.task_states[&fixture.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_eq!(result.image_state.workflow_confirmations.len(), 3);
+    assert_eq!(
+        rebuild_state(
+            fixture.image_id.clone(),
+            &repo.load_events(&fixture.image_id).await.unwrap()
+        )
+        .unwrap(),
+        result.image_state
+    );
+}
+
 fn optional_skeleton_spec() -> SkeletonSpec {
     SkeletonSpec {
         keypoints: vec![

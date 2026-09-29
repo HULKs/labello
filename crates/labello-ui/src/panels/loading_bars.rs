@@ -85,7 +85,7 @@ impl LabelloApp {
                 migration: self
                     .manual_migration_active()
                     .then(|| self.migration_bar_presentation()),
-                previous_image: self.work.previous_assignment.is_some(),
+                previous_image: self.workflow_context().is_some() || self.work.previous_assignment.is_some(),
                 availability_loading: self.navigation.workspace_bars.presentation.is_none()
                     && self.work.availability.loading && self.work.availability.tasks.is_empty(),
                 review_removable: self.migration_review_removal().is_some(),
@@ -95,7 +95,7 @@ impl LabelloApp {
                     crate::glossary::APPROVE
                 },
                 review_next: if self.review_position() + 1 == self.review_object_targets().len() {
-                    "Overview"
+                    crate::glossary::OVERVIEW
                 } else {
                     crate::glossary::NEXT_OBJECT
                 },

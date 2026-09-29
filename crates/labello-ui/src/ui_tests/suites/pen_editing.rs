@@ -373,7 +373,7 @@ fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() 
     harness.step();
     click_accesskit_button(&mut harness, &destination.label());
     assert_eq!(harness.state().work.pending_transition,
-        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+        Some(crate::app::PendingTransition::WorkflowVariant(destination.task_id.clone(), labello_domain::WorkflowVariant::Overview)));
     assert!(harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
     assert!(!harness.get_by_label("Cancel").accesskit_node().is_disabled());
     click_accesskit_button(&mut harness, "Cancel");
@@ -387,7 +387,7 @@ fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() 
     step_until(&mut harness, 12, |app| !app.loading.saving);
     assert!(!harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
     assert_eq!(harness.state().work.pending_transition,
-        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+        Some(crate::app::PendingTransition::WorkflowVariant(destination.task_id.clone(), labello_domain::WorkflowVariant::Overview)));
     click_accesskit_button(&mut harness, "Submit and switch");
     step_until(&mut harness, 20, |app| app.work.selected_task_id.as_ref() == Some(&destination.task_id) && !app.loading.saving);
 }

@@ -28,8 +28,8 @@ use crate::{
     CreateDatasetRequest, DatasetApi, DatasetSummary, DatasetUser, ImageApi, ImageExplorerQuery,
     ImageFile, ImagePreview, ImportApi, IngestJob, IngestReport, KeybindingApi,
     OAuthCallbackRequest, OAuthLoginRequest, OfflineApi, OfflineBundleRequest, PrelabelApi,
-    PrelabelSuggestionRequest, ReviewApi, SessionInfo, SetDatasetRolesRequest, StatsApi, TaskApi,
-    UpdateDatasetConfigRequest, UserApi,
+    ReviewApi, SessionInfo, SetDatasetRolesRequest, StatsApi, TaskApi, UpdateDatasetConfigRequest,
+    UserApi,
 };
 
 #[derive(Clone)]

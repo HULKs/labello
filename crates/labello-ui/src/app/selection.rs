@@ -14,26 +14,6 @@ impl LabelloApp {
         )
     }
 
-    pub(crate) fn clear_workflow_change_outside_scope(&mut self) {
-        if self
-            .work
-            .automatic_workflow_change
-            .as_ref()
-            .is_some_and(|notice| {
-                notice.dataset_id != self.config.dataset_id || notice.view != self.view
-            })
-        {
-            self.work.automatic_workflow_change = None;
-        }
-    }
-
-    pub(crate) fn acknowledge_workflow_change(&mut self) {
-        self.clear_workflow_change_outside_scope();
-        if self.work.automatic_workflow_change.take().is_some() {
-            self.request_next_image();
-        }
-    }
-
     pub(crate) fn selected_task(&self) -> Option<&TaskDefinition> {
         let selected = self.work.selected_task_id.as_ref()?;
         self.work
@@ -94,8 +74,8 @@ impl LabelloApp {
             return false;
         }
         let annotation_type = task.annotation_type.clone();
-        self.work.automatic_workflow_change = None;
         self.work.selected_task_id = Some(task_id.clone());
+        self.work.workflow.variant_selected = false;
         self.work.tool = tool_for_annotation_type(&annotation_type);
         true
     }
@@ -148,6 +128,8 @@ impl LabelloApp {
                 .any(|task| task.task_id == task_id && valid_workflow(task))
         {
             self.work.selected_task_id = Some(task_id);
+            self.work.workflow.variant = self.runtime.persistence.preference.as_ref().expect("restored preference").workflow_variant;
+            self.work.workflow.variant_selected = true;
         }
         if self.ensure_valid_task_selection()
             && let Some(annotation_type) = self
@@ -172,6 +154,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn refocus_annotation(&self) -> Option<labello_domain::AnnotationVersion> {
+        if self.workflow_context().is_some_and(|context| context.item == labello_domain::WorkflowItem::Overview) {
+            return None;
+        }
         if self.manual_migration_active() {
             return self.current_migration_guide();
         }
@@ -235,6 +220,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn workflow_availability(&self, task_id: &TaskId) -> Option<bool> {
+        if self.work.availability.resolved && self.work.availability.error.is_none()
+            && let Some(entry) = self.workflow_variant_availability(task_id, self.work.workflow.variant) { return Some(entry.available); }
         let kind = self.assignment_kind()?;
         (self.work.availability.dataset_id.as_ref() == Some(&self.config.dataset_id)
             && self.work.availability.kind.as_ref() == Some(&kind)

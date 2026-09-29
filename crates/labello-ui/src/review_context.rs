@@ -188,7 +188,44 @@ impl LabelloApp {
             .iter()
             .find(|class| Some(&class.class_id) == self.selected_class_id())?;
         let canonical_targets = state.review_object_targets(task).ok()?;
-        let (target, phase, annotation_id) = if self.manual_migration_active() {
+        let (target, phase, annotation_id) = if let Some(context) = self.workflow_context() {
+            let target = context.review_target.clone()?;
+            if context.item.variant() == labello_domain::WorkflowVariant::Overview {
+                (
+                    target,
+                    ReviewContextPhase::FullImage {
+                        migration: self.manual_migration_active(),
+                    },
+                    None,
+                )
+            } else {
+                if !canonical_targets.contains(&target) {
+                    return None;
+                }
+                let (annotation_id, annotation_version, disposition_version) = match &target {
+                    ReviewTarget::AnnotationVersion {
+                        annotation_id,
+                        version,
+                    } => (Some(annotation_id.clone()), Some(*version), None),
+                    ReviewTarget::MigrationDisposition {
+                        disposition_version,
+                        ..
+                    } => (None, None, Some(*disposition_version)),
+                    _ => return None,
+                };
+                (
+                    target,
+                    ReviewContextPhase::Object {
+                        number: 1,
+                        total: 1,
+                        kind: "Object review",
+                        annotation_version,
+                        disposition_version,
+                    },
+                    annotation_id,
+                )
+            }
+        } else if self.manual_migration_active() {
             self.migration_review_context_target(&canonical_targets)?
         } else {
             let objects = self.annotation_objects();

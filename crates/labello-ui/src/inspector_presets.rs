@@ -27,6 +27,10 @@ pub enum InspectorPreset {
     DatasetGallery,
     DatasetInspection,
     Annotation,
+    AnnotationObjects,
+    AnnotationOverview,
+    ReviewObjects,
+    ReviewOverview,
     OverlappingBoxes,
     OverlappingBoxesUnfiltered,
     PrelabelBoxes,
@@ -99,10 +103,14 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 72] = [
+    pub const ALL: [Self; 76] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
+        Self::AnnotationObjects,
+        Self::AnnotationOverview,
+        Self::ReviewObjects,
+        Self::ReviewOverview,
         Self::OverlappingBoxes,
         Self::OverlappingBoxesUnfiltered,
         Self::PrelabelBoxes,
@@ -179,6 +187,10 @@ impl InspectorPreset {
             Self::DatasetGallery => "dataset-gallery",
             Self::DatasetInspection => "dataset-inspection",
             Self::Annotation => "annotation",
+            Self::AnnotationObjects => "annotation-objects",
+            Self::AnnotationOverview => "annotation-overview",
+            Self::ReviewObjects => "review-objects",
+            Self::ReviewOverview => "review-overview",
             Self::OverlappingBoxes => "overlapping-boxes",
             Self::OverlappingBoxesUnfiltered => "overlapping-boxes-unfiltered",
             Self::PrelabelBoxes => "prelabel-boxes",
@@ -259,6 +271,10 @@ impl InspectorPreset {
 
 pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
     let mut app = match preset {
+        InspectorPreset::AnnotationObjects
+        | InspectorPreset::AnnotationOverview
+        | InspectorPreset::ReviewObjects
+        | InspectorPreset::ReviewOverview => queue_work_preset(ctx, preset),
         InspectorPreset::ReviewInitialLoad
         | InspectorPreset::ReviewNextImage
         | InspectorPreset::MigrationNextImage => {
@@ -490,17 +506,11 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::Review => work_preset(AssignmentKind::Review, ctx),
         InspectorPreset::WorkflowChange => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
-            app.clear_current_image();
-            app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
-                previous: "Vehicle boxes (Vehicle) · Bounding box".into(),
-                current: app.workflow_identity_label(app.selected_task().unwrap()),
-                previous_type: AnnotationType::BoundingBox,
-                current_type: app.selected_task().unwrap().annotation_type.clone(),
-                reason: labello_domain::WorkflowUnavailableReason::BalanceLimit,
-                dataset_id: app.config.dataset_id.clone(),
-                view: app.view,
-                focus_pending: true,
-            });
+            app.runtime.notice = Some(format!(
+                "Workflow changed from Vehicle boxes (Vehicle) to {}.",
+                app.workflow_identity_label(app.selected_task().unwrap())
+            ));
+            app.work.workflow.change_notice = app.runtime.notice.clone();
             app
         }
         InspectorPreset::WorkflowReasons => {
@@ -2076,6 +2086,97 @@ fn export_preset(preset: InspectorPreset) -> LabelloApp {
         state.error = Some("Export status is temporarily unavailable".into());
         state.retry = Some(crate::export_flow::ExportAction::Load);
     }
+    app
+}
+
+fn queue_work_preset(ctx: &egui::Context, preset: InspectorPreset) -> LabelloApp {
+    use labello_domain::{WorkflowItem, WorkflowObject, WorkflowVariant};
+    let review = matches!(
+        preset,
+        InspectorPreset::ReviewObjects | InspectorPreset::ReviewOverview
+    );
+    let variant = if matches!(
+        preset,
+        InspectorPreset::AnnotationOverview | InspectorPreset::ReviewOverview
+    ) {
+        WorkflowVariant::Overview
+    } else {
+        WorkflowVariant::Objects
+    };
+    let mut app = build(
+        if review {
+            InspectorPreset::Review
+        } else {
+            InspectorPreset::Annotation
+        },
+        ctx,
+    );
+    let assignment = app.work.assignment.clone().expect("work preset assignment");
+    let annotation = app
+        .work
+        .annotations
+        .iter()
+        .find(|a| a.task_id == assignment.task_id)
+        .cloned()
+        .expect("preset object");
+    let task = app.selected_task().unwrap().clone();
+    let state = app.work.current_state.as_mut().unwrap();
+    state
+        .annotations
+        .insert(annotation.annotation_id.clone(), vec![annotation.clone()]);
+    let item = if variant == WorkflowVariant::Overview {
+        WorkflowItem::Overview
+    } else {
+        WorkflowItem::Object {
+            object: WorkflowObject::Annotation {
+                annotation_id: annotation.annotation_id.clone(),
+            },
+        }
+    };
+    let target = review.then(|| {
+        if variant == WorkflowVariant::Objects {
+            labello_domain::ReviewTarget::AnnotationVersion {
+                annotation_id: annotation.annotation_id.clone(),
+                version: annotation.version,
+            }
+        } else {
+            state
+                .review_targets(&task)
+                .unwrap()
+                .into_iter()
+                .find(|target| WorkflowItem::from_review_target(target) == WorkflowItem::Overview)
+                .unwrap()
+        }
+    });
+    state.workflow_assignments.insert(
+        assignment.assignment_id.clone(),
+        labello_domain::WorkflowAssignmentContext {
+            item,
+            task_fingerprint: labello_domain::workflow_task_fingerprint(&task),
+            overview_fingerprint: None,
+            review_target: target,
+            review_exception: false,
+            source_assignment_id: None,
+        },
+    );
+    app.install_workflow_item();
+    app.work.workflow_panel_collapsed = false;
+    app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+    app.work.availability.kind = Some(assignment.kind.clone());
+    app.work.availability.resolved = true;
+    app.work.availability.workflows = [WorkflowVariant::Objects, WorkflowVariant::Overview]
+        .into_iter()
+        .map(|variant| labello_domain::WorkflowAvailability {
+            selection: labello_domain::WorkflowSelection {
+                task_id: task.task_id.clone(),
+                kind: assignment.kind.clone(),
+                variant,
+            },
+            available: true,
+            reason: None,
+            split: true,
+        })
+        .collect();
     app
 }
 

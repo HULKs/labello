@@ -1,6 +1,6 @@
 use super::*;
-use crate::prelabel_flow::{HintStatus, PrelabelAction, PrelabelReply};
-use labello_domain::{PrelabelGeneration, PrelabelResponse, UserAction};
+use crate::prelabel_flow::PrelabelAction;
+use labello_domain::UserAction;
 
 #[test]
 fn model_check_replies_cannot_replace_a_changed_filename_or_removed_configuration() {
@@ -35,183 +35,6 @@ fn model_check_replies_cannot_replace_a_changed_filename_or_removed_configuratio
             .location,
         "different.onnx"
     );
-}
-
-#[test]
-fn prelabels_wait_for_explicit_selection_and_stop_when_disabled() {
-    let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
-    let task = harness.state().selected_task().unwrap().task_id.clone();
-    assert_eq!(harness.state().prelabel_choice(&task), None);
-    assert!(harness.state().visible_prelabels().is_empty());
-    assert!(
-        harness
-            .query_all_by_role(egui::accesskit::Role::ComboBox)
-            .any(|node| node.accesskit_node().value().as_deref() == Some("No prelabels"))
-    );
-    assert!(harness.query_by_label("Prelabels turned off").is_some());
-    assert_eq!(api.counts().prelabel_suggestions, 0);
-    assert_eq!(api.counts().prelabel_generation, 0);
-
-    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
-    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
-    assert_eq!(
-        harness.state().prelabel_choice(&task),
-        Some("demo-prelabel".into())
-    );
-    assert!(api.counts().prelabel_suggestions > 0);
-
-    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
-    assert_eq!(harness.state().prelabel_choice(&task), None);
-    assert!(harness.state().visible_prelabels().is_empty());
-    assert!(harness.state().work.prelabels.pending.is_none());
-    let before = api.counts();
-    for _ in 0..8 {
-        harness.step();
-    }
-    assert_eq!(
-        api.counts().prelabel_suggestions,
-        before.prelabel_suggestions
-    );
-    assert_eq!(api.counts().prelabel_generation, before.prelabel_generation);
-}
-
-#[test]
-fn explicit_prelabel_choices_survive_preferences_and_unavailable_models_become_none() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    let app = harness.state_mut();
-    let task = app.selected_task().unwrap().task_id.clone();
-    let key = format!("{}/{task}", app.config.dataset_id);
-    for choice in [Some("demo-prelabel".into()), None] {
-        app.work
-            .prelabels
-            .choices
-            .insert(key.clone(), choice.clone());
-        assert_eq!(app.prelabel_choice(&task), choice);
-        app.persist_workspace_preference();
-        let preference = app.runtime.persistence.preference.as_ref().unwrap();
-        let decoded: WorkspacePreference =
-            serde_json::from_slice(&serde_json::to_vec(preference).unwrap()).unwrap();
-        assert_eq!(decoded.prelabel_choices.get(&key), Some(&choice));
-    }
-    app.work
-        .prelabels
-        .choices
-        .insert(key, Some("removed-model".into()));
-    assert_eq!(app.prelabel_choice(&task), None);
-}
-
-#[test]
-fn prelabel_filter_reacts_to_draft_creation_edit_deletion_and_confidence() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
-    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
-    let app = harness.state_mut();
-    let hint = app.visible_prelabels().remove(0);
-    let mut box_annotation = labello_domain::AnnotationVersion::native(
-        "draft".into(),
-        hint.task_id.clone(),
-        hint.class_id.clone(),
-        AnnotationType::BoundingBox,
-        hint.geometry.clone(),
-        "admin".into(),
-        labello_domain::now(),
-    );
-    app.work.annotations.push(box_annotation.clone());
-    assert!(app.visible_prelabels().is_empty());
-    box_annotation.geometry = AnnotationGeometry::BoundingBox(BoundingBox {
-        x: 0.7,
-        y: 0.7,
-        width: 0.1,
-        height: 0.1,
-    });
-    *app.work.annotations.last_mut().unwrap() = box_annotation.clone();
-    assert_eq!(app.visible_prelabels().len(), 1);
-    box_annotation.geometry = hint.geometry;
-    box_annotation.deleted = true;
-    *app.work.annotations.last_mut().unwrap() = box_annotation;
-    assert_eq!(app.visible_prelabels().len(), 1);
-    app.datasets.metadata.as_mut().unwrap().prelabel_configs[0]
-        .output_processing
-        .confidence_threshold = 0.99;
-    assert!(app.visible_prelabels().is_empty());
-}
-
-#[test]
-fn prelabel_generation_reset_clears_hints_and_preserves_edits_and_rejects_stale_response() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
-    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
-    let app = harness.state_mut();
-    app.cancel_prelabel_load();
-    let hint = app.visible_prelabels().remove(0);
-    app.sync_prelabel_review();
-    assert!(app.confirm_prelabel_object());
-    let annotations = app.work.annotations.clone();
-    let query = PrelabelSuggestionRequest {
-        image_id: app.work.current.as_ref().unwrap().image.image_id.clone(),
-        task_id: hint.task_id.clone(),
-        config_id: hint.config_id.clone(),
-    };
-    let key = (
-        query.image_id.clone(),
-        query.task_id.clone(),
-        query.config_id.clone(),
-    );
-    let generation = PrelabelGeneration {
-        generation: 0,
-        scope_generation: 0,
-        paused: false,
-    };
-    app.work.prelabels.hints.insert(
-        key.clone(),
-        HintStatus {
-            execution: None,
-            generation: Some(generation.clone()),
-            error: None,
-            from_batch: false,
-            checked_at: Instant::now(),
-        },
-    );
-    app.request_prelabels(PrelabelAction::Check(query.clone()));
-    let request = app.runtime.commands.back().unwrap().request().clone();
-    app.runtime
-        .tx
-        .send(UiMessage::PrelabelFinished {
-            request: request.clone(),
-            result: Box::new(Ok(PrelabelReply::Generation(PrelabelGeneration {
-                generation: 1,
-                scope_generation: 1,
-                paused: true,
-            }))),
-        })
-        .unwrap();
-    app.process_messages(&egui::Context::default());
-    assert!(app.work.current.as_ref().unwrap().prelabels.is_empty());
-    assert!(
-        app.work.prelabels.hints[&key]
-            .generation
-            .as_ref()
-            .unwrap()
-            .paused
-    );
-    assert_eq!(app.work.annotations, annotations);
-    app.runtime
-        .tx
-        .send(UiMessage::PrelabelFinished {
-            request,
-            result: Box::new(Ok(PrelabelReply::Hints(Box::new(PrelabelResponse {
-                execution: None,
-                generation,
-                suggestions: vec![hint],
-                from_batch: true,
-                browser_grant: None,
-            })))),
-        })
-        .unwrap();
-    app.process_messages(&egui::Context::default());
-    assert!(app.work.current.as_ref().unwrap().prelabels.is_empty());
-    assert_eq!(app.work.annotations, annotations);
 }
 
 #[test]
@@ -267,64 +90,6 @@ fn prelabel_admin_removal_requires_confirmation_and_controls_fit_narrow_and_shor
 }
 
 #[test]
-fn prelabel_loading_and_failure_do_not_claim_successful_empty_predictions() {
-    let mut loaded = loaded_work_harness(Rc::new(SpyApi::new()));
-    choose_prelabels(&mut loaded, "No prelabels", "Demo prelabels");
-    let mut app = std::mem::replace(loaded.state_mut(), base_live_app(Rc::new(SpyApi::new())));
-    app.cancel_prelabel_load();
-    app.work.prelabels.hints.clear();
-    app.work.current.as_mut().unwrap().prelabels.clear();
-    let task = app.selected_task().unwrap().task_id.clone();
-    let key = (
-        app.work.current.as_ref().unwrap().image.image_id.clone(),
-        task.clone(),
-        app.prelabel_choice(&task).unwrap(),
-    );
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(400.0, 1000.0))
-        .build_ui_state(|ui, app: &mut LabelloApp| app.right_panel(ui, false), app);
-    harness.step();
-    assert!(
-        harness
-            .query_by_label("Preparing prelabels… You can annotate while they load.")
-            .is_some()
-    );
-    assert!(harness.query_by_label("No remaining prelabels").is_none());
-    harness.state_mut().work.prelabels.hints.insert(
-        key.clone(),
-        HintStatus {
-            execution: None,
-            generation: None,
-            error: Some("Inference failed; manual annotation is available".into()),
-            from_batch: false,
-            checked_at: Instant::now(),
-        },
-    );
-    harness.step();
-    assert!(
-        harness
-            .query_by_label("Inference failed; manual annotation is available")
-            .is_some()
-    );
-    assert!(harness.query_by_label("No remaining prelabels").is_none());
-    let status = harness
-        .state_mut()
-        .work
-        .prelabels
-        .hints
-        .get_mut(&key)
-        .unwrap();
-    status.error = None;
-    status.generation = Some(PrelabelGeneration {
-        generation: 0,
-        scope_generation: 0,
-        paused: false,
-    });
-    harness.step();
-    assert!(harness.query_by_label("No remaining prelabels").is_some());
-}
-
-#[test]
 fn prelabel_admin_start_queues_the_selected_preflight_run() {
     let api = Rc::new(SpyApi::new());
     let mut app = base_live_app(api.clone());
@@ -355,70 +120,6 @@ fn prelabel_admin_start_queues_the_selected_preflight_run() {
     click(&mut harness, "Start generation");
     assert!(
         matches!(&harness.state().admin.prelabels.pending, Some((_, PrelabelAction::Admin(Some(labello_domain::PrelabelAdminCommand::Start { run_id })))) if run_id == "prepared-run")
-    );
-}
-
-#[test]
-fn disabled_server_hides_annotation_hints_and_never_requests_them() {
-    let api = Rc::new(SpyApi::new());
-    api.state.borrow_mut().prelabel_available = false;
-    let mut harness = loaded_work_harness(api.clone());
-    assert!(!harness.state().auth.prelabel_available);
-    assert!(harness.state().visible_prelabels().is_empty());
-    assert!(
-        harness
-            .query_by_label("Prelabeling is disabled by server configuration.")
-            .is_some()
-    );
-    for label in [
-        "No prelabels",
-        "Refresh prelabels",
-        "Preparing prelabels… You can annotate while they load.",
-        "Approve",
-        "Discard",
-    ] {
-        assert!(harness.query_by_label(label).is_none(), "{label}");
-    }
-    let app = harness.state_mut();
-    // Retained candidates must remain hidden even if a previous session loaded them.
-    app.work
-        .current
-        .as_mut()
-        .unwrap()
-        .prelabels
-        .push(labello_domain::PrelabelSuggestion {
-            suggestion_id: "retained".into(),
-            config_id: "demo-prelabel".into(),
-            task_id: app.work.selected_task_id.clone().unwrap(),
-            class_id: "person".into(),
-            confidence: 0.9,
-            geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-                x: 0.1,
-                y: 0.1,
-                width: 0.2,
-                height: 0.2,
-            }),
-            evidence: None,
-        });
-    assert!(app.visible_prelabels().is_empty());
-    app.request_prelabels(PrelabelAction::Load(PrelabelSuggestionRequest {
-        image_id: app.work.current.as_ref().unwrap().image.image_id.clone(),
-        task_id: app.work.selected_task_id.clone().unwrap(),
-        config_id: "demo-prelabel".into(),
-    }));
-    app.request_prelabels(PrelabelAction::Admin(None));
-    assert!(app.work.prelabels.pending.is_none());
-    assert!(app.admin.prelabels.pending.is_none());
-    for _ in 0..8 {
-        harness.step();
-    }
-    let counts = &api.state.borrow().counts;
-    assert_eq!(counts.prelabel_suggestions, 0);
-    assert_eq!(counts.prelabel_generation, 0);
-    assert_eq!(counts.prelabel_admin, 0);
-    assert!(
-        counts.assign_next_image > 0,
-        "manual annotation still loads work"
     );
 }
 
@@ -475,7 +176,6 @@ fn disabled_server_hides_admin_hint_controls_and_preserves_model_configuration()
 fn pending_object_summaries_truncate_long_names_and_keep_confidence_visible() {
     let mut loaded = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     let mut app = std::mem::replace(loaded.state_mut(), base_live_app(Rc::new(SpyApi::new())));
-    app.cancel_prelabel_load();
     app.runtime.api = None;
     let class = app
         .work
@@ -501,84 +201,6 @@ fn pending_object_summaries_truncate_long_names_and_keep_confidence_visible() {
         assert!(harness.query_by_label("Approve").is_none());
         assert!(harness.query_by_label("Discard").is_none());
     }
-}
-
-#[test]
-fn prelabel_refresh_is_inline_named_and_disabled_until_hints_are_ready() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    let refresh = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Refresh prelabels");
-    assert!(refresh.accesskit_node().is_disabled());
-    let selector = harness
-        .query_all_by_role(egui::accesskit::Role::ComboBox)
-        .find(|node| node.accesskit_node().value().as_deref() == Some("No prelabels"))
-        .unwrap();
-    assert!((refresh.rect().center().y - selector.rect().center().y).abs() < 1.0);
-    assert!(refresh.rect().left() > selector.rect().right());
-    assert!(refresh.rect().width() >= 44.0 && refresh.rect().height() >= 44.0);
-    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
-    step_until(&mut harness, 20, |app| {
-        !app.visible_prelabels().is_empty() && app.work.prelabels.pending.is_none()
-    });
-    let mut app = std::mem::replace(harness.state_mut(), base_live_app(Rc::new(SpyApi::new())));
-    let key = app.work.prelabels.hints.keys().next().unwrap().clone();
-    app.work.prelabels.hints.get_mut(&key).unwrap().error = Some("Inference failed".into());
-    app.datasets.metadata.as_mut().unwrap().prelabel_configs[0].name =
-        "A very long model name that must leave room for the refresh icon".into();
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(320.0, 1000.0))
-        .build_ui_state(|ui, app: &mut LabelloApp| app.right_panel(ui, false), app);
-    harness.run_steps(3);
-    for width in [260.0, 280.0, 320.0] {
-        harness.set_size(egui::vec2(width, 1000.0));
-        harness.run_steps(3);
-        let refresh = harness.get_by_label("Refresh prelabels").rect();
-        let selector = harness
-            .query_all_by_role(egui::accesskit::Role::ComboBox)
-            .find(|node| {
-                node.accesskit_node()
-                    .value()
-                    .is_some_and(|value| value.starts_with("A very long model"))
-            })
-            .unwrap()
-            .rect();
-        assert!(refresh.right() <= width);
-        assert!(selector.right() < refresh.left());
-        assert!((selector.center().y - refresh.center().y).abs() < 1.0);
-    }
-    assert!(
-        !harness
-            .get_by_label("Refresh prelabels")
-            .accesskit_node()
-            .is_disabled()
-    );
-    harness
-        .state_mut()
-        .request_prelabels(PrelabelAction::Check(PrelabelSuggestionRequest {
-            image_id: key.0.clone(),
-            task_id: key.1.clone(),
-            config_id: key.2.clone(),
-        }));
-    harness.step();
-    assert!(
-        harness
-            .get_by_label("Refresh prelabels")
-            .accesskit_node()
-            .is_disabled()
-    );
-    harness.state_mut().cancel_prelabel_load();
-    harness.step();
-    harness.get_by_label("Refresh prelabels").focus();
-    harness.step();
-    harness.key_press(egui::Key::Enter);
-    harness.step();
-    assert!(!harness.state().work.prelabels.hints.contains_key(&key));
-    harness.step();
-    assert!(
-        harness
-            .get_by_label("Refresh prelabels")
-            .accesskit_node()
-            .is_disabled()
-    );
 }
 
 #[test]
@@ -616,6 +238,7 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
     for (overview, submit_on_return) in [(false, false), (true, false), (true, true)] {
         let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
         let original = harness.state().work.assignment.clone().unwrap();
+        let hint = harness.state().work.current.as_ref().unwrap().prelabels[0].clone();
         if overview {
             harness.state_mut().work.canvas.fit_view();
             harness.step();
@@ -634,8 +257,11 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
                 .assignment
                 .as_ref()
                 .is_some_and(|assignment| assignment.image_id != original.image_id)
-                && !app.visible_prelabels().is_empty()
+                && !app.loading.image
         });
+        harness.state_mut().work.current.as_mut().unwrap().prelabels = vec![hint.clone()];
+        harness.state_mut().sync_prelabel_review();
+        harness.state_mut().advance_prelabel_object();
         // The fake uses the same suggestion ID on each image. Decisions must be scoped.
         assert!(!harness.state().visible_prelabels().is_empty());
         if submit_on_return {
@@ -647,7 +273,7 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
             app.delete_selected();
             app.confirm_prelabel_object();
         }
-        click(&mut harness, "Previous image");
+        click(&mut harness, "Previous");
         if submit_on_return {
             assert!(harness.state().work.pending_transition.is_some());
             harness.state_mut().submit_pending_transition();
@@ -657,13 +283,10 @@ fn deleted_prelabels_stay_deleted_when_reopening_previous_image() {
                 .assignment
                 .as_ref()
                 .is_some_and(|assignment| assignment.image_id == original.image_id)
-                && app
-                    .work
-                    .current
-                    .as_ref()
-                    .is_some_and(|current| !current.prelabels.is_empty())
                 && !app.loading.image
         });
+        harness.state_mut().work.current.as_mut().unwrap().prelabels = vec![hint];
+        harness.state_mut().sync_prelabel_review();
         harness.run_steps(3);
         assert_ne!(
             harness
@@ -1056,38 +679,6 @@ fn pending_edits_recover_separately_from_annotations_after_autosave() {
 }
 
 #[test]
-fn pending_objects_block_completion_and_retain_edits_when_model_is_disabled() {
-    let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_prelabel_work_harness(api.clone());
-    let id = harness.state().work.selected_annotation.clone().unwrap();
-    harness.state_mut().edit_bbox(BoundingBoxEdit {
-        annotation_id: id.clone(),
-        bounding_box: BoundingBox {
-            x: 0.2,
-            y: 0.2,
-            width: 0.2,
-            height: 0.3,
-        },
-    });
-    harness.state_mut().request_save(true);
-    assert!(!harness.state().loading.saving);
-    assert_eq!(api.counts().complete_assignment, 0);
-    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
-    assert!(harness.state().pending_prelabel_objects().is_empty());
-    assert!(harness.state().work.annotations.is_empty());
-    assert!(harness.state().work.selected_annotation.is_none());
-    choose_prelabels(&mut harness, "No prelabels", "Demo prelabels");
-    step_until(&mut harness, 20, |app| {
-        app.selected_prelabel_object().is_some()
-    });
-    assert_eq!(harness.state().work.selected_annotation, Some(id));
-    assert!(
-        matches!(harness.state().selected_prelabel_object().unwrap().annotation.geometry,
-        AnnotationGeometry::BoundingBox(ref bbox) if bbox.x == 0.2)
-    );
-}
-
-#[test]
 fn confirm_and_delete_are_visible_and_guarded_at_every_workspace_size() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     harness.state_mut().work.inspector_panel_collapsed = true;
@@ -1252,38 +843,9 @@ fn confirming_again_after_saved_undo_reuses_the_annotation_identity_and_version(
 }
 
 #[test]
-fn pending_box_edits_refilter_other_model_objects_without_destroying_their_drafts() {
-    let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
-    add_second_prelabel(harness.state_mut());
-    let app = harness.state_mut();
-    app.datasets.metadata.as_mut().unwrap().prelabel_configs[0]
-        .output_processing
-        .suppress_overlaps_iou = Some(0.5);
-    let first = app
-        .selected_prelabel_object()
-        .unwrap()
-        .annotation
-        .annotation_id
-        .clone();
-    let second = app.pending_prelabel_objects()[1].clone();
-    let AnnotationGeometry::BoundingBox(bbox) = second.annotation.geometry else {
-        panic!("box");
-    };
-    app.edit_bbox(BoundingBoxEdit {
-        annotation_id: first,
-        bounding_box: bbox,
-    });
-    assert_eq!(app.pending_prelabel_objects().len(), 1);
-    assert_eq!(app.work.prelabel_review.objects.len(), 2);
-    app.undo();
-    assert_eq!(app.pending_prelabel_objects().len(), 2);
-}
-
-#[test]
 fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     let app = harness.state_mut();
-    app.cancel_prelabel_load();
     app.runtime.api = None;
     let task_id = app.work.selected_task_id.clone().unwrap();
     let task = app
@@ -1338,142 +900,6 @@ fn pose_model_objects_keep_editable_keypoints_before_confirmation() {
     };
     assert_eq!(skeleton.keypoints[0].point, Some(edited));
     assert_eq!(skeleton.keypoints[0].state, KeypointState::Hidden);
-}
-
-#[test]
-fn retained_prelabels_select_an_item_default_without_generating_or_persisting_a_choice() {
-    let api = Rc::new(SpyApi::new());
-    let mut harness = loaded_work_harness(api.clone());
-    let image = harness
-        .state()
-        .work
-        .current
-        .as_ref()
-        .unwrap()
-        .image
-        .image_id
-        .clone();
-    let task = harness.state().selected_task().unwrap().task_id.clone();
-    let hint = labello_domain::PrelabelSuggestion {
-        suggestion_id: "retained".into(),
-        config_id: "demo-prelabel".into(),
-        task_id: task.clone(),
-        class_id: "person".into(),
-        confidence: 0.9,
-        geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-            x: 0.1,
-            y: 0.1,
-            width: 0.2,
-            height: 0.2,
-        }),
-        evidence: None,
-    };
-    api.state.borrow_mut().retained_prelabels.insert(
-        (image.clone(), task.clone()),
-        labello_domain::RetainedPrelabels {
-            config_id: "demo-prelabel".into(),
-            response: PrelabelResponse {
-                generation: PrelabelGeneration {
-                    generation: 0,
-                    scope_generation: 0,
-                    paused: false,
-                },
-                suggestions: vec![hint],
-                execution: Some(labello_domain::PrelabelExecutionKind::ServerCpu),
-                from_batch: true,
-                browser_grant: None,
-            },
-        },
-    );
-    harness.state_mut().cancel_prelabel_load();
-    harness.state_mut().work.prelabels.automatic = None;
-    step_until(&mut harness, 20, |app| !app.visible_prelabels().is_empty());
-    assert_eq!(
-        harness.state().prelabel_choice(&task),
-        Some("demo-prelabel".into())
-    );
-    assert!(harness.state().work.prelabels.choices.is_empty());
-    assert_eq!(
-        api.counts().prelabel_suggestions,
-        0,
-        "discovery must not start inference, including queued items"
-    );
-    assert!(harness.query_by_label("Using dataset prelabels").is_some());
-    let current = harness.state_mut().work.current.as_mut().unwrap();
-    current.image.image_id = "another-image".into();
-    assert_eq!(
-        harness.state().prelabel_choice(&task),
-        None,
-        "automatic defaults are item scoped"
-    );
-    harness
-        .state_mut()
-        .work
-        .current
-        .as_mut()
-        .unwrap()
-        .image
-        .image_id = image;
-    choose_prelabels(&mut harness, "Demo prelabels", "No prelabels");
-    harness.state_mut().work.prelabels.automatic = None;
-    for _ in 0..8 {
-        harness.step();
-    }
-    assert_eq!(harness.state().prelabel_choice(&task), None);
-    assert!(harness.state().visible_prelabels().is_empty());
-    assert_eq!(api.counts().prelabel_suggestions, 0);
-}
-
-#[test]
-fn late_retained_prelabels_cannot_override_an_explicit_choice() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    let app = harness.state_mut();
-    app.cancel_prelabel_load();
-    let image = app.work.current.as_ref().unwrap().image.image_id.clone();
-    let task = app.selected_task().unwrap().task_id.clone();
-    app.request_prelabels(PrelabelAction::Retained(
-        labello_client::PrelabelItemRequest {
-            image_id: image,
-            task_id: task.clone(),
-        },
-    ));
-    let request = app.runtime.commands.back().unwrap().request().clone();
-    app.work.prelabels.choices.insert(
-        format!("{}/{task}", app.config.dataset_id),
-        Some("demo-prelabel".into()),
-    );
-    app.runtime
-        .tx
-        .send(UiMessage::PrelabelFinished {
-            request,
-            result: Box::new(Ok(PrelabelReply::Retained(None))),
-        })
-        .unwrap();
-    app.process_messages(&egui::Context::default());
-    assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
-}
-
-#[test]
-fn retained_prelabel_defaults_do_not_cross_workspace_or_account_epochs() {
-    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
-    let app = harness.state_mut();
-    let task = app.selected_task().unwrap().task_id.clone();
-    for auth in [false, true] {
-        app.work.prelabels.automatic = Some(crate::prelabel_flow::AutomaticPrelabels {
-            image: app.work.current.as_ref().unwrap().image.image_id.clone(),
-            task: task.clone(),
-            config: Some("demo-prelabel".into()),
-            checked_at: Instant::now(),
-        });
-        assert_eq!(app.prelabel_choice(&task), Some("demo-prelabel".into()));
-        if auth {
-            app.begin_auth_epoch();
-        } else {
-            app.begin_workspace_epoch();
-        }
-        assert!(app.work.prelabels.automatic.is_none());
-        assert_eq!(app.prelabel_choice(&task), None);
-    }
 }
 
 #[test]

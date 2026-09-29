@@ -109,46 +109,6 @@ impl PrelabelApi for DemoLabelloApi {
         })
     }
 
-    fn prelabel_suggestions<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        _request: PrelabelSuggestionRequest,
-    ) -> crate::ApiFuture<'a, labello_domain::PrelabelResponse> {
-        Box::pin(async {
-            Ok(labello_domain::PrelabelResponse {
-                execution: None,
-                generation: labello_domain::PrelabelGeneration {
-                    generation: 0,
-                    scope_generation: 0,
-                    paused: false,
-                },
-                suggestions: vec![],
-                from_batch: false,
-                browser_grant: None,
-            })
-        })
-    }
-    fn retained_prelabels<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        _request: crate::PrelabelItemRequest,
-    ) -> crate::ApiFuture<'a, Option<labello_domain::RetainedPrelabels>> {
-        Box::pin(async { Ok(None) })
-    }
-
-    fn prelabel_generation<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        _request: PrelabelSuggestionRequest,
-    ) -> crate::ApiFuture<'a, labello_domain::PrelabelGeneration> {
-        Box::pin(async {
-            Ok(labello_domain::PrelabelGeneration {
-                generation: 0,
-                scope_generation: 0,
-                paused: false,
-            })
-        })
-    }
     fn prelabel_admin_state<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

@@ -90,7 +90,7 @@ impl PrelabelService {
         Ok(None)
     }
 
-    async fn retained_response(
+    pub(super) async fn retained_response(
         &self,
         dataset: &DatasetId,
         control: &Control,
@@ -320,6 +320,27 @@ impl PrelabelService {
             // Exact committed retries remain valid after reset; they create no new acceptance.
             if let Some(existing) = state.current_annotation(annotation_id)
                 && matches!(&existing.origin, AnnotationOrigin::Prelabel { prelabel } if prelabel.provenance == p.clone() && prelabel.predicted_geometry == unsigned.predicted_geometry)
+            {
+                continue;
+            }
+            // Display permanently captures the signed source. An administrator's
+            // later reset/model selection must not invalidate active or partial work.
+            if state.workflow_item_seen(
+                &p.task_id,
+                &WorkflowItem::Object {
+                    object: WorkflowObject::Prelabel {
+                        suggestion_id: p.suggestion_id.clone(),
+                    },
+                },
+            ) && state
+                .workflow_preparations
+                .get(&p.task_id)
+                .is_some_and(|prepared| {
+                    prepared
+                        .prelabels
+                        .iter()
+                        .any(|s| s.evidence.as_deref() == Some(evidence.as_ref()))
+                })
             {
                 continue;
             }

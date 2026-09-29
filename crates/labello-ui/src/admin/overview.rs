@@ -1,6 +1,6 @@
 impl LabelloApp {
     fn admin_overview(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Overview");
+        ui.heading(crate::glossary::OVERVIEW);
         ui.label(
             RichText::new("Review dataset health before opening a focused admin section.")
                 .color(theme::TEXT_MUTED),

@@ -3,11 +3,10 @@ use std::collections::BTreeSet;
 use eframe::egui::{self, RichText};
 use labello_client::DatasetUser;
 use labello_domain::{
-    AnnotationType, BrowserAcceleration, ClassId, DatasetMetadata, DatasetRole,
-    DatasetRoleAssignment, DatasetSnapshot, ImageExplorerItem, ImbalanceConfig, KeypointSpec,
-    LabelClass, ModelSpec, OutputProcessing, PrelabelConfig, PrelabelConfigId, PrelabelExecution,
-    ReviewConfig, ReviewWorkflow, SkeletonEdge, SkeletonSpec, TaskDefinition, TaskId, TaskStatus,
-    TutorialContent, UserId,
+    AnnotationType, ClassId, DatasetMetadata, DatasetRole, DatasetRoleAssignment, DatasetSnapshot,
+    ImageExplorerItem, ImbalanceConfig, KeypointSpec, LabelClass, ModelSpec, OutputProcessing,
+    PrelabelConfig, PrelabelConfigId, PrelabelExecution, ReviewConfig, ReviewWorkflow,
+    SkeletonEdge, SkeletonSpec, TaskDefinition, TaskId, TaskStatus, TutorialContent, UserId,
 };
 
 use crate::{
@@ -28,7 +27,7 @@ impl AdminSection {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Overview => "Overview",
+            Self::Overview => crate::glossary::OVERVIEW,
             Self::People => crate::glossary::PEOPLE,
             Self::Images => crate::glossary::IMAGES,
             Self::Schema => crate::glossary::SCHEMA,

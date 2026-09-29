@@ -2388,11 +2388,9 @@ dependencies = [
 name = "labello-client"
 version = "0.1.0"
 dependencies = [
- "blake3",
  "futures",
  "image",
  "labello-domain",
- "labello-inference",
  "reqwest",
  "serde",
  "serde_json",
@@ -2401,7 +2399,6 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
- "web-sys",
  "web-time",
 ]
 
@@ -2437,15 +2434,12 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "image",
- "js-sys",
  "labello-domain",
  "ort",
  "prost",
  "serde",
  "serde_json",
  "tract-onnx",
- "wasm-bindgen",
- "wasm-bindgen-futures",
 ]
 
 [[package]]

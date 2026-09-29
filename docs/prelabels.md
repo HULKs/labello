@@ -45,8 +45,9 @@ timeoutSeconds = 120
 Add this section to `labello.server.toml` or the file selected by `LABELLO_CONFIG`.
 Create the model directory before starting the server. Restart the server and
 reload the web app after changing this configuration. Without the section,
-prelabel controls are replaced by a server-configuration notice and no hint
-requests or management polling run. Existing model settings remain stored.
+administrative model controls show a server-configuration notice. Existing model
+settings remain stored. Work requiring preparation reports unavailable; annotators
+cannot bypass a configured model.
 
 There is no model upload endpoint. Dataset administrators select a managed
 basename such as `people.onnx` in **Admin > Automation**. Paths, symlinks, URLs,
@@ -80,7 +81,7 @@ cannot establish these meanings.
 
 Select the **Output tensor** from the discovered outputs. A sole compatible output
 is selected automatically; unsupported outputs are shown with their reason. The
-selected output name is saved and used by both execution environments. Each dataset
+selected output name is saved and used by server inference. Each dataset
 class has a selector for model class IDs `0` through `classCount - 1`. For example,
 map `person` to `0` and `ball` to `32` in the standard 80-class COCO detector.
 Unmapped outputs produce no hints. Multiple model outputs may map to the same
@@ -95,8 +96,8 @@ Historical positional `classIds` arrays remain readable and keep their exact
 meaning; checking them converts their mappings to explicit `classMappings` entries
 with `modelClassId` and `classId`. Configuration changes use normal staged Admin save.
 
-Set the model ID and version, execution mode, confidence/IoU thresholds, task
-associations, and annotator availability. Every class in a linked workflow must be
+Set the model ID and version, confidence/IoU thresholds, workflow associations,
+and availability. Every class in a linked workflow must be
 mapped. For pose, keypoint names remain in model order and must exactly match the
 workflow's ordered skeleton specification. Detection models link to box workflows;
 pose models link to skeleton workflows.
@@ -178,140 +179,71 @@ for up to 30 seconds before returning busy. After admission, `timeoutSeconds`
 bounds worker acquisition and all provider attempts together. Resource limits
 apply to each process, so size the worker cap for the host's available memory.
 
-Browser inference uses self-hosted ONNX Runtime Web in a dedicated worker.
-WebGPU-preferred configurations try WebGPU, then retry on WASM CPU if execution
-fails. CPU-only configurations use WASM directly. Each attempt times out after
-120 seconds; cancelling the request terminates its worker. Shared Rust code
-performs preprocessing and output decoding. Model and image downloads use the
-authenticated API and are checked against the server's BLAKE3 identities.
-Models selected for browser execution are therefore disclosed to authorized
-dataset users. Browser results are explicitly recorded as `browser_reported`;
-the server cannot attest that an untrusted browser ran a particular model.
+Browser inference and model-byte delivery are no longer exposed. Dataset-managed
+jobs run detection and pose on the server. Historical `browser_reported` evidence
+remains readable and distinct from server execution evidence.
 
 Model bytes are limited to 256 MiB, original images to 32 MiB, decoded dimensions
 to 16384 per axis, image decoder allocation to 128 MiB, output to eight million
-float32 values, and candidates to 35000. Unsupported models, exhausted workers,
-timeouts, and download failures leave manual annotation available.
+float32 values, and candidates to 35000. Preparation failures are administrative
+state, surfaced as a workflow availability reason.
 
-## Annotator controls and filtering
+## Annotation and filtering
 
-The Prelabels selector offers compatible, available configurations and
-**No prelabels**. Without a saved choice, the app checks the current image/workflow
-for retained dataset hints. It selects the first compatible, annotator-available
-configuration in dataset configuration order with valid, nonempty results. With no
-such results it stays on **No prelabels**. This read-only lookup never runs a model.
-It checks again every three seconds while no retained hints are available, so a
-batch finishing for an open item can supply its default. Empty, expired, reset,
-paused, changed-model/configuration and incompatible results do not enable hints.
+The dataset administrator chooses one active compatible configuration per task.
+Annotators have no model picker, No prelabels option, generation trigger or saved
+model preference. Historical lists resolve to the first available compatible
+configuration in their stored order; new or changed bindings accept at most one.
 
-The automatic default belongs only to the current image/workflow and is not saved.
-An explicit selection, including **No prelabels**, takes precedence and persists
-per account, API origin, dataset and workflow. A removed or unavailable saved model
-becomes none. Adding a model alone does not enable inference. To generate hints
-interactively, explicitly select a model, even if it is already the automatic choice.
+Before claiming work, the server prepares the task's focusable sources. Nonempty
+predictions enter Objects as individually leased items; empty results use normal
+Overview annotation. A skeleton is one item. The UI displays only the leased
+prediction and zooms to it. Confirm & next keeps its geometry and advances to the
+next Objects item across image boundaries. Delete is a pending decision for both
+boxes and skeletons; confirm it explicitly before advancing. Undo can restore it.
+Autosave and Skip preserve partial geometry without accepting the prediction.
 
-Hints load independently of the image. Explicit model selections also prefetch
-hints for prepared images; automatic defaults only fetch retained current-item hints.
-Changing selection cancels obsolete work and clears queued hints while keeping
-annotation drafts. The **Refresh hints** icon beside the model selector retries
-a failed request. Model objects enter the current image's object sequence
-immediately. The first object opens selected and zoomed in, with the usual box
-move/resize handles or editable pose keypoints. The Inspector lists these objects
-alongside annotations, marks them **Needs confirmation**, and shows confidence.
-Long object labels truncate with an ellipsis and retain their full accessible name.
+Overview is a separate image queue, available only after all Objects work is
+finished. It handles missing annotations directly. Objects never automatically
+ends in Overview. Fit and Refocus remain available without changing the queue.
 
-Use **Confirm & next** in the lower bar, or Space with default shortcuts, to keep
-the current geometry and focus the next pending object. **Delete** in the same bar
-or the Delete key removes a pending box from the canvas while preserving the current
-view. Use **Confirm & next** to confirm the deletion before advancing, or Undo to
-restore the box. The deleted box remains a pending local decision and blocks
-submission until confirmed while its model is selected; save and autosave never
-turn it into an annotation. Deleting a pending skeleton still advances immediately.
-Previous/next object navigation can revisit pending deletions; editing, confirmation,
-and deletion share Undo/Redo.
-These actions work with the Inspector closed. Fit shows the whole image; Refocus
-returns to the selected object. Editing or autosaving does not repeatedly recenter it.
+Preparation applies confidence and overlap filtering against the current image
+and task. Existing nondeleted boxes win. Remaining hints use descending confidence
+with stable suggestion-ID ties; same-class/task IoU greater than the configured
+threshold suppresses a hint. The default hint threshold is 0.5. Once displayed,
+an item remains available for an explicit decision even if another edit changes
+overlap visibility. Its identity and signed original geometry stay fixed.
 
-After the last pending object, the canvas fits the full image. Add missing objects
-or correct existing ones, then **Submit & next** completes the normal assignment.
-Unconfirmed objects block submission while their model is selected. Save, including
-autosave, sends only confirmed or manually drawn annotations. Editing and confirming
-further objects remains available while a background save is in flight. Its reply
-preserves newer local decisions, and final submission waits for that save to finish.
-Save replies, Undo/Redo, and recovered drafts retain the server's immutable
-accepted-prelabel origin and object group while preserving local geometry edits.
-In compact layouts,
-Save is available under **More actions** and through its configured shortcut.
-The former prelabel acceptance/deletion shortcuts remain compatible aliases for
-the selected pending object.
-
-Edited pending objects and local decisions use the existing account- and
-assignment-scoped browser draft recovery. They remain separate from annotations
-until confirmed. Turning prelabels off hides pending objects without accepting
-them; selecting the same model again retains matching local edits. Refreshed
-signed evidence is required before a retained pending object can be confirmed.
-After submission, **Previous image** retains the confirmed/deleted prediction IDs
-for that image and workflow, even though reopening creates a new assignment.
-These local decisions last with the previous-image history in the current session;
-they are not dataset-wide hint removal. Discarding unsaved work discards its local
-decisions. Newly generated prediction IDs remain eligible. Once a prediction has
-been saved as an annotation, its persisted provenance prevents the same prediction
-from appearing again as a pending object, including after deleting that annotation.
-
-Before display, the shared filtering policy combines the current candidate set
-and compares it with current persisted and draft boxes. Existing nondeleted
-boxes win. Remaining hints are ordered by descending confidence with stable
-suggestion-ID ties. A hint is suppressed only when IoU is **greater than** the
-configured threshold against a kept hint or existing box in the same image,
-class, and workflow. The default threshold is **0.5**. Different classes and
-workflows may overlap under this prelabel-specific filter. Editing or deleting a draft box immediately refilters
-the retained candidates. Pending object edits also participate in hint suppression;
-the original prediction must still pass the acceptance filter against annotations.
-Changing model or processing configuration invalidates
-the generation identity and requires refreshed hints.
-
-The dataset's [overlapping-box visibility](configuration.md) policy also applies
-to editable pending objects after this filter. It compares same-class boxes
-across workflows using the dataset threshold, default 0.9. Suppressed hints stay
-retained but do not appear on the canvas, in object counts, or as outstanding
-confirmation work. This does not change model generation or signed acceptance
-evidence, and it does not delete hints or annotation records.
+Displaying an item records a durable seen event. Config/model changes and resets
+replace unseen unused predictions, including prefetched or claimed items never
+displayed. Previously displayed objects retain their original evidence across
+Skip, partial saves, history and restart. An already displayed Overview rejects
+late predictions. Completed work never reopens merely because generation finishes.
 
 ## Dataset generation and removal
 
-In **Admin > Automation > Dataset prelabels**, check remaining box workflows,
-choose a compatible server model for each ambiguous workflow, then start the
-prepared run. A workflow with one compatible server model is mapped
-automatically. Missing mappings or unavailable files block start. Preflight
-captures missing/Pending, InProgress, and NeedsCorrection image/workflow pairs.
-Disabled, submitted, completed, and import-excluded work is omitted.
-Preflight shows eligible pairs, matching reusable results, and ineligible pairs.
-Start reuses compatible retained results and generates the remaining items.
-If new eligible work appears before start, check remaining workflows again to
-include it. Work added after start belongs to a later run.
+The server discovers configured workflows at startup and on a five-second
+maintenance interval. Claim, availability and administrative configuration paths
+also synchronize preparation. Durable bounded jobs cover both boxes and poses;
+large datasets continue in subsequent jobs. Work is revalidated before execution
+and publication against image, task/configuration, model and reset identities.
+Obsolete results cannot publish into unused work. Compatible retained results are
+reused without rerunning inference.
 
-Runs continue after the browser disconnects. The UI reports pending, generated,
-empty, skipped, and failed item counts. Each item is revalidated before execution
-and publication; changed or completed work is skipped. Results bind the image
-hash, task/configuration digest, model digest, and reset generations. Interactive
-requests for that exact binding reuse retained results without inference.
+**Admin > Automation > Dataset prelabels** shows job state and administrative
+preflight, start, retry, cancellation and removal controls. Explicit preflight
+continues to support box batches. Automatic workflow preparation also supports
+poses. Pending and failed preparation are visible as unavailable reasons to users.
+Jobs continue after the browser disconnects. Interrupted or cancelled work remains
+administrative retry work; polling does not silently retry a failed generation.
+Cancellation preserves completed results and marks unfinished managed items failed.
 
-Cancellation preserves successful results and pending work. Retry processes
-failed and pending items; it preserves successful results unless a reset removed
-them. A server restart exposes a running job as interrupted on the next dataset
-prelabel access. It requires explicit retry. Configuration/model changes require
-a fresh preflight. There is one active batch per dataset, sharing the global
-worker limit with interactive requests.
-
-Removal can target a workflow, a configuration, their intersection, or the whole
-dataset. Confirm **Remove prelabels and pause** to remove retained results, cancel
-affected runs, and advance durable generation markers. Repeating a removal is
-idempotent. Affected browser caches and in-flight results cannot authorize a new
-acceptance. Clients check generation status while annotating. Annotation history,
-accepted annotations, user edits, drafts, and model configuration remain intact.
-Unsaved acceptances from an old generation fail on save and require refreshed
-hints. **Resume prelabels in this scope**, or explicitly starting/retrying a run,
-reenables generation. Ordinary polling cannot resume it.
+**Remove prelabels and pause** advances durable generation markers, cancels
+matching jobs and removes unused retained results. It preserves displayed source
+predictions, partial work, saved annotations and provenance. An older displayed
+prediction remains saveable using its captured evidence. A paused scope uses normal
+image annotation for untouched work. **Resume prelabels in this scope** enables
+new preparation. Late results cannot interrupt a displayed Overview.
 
 Private state lives below `.labello-server/prelabels/<dataset-id>/`.
 `control.json` holds the signing secret, durable generations, pause scopes, run
@@ -322,8 +254,8 @@ backups and use the API for removal rather than hand-editing private files.
 
 The default retention is seven days, with 16 runs, 100000 captured work items,
 100000 result files, 8 MiB per result, and 2 GiB of indexed results per dataset.
-Administrative access/preflight prunes expired results and runs; interactive
-requests do not reuse expired results. Limits are configurable in
+Administrative access/preflight prunes expired results and runs; preparation
+does not reuse expired unused results. Limits are configurable in
 `[prelabel.limits]`, documented in the server example. Quota or I/O interruption
 leaves pending work retryable after the operator resolves the limit or storage
 failure. Model storage is operator-managed and outside these result quotas.
@@ -346,9 +278,8 @@ statistics, and export rules. Unaccepted hints never become ground truth.
 Schema version 3 events, states, generated schemas, snapshots, and offline bundles
 retain accepted provenance. Historical version-2 and version-3 annotations remain
 readable; version-2 output rejects new prelabel origins instead of dropping them.
-New prelabel acceptance requires the online evidence endpoint. Historical
+New prelabel acceptance requires signed evidence in an online annotation batch. Historical
 `prelabel_suggestion` revisions remain readable but cannot be newly authored by
 ordinary event or offline synchronization requests.
 
-Dataset-wide pose generation and external prediction-file import are outside
-this feature's scope.
+External prediction-file import is outside this feature's scope.

@@ -1,5 +1,31 @@
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ClaimWorkflowRequest {
+    pub selection: labello_domain::WorkflowSelection,
+    #[serde(default)]
+    pub prefetch: bool,
+    #[serde(default)]
+    pub excluded: Vec<labello_domain::WorkflowItemRef>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveWorkflowDraftRequest {
+    pub assignment: AssignmentActionRequest,
+    #[serde(flatten)]
+    pub draft: WorkflowDraftInput,
+    pub expected_sequence: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WorkflowDraftInput {
+    Geometry { geometry: labello_domain::AnnotationGeometry },
+    Edits { edits: labello_domain::WorkflowEdits },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssignNextRequest {
     pub task_id: TaskId,
     pub kind: Option<AssignmentKind>,
@@ -48,6 +74,8 @@ pub struct AssignmentAvailabilityRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignmentAvailability {
+    #[serde(default)]
+    pub workflows: Vec<labello_domain::WorkflowAvailability>,
     pub kind: AssignmentKind,
     pub tasks: BTreeMap<TaskId, bool>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

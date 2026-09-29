@@ -9,6 +9,13 @@ impl ImageState {
         task_state: &TaskState,
         event: &EventLogEntry,
     ) -> DomainResult<()> {
+        if self
+            .workflow_assignments
+            .contains_key(&assignment.assignment_id)
+        {
+            return self
+                .apply_workflow_correction(assignment, submission, review, task_state, event);
+        }
         submission.validate()?;
         let invalid = || {
             DomainError::InvalidReviewerCorrection("invalid correction submission boundary".into())

@@ -12,8 +12,8 @@ use crate::{
     CreateDatasetRequest, DatasetApi, DatasetSummary, DatasetUser, ImageApi, ImageFile,
     ImagePreview, ImportApi, IngestJob, IngestJobStatus, IngestReport, KeybindingApi,
     OAuthCallbackRequest, OAuthLoginRequest, OfflineApi, OfflineBundleRequest, PrelabelApi,
-    PrelabelSuggestionRequest, ReviewApi, SessionInfo, SetDatasetRolesRequest, StatsApi, TaskApi,
-    UpdateDatasetConfigRequest, UserApi,
+    ReviewApi, SessionInfo, SetDatasetRolesRequest, StatsApi, TaskApi, UpdateDatasetConfigRequest,
+    UserApi,
 };
 
 #[derive(Clone, Default)]

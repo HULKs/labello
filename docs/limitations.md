@@ -15,10 +15,9 @@ for the supported workflows.
   present merge conflicts. Browser draft recovery is not offline mode.
 - Independent multi-annotator labeling and agreement calculation are not operational.
 - [Prelabels](prelabels.md) support static float32 Ultralytics YOLO detection
-  and pose ONNX exports. Server execution requires Linux; browser execution
-  reports browser trust and may fall back to CPU. Model files are supplied by
-  the operator. Dataset-wide pose generation and external prediction import
-  are unavailable.
+  and pose ONNX exports. Server-managed box and pose generation requires Linux and uses native GPU
+  providers with CPU fallback. Browser inference is unavailable. Model files are supplied by
+  the operator. External prediction import is unavailable.
 - Task tutorials display configured title and text only. Administrators can
   enter example-image paths, but those images are not loaded or shown to
   annotators.

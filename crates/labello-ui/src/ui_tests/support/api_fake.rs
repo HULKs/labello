@@ -243,7 +243,6 @@ pub(super) struct CallCounts {
 }
 
 pub(super) struct SpyState {
-    pub(super) retained_prelabels: BTreeMap<(ImageId, TaskId), labello_domain::RetainedPrelabels>,
     pub(super) prelabel_available: bool,
     pub(super) review_submitters: Vec<labello_client::ReviewSubmitter>,
     pub(super) workflow_reasons: BTreeMap<ImageId, Vec<labello_client::WorkflowReasonEntry>>,
@@ -376,7 +375,6 @@ impl SpyState {
             },
         ];
         Self {
-            retained_prelabels: BTreeMap::new(),
             prelabel_available: true,
             metadata,
             states,
@@ -1452,6 +1450,16 @@ impl TaskApi for SpyApi {
 }
 
 impl ImageApi for SpyApi {
+    fn claim_workflow_item<'a>(&'a self, dataset_id: &'a DatasetId, request: labello_client::ClaimWorkflowRequest) -> ApiFuture<'a, Option<Assignment>> {
+        // Most existing fixtures represent legacy image leases. Item-scoped UI
+        // tests install explicit workflow contexts rather than duplicating storage policy.
+        Box::pin(async move { self.assign_next_image(dataset_id, AssignNextRequest {
+            task_id: request.selection.task_id, kind: Some(request.selection.kind), assignment_id: None,
+            excluded_image_ids: request.excluded.into_iter().map(|item| item.image_id).collect(), prefetch: request.prefetch,
+        }).await.map(|response| response.into_assignment()) })
+    }
+    fn workflow_history<'a>(&'a self, _: &'a DatasetId, _: labello_domain::WorkflowSelection) -> ApiFuture<'a, Vec<labello_domain::WorkflowHistoryEntry>> { ready(Ok(Vec::new())) }
+    fn leave_workflow<'a>(&'a self, _: &'a DatasetId, _: labello_domain::WorkflowSelection) -> ApiFuture<'a, ()> { ready(Ok(())) }
     fn get_review_submitters<'a>(&'a self, _dataset_id: &'a DatasetId, image_id: &'a ImageId)
         -> labello_client::ApiFuture<'a, Vec<labello_client::ReviewSubmitter>> {
         ready(Ok(self.state.borrow().review_submitters.iter().filter(|entry| &entry.image_id == image_id).cloned().collect()))
@@ -1500,6 +1508,7 @@ impl ImageApi for SpyApi {
             })
             .collect();
         ready(Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
             queue: Some(labello_client::AssignmentQueueStatus { size: state.metadata.preload_queue_size, eligible_assignments: None }),
             reasons: Default::default(),
             kind: request.kind.clone(),
@@ -2293,35 +2302,6 @@ impl PrelabelApi for SpyApi {
         ready(Ok(config))
     }
 
-    fn prelabel_suggestions<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, labello_domain::PrelabelResponse> {
-        self.state.borrow_mut().counts.prelabel_suggestions += 1;
-        ready(Ok(labello_domain::PrelabelResponse { execution: None, generation: labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false }, from_batch: false, browser_grant: None, suggestions: vec![PrelabelSuggestion {
-            evidence: None,
-            suggestion_id: "suggestion-1".to_string(),
-            config_id: request.config_id,
-            task_id: request.task_id,
-            class_id: ClassId::from("person"),
-            confidence: 0.88,
-            geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-                x: 0.1,
-                y: 0.1,
-                width: 0.25,
-                height: 0.35,
-            }),
-        }] }))
-    }
-    fn retained_prelabels<'a>(
-        &'a self,
-        _dataset_id: &'a DatasetId,
-        request: labello_client::PrelabelItemRequest,
-    ) -> ApiFuture<'a, Option<labello_domain::RetainedPrelabels>> {
-        ready(Ok(self.state.borrow().retained_prelabels.get(&(request.image_id, request.task_id)).cloned()))
-    }
-    fn prelabel_generation<'a>(&'a self, _dataset_id: &'a DatasetId, _request: PrelabelSuggestionRequest) -> ApiFuture<'a, labello_domain::PrelabelGeneration> { self.state.borrow_mut().counts.prelabel_generation += 1; ready(Ok(labello_domain::PrelabelGeneration { generation: 0, scope_generation: 0, paused: false })) }
     fn prelabel_admin_state<'a>(&'a self, _dataset_id: &'a DatasetId) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { self.state.borrow_mut().counts.prelabel_admin += 1; ready(Ok(Default::default())) }
     fn prelabel_admin_command<'a>(&'a self, _dataset_id: &'a DatasetId, _command: labello_domain::PrelabelAdminCommand) -> ApiFuture<'a, labello_domain::PrelabelAdminState> { self.state.borrow_mut().counts.prelabel_admin += 1; ready(Ok(Default::default())) }
 

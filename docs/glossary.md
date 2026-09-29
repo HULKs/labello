@@ -35,6 +35,9 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 <!-- glossary:start -->
 | Name | Meaning |
 | --- | --- |
+| Objects | A workflow pass for focused annotation or review of one object at a time. |
+| Overview | A workflow pass for checking the complete image and handling missing objects after its Objects work is finished. |
+| Previous | Return to the previous item in this workflow's saved history. |
 | Boosted workflow | A workflow whose annotations currently earn a scoring bonus. |
 | Dataset | Images, workflow configuration, annotations, and their history managed together. |
 | Workflow | A configured labeling process for one annotation type and class. Stored as a task in the API and dataset configuration. |
@@ -108,12 +111,12 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 | Status | The current state of an item or operation. |
 | Save | Commit current edits without submitting the image or advancing to another assignment. |
 | Submit | Complete and submit the current image workflow when its requirements are satisfied. |
-| Submit & next | Save and submit this annotation assignment, then claim another image. |
+| Submit & next | Finish the current item and advance within this workflow's queue. |
 | Confirm & next | Confirm the current prelabel geometry or deletion, then advance to the next object. |
 | Next object | Move to the next object in the current image; the workflow determines whether confirmation is required first. |
-| Previous object | Move to the previous object within the current image. |
-| Next guide | Save the current companion annotation and advance to the next guide; the last guide submits the image. |
-| Previous image | Return to the immediately previous eligible assignment. |
+| Previous object | Historical object-navigation label; item queues use Previous across image boundaries. |
+| Next guide | Save the current companion annotation and advance within Objects; Overview is completed separately. |
+| Previous image | Historical image-navigation label; item queues use configurable Previous history. |
 | Next image | Navigate to the next image in dataset inspection. |
 | Approve | Confirm an acceptable review item or submit final image approval, according to the review phase. |
 | Submit correction | Confirm the current correction or submit accumulated corrections, according to the review phase. |
@@ -132,7 +135,7 @@ and accessible description retain `Bounding boxes` or `Skeletons`.
 | Confirm all guides & finish | Confirm the migration full-image scan after all guides are resolved. |
 | Confirm no guides & finish | Confirm that the image has no migration guides and needs no skeletons. |
 | Confirm & finish | Compact form of the applicable migration full-image confirmation. |
-| Skip | Release the current assignment and request another image. |
+| Skip | Save partial work, release this item, and request another item in this workflow. |
 | Undo | Reverse the last supported annotation edit. |
 | Undo last keypoint | Remove the last draft keypoint during migration. |
 | Redo | Reapply the last undone annotation edit where supported. |

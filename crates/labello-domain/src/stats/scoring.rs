@@ -119,6 +119,7 @@ impl ScoringProjection {
         let mut credited = BTreeMap::<AnnotationId, (UserId, i64)>::new();
         let mut logical_labels = BTreeSet::new();
         let mut reviews = Vec::<(&ReviewRecord, ReviewTarget, Timestamp, u64)>::new();
+        let mut overview_approvals = Vec::new();
         let mut reviewer_corrections = Vec::new();
         let mut dispositions = BTreeMap::new();
         for event in events {
@@ -238,6 +239,88 @@ impl ScoringProjection {
                             event.event_sequence,
                         )
                     }));
+                }
+                EventPayload::Workflow { event: workflow } => {
+                    if let crate::WorkflowEvent::ItemConfirmed { confirmation } = workflow.as_ref()
+                    {
+                        if let Some(review) = &confirmation.review
+                            && review.decision == ReviewDecision::Approved
+                            && state
+                                .workflow_assignments
+                                .get(&confirmation.assignment_id)
+                                .is_some_and(|c| c.item == crate::WorkflowItem::Overview)
+                        {
+                            // Overview verifies corrections without another focused pass.
+                            // These approvals unlock correction credit, not another object-review reward.
+                            overview_approvals.extend(
+                                current
+                                    .values()
+                                    .filter(|a| {
+                                        a.task_id == confirmation.task_id
+                                            && matches!(
+                                                a.revision_source,
+                                                RevisionSource::ReviewerCorrection { .. }
+                                            )
+                                    })
+                                    .map(|a| {
+                                        (
+                                            review,
+                                            ReviewTarget::AnnotationVersion {
+                                                annotation_id: a.annotation_id.clone(),
+                                                version: a.version,
+                                            },
+                                            event.timestamp,
+                                            event.event_sequence,
+                                        )
+                                    }),
+                            );
+                        }
+                        if confirmation.review.is_none()
+                            && let Some(final_geometry) = &confirmation.annotation
+                            && let Some(annotation) = current.get(&final_geometry.annotation_id)
+                            && (matches!(
+                                annotation.revision_source,
+                                RevisionSource::Human {
+                                    action: HumanRevisionKind::Authored | HumanRevisionKind::Edited
+                                } | RevisionSource::PrelabelSuggestion { .. }
+                            ) || (matches!(
+                                annotation.origin,
+                                crate::AnnotationOrigin::Prelabel { .. }
+                            ) && matches!(
+                                annotation.revision_source,
+                                RevisionSource::Human {
+                                    action: HumanRevisionKind::AcceptedUnchanged
+                                }
+                            )))
+                        {
+                            let logical = (
+                                annotation.task_id.clone(),
+                                annotation.object_group_id.as_ref().map_or_else(
+                                    || format!("annotation:{}", annotation.annotation_id),
+                                    |group| format!("group:{group}"),
+                                ),
+                            );
+                            if !credited.contains_key(&annotation.annotation_id)
+                                && logical_labels.insert(logical)
+                            {
+                                let base = base_value(&annotation.geometry);
+                                credited.insert(
+                                    annotation.annotation_id.clone(),
+                                    (event.actor_user_id.clone(), base),
+                                );
+                                self.labels.push(LabelAward {
+                                    timestamp: event.timestamp,
+                                    image: event.image_id.clone(),
+                                    sequence: event.event_sequence,
+                                    annotation: annotation.annotation_id.clone(),
+                                    user: event.actor_user_id.clone(),
+                                    task: annotation.task_id.clone(),
+                                    base,
+                                    manual: !prelabels.contains(&annotation.annotation_id),
+                                });
+                            }
+                        }
+                    }
                 }
                 EventPayload::TaskStateChanged { task_state }
                     if task_state.completed_by.is_some()
@@ -370,7 +453,7 @@ impl ScoringProjection {
                 }
             }
         }
-        for (review, target, timestamp, sequence) in &reviews {
+        for (review, target, timestamp, sequence) in reviews.iter().chain(&overview_approvals) {
             let ReviewTarget::AnnotationVersion {
                 annotation_id,
                 version,

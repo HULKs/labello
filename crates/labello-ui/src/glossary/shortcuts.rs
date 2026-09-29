@@ -25,7 +25,7 @@ pub(crate) fn action_label(action: &labello_domain::UserAction) -> &'static str 
         UserAction::ZoomOut => crate::glossary::ZOOM_OUT,
         UserAction::FitImage => crate::glossary::FIT,
         UserAction::RefocusObject => crate::glossary::REFOCUS,
-        UserAction::PreviousImage => crate::glossary::PREVIOUS_IMAGE,
+        UserAction::PreviousImage => crate::glossary::PREVIOUS,
         UserAction::SaveAnnotations => crate::glossary::SAVE,
         UserAction::DeleteAnnotation => crate::glossary::DELETE,
         UserAction::SelectBoundingBoxTool => crate::glossary::BOUNDING_BOX_TOOL,
@@ -150,7 +150,9 @@ pub(crate) fn action_description(action: labello_domain::UserAction) -> &'static
         UserAction::SaveAnnotations => {
             "Save annotations without leaving the image. Migration saves use Confirm / submit instead."
         }
-        UserAction::SkipAssignment => "Release this image and claim another.",
+        UserAction::SkipAssignment => {
+            "Save partial annotation, release this item, and continue with another item in the workflow."
+        }
         UserAction::DeleteAnnotation => {
             "Delete the selected annotation or pending prelabel. In migration, delete a missing object being added or remove the last guide keypoint. In review, only a selected new addition can be removed."
         }
@@ -199,7 +201,7 @@ pub(crate) fn action_description(action: labello_domain::UserAction) -> &'static
         UserAction::RejectReviewObject => {
             "Shortcut-only rejection of the current review target through the existing correction/rejection flow. It is not the primary Submit correction button."
         }
-        UserAction::PreviousImage => "Return to the last skipped or submitted assignment.",
+        UserAction::PreviousImage => "Return to the previous item in this workflow's history.",
         UserAction::SelectBoundingBoxTool
         | UserAction::SelectKeypointTool
         | UserAction::ToggleOfflineMode => "No longer used.",

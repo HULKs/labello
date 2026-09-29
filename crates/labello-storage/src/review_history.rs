@@ -17,17 +17,40 @@ use crate::{DatasetRepository, StorageError, StorageResult};
 
 type Key = (UserId, TaskId);
 type Entry = (Timestamp, ImageId, AssignmentId);
+type WorkflowKey = (UserId, TaskId, bool, labello_domain::WorkflowVariant);
+type WorkflowVisit = (Timestamp, labello_domain::EventId, ImageId, AssignmentId);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Observation {
     sequence: u64,
     finished: BTreeMap<Key, (Timestamp, AssignmentId)>,
+    workflow: BTreeMap<WorkflowKey, BTreeSet<WorkflowVisit>>,
 }
 
 impl Observation {
     fn from_state(state: &ImageState) -> Self {
         let mut finished = BTreeMap::new();
+        let mut workflow = BTreeMap::<WorkflowKey, BTreeSet<WorkflowVisit>>::new();
         for assignment in &state.assignments {
+            if let Some(context) = state.workflow_assignments.get(&assignment.assignment_id)
+                && context.source_assignment_id.is_none()
+                && let Some(seen) = state.workflow_seen.get(&assignment.assignment_id)
+            {
+                workflow
+                    .entry((
+                        assignment.assigned_to.clone(),
+                        assignment.task_id.clone(),
+                        assignment.kind == AssignmentKind::Review,
+                        context.item.variant(),
+                    ))
+                    .or_default()
+                    .insert((
+                        seen.timestamp,
+                        seen.event_id.clone(),
+                        state.image_id.clone(),
+                        assignment.assignment_id.clone(),
+                    ));
+            }
             if assignment.kind != AssignmentKind::Review
                 || !(assignment.status == AssignmentStatus::Completed
                     || (assignment.status == AssignmentStatus::Cancelled
@@ -51,6 +74,7 @@ impl Observation {
         Self {
             sequence: state.current_sequence,
             finished,
+            workflow,
         }
     }
 }
@@ -75,6 +99,7 @@ impl Latest {
 struct Projection {
     images: HashMap<ImageId, Observation>,
     latest: HashMap<Key, Latest>,
+    workflow: BTreeMap<WorkflowKey, BTreeSet<WorkflowVisit>>,
 }
 
 impl Projection {
@@ -87,6 +112,16 @@ impl Projection {
             return;
         }
         if let Some(old) = self.images.remove(&image) {
+            for (key, visits) in old.workflow {
+                if let Some(entries) = self.workflow.get_mut(&key) {
+                    for visit in visits {
+                        entries.remove(&visit);
+                    }
+                    if entries.is_empty() {
+                        self.workflow.remove(&key);
+                    }
+                }
+            }
             for (key, (timestamp, assignment)) in old.finished {
                 if let Some(latest) = self.latest.get_mut(&key) {
                     latest
@@ -105,6 +140,12 @@ impl Projection {
                 .entries
                 .insert((*timestamp, image.clone(), assignment.clone()));
             latest.refresh();
+        }
+        for (key, visits) in &observation.workflow {
+            self.workflow
+                .entry(key.clone())
+                .or_default()
+                .extend(visits.iter().cloned());
         }
         self.images.insert(image, observation);
     }
@@ -144,6 +185,38 @@ pub(crate) struct ReviewHistoryCommitPause {
 }
 
 impl ReviewHistoryCache {
+    pub(crate) fn workflow_history(
+        &self,
+        user: &UserId,
+        selection: &labello_domain::WorkflowSelection,
+        depth: usize,
+    ) -> StorageResult<Vec<labello_domain::WorkflowHistoryEntry>> {
+        let inner = self.inner.lock();
+        let projection = inner.projection.as_ref().ok_or_else(|| {
+            StorageError::AssignmentConflict("workflow history is refreshing".into())
+        })?;
+        let key = (
+            user.clone(),
+            selection.task_id.clone(),
+            selection.kind == AssignmentKind::Review,
+            selection.variant,
+        );
+        Ok(projection
+            .workflow
+            .get(&key)
+            .into_iter()
+            .flat_map(|visits| visits.iter().rev())
+            .take(depth + 1)
+            .map(
+                |(seen_at, _, image_id, assignment_id)| labello_domain::WorkflowHistoryEntry {
+                    image_id: image_id.clone(),
+                    assignment_id: assignment_id.clone(),
+                    seen_at: *seen_at,
+                },
+            )
+            .collect())
+    }
+
     #[cfg(test)]
     pub(crate) async fn pause_before_publish(&self) -> Arc<ReviewHistoryPublishPause> {
         let pause = Arc::new(ReviewHistoryPublishPause::default());
@@ -333,6 +406,29 @@ impl DatasetRepository {
             .filter(|key| old.finished.get(*key) != observation.finished.get(*key))
             .cloned()
             .collect::<BTreeSet<_>>();
+        for key in old.workflow.keys().chain(observation.workflow.keys()) {
+            if old.workflow.get(key) != observation.workflow.get(key) {
+                keys.insert((key.0.clone(), key.1.clone()));
+            }
+        }
+        let reopened = after
+            .assignments
+            .iter()
+            .filter_map(|assignment| {
+                if before
+                    .workflow_assignments
+                    .contains_key(&assignment.assignment_id)
+                {
+                    return None;
+                }
+                let context = after.workflow_assignments.get(&assignment.assignment_id)?;
+                let source = context.source_assignment_id.as_ref()?;
+                Some((assignment, context, source))
+            })
+            .collect::<Vec<_>>();
+        for (assignment, _, _) in &reopened {
+            keys.insert((assignment.assigned_to.clone(), assignment.task_id.clone()));
+        }
         if let Some(previous) = previous {
             keys.insert((previous.assigned_to.clone(), previous.task_id.clone()));
         }
@@ -355,6 +451,27 @@ impl DatasetRepository {
         }
         if let Some(previous) = previous {
             self.review_history_cache.check_previous(previous)?;
+        }
+        if !reopened.is_empty() {
+            let config = self.load_dataset_config().await?;
+            for (assignment, context, source) in reopened {
+                let history = self.review_history_cache.workflow_history(
+                    &assignment.assigned_to,
+                    &labello_domain::WorkflowSelection {
+                        task_id: assignment.task_id.clone(),
+                        kind: assignment.kind.clone(),
+                        variant: context.item.variant(),
+                    },
+                    config.workflow_queue.history_depth,
+                )?;
+                if !history.iter().any(|entry| {
+                    entry.image_id == assignment.image_id && entry.assignment_id == *source
+                }) {
+                    return Err(StorageError::AssignmentConflict(
+                        "item is outside the configured history window".into(),
+                    ));
+                }
+            }
         }
         Ok(ReviewHistoryCommit {
             cache: self.review_history_cache.clone(),
@@ -486,6 +603,7 @@ mod tests {
             Observation {
                 sequence: 2_002,
                 finished: BTreeMap::new(),
+                workflow: BTreeMap::new(),
             },
         );
         let cache = ReviewHistoryCache {

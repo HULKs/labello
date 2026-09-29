@@ -109,6 +109,12 @@ impl ApiError {
                 StatusCode::BAD_REQUEST
             }
             ApiError::Storage(labello_storage::StorageError::Domain(
+                labello_domain::DomainError::MissingRole { .. },
+            )) => StatusCode::FORBIDDEN,
+            ApiError::Storage(labello_storage::StorageError::Domain(
+                labello_domain::DomainError::InvalidWorkflow(_),
+            )) => StatusCode::CONFLICT,
+            ApiError::Storage(labello_storage::StorageError::Domain(
                 labello_domain::DomainError::InvalidKeybindings(_),
             )) => StatusCode::BAD_REQUEST,
             ApiError::Storage(labello_storage::StorageError::Domain(
@@ -156,6 +162,12 @@ impl ApiError {
             Self::Storage(labello_storage::StorageError::Unauthorized(_)) => {
                 "unauthorized".to_string()
             }
+            Self::Storage(labello_storage::StorageError::Domain(
+                labello_domain::DomainError::MissingRole { .. },
+            )) => "forbidden".into(),
+            Self::Storage(labello_storage::StorageError::Domain(
+                labello_domain::DomainError::InvalidWorkflow(message),
+            )) => message.clone(),
             Self::Storage(labello_storage::StorageError::InvalidAssignment(message))
             | Self::Storage(labello_storage::StorageError::InvalidCorrection(message))
             | Self::Storage(labello_storage::StorageError::AssignmentConflict(message)) => {

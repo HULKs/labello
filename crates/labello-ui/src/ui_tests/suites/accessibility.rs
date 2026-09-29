@@ -56,7 +56,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             let workflow_boundary = migration.state().workflow_choices().iter()
                 .flat_map(|workflow| {
                     use crate::panels::WorkflowActivity;
-                    [WorkflowActivity::Boxes, WorkflowActivity::Migration, WorkflowActivity::MissingObjects, WorkflowActivity::Skeleton]
+                    [WorkflowActivity::Boxes, WorkflowActivity::Migration, WorkflowActivity::Skeleton]
                         .map(|activity| migration.state().workflow_entry_label(workflow, Some(activity)))
                 })
                 .filter_map(|label| migration.query_by_role_and_label(egui::accesskit::Role::Button, &label).map(|node| node.rect().right()))
@@ -69,7 +69,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
                 .get_by_role_and_label(egui::accesskit::Role::Button, &workflow_label);
             assert_eq!(
                 selected_workflow.accesskit_node().description(),
-                Some("Loaded assignment queue: 2/2".to_string())
+                None
             );
             let workflow_gutter = canvas.left() - workflow_boundary;
             let inspector_gutter = inspector_boundary - canvas.right();

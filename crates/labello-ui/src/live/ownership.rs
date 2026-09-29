@@ -4,6 +4,7 @@ pub(crate) struct ReservationCleanup {
     pub loads: std::collections::BTreeMap<u64, Rc<dyn labello_client::LabelloApi>>,
     releases: std::collections::BTreeSet<u64>,
     unused: Vec<UnusedReservation>,
+    workflows: Vec<(Rc<dyn labello_client::LabelloApi>, labello_domain::DatasetId, labello_domain::WorkflowSelection)>,
 }
 
 struct UnusedReservation {
@@ -14,11 +15,23 @@ struct UnusedReservation {
 
 impl ReservationCleanup {
     pub fn has_pending_releases(&self) -> bool {
-        !self.unused.is_empty() || !self.releases.is_empty()
+        !self.unused.is_empty() || !self.releases.is_empty() || !self.workflows.is_empty()
     }
 }
 
 impl LabelloApp {
+    pub(crate) fn leave_current_workflow(&mut self) {
+        if let (Some(api), Some(selection)) = (self.runtime.api.clone(), self.workflow_selection()) {
+            self.runtime.reservation_cleanup.workflows.push((api, self.config.dataset_id.clone(), selection));
+        }
+        self.work.workflow.history.clear();
+        self.work.workflow.history_request = None;
+        self.work.workflow.current_root = None;
+        self.work.workflow.excluded = None;
+        self.work.workflow.change_notice = None;
+        self.work.workflow.variant_selected = false;
+        self.work.workflow.returning_forward = false;
+    }
     pub(crate) fn defer_reservation_release(
         &mut self,
         api: Rc<dyn labello_client::LabelloApi>,
@@ -53,6 +66,13 @@ impl LabelloApp {
         // whether an assignment is unused, then keep claims behind its release.
         if !self.runtime.reservation_cleanup.loads.is_empty() {
             return;
+        }
+        for (api, dataset_id, selection) in std::mem::take(&mut self.runtime.reservation_cleanup.workflows) {
+            let operation_id = self.next_operation();
+            let request = self.operation_identity(operation_id, dataset_id.clone());
+            self.runtime.active_requests.insert(operation_id);
+            self.runtime.reservation_cleanup.releases.insert(operation_id);
+            self.start_workflow_command(api, UiCommand::LeaveWorkflow { request, dataset_id, selection });
         }
         for pending in std::mem::take(&mut self.runtime.reservation_cleanup.unused) {
             let queued_owner = self.runtime.commands.iter().any(|command| {
@@ -173,7 +193,7 @@ impl LabelloApp {
                     }
                 }
                 else if matches!(action, crate::prelabel_flow::PrelabelAction::Admin(_)) { self.admin.prelabels.pending = None; self.admin.prelabels.error = Some(error.to_owned()); }
-                else { self.work.prelabels.pending = None; }
+
                 return;
             }
             UiCommand::Export { .. } => {
@@ -301,6 +321,7 @@ impl LabelloApp {
                 self.work.shortcut_settings.error = Some(error.to_string());
             }
             UiCommand::ClaimAssignment { operation_id, .. }
+            | UiCommand::ReopenWorkItem { operation_id, .. }
             | UiCommand::ReloadAssignment { operation_id, .. }
             | UiCommand::ReopenAssignment { operation_id, .. } => {
                 if self.work.active_load_id == Some(*operation_id) {
@@ -327,7 +348,8 @@ impl LabelloApp {
                     self.work.queue.mark_failed();
                 }
             }
-            UiCommand::ReleaseReservation { .. } => {}
+            UiCommand::ReleaseReservation { .. } | UiCommand::LeaveWorkflow { .. } => {}
+            UiCommand::WorkflowHistory { .. } => { self.work.workflow.history_request = None; }
             UiCommand::SaveAnnotations { operation_id, .. }
             | UiCommand::ReleaseAssignment { operation_id, .. }
             | UiCommand::Review { operation_id, .. }
@@ -443,6 +465,7 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
+        self.work.workflow.history_request = None;
         if self.auth.recovery.is_some() {
             self.inspection.suspend_requests();
         } else {
@@ -476,9 +499,6 @@ impl LabelloApp {
         self.admin.pending_role_saves.clear();
         self.admin.export = Default::default();
         self.admin.prelabels = Default::default();
-        self.cancel_prelabel_load();
-        self.work.prelabels.hints.clear();
-        self.work.prelabels.automatic = None;
         self.loading.image = false;
         self.loading.saving = false;
         self.loading.ingesting = false;
@@ -509,7 +529,6 @@ impl LabelloApp {
     pub(crate) fn begin_auth_epoch(&mut self) {
         self.auth.preferences = Default::default();
         self.auth.prelabel_available = false;
-        self.work.automatic_workflow_change = None;
         self.work.reason_notice = None;
         self.work.review_submitters.clear();
         self.auth_epoch = self.auth_epoch.wrapping_add(1);

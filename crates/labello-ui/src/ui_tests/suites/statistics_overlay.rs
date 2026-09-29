@@ -313,7 +313,7 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
         app
     });
     harness.run_steps(4);
-    let workflow = "Person: Bounding box annotation · Person bounding boxes";
+    let workflow = "Person: Bounding box annotation · Person bounding boxes · Annotate";
     assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
         .accesskit_node().description().unwrap().contains(crate::glossary::BOOSTED_WORKFLOW));
     assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
@@ -330,11 +330,11 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
     });
     harness.state_mut().work.tasks.push(focused);
     harness.run_steps(3);
-    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Choose workflow");
-    assert!(trigger.accesskit_node().description().unwrap().contains("Boosted workflow: Other focused boxes"));
+    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Annotate · Choose workflow");
+    assert!(trigger.accesskit_node().description().unwrap().contains("Boosted workflow"));
     trigger.click();
     harness.run_steps(3);
-    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Other focused boxes");
+    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Other focused boxes · Annotate");
     assert!(option.accesskit_node().description().unwrap().contains(crate::glossary::BOOSTED_WORKFLOW));
     assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
 }
@@ -359,7 +359,7 @@ fn workflow_boost_shimmer_settles_and_respects_reduced_motion() {
         inspector_presets::build(InspectorPreset::WorkflowBoost, &ctx.egui_ctx)
     });
     harness.run_steps(4);
-    let label = "Goal post: Bounding box annotation · Goal post boxes";
+    let label = "Goal post: Bounding box annotation · Goal post boxes · Annotate";
     let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
     let still = paint(&harness, tile);
     assert!(still.len() >= 2, "the boost must have a persistent rim and sparkle");

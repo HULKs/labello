@@ -14,7 +14,8 @@ images, annotations, reviews, and audit history on the filesystem.
 - Annotate boxes and keypoints with autosave, undo/redo, personal shortcuts shared across datasets,
   prepared image queues, and account-scoped browser draft recovery.
 - Review each object and the full image. Reviewers can correct geometry or add
-  missing objects; one reviewer approves the resulting round to complete it.
+  missing objects in separate Objects and Overview queues. Review eligibility is
+  enforced per object and image, with a recorded dataset-wide fallback.
 - Browse datasets without claiming work, inspect overlays, and return completed
   workflows to review with an audited reason.
 - Manage classes, workflows, instructions, roles, images, and assignment balance.
@@ -108,8 +109,8 @@ Labello is under active development. These boundaries matter when choosing it:
   with model inspection, named outputs and explicit class mappings.
   Server inference tries CUDA/WebGPU when native providers are installed, with CPU
   fallback. Server generation requires Linux and an operator-managed model
-  directory. Dataset-wide generation covers box workflows; external prediction
-  import and dataset-wide pose generation are unavailable.
+  directory. Dataset-managed preparation covers boxes and poses; external prediction
+  import is unavailable. Annotators cannot select or generate their own prelabels.
 - Tutorials render text only. Review has no swipe controls. Pen events have
   focused Chromium/WebKit coverage. After pen detection, fingers navigate without
   annotating; two-finger navigation can overlap pen editing. Browser detection

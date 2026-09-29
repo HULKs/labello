@@ -71,7 +71,6 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_load_dataset(&mut self) {
-        self.clear_workflow_change_outside_scope();
         if self.loading.dataset || self.runtime.api.is_none() {
             return;
         }
@@ -86,7 +85,6 @@ impl LabelloApp {
     }
 
     pub(crate) fn request_admin_dataset(&mut self) {
-        self.work.automatic_workflow_change = None;
         self.view = AppView::Admin;
         if self
             .datasets

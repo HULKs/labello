@@ -12,7 +12,10 @@ base points, each additional keypoint adds 5, and a bounding box earns 20. A
 skeleton counts once, including its coordinate-free keypoint outcomes; autosaves
 and editing individual points do not create additional labels.
 
-The first submission of a label earns its base reward immediately. A manual
+An Objects confirmation earns the label reward immediately for its finisher.
+Partial contributors receive no fraction of that reward. Overview awards any new
+labels it completes, without awarding previously confirmed objects again.
+Legacy whole-image submissions retain their historical reward timing. A manual
 label adds 10% of base, and a label in the focus workflow adds 25% of base.
 Those percentages add together before the daily multiplier. Accepted prelabels
 earn the ordinary base reward. Their recorded provenance survives later human
@@ -36,9 +39,9 @@ object exclusions without a skeleton earn no label-based reward.
 An effective label rejection deducts 50% of its original credited base value,
 at most once per label. Multiple reviewers and correction attempts do not stack
 deductions. A subsequently approved geometry correction earns its author 20% of
-that base value, at most once; it does not refund the deduction. Current reviewer
-corrections start a fresh review round and earn the correction reward only after
-approval. Their task-wide rejection penalizes edited/removed labels, not unchanged
+that base value, at most once; it does not refund the deduction. Current reviewer corrections earn their correction reward after the required
+Overview approval. Valid object review decisions earn their review reward when
+submitted; draft edits and partial saves earn none. Their task-wide rejection penalizes edited/removed labels, not unchanged
 labels or missing objects added by the reviewer. Historical
 `ReviewerCorrectionRecorded` events retain their immediate acceptance and correction
 reward. Review and correction

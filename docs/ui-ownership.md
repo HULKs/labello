@@ -42,11 +42,11 @@ inspector. See the [product glossary](glossary.md).
 | `panels/loading_bars.rs` | Scoped retained bars and validated inspector context during image loads |
 | `app/shell.rs` | Layout, persistent bottom action panel, resize repaint |
 | `panels/workspace.rs` | Canvas area, second-bar context, canvas controls |
-| `panels/workspace_actions.rs` | Workflow commands at every width, Previous image/object |
+| `panels/workspace_actions.rs` | Workflow commands at every width, unified Previous and Skip |
 | `panels/workspace_overflow.rs` | Action measurement, visible prefix, overflow focus and command identity |
 | `panels/task_selector.rs` | Task selection; `workflow_marker.rs` owns reason icons and the committed-workflow marker |
 | `panels/inspector.rs`, `panels/prelabels.rs` | Context details, annotation controls, filtered suggestions |
-| `prelabel_flow.rs`, `live/prelabels.rs` | Explicit model choice, item-scoped retained-hint defaults, independent current/queued hint requests, cancellation, generation invalidation, admin runs and reset, model-check request ownership |
+| `prelabel_flow.rs`, `live/prelabels.rs` | Admin runs, reset, model checks and managed hint presentation |
 | `prelabel_review.rs` | Pending editable prelabels, confirmation/deletion, sequence selection and progress; shared annotation history and browser drafts retain local changes |
 | `panels/review_context_bar.rs`, `review_context.rs` | Measured inline/stacked context summary, compact progress presentation and height; exact review target identity, type, phase and version |
 | `panels/overlays.rs` | Tutorial, recovery, transitions, settings, discard decisions |
@@ -211,10 +211,10 @@ preserve current work. Statistics uses its separate assignment-preserving modal.
 Normal, migration, and revision review share the correction owner for item
 position, validity, local decisions, navigation, reset, and overview eligibility.
 Opening an editor is not a correction. Actual differences enable rejection and
-amber previews. `NextImage`, Space by default, approves an unchanged item or retains
-a valid correction. Y/N actions use the same owners. Ordinary unchanged approval
-uses its server command; revision approval is staged; corrected-item rejection
-stays local until overview submission. Reset invalidates the affected decision.
+amber previews. `NextImage`, Space by default, approves an unchanged item or submits
+a valid correction. Y/N actions use the same owners. Objects corrections submit
+immediately; Overview submits its image changes together. Historical whole-image
+revision approval remains staged. Reset invalidates the affected decision.
 Unchanged items still require approval, even when other items have corrections.
 
 Overview additions retain editor and undo history after completion. The next blank
@@ -225,9 +225,9 @@ toggle Visible/Hidden; hidden placement resets to Visible after use. Delete
 annotation discards the selected local addition as a whole, with text-focus,
 busy-state, and overlay guards. Invalid additions block confirmation.
 
-Only overview submission sends the complete correction batch. Failure retains
-an immutable retry request. The server starts a fresh review round and enforces
-all-current-item approval. Review context is derived from exact assignment and
+Each item submission sends its scoped correction batch. Failure retains
+an immutable retry request. The server preserves unchanged approvals and requires
+Objects review for additions and Overview review for edited images. Review context is derived from exact assignment and
 target identity, never stale display state. Completed migration review retains
 its outgoing position until replacement or clearing; it does not restart review.
 
@@ -412,20 +412,13 @@ validity. See [administration](administration.md#create-or-reuse-a-schema).
 
 ## Notices and build information
 
-Work owns pending automatic-workflow changes separately from transient runtime
-errors and saved workflow reasons. An accepted availability fallback captures the
-old/new task, class and annotation-type identities together with the previous
-workflow's structured availability reason. Later refreshes cannot rewrite this
-snapshot. Missing reasons use the generic unavailable category. A blocking modal
-renders the captured explanation and existing reason/type icons and requires
-explicit acknowledgment before claiming work in the new workflow. Rendering, loading,
-queue refresh, retries, Escape, and outside clicks cannot acknowledge it.
-The shell disables background controls and workspace shortcuts while it is
-pending, including the first frame. The modal starts without focusing its action,
-so an incidental completion key cannot acknowledge it; Tab reaches the action.
-Acknowledgment clears the pending change and retries normal availability/claim
-selection. A subsequent fallback requires its own acknowledgment. Explicit
-selection, auth/dataset changes, or leaving work clear obsolete pending state.
+Work owns automatic workflow-change feedback separately from transient errors and
+saved workflow reasons. An accepted fallback captures old/new task, class and
+annotation-type identities with the previous workflow's availability explanation.
+Later refreshes cannot rewrite that text. Missing reasons use the generic
+unavailable category. The nonmodal notice remains visible after item loading;
+it does not consume confirmation shortcuts or require acknowledgment. Explicit
+selection, auth/dataset changes, or leaving work clear obsolete feedback.
 
 `workflow_reasons.rs` owns image-and-workflow-scoped saved feedback. Assignment
 load fetches it with state/preview under the same ownership gate; failure fails
@@ -501,7 +494,7 @@ and explicit guide confirmation remain unchanged.
 Migration full-image confirmation starts a missing-object skeleton on a blank
 canvas press and release and selects existing objects directly. No separate Add
 missing object or Edit added object buttons are shown in the inspector. The class
-workflow panel provides the Add missing objects entry. After a complete
+workflow panel selects the separate Overview queue. After a complete
 one-keypoint draft, the next blank placement saves it through the existing
 migration command and starts the next object only
 after success. Selecting another object uses the same save-before-switch path.
@@ -551,8 +544,9 @@ no cross-dataset atomic snapshot or large-server performance guarantee.
 
 In Annotate and Review, `panels/task_selector.rs` groups enabled one-class tasks under their
 class identity. Each class is one card with its name above equal-width activity
-columns: bounding-box annotation, migration, missing objects, and direct skeleton
-annotation when applicable. Review uses bounding-box and skeleton review activities
+columns: bounding-box annotation, migration, and direct skeleton annotation when
+applicable. Each split activity contains Objects and Overview buttons; an unsplit
+activity uses one Annotate or Review button. Review uses bounding-box and skeleton review activities
 and retains its existing task-transition and correction guards. Unconfigured activities do not take up columns;
 multiple tasks within one activity use a single tile with a dropdown chevron.
 The count appears in its tooltip, accessible description, and chooser. Row height
@@ -575,13 +569,24 @@ The annotation panel has bounded width; task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
 task. Temporarily blocked configured activities remain disabled with an explanation.
 
-Missing-object selection reflects the authoritative migration full-image cursor.
-The entry begins a missing-object draft only when that phase is active; repeated
-selection preserves an existing draft. Migration from full-image confirmation
-revisits the first guide through the existing audited command and discard guard.
-Neither entry advances the migration cursor locally or bypasses unresolved work.
-These current-assignment actions remain usable when the queue has no further
-assignments, but loading, saving, and pending transitions retain their guards.
-Migration-configured tasks without migration targets on the loaded image expose
-direct skeleton annotation instead. Normal task switches still use the shared
-pending-transition owner, and workflow-cycle shortcuts continue selecting tasks.
+Objects and Overview select server-owned queues, not local phases of the current
+image. Switching saves unfinished input and releases the departing workflow's
+reservations. Overview eligibility waits for prerequisite objects; the selector
+cannot bypass that gate. A migration workflow with no focusable sources uses
+ordinary full-image annotation. Loading, saving and pending transitions retain
+their guards, and workflow-cycle shortcuts continue selecting tasks.
+
+## Work-item presentation
+
+`work_items.rs` owns Objects/Overview selection, item-scoped editor projection and
+backward/forward navigation over server history. `work_items/edits.rs` maps local
+editors to typed durable proposals and restores them after validated assignment
+loading. It never treats a browser draft as authoritative completion. Review
+browser backups contain unsaved edits, not untouched selection or proposals
+already saved by the server.
+
+The command/reducer path saves partial work before Skip, Previous or departure;
+failed saves retain the editor and lease. Prefetch identities include the item,
+so multiple objects on one image remain distinct. Activation records display/seen;
+prefetch only revalidates. Reservation cleanup waits for in-flight claims before
+releasing the workflow. Shared rendering presents one Previous and Skip action.

@@ -18,6 +18,7 @@ use super::{
 
 mod companions;
 mod review_corrections;
+mod workflow;
 use companions::*;
 
 const MAX_IDEMPOTENCY_KEY_BYTES: usize = 200;
@@ -96,6 +97,20 @@ impl DatasetRepository {
             &context.kind,
             labello_domain::now(),
         )?;
+        if let Some(captured) = state.workflow_assignments.get(context.assignment_id) {
+            let assignment = state
+                .assignments
+                .iter()
+                .find(|a| a.assignment_id == *context.assignment_id)
+                .cloned();
+            if pass_id.is_some() {
+                return Err(conflict("object queues do not use migration passes"));
+            }
+            let cursor = workflow::item_cursor(&state, context.task_id, &captured.item)?;
+            let mut result = command_result(state, context.task_id, None, assignment, None)?;
+            result.cursor = cursor;
+            return Ok(result);
+        }
         if context.kind == AssignmentKind::Review {
             let events = self.load_events(context.image_id).await?;
             let cursor = match canonical_review_target(&state, &events, context.task_id, user_id)? {
@@ -122,7 +137,10 @@ impl DatasetRepository {
         &self,
         image_id: &ImageId,
     ) -> StorageResult<(
-        tokio::sync::RwLockReadGuard<'_, ()>,
+        (
+            tokio::sync::RwLockReadGuard<'_, ()>,
+            tokio::sync::MutexGuard<'_, ()>,
+        ),
         DatasetMetadata,
         ImageRecord,
     )> {
@@ -130,13 +148,14 @@ impl DatasetRepository {
         // Callers retain this guard through authorization and the whole append.
         self.ensure_artifact_migration().await?;
         let config_guard = self.review_config_lock.read().await;
+        let admission_guard = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset_config().await?;
         let image = self.load_image_record(image_id).await?;
         #[cfg(test)]
         if let Some(notify) = self.migration_config_captured.lock().as_ref() {
             notify.notify_one();
         }
-        Ok((config_guard, metadata, image))
+        Ok(((config_guard, admission_guard), metadata, image))
     }
 
     #[allow(
@@ -1686,6 +1705,16 @@ impl DatasetRepository {
         primary_index: usize,
         timestamp: Timestamp,
     ) -> StorageResult<ImageState> {
+        let payloads = self
+            .migration_workflow_payloads(
+                image_id,
+                user_id,
+                role.clone(),
+                assignment_id,
+                payloads,
+                timestamp,
+            )
+            .await?;
         if payloads.iter().any(|payload| {
             matches!(
                 payload,
@@ -1960,6 +1989,13 @@ fn validate_annotation_command(
         now,
     )?
     .clone();
+    if let Some(captured) = state.workflow_assignments.get(context.assignment_id) {
+        workflow::validate_migration_item(state, context, captured, &expected.object_group_id)?;
+        if pass_id.is_some() {
+            return Err(conflict("object queues do not use migration passes"));
+        }
+        return Ok(assignment);
+    }
     ensure_annotation_status(state, context.task_id)?;
     if let Some(pass_id) = pass_id {
         let pass = state
@@ -2052,7 +2088,7 @@ fn validate_exact_one(state: &ImageState, task: &TaskDefinition) -> StorageResul
             && annotation.annotation_type == AnnotationType::Skeleton
             && matches!(
                 annotation.origin,
-                AnnotationOrigin::Native { legacy_v2: false }
+                AnnotationOrigin::Native { legacy_v2: false } | AnnotationOrigin::Prelabel { .. }
             )
             && matches!(
                 annotation.revision_source,
@@ -2090,7 +2126,7 @@ fn current_discovered_skeleton(
         || current.annotation_type != AnnotationType::Skeleton
         || !matches!(
             current.origin,
-            AnnotationOrigin::Native { legacy_v2: false }
+            AnnotationOrigin::Native { legacy_v2: false } | AnnotationOrigin::Prelabel { .. }
         )
     {
         return Err(conflict(
@@ -2593,7 +2629,21 @@ fn command_result(
     assignment: Option<Assignment>,
     annotation_id: Option<labello_domain::AnnotationId>,
 ) -> StorageResult<ManualMigrationCommandResult> {
-    let cursor = state.migration_cursor(task_id, pass_id)?;
+    let assignment = assignment.map(|assignment| {
+        state
+            .assignments
+            .iter()
+            .find(|a| a.assignment_id == assignment.assignment_id)
+            .cloned()
+            .unwrap_or(assignment)
+    });
+    let cursor = match assignment
+        .as_ref()
+        .and_then(|a| state.workflow_assignments.get(&a.assignment_id))
+    {
+        Some(context) => workflow::item_cursor(&state, task_id, &context.item)?,
+        None => state.migration_cursor(task_id, pass_id)?,
+    };
     let dispositions = state.migration_dispositions.get(task_id).ok_or_else(|| {
         StorageError::InvalidAssignment("migration dispositions are missing".to_string())
     })?;

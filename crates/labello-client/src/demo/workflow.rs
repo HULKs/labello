@@ -27,6 +27,22 @@ impl TaskApi for DemoLabelloApi {
 }
 
 impl ImageApi for DemoLabelloApi {
+    fn workflow_availability<'a>(&'a self, _dataset_id: &'a DatasetId, _kind: labello_domain::AssignmentKind) -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowAvailability>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn claim_workflow_item<'a>(&'a self, _dataset_id: &'a DatasetId, _request: crate::ClaimWorkflowRequest) -> crate::ApiFuture<'a, Option<Assignment>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    fn workflow_history<'a>(&'a self, _dataset_id: &'a DatasetId, _selection: labello_domain::WorkflowSelection) -> crate::ApiFuture<'a, Vec<labello_domain::WorkflowHistoryEntry>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn leave_workflow<'a>(&'a self, _dataset_id: &'a DatasetId, _selection: labello_domain::WorkflowSelection) -> crate::ApiFuture<'a, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn get_review_submitters<'a>(&'a self, _dataset_id: &'a DatasetId, _image_id: &'a ImageId)
         -> crate::ApiFuture<'a, Vec<crate::ReviewSubmitter>> {
         Box::pin(async { Ok(Vec::new()) })
@@ -44,6 +60,7 @@ impl ImageApi for DemoLabelloApi {
     ) -> crate::ApiFuture<'a, crate::AssignmentAvailability> {
         Box::pin(async move {
             Ok(crate::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: request.kind,

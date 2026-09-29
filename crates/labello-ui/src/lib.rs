@@ -32,6 +32,7 @@ mod statistics;
 pub use statistics::set_reduced_motion;
 mod companion_guides;
 pub mod theme;
+mod work_items;
 mod workspace_canvas;
 
 #[cfg(test)]
