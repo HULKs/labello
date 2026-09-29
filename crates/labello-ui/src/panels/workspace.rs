@@ -71,15 +71,29 @@ impl LabelloApp {
                             presented = true;
                         }
                         ui.add_space(gap);
-                        ui.label(
-                            "No assignments are currently available in the previous workflow.",
-                        );
-                        ui.add_space(gap);
-                        ui.label(RichText::new(crate::glossary::PREVIOUS_WORKFLOW).weak());
-                        ui.add(egui::Label::new(&notice.previous).wrap());
-                        ui.add_space(gap);
-                        ui.label(RichText::new("New workflow").weak());
-                        ui.add(egui::Label::new(RichText::new(&notice.current).strong()).wrap());
+                        let reason = WorkflowMarkerReason::Unavailable(notice.reason);
+                        ui.horizontal_top(|ui| {
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::Vec2::splat(Self::WORKFLOW_MARKER_WIDTH), egui::Sense::hover(),
+                            );
+                            paint_workflow_marker(ui, rect, false, Some(reason));
+                            ui.add(egui::Label::new(reason.label()).wrap());
+                        });
+                        for (heading, label, annotation_type, emphasize) in [
+                            (crate::glossary::PREVIOUS_WORKFLOW, &notice.previous, &notice.previous_type, false),
+                            ("New workflow", &notice.current, &notice.current_type, true),
+                        ] {
+                            ui.add_space(gap);
+                            ui.label(RichText::new(heading).weak());
+                            ui.horizontal_top(|ui| {
+                                let (rect, response) = ui.allocate_exact_size(
+                                    egui::Vec2::splat(Self::WORKFLOW_ICON_SIZE), egui::Sense::hover(),
+                                );
+                                workflow_type_icon(ui, response.id, rect, annotation_type);
+                                let text = RichText::new(label);
+                                ui.add(egui::Label::new(if emphasize { text.strong() } else { text }).wrap());
+                            });
+                        }
                         ui.add_space(gap + theme::SPACE_1);
                         let button = theme::primary_button(
                             ui,

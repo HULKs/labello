@@ -414,9 +414,11 @@ validity. See [administration](administration.md#create-or-reuse-a-schema).
 
 Work owns pending automatic-workflow changes separately from transient runtime
 errors and saved workflow reasons. An accepted availability fallback captures the
-old/new task and class identities. A blocking modal explains that no assignments
-are currently available in the previous workflow and requires explicit
-acknowledgment before claiming work in the new workflow. Rendering, loading,
+old/new task, class and annotation-type identities together with the previous
+workflow's structured availability reason. Later refreshes cannot rewrite this
+snapshot. Missing reasons use the generic unavailable category. A blocking modal
+renders the captured explanation and existing reason/type icons and requires
+explicit acknowledgment before claiming work in the new workflow. Rendering, loading,
 queue refresh, retries, Escape, and outside clicks cannot acknowledge it.
 The shell disables background controls and workspace shortcuts while it is
 pending, including the first frame. The modal starts without focusing its action,
