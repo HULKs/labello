@@ -432,6 +432,10 @@ concurrent clients each perform five claim/submit/statistics/presence/availabili
 cycles. This is an accelerated contention workload, not a simulation of human
 labeling speed. Image delivery, browser rendering, TLS and proxy latency are
 outside this measurement; route handlers and response bodies are exercised.
+This benchmark uses the image-assignment endpoint, not Objects/Overview item
+display. Storage workflow regressions separately bound image-state and event-log
+reads during warm item display/submission in both annotation and review, and
+check retained and unseen reservation release on departure.
 
 ```sh
 cargo test --locked --release -p labello-api nine_client_polling_performance -- --ignored --nocapture

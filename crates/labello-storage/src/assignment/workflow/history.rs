@@ -238,36 +238,45 @@ impl DatasetRepository {
         release_unseen: bool,
     ) -> StorageResult<()> {
         let now = labello_domain::now();
+        let releasable = |state: &ImageState, assignment: &Assignment| {
+            let Some(context) = state.workflow_assignments.get(&assignment.assignment_id) else {
+                return false;
+            };
+            let root = context
+                .source_assignment_id
+                .as_ref()
+                .unwrap_or(&assignment.assignment_id);
+            assignment.assigned_to == *user
+                && assignment.task_id == selection.task_id
+                && assignment.kind == selection.kind
+                && context.item.variant() == selection.variant
+                && assignment.status == AssignmentStatus::Active
+                && !keep.contains(root)
+                && (release_unseen || state.workflow_seen.contains_key(&assignment.assignment_id))
+        };
         for image_id in metadata.images.keys() {
+            let cached = self
+                .workflow_polling_state(image_id, metadata.bounding_box_visibility)
+                .await?;
+            if !cached.assignments.iter().any(|a| releasable(&cached, a)) {
+                continue;
+            }
+            // Cached facts select candidates only. Recheck exact ownership and
+            // retained history under the image lock before publishing a release.
             let lock = self.image_lock(image_id);
             let _image = lock.lock().await;
             let state = self.load_image_state(image_id).await?;
             let payloads = state
                 .assignments
                 .iter()
-                .filter_map(|assignment| {
-                    let context = state.workflow_assignments.get(&assignment.assignment_id)?;
-                    let root = context
-                        .source_assignment_id
-                        .as_ref()
-                        .unwrap_or(&assignment.assignment_id);
-                    if assignment.assigned_to != *user
-                        || assignment.task_id != selection.task_id
-                        || assignment.kind != selection.kind
-                        || context.item.variant() != selection.variant
-                        || assignment.status != AssignmentStatus::Active
-                        || keep.contains(root)
-                        || (!release_unseen
-                            && !state.workflow_seen.contains_key(&assignment.assignment_id))
-                    {
-                        return None;
-                    }
+                .filter(|assignment| releasable(&state, assignment))
+                .map(|assignment| {
                     let mut released = assignment.clone();
                     released.status = AssignmentStatus::Cancelled;
                     released.updated_at = now;
-                    Some(EventPayload::AssignmentUpdated {
+                    EventPayload::AssignmentUpdated {
                         assignment: released,
-                    })
+                    }
                 })
                 .collect::<Vec<_>>();
             if !payloads.is_empty() {

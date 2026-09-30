@@ -130,7 +130,7 @@ async fn availability_reports_each_pass_and_matches_its_prerequisites() {
 #[tokio::test]
 async fn history_preserves_forward_reservations_and_releases_them_on_departure() {
     let (_temp, repo, task, users) =
-        crate::assignment::tests::annotation_repo(4, &["a", "b"]).await;
+        crate::assignment::tests::annotation_repo(32, &["a", "b"]).await;
     let mut metadata = repo.load_dataset().await.unwrap();
     metadata.workflow_queue.history_depth = 2;
     repo.save_dataset(&metadata).await.unwrap();
@@ -218,17 +218,51 @@ async fn history_preserves_forward_reservations_and_releases_them_on_departure()
             .status,
         AssignmentStatus::Cancelled
     );
+    let other = repo
+        .claim_workflow_item(&users[1], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    excluded.push(WorkflowItemRef {
+        image_id: fourth.image_id.clone(),
+        item: WorkflowItem::Overview,
+    });
+    let unseen = repo
+        .claim_workflow_item_with_prefetch(&users[0], &selection, &excluded, true)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(&users[0], context(&fourth))
+        .await
+        .unwrap();
+    let prefetched = repo.load_image_state(&unseen.image_id).await.unwrap();
+    assert!(!prefetched.workflow_seen.contains_key(&unseen.assignment_id));
+    assert!(prefetched.assignments.iter().any(|a| {
+        a.assignment_id == unseen.assignment_id && a.status == AssignmentStatus::Active
+    }));
+    repo.workflow_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    repo.reset_image_state_load_count();
     repo.leave_workflow(&users[0], &selection).await.unwrap();
-    for visit in visits.iter().chain([&fourth]) {
+    assert!(
+        repo.image_state_load_count() <= 8,
+        "departure must reload only retained and unseen reservation images"
+    );
+    for visit in visits.iter().chain([&fourth, &unseen]) {
         assert!(
             repo.load_image_state(&visit.image_id)
                 .await
                 .unwrap()
                 .assignments
                 .iter()
-                .all(|a| a.status != AssignmentStatus::Active)
+                .all(|a| a.assigned_to != users[0] || a.status != AssignmentStatus::Active)
         );
     }
+    let other_state = repo.load_image_state(&other.image_id).await.unwrap();
+    assert!(other_state.assignments.iter().any(|a| {
+        a.assignment_id == other.assignment_id && a.status == AssignmentStatus::Active
+    }));
     let reacquired = repo
         .reopen_workflow_item(&users[0], context(&visits[1]))
         .await
@@ -248,6 +282,67 @@ async fn history_preserves_forward_reservations_and_releases_them_on_departure()
         state.workflow_assignments[&reacquired.assignment_id].source_assignment_id,
         Some(visits[1].assignment_id.clone())
     );
+}
+
+#[tokio::test]
+async fn workflow_advancing_reloads_only_changed_images() {
+    let (_temp, repo, task, users) =
+        crate::assignment::tests::annotation_repo(32, &["a", "b"]).await;
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata.role_assignments[1]
+        .roles
+        .insert(DatasetRole::Reviewer);
+    repo.save_dataset(&metadata).await.unwrap();
+    for image in ["img_0", "img_1"] {
+        seed(&repo, &task, &users[0], image, "box").await;
+    }
+    repo.prepare_review_history().await.unwrap();
+    for (kind, user) in [
+        (AssignmentKind::Annotation, &users[0]),
+        (AssignmentKind::Review, &users[1]),
+    ] {
+        for variant in [WorkflowVariant::Objects, WorkflowVariant::Overview] {
+            let selection = WorkflowSelection {
+                task_id: task.clone(),
+                kind: kind.clone(),
+                variant,
+            };
+            repo.workflow_availability(user, kind.clone())
+                .await
+                .unwrap();
+            for _ in 0..2 {
+                let item = repo
+                    .claim_workflow_item(user, &selection, &[])
+                    .await
+                    .unwrap()
+                    .unwrap();
+                // Isolate warm navigation from the separate score-window initialization.
+                repo.scoring_focus(labello_domain::now()).await.unwrap();
+                repo.reset_image_state_load_count();
+                repo.reset_event_load_count();
+                if kind == AssignmentKind::Review {
+                    approve_item(&repo, user, &item).await;
+                } else {
+                    repo.display_workflow_item(user, context(&item))
+                        .await
+                        .unwrap();
+                    repo.apply_annotation_batch(user, context(&item), vec![], true)
+                        .await
+                        .unwrap();
+                }
+                assert!(
+                    repo.image_state_load_count() <= 6,
+                    "{kind:?} {variant:?} advance must not reload unrelated images: {} loads",
+                    repo.image_state_load_count()
+                );
+                assert!(
+                    repo.event_load_count() <= 10,
+                    "{kind:?} {variant:?} advance must not reread unrelated histories: {} loads",
+                    repo.event_load_count()
+                );
+            }
+        }
+    }
 }
 
 #[tokio::test]

@@ -127,6 +127,11 @@ Availability is advisory and reads reusable image projections without holding
 dataset admission; every claim and mutation repeats its applicable checks.
 `prelabel/workflow.rs` owns dataset-managed preparation and generation scheduling.
 
+Display and departure use the invalidated image projections to locate releasable
+reservations. Only candidate images are reloaded under their image locks; exact
+ownership, workflow selection and retained history are checked again before
+release. Warm navigation does not reread unrelated image histories.
+
 The client exposes typed work-item requests; API handlers validate request identity
 and authenticate the actor. `labello-ui/work_items` projects one leased item into
 its editor and navigates server history. It does not decide final completion,
