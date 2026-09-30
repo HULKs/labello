@@ -5153,3 +5153,173 @@ async fn migration_review_can_approve_after_a_locally_corrected_skeleton() {
 }
 
 mod box_visibility;
+
+#[tokio::test]
+async fn overview_revisits_canonical_migration_with_its_own_lease_through_replay() {
+    use labello_domain::{WorkflowSelection, WorkflowVariant};
+    let f = fixture(ReviewWorkflow::Approval, 1).await;
+    let repo = &f.repository;
+    let selection = WorkflowSelection {
+        task_id: f.task_id.clone(),
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Objects,
+    };
+    let object = repo
+        .claim_workflow_item(&f.annotator, &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&f.annotator, context(&object))
+        .await
+        .unwrap();
+    let saved = repo
+        .save_migration_skeleton(
+            &f.annotator,
+            context(&object),
+            None,
+            &expectation(&state, &f.task_id, &f.targets[0]),
+            skeleton(0.4),
+            "initial-object",
+        )
+        .await
+        .unwrap();
+    let receipt = saved.image_state.workflow_confirmations[&object.assignment_id].clone();
+    let overview_selection = WorkflowSelection {
+        variant: WorkflowVariant::Overview,
+        ..selection.clone()
+    };
+    let overview = repo
+        .claim_workflow_item(&f.annotator, &overview_selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let before_display = repo.load_image_state(&f.image_id).await.unwrap();
+    let expected = expectation(&before_display, &f.task_id, &f.targets[0]);
+    assert!(
+        repo.revisit_migration_target(
+            &f.annotator,
+            context(&overview),
+            None,
+            &expected,
+            "unseen-revisit"
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        repo.load_image_state(&f.image_id).await.unwrap(),
+        before_display
+    );
+    let state = repo
+        .display_workflow_item(&f.annotator, context(&overview))
+        .await
+        .unwrap();
+    let expected = expectation(&state, &f.task_id, &f.targets[0]);
+    assert!(
+        repo.save_migration_skeleton(
+            &f.annotator,
+            context(&overview),
+            None,
+            &expected,
+            skeleton(0.6),
+            "without-revisit"
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        repo.revisit_migration_target(
+            &f.reviewers[0],
+            context(&overview),
+            None,
+            &expected,
+            "wrong-owner"
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(repo.load_image_state(&f.image_id).await.unwrap(), state);
+    let revisited = repo
+        .revisit_migration_target(
+            &f.annotator,
+            context(&overview),
+            None,
+            &expected,
+            "overview-revisit",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        revisited.image_state
+    );
+    let expected = expectation(&revisited.image_state, &f.task_id, &f.targets[0]);
+    let revised = repo
+        .save_migration_skeleton(
+            &f.annotator,
+            context(&overview),
+            None,
+            &expected,
+            skeleton(0.6),
+            "overview-edit",
+        )
+        .await
+        .unwrap();
+    assert!(matches!(revisited.cursor, MigrationCursor::Object { .. }));
+    assert_eq!(revised.cursor, MigrationCursor::FullImage);
+    assert_eq!(
+        revised.assignment.as_ref().unwrap().status,
+        AssignmentStatus::Active
+    );
+    assert!(
+        revised
+            .image_state
+            .workflow_pending_objects(&f.task_id)
+            .is_empty()
+    );
+    assert_eq!(
+        revised.image_state.workflow_confirmations[&object.assignment_id],
+        receipt
+    );
+    let retry = repo
+        .save_migration_skeleton(
+            &f.annotator,
+            context(&overview),
+            None,
+            &expected,
+            skeleton(0.6),
+            "overview-edit",
+        )
+        .await
+        .unwrap();
+    assert_eq!(retry.image_state, revised.image_state);
+    let state = repo.rebuild_image_state(&f.image_id).await.unwrap();
+    let target_hash = &state.migration_target_sets[&f.task_id].target_set_hash;
+    let state_hash = state.current_migration_state_hash(&f.task_id).unwrap();
+    let confirmation = migration_confirmation_hash(target_hash, &state_hash).unwrap();
+    let result = repo
+        .confirm_and_submit_migration(
+            &f.annotator,
+            context(&overview),
+            target_hash,
+            &state_hash,
+            &confirmation,
+            "finish-overview",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        result.image_state.task_states[&f.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_eq!(result.image_state.workflow_confirmations.len(), 2);
+    let events = repo.load_events(&f.image_id).await.unwrap();
+    for boundary in 0..=events.len() {
+        rebuild_state(f.image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        result.image_state
+    );
+}

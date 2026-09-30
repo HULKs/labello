@@ -16,6 +16,7 @@ pub(super) fn item_cursor(
             object_group_id: object_group_id.clone(),
             sequence_index: migration_target(state, task, object_group_id)?.sequence_index,
         },
+        WorkflowItem::Overview => state.migration_cursor(task, None)?,
         _ => MigrationCursor::FullImage,
     })
 }
@@ -26,14 +27,15 @@ pub(super) fn validate_migration_item(
     captured: &WorkflowAssignmentContext,
     group: &ObjectGroupId,
 ) -> StorageResult<()> {
-    if !state.workflow_seen.contains_key(assignment.assignment_id)
-        || captured.item
-            != (WorkflowItem::Object {
-                object: WorkflowObject::Migration {
-                    object_group_id: group.clone(),
-                },
-            })
-    {
+    let owns_target = match &captured.item {
+        WorkflowItem::Object {
+            object: WorkflowObject::Migration { object_group_id },
+        } => object_group_id == group,
+        WorkflowItem::Overview => matches!(state.migration_cursor(assignment.task_id, None)?,
+            MigrationCursor::Object { object_group_id, .. } if &object_group_id == group),
+        _ => false,
+    };
+    if !state.workflow_seen.contains_key(assignment.assignment_id) || !owns_target {
         return Err(conflict(
             "migration target does not match the displayed queue item",
         ));

@@ -1125,6 +1125,24 @@ impl DatasetRepository {
         )?
         .clone();
         ensure_annotation_status(&state, context.task_id)?;
+        if let Some(captured) = state.workflow_assignments.get(context.assignment_id)
+            && (!state.workflow_seen.contains_key(context.assignment_id)
+                || !matches!(
+                    &captured.item,
+                    labello_domain::WorkflowItem::Overview
+                        | labello_domain::WorkflowItem::Object {
+                            object: labello_domain::WorkflowObject::Migration { .. }
+                        }
+                )
+                || matches!(&captured.item,
+                    labello_domain::WorkflowItem::Object {
+                        object: labello_domain::WorkflowObject::Migration { object_group_id }
+                    } if object_group_id != &expected.object_group_id))
+        {
+            return Err(conflict(
+                "migration target does not match the displayed queue item",
+            ));
+        }
         if assignment_pass(&state, context.assignment_id, context.task_id) != pass_id {
             return Err(conflict(
                 "migration revisit pass does not match the assignment's active pass",

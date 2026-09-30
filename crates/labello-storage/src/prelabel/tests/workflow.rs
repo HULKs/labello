@@ -350,3 +350,256 @@ async fn late_model_results_cannot_interrupt_a_displayed_overview() {
     );
     f.service.shutdown().await;
 }
+
+#[tokio::test]
+async fn managed_preparation_uses_configured_overlap_filtering() {
+    for (threshold, offset) in [(0.9, 0.05), (0.1, 0.2)] {
+        let f = queue_fixture(Runner::default()).await;
+        let mut metadata = f.repo.load_dataset().await.unwrap();
+        metadata.prelabel_configs[0]
+            .output_processing
+            .suppress_overlaps_iou = Some(threshold);
+        f.repo.save_dataset(&metadata).await.unwrap();
+        let first = f.hints().await.suggestions[0].clone();
+
+        let mut second = first.clone();
+        second.suggestion_id = "second-hint".into();
+        second.confidence = 0.8;
+        if let AnnotationGeometry::BoundingBox(bounds) = &mut second.geometry {
+            bounds.x += offset;
+        }
+        let provenance = &first.evidence.as_ref().unwrap().provenance;
+        let control = f.service.lock(&f.dataset).await.unwrap();
+        let item = WorkItem {
+            image_id: provenance.image_id.clone(),
+            image_hash: provenance.image_hash.clone(),
+            task_id: provenance.task_id.clone(),
+            config_id: provenance.config_id.clone(),
+            config_digest: provenance.config_digest.clone(),
+            model_digest: provenance.model_digest.clone(),
+            generation: PrelabelService::generation(
+                &control,
+                &provenance.task_id,
+                &provenance.config_id,
+            ),
+            outcome: PrelabelItemOutcome::Pending,
+        };
+        let hints = predictions::certify(
+            &f.dataset,
+            &control,
+            &item,
+            &metadata.prelabel_configs[0],
+            metadata.task(&item.task_id).unwrap(),
+            ImageDimensions {
+                width: 100,
+                height: 100,
+            },
+            vec![second, first],
+            PrelabelExecutionKind::ServerCpu,
+        )
+        .unwrap();
+        drop(control);
+        let expected =
+            filter_prelabels(&hints, &[], &metadata.prelabel_configs[0].output_processing);
+        let task = metadata.task(&TaskId::from("boxes")).unwrap();
+        f.repo
+            .prepare_workflow_predictions(
+                &"fresh".into(),
+                &task.task_id,
+                workflow_prelabel_digest(&metadata, task),
+                None,
+                WorkflowPreparationStatus::Ready,
+                hints,
+            )
+            .await
+            .unwrap();
+        let state = f.repo.load_image_state(&"fresh".into()).await.unwrap();
+        assert_eq!(
+            state.workflow_preparations[&task.task_id].prelabels,
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn managed_quotas_never_publish_unretained_predictions_and_retry_after_restart() {
+    let probe = queue_fixture(Runner::default()).await;
+    let hints = probe.hints().await.suggestions;
+    let compact = serde_json::to_vec(&hints).unwrap().len() + 128;
+    let total = (serde_json::to_vec_pretty(&hints).unwrap().len() + 128).max(compact) as u64;
+    for (limits, retained) in [
+        (
+            PrelabelLimits {
+                max_result_bytes: 1,
+                ..Default::default()
+            },
+            0,
+        ),
+        (
+            PrelabelLimits {
+                max_retained_results: 1,
+                ..Default::default()
+            },
+            1,
+        ),
+        (
+            PrelabelLimits {
+                max_result_bytes: compact,
+                max_total_result_bytes: total,
+                ..Default::default()
+            },
+            1,
+        ),
+    ] {
+        let mut f = queue_fixture(Runner::default()).await;
+        f.service = PrelabelService::new(
+            f.temp.path(),
+            &f.temp.path().join("models"),
+            limits.clone(),
+            Arc::new(f.runner.clone()),
+        )
+        .await
+        .unwrap();
+        f.service
+            .synchronize_workflows(&f.dataset, f.repo.clone(), true)
+            .await
+            .unwrap();
+        let admin = f.finish().await;
+        assert_eq!(admin.runs[0].phase, PrelabelRunPhase::Interrupted);
+        let run_id = admin.runs[0].run_id.clone();
+        for restart in [false, true] {
+            if restart {
+                f.service.shutdown().await;
+                f.service = PrelabelService::new(
+                    f.temp.path(),
+                    &f.temp.path().join("models"),
+                    limits.clone(),
+                    Arc::new(f.runner.clone()),
+                )
+                .await
+                .unwrap();
+                f.service
+                    .synchronize_workflows(&f.dataset, f.repo.clone(), true)
+                    .await
+                    .unwrap();
+            }
+            let cached = f.service.lock(&f.dataset).await.unwrap().results.len();
+            assert_eq!(cached, retained);
+            let mut ready = 0;
+            for image in ["fresh", "active", "correction"] {
+                let state = f.repo.rebuild_image_state(&image.into()).await.unwrap();
+                let prep = &state.workflow_preparations[&TaskId::from("boxes")];
+                if prep.status == WorkflowPreparationStatus::Ready && !prep.prelabels.is_empty() {
+                    ready += 1;
+                } else {
+                    assert!(
+                        prep.prelabels.is_empty(),
+                        "unretained predictions must never become queue sources"
+                    );
+                }
+            }
+            assert_eq!(
+                ready, cached,
+                "every published prediction must have passed retention limits"
+            );
+            let availability = f
+                .repo
+                .workflow_availability(&"worker".into(), AssignmentKind::Annotation)
+                .await
+                .unwrap();
+            assert_eq!(
+                availability
+                    .iter()
+                    .any(|a| a.selection.variant == WorkflowVariant::Objects && a.available),
+                retained > 0
+            );
+        }
+        f.service.shutdown().await;
+        f.service = PrelabelService::new(
+            f.temp.path(),
+            &f.temp.path().join("models"),
+            PrelabelLimits::default(),
+            Arc::new(f.runner.clone()),
+        )
+        .await
+        .unwrap();
+        f.command(PrelabelAdminCommand::Retry {
+            run_id: run_id.clone(),
+        })
+        .await;
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let state = f.service.admin_state(&f.dataset).await.unwrap();
+                let run = state.runs.iter().find(|run| run.run_id == run_id).unwrap();
+                if run.phase != PrelabelRunPhase::Running {
+                    assert_eq!(run.generated, 3);
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        f.service.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn managed_restart_reuses_retained_pending_results_across_publication_boundary() {
+    for published in [false, true] {
+        let mut f = queue_fixture(Runner::default()).await;
+        f.service
+            .synchronize_workflows(&f.dataset, f.repo.clone(), true)
+            .await
+            .unwrap();
+        assert_eq!(f.finish().await.runs[0].generated, 3);
+        let calls = f.runner.calls.load(Ordering::SeqCst);
+        // Reconstruct process loss after durable result retention, either before
+        // or after queue publication, but before recording the item outcome.
+        let run_id = {
+            let mut control = f.service.lock(&f.dataset).await.unwrap();
+            if !published {
+                for item in &control.runs[0].items {
+                    f.service
+                        .publish_managed(&f.repo, item, WorkflowPreparationStatus::Pending, vec![])
+                        .await
+                        .unwrap();
+                }
+            }
+            let run = &mut control.runs[0];
+            run.summary.phase = PrelabelRunPhase::Running;
+            for item in &mut run.items {
+                item.outcome = PrelabelItemOutcome::Pending;
+            }
+            runs::update_counts(run);
+            let id = run.summary.run_id.clone();
+            f.service.persist(&f.dataset, &control).await.unwrap();
+            id
+        };
+        f.service = PrelabelService::new(
+            f.temp.path(),
+            &f.temp.path().join("models"),
+            PrelabelLimits::default(),
+            Arc::new(f.runner.clone()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            f.service.admin_state(&f.dataset).await.unwrap().runs[0].phase,
+            PrelabelRunPhase::Interrupted
+        );
+        f.command(PrelabelAdminCommand::Retry { run_id }).await;
+        assert_eq!(f.finish().await.runs[0].generated, 3);
+        assert_eq!(
+            f.runner.calls.load(Ordering::SeqCst),
+            calls,
+            "retained results must not require inference again"
+        );
+        for image in ["fresh", "active", "correction"] {
+            let state = f.repo.rebuild_image_state(&image.into()).await.unwrap();
+            let preparation = &state.workflow_preparations[&TaskId::from("boxes")];
+            assert_eq!(preparation.status, WorkflowPreparationStatus::Ready);
+            assert_eq!(preparation.prelabels.len(), 1);
+        }
+    }
+}

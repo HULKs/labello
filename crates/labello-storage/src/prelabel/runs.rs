@@ -573,6 +573,49 @@ impl PrelabelService {
                 Err(error) => Err(error),
             };
             let mut next = control.clone();
+            if let Ok((suggestions, execution)) = &result {
+                self.check_result_size(suggestions)?;
+                let key = result_key(&item.1)?;
+                if next.results.len() >= self.inner.limits.max_retained_results
+                    && !next.results.contains_key(&key)
+                {
+                    return Err(PrelabelFailure::Limit);
+                }
+                let bytes = serde_json::to_vec_pretty(&suggestions)
+                    .map_err(|_| PrelabelFailure::Invalid)?
+                    .len() as u64
+                    + 1;
+                let retained_bytes: u64 = next
+                    .results
+                    .iter()
+                    .filter(|(existing, _)| *existing != &key)
+                    .map(|(_, result)| result.bytes)
+                    .sum();
+                if retained_bytes.saturating_add(bytes) > self.inner.limits.max_total_result_bytes {
+                    return Err(PrelabelFailure::Limit);
+                }
+                write_json_atomic(
+                    &self.directory(dataset)?.join(format!("result-{key}.json")),
+                    &suggestions,
+                )
+                .await
+                .map_err(|_| PrelabelFailure::Storage)?;
+                next.results.insert(
+                    key,
+                    CachedResult {
+                        execution: execution.clone(),
+                        task_id: item.1.task_id.clone(),
+                        config_id: item.1.config_id.clone(),
+                        created_at: now(),
+                        bytes,
+                        empty: suggestions.is_empty(),
+                    },
+                );
+                // Keep the item pending, but durably retain its result before queue
+                // publication. A restart can reuse this checkpoint after either
+                // publication or the final outcome update is interrupted.
+                self.commit(dataset, &mut control, next).await?;
+            }
             if managed {
                 let publication = match &result {
                     Ok((suggestions, _)) => {
@@ -603,47 +646,9 @@ impl PrelabelService {
                     }
                 }
             }
+            let mut next = control.clone();
             let outcome = match result {
-                Ok((suggestions, execution)) => {
-                    self.check_result_size(&suggestions)?;
-                    let key = result_key(&item.1)?;
-                    if next.results.len() >= self.inner.limits.max_retained_results
-                        && !next.results.contains_key(&key)
-                    {
-                        return Err(PrelabelFailure::Limit);
-                    }
-                    let bytes = serde_json::to_vec_pretty(&suggestions)
-                        .map_err(|_| PrelabelFailure::Invalid)?
-                        .len() as u64
-                        + 1;
-                    let retained_bytes: u64 = next
-                        .results
-                        .iter()
-                        .filter(|(existing, _)| *existing != &key)
-                        .map(|(_, result)| result.bytes)
-                        .sum();
-                    if retained_bytes.saturating_add(bytes)
-                        > self.inner.limits.max_total_result_bytes
-                    {
-                        return Err(PrelabelFailure::Limit);
-                    }
-                    write_json_atomic(
-                        &self.directory(dataset)?.join(format!("result-{key}.json")),
-                        &suggestions,
-                    )
-                    .await
-                    .map_err(|_| PrelabelFailure::Storage)?;
-                    next.results.insert(
-                        key,
-                        CachedResult {
-                            execution,
-                            task_id: item.1.task_id.clone(),
-                            config_id: item.1.config_id.clone(),
-                            created_at: now(),
-                            bytes,
-                            empty: suggestions.is_empty(),
-                        },
-                    );
+                Ok((suggestions, _)) => {
                     if suggestions.is_empty() {
                         PrelabelItemOutcome::Empty
                     } else {

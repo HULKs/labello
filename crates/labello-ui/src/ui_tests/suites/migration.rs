@@ -3031,10 +3031,49 @@ fn seven_class_workflow_picker_fits_desktop_without_shrinking_targets() {
             if node.accesskit_node().label().is_some_and(|label| label.contains(" · ") && label.contains(": ")) {
                 let rect = node.rect();
                 assert!(rect.height() >= 44.0, "{rect:?}");
-                assert!(rect.top() >= 114.0 && rect.bottom() <= 831.0, "all workflow buttons must fit above the footer: {rect:?}");
+                assert!(rect.top() >= 114.0 && rect.bottom() <= 820.0, "all workflow buttons must fit with space above the footer: {rect:?}");
                 count += 1;
             }
         }
         assert_eq!(count, 17, "seven box workflows and five split skeleton workflows");
     }
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn overview_reload_restores_canonical_edit_without_object_zoom() {
+    use labello_domain::{MigrationCursor, MigrationDependencyKind, MigrationDependencyMarker, WorkflowAssignmentContext, WorkflowItem};
+    let mut app = crate::inspector_presets::build(
+        crate::inspector_presets::InspectorPreset::MigrationFullImage,
+        &egui::Context::default(),
+    );
+    let assignment = app.work.assignment.clone().unwrap();
+    let state = app.work.current_state.as_mut().unwrap();
+    let target = state.migration_target_sets[&assignment.task_id].targets[0].clone();
+    state.workflow_assignments.insert(assignment.assignment_id.clone(), WorkflowAssignmentContext {
+        item: WorkflowItem::Overview,
+        task_fingerprint: String::new(),
+        overview_fingerprint: None,
+        review_target: None,
+        review_exception: false,
+        source_assignment_id: None,
+    });
+    state.migration_dependencies.entry(assignment.task_id.clone()).or_default().insert(target.object_group_id.clone(), MigrationDependencyMarker {
+        marker_version: 1,
+        kind: MigrationDependencyKind::ManualSelection,
+        required_disposition_version: state.migration_dispositions[&assignment.task_id][&target.object_group_id].disposition_version,
+        event_id: "overview-revisit".into(),
+        timestamp: labello_domain::now(),
+    });
+    app.work.migration.progress = None;
+    app.work.migration.cursor = None;
+    app.sync_manual_migration();
+    assert_eq!(app.work.migration.cursor, Some(MigrationCursor::Object {
+        object_group_id: target.object_group_id.clone(), sequence_index: target.sequence_index,
+    }));
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+    harness.run();
+    assert_eq!(harness.state().work.canvas.current_zoom(), 1.0, "Overview edits retain the full image");
+    assert!(harness.state().work.migration.draft.is_some());
+    assert_eq!(harness.state().work.assignment.as_ref().unwrap().assignment_id, assignment.assignment_id);
 }

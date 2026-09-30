@@ -27,8 +27,15 @@ keypoints remain one object draft. Previous retains the forward path; Skip saves
 the draft and releases the unfinished object. Reacquisition validates the guide,
 disposition, task and current ownership before allowing edits.
 
+In Overview, selecting a resolved canonical object records a durable revisit
+dependency owned by the displayed Overview assignment. Saving or resolving that
+object clears the dependency and returns to full-image confirmation without
+changing queues or completing the Overview assignment. Reload restores the
+selected edit while retaining the full-image view. Overview cannot finish while
+the selected object still requires a decision.
+
 Historical image assignments retain their direct-revisit dependency and correction
-pass events. New item queues use their exact object lease rather than a global pass.
+pass events. New item queues use their exact item lease rather than a global pass.
 
 ## Add a missing object
 

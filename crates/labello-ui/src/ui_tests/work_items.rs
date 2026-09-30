@@ -271,7 +271,7 @@ fn split_buttons_keep_overview_disabled_with_a_reason_and_have_no_model_picker()
         assert_eq!(objects.rect().width(), overview.rect().width());
         assert_eq!(objects.rect().top(), overview.rect().top());
         assert!(objects.rect().height() >= 44.0);
-        assert!((overview.rect().left() - objects.rect().right() - 4.0).abs() < 0.1);
+        assert!((overview.rect().left() - objects.rect().right() - 6.0).abs() < 0.1);
         assert!(harness.query_by_label("Refresh prelabels").is_none());
         assert!(harness.query_by_label("No prelabels").is_none());
     }

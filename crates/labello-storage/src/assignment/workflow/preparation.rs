@@ -103,19 +103,41 @@ impl DatasetRepository {
             .objects
             .retain(|object| !matches!(object, WorkflowObject::Prelabel { .. }));
         preparation.prelabels = protected;
-        for suggestion in suggestions {
+        let processing = labello_domain::workflow_prelabel_config(&metadata, task)
+            .map(|config| config.output_processing.clone())
+            .unwrap_or(labello_domain::OutputProcessing {
+                confidence_threshold: 0.0,
+                suppress_overlaps_iou: None,
+            });
+        let threshold = processing.iou_threshold();
+        // Seen sources win before confidence sorting, even after the admin changes
+        // the model or threshold. Filtering must never replace work already shown.
+        suggestions.retain(|suggestion| {
+            !preparation.prelabels.iter().any(|old| {
+                old.suggestion_id == suggestion.suggestion_id
+                    || (old.task_id == suggestion.task_id
+                        && old.class_id == suggestion.class_id
+                        && overlapping(&old.geometry, &suggestion.geometry, threshold))
+            })
+        });
+        let annotations = state.visible_annotations().cloned().collect::<Vec<_>>();
+        for suggestion in labello_domain::filter_prelabels(&suggestions, &annotations, &processing)
+        {
             if preparation.prelabels.iter().any(|old| {
                 old.suggestion_id == suggestion.suggestion_id
-                    || overlapping(&old.geometry, &suggestion.geometry)
+                    || (old.task_id == suggestion.task_id
+                        && old.class_id == suggestion.class_id
+                        && overlapping(&old.geometry, &suggestion.geometry, threshold))
             }) {
                 continue;
             }
             // Existing objects, including accepted predictions and migration guides,
             // should not become duplicate prediction work after a model change.
-            if state
-                .visible_annotations()
-                .any(|a| a.task_id == *task_id && overlapping(&a.geometry, &suggestion.geometry))
-            {
+            if annotations.iter().any(|a| {
+                a.task_id == suggestion.task_id
+                    && a.class_id == suggestion.class_id
+                    && overlapping(&a.geometry, &suggestion.geometry, threshold)
+            }) {
                 continue;
             }
             preparation.prelabels.push(suggestion);
@@ -172,7 +194,7 @@ impl DatasetRepository {
     }
 }
 
-fn overlapping(first: &AnnotationGeometry, second: &AnnotationGeometry) -> bool {
+fn overlapping(first: &AnnotationGeometry, second: &AnnotationGeometry, threshold: f32) -> bool {
     fn bounds(geometry: &AnnotationGeometry) -> Option<labello_domain::BoundingBox> {
         match geometry {
             AnnotationGeometry::BoundingBox(bbox) => Some(*bbox),
@@ -203,7 +225,5 @@ fn overlapping(first: &AnnotationGeometry, second: &AnnotationGeometry) -> bool 
     let (Some(a), Some(b)) = (bounds(first), bounds(second)) else {
         return false;
     };
-    let intersection = ((a.x + a.width).min(b.x + b.width) - a.x.max(b.x)).max(0.0)
-        * ((a.y + a.height).min(b.y + b.height) - a.y.max(b.y)).max(0.0);
-    intersection > 0.5 * (a.width * a.height + b.width * b.height - intersection)
+    a.iou(b) > threshold
 }

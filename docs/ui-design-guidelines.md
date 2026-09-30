@@ -497,10 +497,11 @@ non-intersection and scroll reachability as well as viewport containment.
 
 Annotation and review workflow panels and drawers use one bordered group per class.
 Center the class name above equal-width activity columns. Each activity has a
-centered row containing its type icon and label. Keep the class heading at 16
-points, activity icons at 20 points, and one-point gaps within each card.
+centered row containing its type icon and label. Keep the class heading at 15
+points, control labels at 14 points, activity icons at 18 points, and two-point
+gaps within each card. Use six-point gutters between activity and pass columns.
 Place selection and availability cues centered below each button label, with
-three-point top and bottom padding around the label and 18-point status row,
+equal top and bottom padding around the label and 18-point status row,
 separated by two points. Reserve the status row when empty so state changes do
 not shift controls. Buttons retain a minimum height of 44 points.
 Order configured activities left to right: bounding boxes, migration, then direct
@@ -525,7 +526,8 @@ Overview never skips prerequisite Objects work. Keep both panels bounded at
 complete accessible names. Focused activities scroll into view; long text must
 not widen the canvas. Closing a drawer restores keyboard focus to its trigger.
 
-Class cards use four-point vertical gaps and three-point inner vertical padding.
+Class cards use three-point vertical gaps, five-point inner vertical padding,
+and ten-point horizontal padding.
 The seven HSLVision classes should fit a 1440 × 900 desktop viewport without
 scrolling at default text size. Shorter screens and larger text retain scrolling. Availability failures retain a compact Retry availability button above
 the cards. A boosted annotation workflow has a soft amber glow, inner rim, and sparkle,

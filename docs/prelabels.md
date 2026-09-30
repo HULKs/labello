@@ -213,6 +213,9 @@ with stable suggestion-ID ties; same-class/task IoU greater than the configured
 threshold suppresses a hint. The default hint threshold is 0.5. Once displayed,
 an item remains available for an explicit decision even if another edit changes
 overlap visibility. Its identity and signed original geometry stay fixed.
+During preparation refresh, displayed sources win over overlapping new hints
+before confidence sorting; the current configured IoU threshold applies to the
+remaining hints and existing objects.
 
 Displaying an item records a durable seen event. Config/model changes and resets
 replace unseen unused predictions, including prefetched or claimed items never
@@ -262,6 +265,12 @@ does not reuse expired unused results. Limits are configurable in
 `[prelabel.limits]`, documented in the server example. Quota or I/O interruption
 leaves pending work retryable after the operator resolves the limit or storage
 failure. Model storage is operator-managed and outside these result quotas.
+Generation checks per-result size, result count and total retained bytes before
+publishing predictions into workflow queues. It durably indexes the retained
+result before publishing Ready preparation, then records the job outcome. If
+interrupted between these steps, retry reuses the indexed result and completes
+publication without rerunning inference. A rejected result never becomes new
+Objects work.
 
 ## Acceptance and history
 

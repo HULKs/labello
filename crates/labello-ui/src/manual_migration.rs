@@ -220,6 +220,7 @@ impl LabelloApp {
                         object_group_id: object_group_id.clone(),
                         sequence_index: target.sequence_index,
                     }),
+                labello_domain::WorkflowItem::Overview => cursor,
                 _ => Some(MigrationCursor::FullImage),
             }
         } else {
@@ -271,7 +272,10 @@ impl LabelloApp {
         });
         let discovery_focus = self.current_migration_discovery_focus();
         let overview = self.view == AppView::Annotate
-            && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage));
+            && (matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+                || self
+                    .workflow_context()
+                    .is_some_and(|context| context.item == labello_domain::WorkflowItem::Overview));
         self.work.canvas.set_review_focus(if overview {
             None
         } else {
