@@ -53,17 +53,7 @@ fn import_and_migration_presets_are_accessible_at_desktop_mobile_and_short_sizes
             let canvas = migration.get_by_label("Annotation canvas").rect();
             let inspector = migration.get_by_label("Inspector").rect();
             let workflow_label = migration.state().workflow_entry_label(&migration.state().selected_workflow().unwrap(), (migration.state().view == AppView::Annotate).then_some(crate::panels::WorkflowActivity::Migration));
-            let workflow_boundary = migration.state().workflow_choices().iter()
-                .flat_map(|workflow| {
-                    use crate::panels::WorkflowActivity;
-                    [WorkflowActivity::Boxes, WorkflowActivity::Migration, WorkflowActivity::Skeleton]
-                        .map(|activity| migration.state().workflow_entry_label(workflow, Some(activity)))
-                })
-                .filter_map(|label| migration.query_by_role_and_label(egui::accesskit::Role::Button, &label).map(|node| node.rect().right()))
-                .fold(0.0, f32::max)
-                + theme::SPACE_4
-                + theme::inset_frame().total_margin().right
-                + theme::side_frame().stroke.width;
+            let workflow_boundary = migration.state().workflow_panel_width(&migration.ctx);
             let inspector_boundary = width - LayoutMode::INSPECTOR_PANEL_WIDTH;
             let selected_workflow = migration
                 .get_by_role_and_label(egui::accesskit::Role::Button, &workflow_label);

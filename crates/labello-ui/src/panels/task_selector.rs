@@ -19,9 +19,9 @@ impl WorkflowActivity {
 }
 
 impl LabelloApp {
-    const WORKFLOW_ICON_SIZE: f32 = 28.0;
+    const WORKFLOW_ICON_SIZE: f32 = 20.0;
 
-    pub(crate) fn workflow_panel_width(&self, _ctx: &egui::Context) -> f32 { 340.0 }
+    pub(crate) fn workflow_panel_width(&self, _ctx: &egui::Context) -> f32 { 360.0 }
 
     #[cfg(test)]
     pub(crate) fn workflow_entry_label(&self, workflow: &crate::app::WorkflowChoice, activity: Option<WorkflowActivity>) -> String {
@@ -75,39 +75,48 @@ impl LabelloApp {
             if let Some((_, entries)) = groups.iter_mut().find(|(id, _)| id == &class_id) { entries.push(workflow.clone()); }
             else { groups.push((class_id, vec![workflow.clone()])); }
         }
-        ui.spacing_mut().item_spacing.y = 8.0;
+        ui.spacing_mut().item_spacing.y = 4.0;
         for (class_id, entries) in groups {
             ui.push_id(&class_id, |ui| {
-                let frame = theme::inset_frame();
+                let frame = theme::inset_frame().inner_margin(egui::Margin::symmetric(8, 3));
                 let width = (ui.available_width() - frame.total_margin().sum().x).max(1.0);
                 frame.show(ui, |ui| {
                     ui.set_width(width);
-                    let heading = ui.add_sized([width, 0.0], egui::Label::new(RichText::new(self.class_name(&class_id)).heading()).halign(egui::Align::Center).wrap());
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    let heading = ui.add_sized([width, 0.0], egui::Label::new(RichText::new(self.class_name(&class_id)).size(16.0).strong()).halign(egui::Align::Center).wrap());
                     ui.ctx().accesskit_node_builder(heading.id, |node| { node.set_role(egui::accesskit::Role::Heading); node.set_label(self.class_name(&class_id)); });
                     let activities: Vec<_> = [WorkflowActivity::Boxes, WorkflowActivity::Migration, WorkflowActivity::Skeleton].into_iter().filter_map(|activity| {
                         let matching: Vec<_> = entries.iter().filter(|entry| self.workflow_primary_activity(entry) == activity).collect();
                         (!matching.is_empty()).then_some((activity, matching))
                     }).collect();
-                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 1.0);
                     // Reflow complete type groups before shrinking labels or targets.
-                    let columns = ((width + 4.0) / 84.0).floor().max(1.0) as usize;
+                    let columns = ((width + 4.0) / 140.0).floor().max(1.0) as usize;
                     for row in activities.chunks(columns) {
                         ui.columns(row.len(), |columns| {
-                            let label_height = columns.iter().zip(row).map(|(column, (activity, _))| {
-                                column.painter().layout(activity.short_label().into(), egui::TextStyle::Button.resolve(column.style()), theme::TEXT, column.available_width()).size().y
-                            }).fold(0.0, f32::max);
                             for (column, (activity, choices)) in columns.iter_mut().zip(row) {
                                 column.push_id(activity.short_label(), |ui| {
-                                    ui.spacing_mut().item_spacing.y = 4.0;
-                                    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), Self::WORKFLOW_ICON_SIZE), egui::Sense::hover());
-                                    let icon = egui::Rect::from_center_size(rect.center(), egui::vec2(Self::WORKFLOW_ICON_SIZE, Self::WORKFLOW_ICON_SIZE));
+                                    ui.spacing_mut().item_spacing.y = 1.0;
+                                    let label = ui.painter().layout_no_wrap(activity.short_label().into(), egui::TextStyle::Button.resolve(ui.style()), theme::TEXT);
+                                    let size = Self::WORKFLOW_ICON_SIZE;
+                                    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), size.max(label.size().y)), egui::Sense::hover());
+                                    let left = rect.center().x - (size + 4.0 + label.size().x) / 2.0;
+                                    let icon = egui::Rect::from_center_size(egui::pos2(left + size / 2.0, rect.center().y), egui::vec2(size, size));
                                     workflow_type_icon(ui, ui.id().with("type"), icon, &choices[0].annotation_type);
                                     if *activity == WorkflowActivity::Migration { paint_migration_type_badge(ui, icon); }
-                                    ui.add_sized([ui.available_width(), label_height], egui::Label::new(activity.short_label()).halign(egui::Align::Center).wrap());
+                                    ui.painter().galley(egui::pos2(icon.right() + 4.0, rect.center().y - label.size().y / 2.0), label, theme::TEXT);
                                     let split = choices.iter().any(|choice| self.workflow_is_split(choice));
                                     if split {
-                                        self.workflow_pass_button(ui, choices, *activity, WorkflowVariant::Objects, crate::glossary::OBJECTS, false);
-                                        self.workflow_pass_button(ui, choices, *activity, WorkflowVariant::Overview, crate::glossary::OVERVIEW, false);
+                                        let label_width = ui.painter().layout_no_wrap(crate::glossary::OVERVIEW.into(), egui::TextStyle::Button.resolve(ui.style()), theme::TEXT).size().x;
+                                        if ui.available_width() >= 2.0 * (label_width + 4.0) + 4.0 {
+                                            ui.columns(2, |columns| {
+                                                self.workflow_pass_button(&mut columns[0], choices, *activity, WorkflowVariant::Objects, crate::glossary::OBJECTS, false);
+                                                self.workflow_pass_button(&mut columns[1], choices, *activity, WorkflowVariant::Overview, crate::glossary::OVERVIEW, false);
+                                            });
+                                        } else {
+                                            self.workflow_pass_button(ui, choices, *activity, WorkflowVariant::Objects, crate::glossary::OBJECTS, false);
+                                            self.workflow_pass_button(ui, choices, *activity, WorkflowVariant::Overview, crate::glossary::OVERVIEW, false);
+                                        }
                                     } else {
                                         self.workflow_pass_button(ui, choices, *activity, WorkflowVariant::Overview, if self.view == AppView::Review { crate::glossary::REVIEW } else { crate::glossary::ANNOTATE }, false);
                                     }
@@ -135,9 +144,9 @@ impl LabelloApp {
             let label = if multiple {
                 format!("{} · {title} · Choose workflow", self.workflow_type_label(workflow, activity))
             } else { format!("{} · {title}", self.workflow_entry_identity(workflow, Some(activity))) };
-            let width = (ui.available_width() - 8.0).max(1.0);
+            let width = (ui.available_width() - 4.0).max(1.0);
             let galley = ui.painter().layout(pass_label, egui::TextStyle::Button.resolve(ui.style()), theme::TEXT, width);
-            let height = (galley.size().y + 18.0 + 12.0).max(44.0);
+            let height = (galley.size().y + 18.0 + 8.0).max(44.0);
             let response = ui.add_enabled(block.is_none() || block == Some(WorkflowMarkerReason::CheckFailed), egui::Button::new("")
                 .selected(selected).corner_radius(theme::SURFACE_RADIUS).min_size(egui::vec2(ui.available_width(), height)));
             response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, response.enabled(), selected, &label));
@@ -146,11 +155,11 @@ impl LabelloApp {
             let color = ui.style().interact(&response).fg_stroke.color;
             let color = if response.enabled() { color } else { ui.visuals().disable(color) };
             let center = response.rect.center();
-            ui.painter().galley(egui::pos2(center.x - galley.size().x / 2.0, response.rect.top() + 5.0), galley.clone(), color);
+            ui.painter().galley(egui::pos2(center.x - galley.size().x / 2.0, response.rect.top() + 3.0), galley.clone(), color);
             let count = usize::from(selected) + usize::from(block.is_some()) + usize::from(multiple);
             let cue_width = if count == 0 { 0.0 } else { (if selected { 8.0 } else { 0.0 }) + (if block.is_some() { 18.0 } else { 0.0 }) + (if multiple { 8.0 } else { 0.0 }) + (count - 1) as f32 * 4.0 };
             let mut x = center.x - cue_width / 2.0;
-            let y = response.rect.top() + 5.0 + galley.size().y + 2.0 + 9.0;
+            let y = response.rect.top() + 3.0 + galley.size().y + 2.0 + 9.0;
             if selected { ui.painter().circle_filled(egui::pos2(x + 4.0, y), 4.0, color); x += 12.0; }
             if block.is_some() { paint_workflow_marker(ui, egui::Rect::from_center_size(egui::pos2(x + 9.0, y), egui::vec2(18.0, 18.0)), false, block, color); x += 22.0; }
             if multiple {

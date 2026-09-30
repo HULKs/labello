@@ -11,8 +11,6 @@ use labello_domain::{
 
 use crate::theme;
 
-mod scan_transition;
-
 pub(crate) const MIN_ZOOM: f32 = 1.0;
 pub(crate) const MAX_ZOOM: f32 = 48.0;
 const ZOOM_STEP: f32 = 1.25;
@@ -164,7 +162,6 @@ pub struct CanvasState {
     review_target: ReviewViewTarget,
     keypoint_guide_focus: bool,
     pending_review_view: Option<Option<Rect>>,
-    scan_transition: scan_transition::ScanTransition,
 }
 
 impl Default for CanvasState {
@@ -186,7 +183,6 @@ impl Default for CanvasState {
             review_target: ReviewViewTarget::Disabled,
             keypoint_guide_focus: false,
             pending_review_view: None,
-            scan_transition: Default::default(),
         }
     }
 }
@@ -301,7 +297,6 @@ impl CanvasState {
 
     /// Zoom in one step around the center of the viewport.
     pub fn zoom_in(&mut self) {
-        self.scan_transition.cancel();
         self.cancel_drag();
         let old_zoom = self.zoom;
         self.zoom = (old_zoom * ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
@@ -310,7 +305,6 @@ impl CanvasState {
 
     /// Zoom out one step around the center of the viewport.
     pub fn zoom_out(&mut self) {
-        self.scan_transition.cancel();
         self.cancel_drag();
         let old_zoom = self.zoom;
         self.zoom = (old_zoom / ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
@@ -324,7 +318,6 @@ impl CanvasState {
 
     /// Fit the image to the canvas and center it.
     pub fn fit_view(&mut self) {
-        self.scan_transition.cancel();
         self.cancel_drag();
         self.zoom = MIN_ZOOM;
         self.pan = Vec2::ZERO;
@@ -344,14 +337,6 @@ impl CanvasState {
         }
         self.review_target = target;
         self.pending_review_view = Some(annotation.and_then(annotation_focus_rect));
-    }
-
-    pub(crate) fn set_scan_phase(&mut self, identity: Option<egui::Id>) {
-        self.scan_transition.set_phase(identity);
-    }
-
-    pub(crate) fn scan_emphasis(&self) -> f32 {
-        self.scan_transition.emphasis()
     }
 
     /// Keep the editing view stable across geometry changes and saved versions.

@@ -269,9 +269,9 @@ fn split_buttons_keep_overview_disabled_with_a_reason_and_have_no_model_picker()
                 .is_some_and(|description| description.contains("Objects"))
         );
         assert_eq!(objects.rect().width(), overview.rect().width());
-        assert!((objects.rect().center().x - overview.rect().center().x).abs() < 0.1);
+        assert_eq!(objects.rect().top(), overview.rect().top());
         assert!(objects.rect().height() >= 44.0);
-        assert!(overview.rect().top() - objects.rect().bottom() <= 4.1);
+        assert!((overview.rect().left() - objects.rect().right() - 4.0).abs() < 0.1);
         assert!(harness.query_by_label("Refresh prelabels").is_none());
         assert!(harness.query_by_label("No prelabels").is_none());
     }

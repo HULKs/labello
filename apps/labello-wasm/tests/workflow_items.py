@@ -102,7 +102,7 @@ async def run(kind, artifacts=None):
                 if artifacts:
                     folder = Path(artifacts)
                     folder.mkdir(parents=True, exist_ok=True)
-                    await page.screenshot(path=str(folder / f"objects-{kind}.png"), clip={"x": 0, "y": 110, "width": 335, "height": 330}, scale="css")
+                    await page.screenshot(path=str(folder / f"objects-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
                 visits = [first]
                 for _ in range(2):
                     before = len(displayed)
@@ -140,11 +140,11 @@ async def run(kind, artifacts=None):
                 await until(objects_finished, "objects-not-confirmed")
                 await page.wait_for_timeout(800)
                 before = len(displayed)
-                await page.mouse.click(170, 300)  # Overview in the single-class selector.
+                await page.mouse.click(260, 200)  # Overview beside Objects in the single-class selector.
                 overview = await until(lambda: next_display(before), "overview-not-selected")
                 require(overview[1]["item"]["kind"] == "overview", "overview-selected-object")
                 if artifacts:
-                    await page.screenshot(path=str(Path(artifacts) / f"overview-{kind}.png"), clip={"x": 0, "y": 110, "width": 335, "height": 330}, scale="css")
+                    await page.screenshot(path=str(Path(artifacts) / f"overview-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
                 # Revisions made in Overview must survive autosave without reopening Objects.
                 await page.wait_for_timeout(600)
                 scenario.bounds = await until(lambda: scenario.color_bounds(COLOR), "overview-image-not-rendered")
@@ -177,7 +177,7 @@ async def run(kind, artifacts=None):
                 require(review[0]["kind"] == "review" and review[1]["item"]["kind"] == "object", "review-not-focused")
                 require(review[1]["reviewException"], "self-review-fallback-not-recorded")
                 if artifacts:
-                    await page.screenshot(path=str(Path(artifacts) / f"review-{kind}.png"), clip={"x": 0, "y": 110, "width": 335, "height": 330}, scale="css")
+                    await page.screenshot(path=str(Path(artifacts) / f"review-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
                 before = len(displayed)
                 await page.keyboard.press("Space")
                 review = await until(lambda: next_display(before), "review-did-not-advance")
@@ -189,7 +189,7 @@ async def run(kind, artifacts=None):
             finally:
                 if artifacts and hasattr(scenario, "page"):
                     await scenario.page.screenshot(path=str(Path(artifacts) / f"navigation-{kind}.png"), clip={"x": 0, "y": 0, "width": 1440, "height": 108}, scale="css")
-                    await scenario.page.screenshot(path=str(Path(artifacts) / f"final-selector-{kind}.png"), clip={"x": 0, "y": 110, "width": 335, "height": 330}, scale="css")
+                    await scenario.page.screenshot(path=str(Path(artifacts) / f"final-selector-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
                 await browser.close()
 
 

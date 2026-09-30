@@ -262,8 +262,7 @@ pub(crate) fn show_canvas_with_task_edges(
         interaction_rect,
         state,
     );
-    state.scan_transition.update(ui.ctx());
-    let image_rect = state.scan_transition.image_rect(transformed_image_rect(fitted_image, state.zoom, state.pan));
+    let image_rect = transformed_image_rect(fitted_image, state.zoom, state.pan);
     let (primary_down, middle_down) = ui.input(|input| {
         (
             input.pointer.primary_down(),

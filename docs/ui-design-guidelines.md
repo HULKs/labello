@@ -76,7 +76,7 @@ qualify a term; compact synonyms must be listed in the glossary.
   enlarged text needs more room; retain every control and its 44-point target.
   If the control group cannot fit between the panel toggles, put it beneath them.
   On short compact workspaces, use six-point outer canvas gutters vertically to
-  retain image space; keep the migration canvas's inner scan gutter fixed.
+  retain image space.
 - Render each action once per layout. Keep primary work actions visible and move
   secondary actions to overflow when space is limited.
 - Wide work views use workflow, canvas, and inspector panes; Medium and Compact
@@ -220,18 +220,6 @@ has been recorded.
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
-- **Migration scan phase:** mark full-image annotation and review with a persistent
-  four-point information-blue outer frame and one-point light inner frame. Keep
-  a dark gap and an eight-point gutter outside the canvas in both focused and
-  overview phases, so the cue adds no image occlusion or phase-dependent layout
-  shift. The double-frame shape distinguishes it from object selection, warnings,
-  errors, and keyboard focus. It follows workflow phase rather than zoom and
-  adds no visible text. Hide it without an image preview. On phase entry, briefly
-  brighten the frame and contract the image and overlays together by about eight
-  percent, with one rebound and a small settle within 100 ms. Keep the animation
-  inside the image bounds and out of persisted view preferences. User input stops
-  it; zooming within the phase does not restart it. Respect reduced motion, with
-  the static frame as the default when no platform preference adapter is present.
 - **Image overlays:** use filled circles for visible keypoints and hollow
   diamonds for occluded keypoints in saved annotations, active drafts, reviewer
   corrections, and migration. Not-present keypoints have no image marker or
@@ -507,19 +495,19 @@ non-intersection and scroll reachability as well as viewport containment.
 
 ### Annotation and review class groups
 
-Annotation and review workflow panels and drawers use one bordered group per class. The
-class name is centered above equal-width activity columns. Center each type icon
-and activity label independently of selection and availability cues. Place those
-cues centered below the rendered label with a small, consistent gap. Measure the
-tallest label in each row and use equal tile heights with five-point top and bottom padding around the label and 18-point status
-row, separated by two points. Reserve that status
-row even when empty so selection and availability changes do not shift controls.
-Status cues must never shift the type icon's horizontal alignment. Order configured
-activities left to right: bounding-box annotation, migration, then direct
-skeleton annotation when applicable. Omit unconfigured
-activities: one activity fills the card, two share it equally, and three use
-thirds. Each configured activity contains Objects and Overview buttons when split,
-stacked at equal width. Unsplit activities use one Annotate or Review button. A small downward chevron indicates
+Annotation and review workflow panels and drawers use one bordered group per class.
+Center the class name above equal-width activity columns. Each activity has a
+centered row containing its type icon and label. Keep the class heading at 16
+points, activity icons at 20 points, and one-point gaps within each card.
+Place selection and availability cues centered below each button label, with
+three-point top and bottom padding around the label and 18-point status row,
+separated by two points. Reserve the status row when empty so state changes do
+not shift controls. Buttons retain a minimum height of 44 points.
+Order configured activities left to right: bounding boxes, migration, then direct
+skeleton annotation. Omit unconfigured activities. Split activities place Objects
+and Overview side by side when their measured labels fit; otherwise stack them.
+Reflow complete activity groups on narrow screens before clipping labels.
+Unsplit activities use one Annotate or Review button. A small downward chevron indicates
 multiple workflows; keep the count in the chooser, tooltip, and accessible
 description instead of adding another line to the tile. Such tiles open a
 bounded, scrollable chooser with full workflow names and individual availability
@@ -533,12 +521,13 @@ that support only direct skeleton annotation.
 
 The selected marker follows the chosen task and Objects/Overview variant.
 Overview never skips prerequisite Objects work. Keep both panels bounded at
-340 logical points, cap drawers to the viewport, wrap class headings and retain
+360 logical points, cap drawers to the viewport, wrap class headings and retain
 complete accessible names. Focused activities scroll into view; long text must
 not widen the canvas. Closing a drawer restores keyboard focus to its trigger.
 
-Class cards use the ordinary eight-point vertical gap without an additional
-spacer. Availability failures retain a compact Retry availability button above
+Class cards use four-point vertical gaps and three-point inner vertical padding.
+The seven HSLVision classes should fit a 1440 × 900 desktop viewport without
+scrolling at default text size. Shorter screens and larger text retain scrolling. Availability failures retain a compact Retry availability button above
 the cards. A boosted annotation workflow has a soft amber glow, inner rim, and sparkle,
 including the matching option inside a grouped chooser. A brief shimmer runs
 when the boost appears or the button receives hover or keyboard focus; it then

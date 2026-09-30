@@ -237,6 +237,10 @@ class. Its amber rim and sparkle use the production renderer; the native preset
 keeps the default static reduced-motion presentation. Chromium exercises the
 activation and hover shimmer with the browser motion preference.
 
+The `workflow-classes` preset models HSLVision's seven classes with box workflows
+and five split migration workflows, using synthetic data. At 1440 × 900 the full
+picker fits without scrolling; shorter viewports exercise drawer scrolling.
+
 The `workflow-change` preset shows the nonmodal automatic workflow-change notice.
 Check that it remains visible after item loading, wraps within the viewport and can
 be dismissed while work remains available. The `annotation-objects`,

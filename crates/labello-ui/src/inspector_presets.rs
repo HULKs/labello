@@ -50,6 +50,7 @@ pub enum InspectorPreset {
     WorkflowReasons,
     WorkflowAvailability,
     WorkflowBoost,
+    WorkflowClasses,
     Admin,
     PrelabelsDisabled,
     PrelabelsDisabledAnnotation,
@@ -103,7 +104,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 76] = [
+    pub const ALL: [Self; 77] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -130,6 +131,7 @@ impl InspectorPreset {
         Self::WorkflowReasons,
         Self::WorkflowAvailability,
         Self::WorkflowBoost,
+        Self::WorkflowClasses,
         Self::Admin,
         Self::PrelabelsDisabled,
         Self::PrelabelsDisabledAnnotation,
@@ -208,6 +210,7 @@ impl InspectorPreset {
             Self::MigrationNextImage => "migration-next-image",
             Self::WorkflowAvailability => "workflow-availability",
             Self::WorkflowBoost => "workflow-boost",
+            Self::WorkflowClasses => "workflow-classes",
             Self::WorkflowChange => "workflow-change",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
@@ -311,6 +314,44 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Annotation => work_preset(AssignmentKind::Annotation, ctx),
+        InspectorPreset::WorkflowClasses => {
+            let mut app = work_preset(AssignmentKind::Annotation, ctx);
+            let class_template = app.work.classes[0].clone();
+            let task_template = app.work.tasks[0].clone();
+            app.work.classes.clear();
+            app.work.tasks.clear();
+            for name in [
+                "Ball",
+                "GoalPost",
+                "LSpot",
+                "PenaltySpot",
+                "Robot",
+                "TSpot",
+                "XSpot",
+            ] {
+                let mut class = class_template.clone();
+                class.class_id = name.to_lowercase().into();
+                class.name = name.into();
+                let mut boxes = task_template.clone();
+                boxes.task_id = format!("boxes:{}", class.class_id).into();
+                boxes.name = name.into();
+                boxes.class_ids = vec![class.class_id.clone()];
+                if !matches!(name, "Ball" | "Robot") {
+                    let mut migration = migration_target_workflow(
+                        format!("skeleton:{}", class.class_id).into(),
+                        boxes.task_id.clone(),
+                    );
+                    migration.class_ids = boxes.class_ids.clone();
+                    migration.name = name.into();
+                    app.work.tasks.push(migration);
+                }
+                app.work.classes.push(class);
+                app.work.tasks.push(boxes);
+            }
+            app.work.selected_task_id = Some("boxes:ball".into());
+            app.work.assignment = None;
+            app
+        }
         InspectorPreset::WorkflowBoost => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             let mut class = app.work.classes[0].clone();

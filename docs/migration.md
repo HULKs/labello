@@ -32,22 +32,6 @@ pass events. New item queues use their exact object lease rather than a global p
 
 ## Add a missing object
 
-A prominent blue double frame around the canvas marks the full-image scan phase
-in migration annotation and review. It appears in the separately selected Overview queue, including workflows
-with no imported guides. Scan for
-missing objects before finishing. Zooming or panning within this phase keeps the
-frame visible; fitting an unfinished object to the image does not activate it.
-Returning to a focused guide or review item clears it. The frame remains outside
-the image and is hidden when the preview is unavailable.
-
-Entering the scan phase briefly contracts the image and its annotations together,
-rebounds once, and settles within 450 ms. The frame brightens on entry and settles
-to blue. Motion never changes saved zoom, pan, or annotation coordinates. Pointer,
-zoom, and keyboard input stop the transition; remaining in the scan phase does
-not replay it. Reduced-motion preferences, including changes while running,
-show the persistent frame without motion. Integrations without a motion preference
-adapter also use this static presentation.
-
 In the full-image view, tap blank image space to start a skeleton for an object
 without an imported guide. Creation and editing need no mode buttons: existing
 objects take selection priority, and clicking one opens it for editing. After the

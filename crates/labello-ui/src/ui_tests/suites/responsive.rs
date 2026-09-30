@@ -422,11 +422,11 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
             "canvas too short at {width}x{height}: {:?}",
             canvas.rect(),
         );
-        // The class groups reserve a bounded 340-point panel, independent of task-name length.
+        // The class groups reserve a bounded 360-point panel, independent of task-name length.
         let wide_baseline = match (width as u32, height as u32) {
-            (1288, 820) => Some((617.0, 593.0)),
-            (1366, 768) => Some((695.0, 541.0)),
-            (1440, 900) => Some((769.0, 673.0)),
+            (1288, 820) => Some((597.0, 593.0)),
+            (1366, 768) => Some((675.0, 541.0)),
+            (1440, 900) => Some((749.0, 673.0)),
             _ => None,
         };
         if let Some((baseline_width, baseline_height)) = wide_baseline {

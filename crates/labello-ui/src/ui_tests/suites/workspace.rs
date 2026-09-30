@@ -201,12 +201,12 @@ fn workflow_selector_divides_each_class_into_equal_activity_columns() {
             "Person: Skeleton annotation · Person skeleton with a deliberately long workflow name · Overview",
         )
         .rect();
-    assert!((skeleton.right() - bounding_box.left() - vehicle.width()).abs() < 2.0, "{bounding_box:?} {skeleton:?} {vehicle:?}");
+    assert!((skeleton.right() - vehicle.right()).abs() < 2.0, "{bounding_box:?} {skeleton:?} {vehicle:?}");
     assert_eq!(bounding_box.width(), skeleton.width());
     assert_eq!(bounding_box.height(), vehicle.height());
     assert_eq!(bounding_box.height(), skeleton.height());
     assert!(
-        bounding_box.width() <= 340.0,
+        bounding_box.width() <= 360.0,
         "long task names must not expand the panel: {bounding_box:?}"
     );
     assert!(bounding_box.height() <= 94.0);
@@ -4008,7 +4008,8 @@ fn workflow_dot_uses_the_same_decorative_slot_in_panel_and_drawer() {
         let other = assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
         let dot = workflow_dot_centers(&harness, selected)[0];
         assert!(dot.x - 4.0 >= selected.left() && dot.x + 4.0 <= selected.right());
-        assert_eq!(selected.width(), other.width());
+        assert_eq!(selected.height(), other.height());
+        assert!((selected.right() - other.right()).abs() <= 1.0);
         assert!(selected.left() >= 0.0 && selected.right() <= width);
         let buttons = harness
             .query_all_by_label(&format!("Person: Bounding box annotation · {long} · Overview"))
