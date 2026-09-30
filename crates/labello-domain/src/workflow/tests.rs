@@ -293,3 +293,28 @@ fn queue_configuration_defaults_to_five_history_items_and_no_overview_cap() {
         .is_err()
     );
 }
+
+#[test]
+fn revising_a_confirmed_object_outside_overview_requires_confirmation() {
+    let mut f = Fixture::new();
+    let id = f.open();
+    f.workflow(WorkflowEvent::ItemSeen {
+        task_id: f.task.clone(),
+        assignment_id: id.clone(),
+    })
+    .unwrap();
+    f.confirm(&id).unwrap();
+    let mut annotation = f.annotation.clone();
+    annotation.version = 2;
+    if let AnnotationGeometry::BoundingBox(bbox) = &mut annotation.geometry {
+        bbox.x += 0.1;
+    }
+    f.append(EventPayload::AnnotationVersionCreated {
+        annotation,
+        previous_version: Some(1),
+        reason: None,
+    })
+    .unwrap();
+    assert_eq!(f.state.workflow_pending_objects(&f.task), vec![f.object()]);
+    assert!(f.state.workflow_overview_versions.is_empty());
+}

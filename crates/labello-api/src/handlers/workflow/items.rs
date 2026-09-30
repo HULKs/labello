@@ -38,9 +38,6 @@ pub(crate) async fn workflow_availability(
             DatasetRole::Annotator
         },
     )?;
-    state
-        .synchronize_workflow_prelabels(&dataset_id, &repo, false)
-        .await?;
     Ok(Json(
         repo.workflow_availability(&actor.user_id, request.kind)
             .await?,
@@ -161,9 +158,6 @@ pub(crate) async fn claim_workflow_item(
             DatasetRole::Reviewer
         },
     )?;
-    state
-        .synchronize_workflow_prelabels(&dataset_id, &repo, false)
-        .await?;
     Ok(Json(
         repo.claim_workflow_item_with_prefetch(
             &actor.user_id,

@@ -361,8 +361,10 @@ Repository clones share a presence cache and a single refresh lock. Cold reads
 load at most 32 images concurrently. Refreshes reuse compact per-image assignment
 facts shared with availability checks, loading only invalidated images. These
 facts include workflow status, import eligibility, active assignments, review
-revision contexts, and final-review participation; they omit annotation geometry
-and complete event histories. User-specific permissions and eligibility are
+revision contexts, and final-review participation. Objects/Overview availability
+also retains the replayed image state needed for source matching and review targets,
+including annotation versions and prepared prediction geometry. Complete event
+logs are not retained. User-specific permissions and eligibility are
 still checked, and claims still reload authoritative state under the image lock.
 Expiry is filtered on every presence read, independent of writes. Presence is a
 sampled view, not a transaction snapshot across datasets; reading never renews leases.
@@ -396,7 +398,8 @@ retains the separate projection described above.
 
 Memory grows with indexed images, configured tasks/classes, active lease contexts,
 contributor days and credited label awards. Raw events and annotation-version
-geometry are not retained by these projections. They are not a fixed-memory
+geometry are not retained by the statistics projections; the shared workflow
+polling projection retains replayed annotation versions. They are not a fixed-memory
 capacity guarantee: measure peak RSS with representative histories using the
 [synthetic polling workload](verification.md#concurrent-polling-performance)
 and reserve room for active requests, previews, imports, exports and inference.
@@ -442,7 +445,9 @@ entries without that field default to server CPU. Neither change rewrites events
 
 Schema-3 workflow events preserve source preparation, seen markers, item contexts,
 partial object geometry, provisional Overview/reviewer edits, exact confirmations
-and review exceptions. All are derived into `state.json` with projection version 2.
+and review exceptions. All are derived into `state.json` with projection version 3,
+including completed Objects preserved through Overview edits and contribution
+tracking that excludes empty edit proposals.
 A cache using an earlier projection is replayed even if its event sequence matches.
 Snapshots and offline bundles retain these fields. See
 [workflow events](event-history.md#objects-and-overview-events) for replay semantics.
@@ -450,3 +455,13 @@ Snapshots and offline bundles retain these fields. See
 Unused prediction files remain private derived data. Seen prediction geometry and
 signed evidence are captured in the image's authoritative preparation events, so
 reset, expiry or removal of private result files cannot erase displayed work.
+
+Objects/Overview availability reuses these image projections across users and
+annotation/review polls. Cold reads use at most 32 workers and do not acquire the
+dataset admission lock. Warm polls reread only invalidated images, reapply current
+configuration, and reevaluate lease expiry. User/kind results are cached for at
+most 30 seconds or until the next lease expires. Event, configuration, repair and
+membership invalidations advance the shared generation; a racing scan cannot
+publish a reusable result for an obsolete generation. Results remain advisory
+samples. Claims and mutations
+retain admission serialization and reload the selected image exactly.

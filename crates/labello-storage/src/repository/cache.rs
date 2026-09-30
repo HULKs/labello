@@ -16,10 +16,21 @@ pub(crate) struct AssignmentAvailabilityCache {
     generation: AtomicU64,
     values: AsyncMutex<BTreeMap<AssignmentAvailabilityCacheKey, CachedAssignmentAvailability>>,
     refresh: AsyncMutex<()>,
+    workflow_values:
+        AsyncMutex<BTreeMap<AssignmentAvailabilityCacheKey, CachedWorkflowAvailability>>,
+    workflow_refresh: AsyncMutex<()>,
     #[cfg(test)]
     scans: AtomicU64,
     #[cfg(test)]
     lookup_before_final_generation: Mutex<Option<LookupBatchTestHook>>,
+}
+
+#[derive(Clone, Debug)]
+struct CachedWorkflowAvailability {
+    generation: u64,
+    cached_at: Instant,
+    expires_at: Option<labello_domain::Timestamp>,
+    workflows: Vec<labello_domain::WorkflowAvailability>,
 }
 
 #[cfg(test)]
@@ -30,6 +41,63 @@ pub(crate) struct LookupBatchTestHook {
 }
 
 impl AssignmentAvailabilityCache {
+    pub(crate) async fn workflow_lookup(
+        &self,
+        key: &AssignmentAvailabilityCacheKey,
+        generation: u64,
+    ) -> Option<Vec<labello_domain::WorkflowAvailability>> {
+        let values = self.workflow_values.lock().await;
+        let cached = values.get(key)?;
+        if cached.generation != generation
+            || self.generation() != generation
+            || cached.cached_at.elapsed() >= ASSIGNMENT_AVAILABILITY_CACHE_TTL
+            || cached
+                .expires_at
+                .is_some_and(|at| at <= labello_domain::now())
+        {
+            return None;
+        }
+        let workflows = cached.workflows.clone();
+        #[cfg(test)]
+        let hook = { self.lookup_before_final_generation.lock().clone() };
+        #[cfg(test)]
+        if let Some(hook) = hook {
+            hook.reached.wait().await;
+            hook.resume.wait().await;
+        }
+        (self.generation() == generation).then_some(workflows)
+    }
+
+    pub(crate) async fn workflow_refresh(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.workflow_refresh.lock().await
+    }
+
+    pub(crate) async fn workflow_store(
+        &self,
+        key: AssignmentAvailabilityCacheKey,
+        generation: u64,
+        expires_at: Option<labello_domain::Timestamp>,
+        workflows: Vec<labello_domain::WorkflowAvailability>,
+    ) {
+        let mut values = self.workflow_values.lock().await;
+        if self.generation() != generation {
+            return;
+        }
+        values.retain(|_, value| {
+            value.generation == generation
+                && value.cached_at.elapsed() < ASSIGNMENT_AVAILABILITY_CACHE_TTL
+        });
+        values.insert(
+            key,
+            CachedWorkflowAvailability {
+                generation,
+                cached_at: Instant::now(),
+                expires_at,
+                workflows,
+            },
+        );
+    }
+
     pub(crate) fn invalidate(&self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
     }
@@ -243,5 +311,40 @@ mod tests {
                 .await
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn workflow_cache_rejects_invalidated_scan_and_lookup() {
+        let cache = Arc::new(AssignmentAvailabilityCache::default());
+        let generation = cache.generation();
+        cache.invalidate();
+        cache
+            .workflow_store(key("annotation"), generation, None, vec![])
+            .await;
+        assert!(
+            cache
+                .workflow_lookup(&key("annotation"), cache.generation())
+                .await
+                .is_none()
+        );
+        let generation = cache.generation();
+        cache
+            .workflow_store(key("annotation"), generation, None, vec![])
+            .await;
+        let hook = LookupBatchTestHook {
+            reached: Arc::new(tokio::sync::Barrier::new(2)),
+            resume: Arc::new(tokio::sync::Barrier::new(2)),
+        };
+        cache.set_lookup_before_final_generation_hook(Some(hook.clone()));
+        let lookup_cache = cache.clone();
+        let lookup = tokio::spawn(async move {
+            lookup_cache
+                .workflow_lookup(&key("annotation"), generation)
+                .await
+        });
+        hook.reached.wait().await;
+        cache.invalidate();
+        hook.resume.wait().await;
+        assert!(lookup.await.unwrap().is_none());
     }
 }

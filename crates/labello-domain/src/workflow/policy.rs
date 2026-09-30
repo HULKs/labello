@@ -143,7 +143,10 @@ impl ImageState {
         match &confirmation.annotation {
             Some(confirmed) => self
                 .current_annotation(&confirmed.annotation_id)
-                .is_some_and(|a| a.version == confirmed.version),
+                .is_some_and(|a| {
+                    a.version == confirmed.version
+                        || self.workflow_overview_versions.get(&a.annotation_id) == Some(&a.version)
+                }),
             None => !self
                 .active_annotations()
                 .any(|a| a.task_id == *task && self.workflow_object_matches_annotation(&item, a)),

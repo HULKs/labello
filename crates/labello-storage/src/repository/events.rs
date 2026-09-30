@@ -75,7 +75,7 @@ impl DatasetRepository {
         if let Some(state) = cached.as_ref()
             && state.image_id == *image_id
             && state.current_sequence == event_sequence
-            && state.review_projection_version == 2
+            && state.review_projection_version == 3
         {
             return Ok((state.clone(), events));
         }

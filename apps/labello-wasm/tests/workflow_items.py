@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 from playwright.async_api import async_playwright
-from stylus_input import Scenario, application, png, require, until
+from stylus_input import COLOR, Scenario, application, png, require, until
 
 
 async def run(kind, artifacts=None):
@@ -145,6 +145,17 @@ async def run(kind, artifacts=None):
                 require(overview[1]["item"]["kind"] == "overview", "overview-selected-object")
                 if artifacts:
                     await page.screenshot(path=str(Path(artifacts) / f"overview-{kind}.png"), clip={"x": 0, "y": 110, "width": 335, "height": 330}, scale="css")
+                # Revisions made in Overview must survive autosave without reopening Objects.
+                await page.wait_for_timeout(600)
+                scenario.bounds = await until(lambda: scenario.color_bounds(COLOR), "overview-image-not-rendered")
+                original = overview[2]["annotations"]["object-0"][-1]
+                await scenario.gesture((0.25, 0.35) if kind == "bounding_box" else (0.25, 0.4),
+                                       (0.30, 0.40) if kind == "bounding_box" else (0.30, 0.45), pointer="mouse")
+                async def overview_edit_saved():
+                    state = await scenario.request("GET", f'/datasets/stylus/images/{overview[0]["imageId"]}')
+                    draft = state.get("workflowEditDrafts", {}).get(overview[0]["assignmentId"], {})
+                    return any(change.get("annotation_id") == "object-0" for change in draft.get("edits", {}).get("changes", []))
+                await until(overview_edit_saved, "overview-edit-not-autosaved")
                 for index in range(2):
                     before = len(displayed)
                     await page.keyboard.press("Space")
@@ -154,6 +165,10 @@ async def run(kind, artifacts=None):
                     states = [await scenario.request("GET", f"/datasets/stylus/images/{image}") for image in images]
                     return all(state["taskStates"][task["taskId"]]["status"] == "submitted" for state in states)
                 await until(submitted, "annotation-overviews-not-submitted")
+                final_state = await scenario.request("GET", f'/datasets/stylus/images/{overview[0]["imageId"]}')
+                revised = final_state["annotations"]["object-0"][-1]
+                require(revised["version"] == original["version"] + 1 and revised["geometry"] != original["geometry"],
+                        "overview-edit-not-published-once")
                 await page.wait_for_load_state("networkidle")
                 await page.wait_for_timeout(500)
                 before = len(displayed)
@@ -169,7 +184,7 @@ async def run(kind, artifacts=None):
                 require(review[1]["item"]["kind"] == "object", "review-entered-overview")
                 require(not scenario.errors, "browser-page-error")
                 print(json.dumps({"result": "passed", "browser": browser.version, "kind": kind,
-                                  "images": 2, "objects": 4, "history": "C-B-A-B-C", "annotation_overviews": 2,
+                                  "images": 2, "objects": 4, "history": "C-B-A-B-C", "annotation_overviews": 2, "overview_edit_autosave": True,
                                   "review": "focused advance and recorded fallback", "viewport": [1440, 1000]}))
             finally:
                 if artifacts and hasattr(scenario, "page"):

@@ -263,7 +263,10 @@ Overview. A later receipt clears an earlier edit proposal logically; its audit
 record remains. Review correction receipts preserve approvals for unchanged targets.
 
 Replay validates ownership, role, displayed state, item scope and sequence before
-applying each event. Cache projection version 2 includes these workflow projections.
+applying each event. Cache projection version 3 also distinguishes empty edit
+proposals from contributions and records annotation versions revised in a displayed
+Overview after their Objects pass finished. These revisions preserve the original
+Objects receipt and score owner. Older caches rebuild from unchanged events.
 Events at every committed boundary must replay to the same state. Snapshot and
 offline serialization preserve the new fields; offline mutation cannot author
 server-owned workflow events or bypass an online item lease.

@@ -64,6 +64,9 @@ pub struct ImageState {
     pub workflow_confirmation_sequences: BTreeMap<crate::AssignmentId, u64>,
     #[serde(default)]
     pub workflow_review_barriers: BTreeMap<TaskId, u64>,
+    /// Annotation versions edited in Overview after their Objects pass finished.
+    #[serde(default)]
+    pub workflow_overview_versions: BTreeMap<AnnotationId, u32>,
     #[serde(default)]
     pub workflow_review_sequences: BTreeMap<crate::ReviewId, u64>,
     #[serde(default)]
@@ -102,7 +105,7 @@ impl ImageState {
             image_id,
             current_sequence: 0,
             bounding_box_visibility: None,
-            review_projection_version: 2,
+            review_projection_version: 3,
             annotations: BTreeMap::new(),
             reviews: Vec::new(),
             review_rounds: BTreeMap::new(),
@@ -124,6 +127,7 @@ impl ImageState {
             workflow_confirmations: BTreeMap::new(),
             workflow_confirmation_sequences: BTreeMap::new(),
             workflow_review_barriers: BTreeMap::new(),
+            workflow_overview_versions: BTreeMap::new(),
             workflow_review_sequences: BTreeMap::new(),
             workflow_drafts: BTreeMap::new(),
             workflow_edit_drafts: BTreeMap::new(),

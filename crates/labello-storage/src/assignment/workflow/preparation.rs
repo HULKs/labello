@@ -7,7 +7,15 @@ impl DatasetRepository {
         for task in metadata.tasks.iter().filter(|t| t.enabled) {
             let config_digest = labello_domain::workflow_prelabel_digest(&metadata, task);
             for image in metadata.images.keys() {
-                let state = self.load_image_state(image).await?;
+                let state = self
+                    .workflow_polling_state(image, metadata.bounding_box_visibility)
+                    .await?;
+                if config_digest.is_none()
+                    && !state.workflow_preparations.contains_key(&task.task_id)
+                {
+                    // The exact claim prepares model-free sources without sweeping writes.
+                    continue;
+                }
                 if state
                     .workflow_preparations
                     .get(&task.task_id)

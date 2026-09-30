@@ -600,7 +600,9 @@ impl DatasetRepository {
         let progress = self.assignment_progress(&selection.kind).await?;
         let mut unseen = 0;
         for image in metadata.images.keys() {
-            let state = self.load_image_state(image).await?;
+            let state = self
+                .workflow_polling_state(image, metadata.bounding_box_visibility)
+                .await?;
             unseen += state
                 .assignments
                 .iter()
@@ -809,9 +811,9 @@ impl DatasetRepository {
             }
         }
         for image_id in metadata.images.keys() {
-            let lock = self.image_lock(image_id);
-            let _image = lock.lock().await;
-            let state = self.load_image_state(image_id).await?;
+            let state = self
+                .workflow_polling_state(image_id, metadata.bounding_box_visibility)
+                .await?;
             for task in metadata
                 .tasks
                 .iter()
@@ -863,9 +865,9 @@ impl DatasetRepository {
     ) -> StorageResult<std::collections::BTreeSet<ImageId>> {
         let mut images = std::collections::BTreeSet::new();
         for image in metadata.images.keys() {
-            let lock = self.image_lock(image);
-            let _image = lock.lock().await;
-            let state = self.load_image_state(image).await?;
+            let state = self
+                .workflow_polling_state(image, metadata.bounding_box_visibility)
+                .await?;
             let eligible = if selection.kind == AssignmentKind::Annotation {
                 state.assignment_eligible(&task.task_id)
             } else {

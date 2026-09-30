@@ -123,10 +123,17 @@ It has no filesystem, HTTP or UI dependencies.
 display/seen publication, history reacquisition, draft transactions and reservation
 release. Dataset admission serializes independent-review fallback, claims and
 mutations before per-image locks. Configuration guards precede admission.
-Availability is advisory; every claim and mutation repeats its applicable checks.
+Availability is advisory and reads reusable image projections without holding
+dataset admission; every claim and mutation repeats its applicable checks.
 `prelabel/workflow.rs` owns dataset-managed preparation and generation scheduling.
 
 The client exposes typed work-item requests; API handlers validate request identity
 and authenticate the actor. `labello-ui/work_items` projects one leased item into
 its editor and navigates server history. It does not decide final completion,
 independent-review exceptions, score ownership or prelabel configuration.
+
+Overview edits to an already confirmed object preserve its finished Objects pass.
+Replay tracks the versions revised in a displayed annotation Overview separately
+from the original completion receipt, preserving its score ownership. Editing an
+object in Objects still requires confirmation. Empty saved edit proposals do not
+make their author an image contributor; actual proposals and decisions do.

@@ -18,15 +18,20 @@ impl PrelabelService {
             &metadata.prelabel_configs,
             metadata.images.len(),
         ))?;
-        let mut throttle = self.inner.managed_sync.lock().await;
+        let mut control = self.lock(dataset).await?;
         if !force
-            && throttle.get(dataset).is_some_and(|(at, key)| {
-                key == &identity && at.elapsed() < std::time::Duration::from_secs(5)
-            })
+            && self
+                .inner
+                .managed_sync
+                .lock()
+                .await
+                .get(dataset)
+                .is_some_and(|(at, key)| {
+                    key == &identity && at.elapsed() < std::time::Duration::from_secs(5)
+                })
         {
             return Ok(());
         }
-        let mut control = self.lock(dataset).await?;
         self.prune(dataset, &mut control).await?;
         let mut items = Vec::new();
         for task in metadata.tasks.iter().filter(|t| t.enabled) {
@@ -40,7 +45,7 @@ impl PrelabelService {
             };
             for record in metadata.images.values() {
                 let state = repo
-                    .load_image_state(&record.image_id)
+                    .workflow_polling_state(&record.image_id, metadata.bounding_box_visibility)
                     .await
                     .map_err(|_| PrelabelFailure::Storage)?;
                 if !prelabel_task_eligible(task, &state)
@@ -49,6 +54,17 @@ impl PrelabelService {
                     continue;
                 }
                 let Some(config) = config else {
+                    if state
+                        .workflow_preparations
+                        .get(&task.task_id)
+                        .is_none_or(|p| {
+                            p.config_digest.is_none()
+                                && p.status == WorkflowPreparationStatus::Ready
+                        })
+                    {
+                        // Model-free sources are prepared lazily by the claim transaction.
+                        continue;
+                    }
                     repo.prepare_workflow_predictions(
                         &record.image_id,
                         &task.task_id,
@@ -199,7 +215,11 @@ impl PrelabelService {
         if let Some(run_id) = start {
             self.start(dataset, repo, &run_id, false).await?;
         }
-        throttle.insert(dataset.clone(), (std::time::Instant::now(), identity));
+        self.inner
+            .managed_sync
+            .lock()
+            .await
+            .insert(dataset.clone(), (std::time::Instant::now(), identity));
         Ok(())
     }
 

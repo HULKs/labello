@@ -491,9 +491,13 @@ Dataset task review configuration retains the legacy `allowReviewerCorrections`
 field for file and wire compatibility. Both `false` and `true` allow corrections
 in approval review; the administration UI no longer offers the switch. Every
 rejection requires substantive reviewer changes and creates a fresh review round.
-One reviewer approves all current-round objects and the final image, including
-guided migration. Historical `requiredReviews` values are normalized by the
-dataset review-policy upgrade.
+Each current-round object and the final Overview require one approval, including
+guided migration. Different reviewers may approve different items. Objects exclude
+the final annotation author; Overview excludes anyone who contributed annotation
+or review work to that image. Viewing or saving an empty proposal does not count
+as a contribution. A recorded self-review exception is allowed only when the user
+has no independent work available in any review queue in the dataset. Historical
+`requiredReviews` values are normalized by the dataset review-policy upgrade.
 
 ## Production guidance
 

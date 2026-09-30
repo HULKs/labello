@@ -11,7 +11,6 @@ impl DatasetRepository {
     ) -> StorageResult<Vec<WorkflowAvailability>> {
         self.ensure_artifact_migration().await?;
         let _config = self.review_config_lock.read().await;
-        let _admission = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset().await?;
         require_role(
             &metadata.role_assignments,
@@ -19,16 +18,49 @@ impl DatasetRepository {
             user,
             role_for_kind(&kind),
         )?;
+        let key = (
+            user.clone(),
+            match kind {
+                AssignmentKind::Annotation => "annotation",
+                AssignmentKind::Review => "review",
+                AssignmentKind::LegacyAdjudication => "adjudication",
+            }
+            .to_string(),
+        );
+        let cache = &self.assignment_availability_cache;
+        if let Some(cached) = cache.workflow_lookup(&key, cache.generation()).await {
+            return Ok(cached);
+        }
+        let _refresh = cache.workflow_refresh().await;
+        let generation = cache.generation();
+        if let Some(cached) = cache.workflow_lookup(&key, generation).await {
+            return Ok(cached);
+        }
+        // Availability is advisory. Cache entries are invalidated under the image
+        // lock before publication; claims still validate their exact target state.
+        // Never hold dataset admission while cold polling reads every image.
+        let sampled_at = labello_domain::now();
+        let mut workers = tokio::task::JoinSet::new();
+        let mut images = metadata.images.keys().cloned();
+        let visibility = metadata.bounding_box_visibility;
+        for image in images.by_ref().take(32) {
+            let repo = self.clone();
+            workers.spawn(async move { repo.workflow_polling_state(&image, visibility).await });
+        }
+        let mut states = Vec::with_capacity(metadata.images.len());
+        while let Some(result) = workers.join_next().await {
+            states.push(result.map_err(|_| {
+                StorageError::BackgroundTask("workflow availability scan failed".into())
+            })??);
+            if let Some(image) = images.next() {
+                let repo = self.clone();
+                workers.spawn(async move { repo.workflow_polling_state(&image, visibility).await });
+            }
+        }
         let exception = kind == AssignmentKind::Review
             && !self
                 .has_independent_workflow_review(&metadata, user)
                 .await?;
-        let mut states = Vec::new();
-        for image in metadata.images.keys() {
-            let lock = self.image_lock(image);
-            let _image = lock.lock().await;
-            states.push(self.load_image_state(image).await?);
-        }
         let mut availability = Vec::new();
         for task in &metadata.tasks {
             let enabled = Self::task_supports_assignment(task, &kind)?;
@@ -92,6 +124,7 @@ impl DatasetRepository {
                 let mut pending_objects = false;
                 let mut preparation = None;
                 for state in &states {
+                    let state = state.as_ref();
                     let mut prepared_state;
                     let state = if kind == AssignmentKind::Annotation
                         && state.assignment_eligible(&task.task_id)
@@ -194,6 +227,19 @@ impl DatasetRepository {
                 });
             }
         }
+        let expires_at = states
+            .iter()
+            .flat_map(|s| &s.assignments)
+            .filter(|a| a.status == AssignmentStatus::Active)
+            .map(|a| {
+                a.expires_at
+                    .unwrap_or_else(|| lease_expiration(a.updated_at))
+            })
+            .filter(|expiry| *expiry > sampled_at)
+            .min();
+        cache
+            .workflow_store(key, generation, expires_at, availability.clone())
+            .await;
         Ok(availability)
     }
 }

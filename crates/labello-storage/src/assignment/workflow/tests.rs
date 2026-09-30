@@ -1409,3 +1409,359 @@ async fn partial_review_edits_are_reassigned_without_publishing_a_correction_or_
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn overview_can_revise_confirmed_objects_and_complete_after_autosave() {
+    use labello_domain::{
+        KeypointAnnotation, KeypointSpec, KeypointState, NormalizedPoint, SkeletonGeometry,
+        SkeletonSpec,
+    };
+    for skeleton in [false, true] {
+        for autosave in [false, true] {
+            let (_temp, repo, task, users) =
+                crate::assignment::tests::annotation_repo(1, &["author", "overview"]).await;
+            let geometry = if skeleton {
+                let mut metadata = repo.load_dataset().await.unwrap();
+                metadata.tasks[0].annotation_type = AnnotationType::Skeleton;
+                metadata.tasks[0].skeleton = Some(SkeletonSpec {
+                    keypoints: vec![KeypointSpec {
+                        name: "head".into(),
+                        required: true,
+                    }],
+                    edges: vec![],
+                    allow_hidden: false,
+                    allow_absent: false,
+                });
+                repo.save_dataset(&metadata).await.unwrap();
+                AnnotationGeometry::Skeleton(SkeletonGeometry {
+                    keypoints: vec![KeypointAnnotation {
+                        name: "head".into(),
+                        state: KeypointState::Visible,
+                        point: Some(NormalizedPoint { x: 0.2, y: 0.3 }),
+                    }],
+                })
+            } else {
+                AnnotationGeometry::BoundingBox(BoundingBox {
+                    x: 0.1,
+                    y: 0.1,
+                    width: 0.2,
+                    height: 0.2,
+                })
+            };
+            let mut annotation = AnnotationVersion::native(
+                "object".into(),
+                task.clone(),
+                "person".into(),
+                if skeleton {
+                    AnnotationType::Skeleton
+                } else {
+                    AnnotationType::BoundingBox
+                },
+                geometry,
+                users[0].clone(),
+                labello_domain::now(),
+            );
+            repo.append_payload(
+                &"img_0".into(),
+                &Actor {
+                    user_id: users[0].clone(),
+                    role: DatasetRole::Annotator,
+                },
+                EventPayload::AnnotationVersionCreated {
+                    annotation: annotation.clone(),
+                    previous_version: None,
+                    reason: None,
+                },
+            )
+            .await
+            .unwrap();
+            let mut selection = WorkflowSelection {
+                task_id: task.clone(),
+                kind: AssignmentKind::Annotation,
+                variant: WorkflowVariant::Objects,
+            };
+            let object = repo
+                .claim_workflow_item(&users[0], &selection, &[])
+                .await
+                .unwrap()
+                .unwrap();
+            repo.display_workflow_item(&users[0], context(&object))
+                .await
+                .unwrap();
+            let confirmed = repo
+                .apply_annotation_batch(&users[0], context(&object), vec![], true)
+                .await
+                .unwrap();
+            selection.variant = WorkflowVariant::Overview;
+            let overview = repo
+                .claim_workflow_item(&users[1], &selection, &[])
+                .await
+                .unwrap()
+                .unwrap();
+            repo.display_workflow_item(&users[1], context(&overview))
+                .await
+                .unwrap();
+            annotation.version += 1;
+            annotation.author_user_id = users[1].clone();
+            match &mut annotation.geometry {
+                AnnotationGeometry::BoundingBox(bbox) => bbox.x += 0.1,
+                AnnotationGeometry::Skeleton(pose) => {
+                    pose.keypoints[0].point.as_mut().unwrap().x += 0.1
+                }
+            }
+            let result = repo
+                .apply_annotation_batch(
+                    &users[1],
+                    context(&overview),
+                    vec![EventPayload::AnnotationVersionCreated {
+                        annotation,
+                        previous_version: Some(1),
+                        reason: None,
+                    }],
+                    !autosave,
+                )
+                .await
+                .unwrap();
+            assert!(result.workflow_pending_objects(&task).is_empty());
+            let result = if autosave {
+                repo.apply_annotation_batch(&users[1], context(&overview), vec![], true)
+                    .await
+                    .unwrap()
+            } else {
+                result
+            };
+            assert_eq!(result.task_states[&task].status, TaskStatus::Submitted);
+            assert_eq!(
+                serde_json::from_slice::<ImageState>(&serde_json::to_vec(&result).unwrap())
+                    .unwrap(),
+                result
+            );
+            assert_eq!(
+                result.workflow_confirmations[&object.assignment_id],
+                confirmed.workflow_confirmations[&object.assignment_id],
+                "the original receipt and score owner stay unchanged"
+            );
+            assert_eq!(
+                result,
+                repo.apply_annotation_batch(&users[1], context(&overview), vec![], true)
+                    .await
+                    .unwrap()
+            );
+            assert_eq!(
+                result,
+                labello_domain::rebuild_state(
+                    overview.image_id.clone(),
+                    &repo.load_events(&overview.image_id).await.unwrap()
+                )
+                .unwrap()
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn empty_review_save_does_not_exclude_independent_overview_reviewer() {
+    let (_temp, repo, task, users) =
+        crate::assignment::tests::annotation_repo(1, &["author", "visitor", "reviewer"]).await;
+    let mut metadata = repo.load_dataset().await.unwrap();
+    for role in &mut metadata.role_assignments {
+        role.roles.insert(DatasetRole::Reviewer);
+    }
+    repo.save_dataset(&metadata).await.unwrap();
+    seed(&repo, &task, &users[0], "img_0", "box").await;
+    for variant in [WorkflowVariant::Objects, WorkflowVariant::Overview] {
+        let selection = WorkflowSelection {
+            task_id: task.clone(),
+            kind: AssignmentKind::Annotation,
+            variant,
+        };
+        let item = repo
+            .claim_workflow_item(&users[0], &selection, &[])
+            .await
+            .unwrap()
+            .unwrap();
+        repo.display_workflow_item(&users[0], context(&item))
+            .await
+            .unwrap();
+        repo.apply_annotation_batch(&users[0], context(&item), vec![], true)
+            .await
+            .unwrap();
+    }
+    let mut selection = WorkflowSelection {
+        task_id: task.clone(),
+        kind: AssignmentKind::Review,
+        variant: WorkflowVariant::Objects,
+    };
+    let item = repo
+        .claim_workflow_item(&users[1], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(&users[1], context(&item))
+        .await
+        .unwrap();
+    repo.save_workflow_edits(
+        &users[1],
+        context(&item),
+        labello_domain::WorkflowEdits::default(),
+        0,
+    )
+    .await
+    .unwrap();
+    repo.leave_workflow(&users[1], &selection).await.unwrap();
+    let item = repo
+        .claim_workflow_item(&users[2], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    approve_item(&repo, &users[2], &item).await;
+    let mut old_cache = repo.load_image_state(&item.image_id).await.unwrap();
+    old_cache.review_projection_version = 2;
+    old_cache.workflow_contributors.insert(users[1].clone());
+    crate::fsjson::write_json_atomic(&repo.state_path(&item.image_id), &old_cache)
+        .await
+        .unwrap();
+    let replay = repo.load_image_state(&item.image_id).await.unwrap();
+    assert_eq!(replay.review_projection_version, 3);
+    assert!(!replay.workflow_contributors.contains(&users[1]));
+    selection.variant = WorkflowVariant::Overview;
+    let overview = repo
+        .claim_workflow_item(&users[1], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&users[1], context(&overview))
+        .await
+        .unwrap();
+    assert!(!state.workflow_assignments[&overview.assignment_id].review_exception);
+}
+
+#[tokio::test]
+async fn workflow_polling_reuses_images_without_holding_admission() {
+    let (_temp, repo, _task, users) = crate::assignment::tests::annotation_repo(3, &["a"]).await;
+    repo.workflow_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    repo.reset_image_state_load_count();
+    let _admission = repo.assignment_claim_lock.lock().await;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        repo.workflow_availability(&users[0], AssignmentKind::Annotation),
+    )
+    .await
+    .expect("polling must not wait for mutation admission")
+    .unwrap();
+    assert_eq!(
+        repo.image_state_load_count(),
+        0,
+        "warm polls must not reread histories"
+    );
+}
+
+#[tokio::test]
+async fn workflow_polling_cold_scan_and_invalidation_do_not_serialize_mutations() {
+    let (_temp, repo, task, users) = crate::assignment::tests::annotation_repo(2, &["a"]).await;
+    let lock = repo.image_lock(&"img_1".into());
+    let image = lock.lock().await;
+    repo.reset_image_state_load_count();
+    let polling = repo.clone();
+    let user = users[0].clone();
+    let scan = tokio::spawn(async move {
+        polling
+            .workflow_availability(&user, AssignmentKind::Annotation)
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while repo.image_state_load_count() == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let admission = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        repo.assignment_claim_lock.lock(),
+    )
+    .await
+    .expect("a cold reader must leave admission free while an image is locked");
+    seed(&repo, &task, &users[0], "img_0", "box").await;
+    drop(admission);
+    drop(image);
+    scan.await.unwrap().unwrap();
+    repo.reset_image_state_load_count();
+    let available = repo
+        .workflow_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(
+        available
+            .iter()
+            .any(|a| a.selection.variant == WorkflowVariant::Objects && a.available)
+    );
+    assert!(
+        repo.image_state_load_count() <= 1,
+        "only the invalidated image may be reread"
+    );
+    repo.reset_image_state_load_count();
+    let mut metadata = repo.load_dataset().await.unwrap();
+    metadata.tasks[0].enabled = false;
+    repo.save_dataset(&metadata).await.unwrap();
+    let available = repo
+        .workflow_availability(&users[0], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(
+        available
+            .iter()
+            .all(|a| a.reason == Some(labello_domain::WorkflowUnavailableReason::WorkflowDisabled))
+    );
+    assert_eq!(repo.image_state_load_count(), 0);
+}
+
+#[tokio::test]
+async fn workflow_polling_rechecks_lease_expiry_without_reloading_images() {
+    let (_temp, repo, task, users) =
+        crate::assignment::tests::annotation_repo(1, &["a", "b"]).await;
+    let selection = WorkflowSelection {
+        task_id: task,
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Overview,
+    };
+    let mut item = repo
+        .claim_workflow_item(&users[0], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    item.expires_at = Some(labello_domain::now() + std::time::Duration::from_secs(2));
+    repo.append_payload(
+        &item.image_id,
+        &Actor {
+            user_id: users[0].clone(),
+            role: DatasetRole::Annotator,
+        },
+        EventPayload::AssignmentUpdated {
+            assignment: item.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    let occupied = repo
+        .workflow_availability(&users[1], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(occupied.iter().any(|a| a.selection == selection
+        && a.reason == Some(labello_domain::WorkflowUnavailableReason::ClaimedByOthers)));
+    repo.reset_image_state_load_count();
+    tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+    let expired = repo
+        .workflow_availability(&users[1], AssignmentKind::Annotation)
+        .await
+        .unwrap();
+    assert!(
+        expired
+            .iter()
+            .any(|a| a.selection == selection && a.available)
+    );
+    assert_eq!(repo.image_state_load_count(), 0);
+}

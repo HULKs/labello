@@ -597,8 +597,8 @@ impl DatasetRepository {
             for image_id in image_ids.by_ref().take(MAX_COMPLETION_SCAN_WORKERS) {
                 let repository = self.clone();
                 workers.spawn(async move {
-                    let state = repository.load_image_state(&image_id).await?;
-                    Ok::<_, StorageError>((image_id, ImageCompletion::from_state(&state)))
+                    let state = repository.polling_image(&image_id).await?;
+                    Ok::<_, StorageError>((image_id, state.completion()))
                 });
             }
             let mut scanned = BTreeMap::new();
@@ -610,8 +610,8 @@ impl DatasetRepository {
                 if let Some(image_id) = image_ids.next() {
                     let repository = self.clone();
                     workers.spawn(async move {
-                        let state = repository.load_image_state(&image_id).await?;
-                        Ok::<_, StorageError>((image_id, ImageCompletion::from_state(&state)))
+                        let state = repository.polling_image(&image_id).await?;
+                        Ok::<_, StorageError>((image_id, state.completion()))
                     });
                 }
             }

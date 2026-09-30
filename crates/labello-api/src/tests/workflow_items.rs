@@ -1,5 +1,5 @@
 #[tokio::test]
-async fn background_preparation_discovers_datasets_without_an_assignment_request() {
+async fn background_preparation_leaves_model_free_sources_for_the_exact_claim() {
     let temp = tempfile::tempdir().unwrap();
     let state = ApiState::new(temp.path());
     let app = router(state.clone());
@@ -12,10 +12,14 @@ async fn background_preparation_discovers_datasets_without_an_assignment_request
     let metadata = repo.load_dataset().await.unwrap();
     let image = metadata.images.keys().next().unwrap();
     let prepared = repo.load_image_state(image).await.unwrap();
-    assert_eq!(prepared.workflow_preparations[&"bounding_box:pixel".into()].status, labello_domain::WorkflowPreparationStatus::Ready);
+    assert!(prepared.workflow_preparations.is_empty());
     assert!(prepared.assignments.is_empty());
     state.maintain_workflow_prelabels().await.unwrap();
     assert_eq!(repo.load_image_state(image).await.unwrap(), prepared);
+    let selection = labello_domain::WorkflowSelection { task_id: "bounding_box:pixel".into(), kind: labello_domain::AssignmentKind::Annotation, variant: labello_domain::WorkflowVariant::Overview };
+    repo.claim_workflow_item(&"admin".into(), &selection, &[]).await.unwrap().unwrap();
+    let claimed = repo.load_image_state(image).await.unwrap();
+    assert_eq!(claimed.workflow_preparations[&selection.task_id].status, labello_domain::WorkflowPreparationStatus::Ready);
 }
 
 #[tokio::test]
@@ -57,4 +61,24 @@ async fn workflow_item_api_enforces_role_display_and_exact_ownership() {
     let (status, retry) = import_json_request(&app, "POST", &submit_uri, "admin", None, submit).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(retry, completed);
+}
+
+
+#[tokio::test]
+async fn availability_reads_do_not_prepare_or_write_dataset_work() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = ApiState::new(temp.path());
+    let app = router(state.clone());
+    create_dataset(&app).await;
+    configure_pixel_task(&app).await;
+    upload_test_image(&app, "work.png", &png_bytes(20, 20)).await;
+    let repo = state.repo(&"ds".into()).unwrap();
+    let metadata = repo.load_dataset().await.unwrap();
+    let image = metadata.images.keys().next().unwrap();
+    let before = repo.load_events(image).await.unwrap();
+    for uri in ["/datasets/ds/assignments/availability?kind=annotation", "/datasets/ds/work-items/availability?kind=review"] {
+        let response = app.clone().oneshot(Request::builder().uri(uri).header("x-test-user-id", "admin").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    assert_eq!(repo.load_events(image).await.unwrap(), before, "GET availability must not reconcile every image");
 }

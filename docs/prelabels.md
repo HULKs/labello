@@ -223,8 +223,11 @@ late predictions. Completed work never reopens merely because generation finishe
 ## Dataset generation and removal
 
 The server discovers configured workflows at startup and on a five-second
-maintenance interval. Claim, availability and administrative configuration paths
-also synchronize preparation. Durable bounded jobs cover both boxes and poses;
+maintenance interval. Administrative configuration paths also synchronize
+preparation. Availability and claim requests do not wait for dataset-wide
+preparation; configured workflows show pending preparation until maintenance
+publishes their sources. Model-free workflows prepare sources in the claim
+transaction. Durable bounded jobs cover both boxes and poses;
 large datasets continue in subsequent jobs. Work is revalidated before execution
 and publication against image, task/configuration, model and reset identities.
 Obsolete results cannot publish into unused work. Compatible retained results are

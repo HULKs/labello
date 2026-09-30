@@ -67,9 +67,6 @@ pub(crate) async fn assignment_availability(
     let (size, eligible_assignments) = repo
         .preload_queue_policy(&actor.user_id, &request.kind)
         .await?;
-    state
-        .synchronize_workflow_prelabels(&dataset_id, &repo, false)
-        .await?;
     let mut workflows = repo
         .workflow_availability(&actor.user_id, request.kind.clone())
         .await?;

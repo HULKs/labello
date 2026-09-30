@@ -472,10 +472,12 @@ diagnostics remain in server logs.
 ## Model execution and hints
 
 Keep the [managed model directory](prelabels.md#supply-a-model) readable only by
-intended server operators/accounts. Browser-enabled models are downloadable by
-users authorized for that dataset. Keep model files in the operator's backup
-plan separately from `datasetsRoot`. Full-root backups include private prelabel
-control state and derived results; snapshots contain accepted annotations only.
+intended server operators/accounts. Model execution is server-managed; users do
+not select or download models. Keep model files in the operator's backup plan
+separately from `datasetsRoot`. Full-root backups include private prelabel control
+state and derived results. Snapshots preserve accepted annotations and prepared
+prediction evidence captured in workflow events, but omit private prelabel control
+state and retained result files.
 Use dataset hint reset controls for removal. A reset durably invalidates old
 proofs before file cleanup; report cleanup failure and retry instead of deleting
 control files. Interrupted runs require explicit retry after restart.

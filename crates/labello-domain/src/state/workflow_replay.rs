@@ -122,14 +122,11 @@ impl ImageState {
                     .insert(object_group_id.clone(), event.actor_user_id.clone());
                 true
             }
-            EventPayload::Workflow { event } => {
-                matches!(
-                    event.as_ref(),
-                    WorkflowEvent::ItemConfirmed { .. }
-                        | WorkflowEvent::DraftSaved { .. }
-                        | WorkflowEvent::EditsSaved { .. }
-                )
-            }
+            EventPayload::Workflow { event } => match event.as_ref() {
+                WorkflowEvent::ItemConfirmed { .. } | WorkflowEvent::DraftSaved { .. } => true,
+                WorkflowEvent::EditsSaved { edits, .. } => !edits.changes.is_empty(),
+                _ => false,
+            },
             EventPayload::TaskStateChanged { task_state } => task_state.completed_by.is_some(),
             EventPayload::AnnotationDeleted { .. }
             | EventPayload::ReviewRecorded { .. }
