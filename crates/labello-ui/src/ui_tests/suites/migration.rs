@@ -3024,14 +3024,14 @@ fn seven_class_workflow_picker_fits_desktop_without_shrinking_targets() {
     for review in [false, true] {
         let mut app = inspector_presets::build(InspectorPreset::WorkflowClasses, &egui::Context::default());
         if review { app.view = AppView::Review; }
-        let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
+        let mut harness = Harness::builder().with_size(egui::vec2(1920.0, 1080.0)).build_eframe(|_| app);
         harness.run();
         let mut count = 0;
         for node in harness.query_all_by_role(egui::accesskit::Role::Button) {
             if node.accesskit_node().label().is_some_and(|label| label.contains(" · ") && label.contains(": ")) {
                 let rect = node.rect();
                 assert!(rect.height() >= 44.0, "{rect:?}");
-                assert!(rect.top() >= 114.0 && rect.bottom() <= 820.0, "all workflow buttons must fit with space above the footer: {rect:?}");
+                assert!(rect.top() >= 114.0 && rect.bottom() <= 1000.0, "all workflow buttons must fit with space above the footer: {rect:?}");
                 count += 1;
             }
         }

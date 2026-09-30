@@ -2,7 +2,6 @@ fn paint_workflow_boost(
     ui: &egui::Ui,
     response: &egui::Response,
     window: Option<i64>,
-    sparkle_center: Option<egui::Pos2>,
 ) {
     let identity = response.id.with("workflow-boost");
     let Some(window) = window else {
@@ -35,11 +34,7 @@ fn paint_workflow_boost(
     let color = theme::WARNING.gamma_multiply(strength);
     // Keep the native outer border available for keyboard focus and selection.
     let rect = response.rect.shrink(2.5);
-    let button_radius = if sparkle_center.is_some() {
-        theme::CONTROL_RADIUS
-    } else {
-        theme::SURFACE_RADIUS
-    };
+    let button_radius = theme::SURFACE_RADIUS;
     let radius = (f32::from(button_radius) - 2.5).min(rect.height() / 2.0);
     let painter = ui
         .painter()
@@ -59,25 +54,6 @@ fn paint_workflow_boost(
         egui::Stroke::new(1.5, color),
         egui::StrokeKind::Inside,
     );
-    let sparkle = sparkle_center.unwrap_or(egui::pos2(rect.right() - 8.0, rect.top() + 8.0));
-    let reach = 5.0 + phase.map_or(0.0, |phase| (phase * std::f32::consts::PI).sin());
-    let points = [
-        sparkle + egui::vec2(0.0, -reach),
-        sparkle + egui::vec2(1.5, -1.5),
-        sparkle + egui::vec2(reach, 0.0),
-        sparkle + egui::vec2(1.5, 1.5),
-        sparkle + egui::vec2(0.0, reach),
-        sparkle + egui::vec2(-1.5, 1.5),
-        sparkle + egui::vec2(-reach, 0.0),
-        sparkle + egui::vec2(-1.5, -1.5),
-    ];
-    let mut sparkle_mesh = egui::Mesh::default();
-    sparkle_mesh.colored_vertex(sparkle, color);
-    for (index, point) in points.into_iter().enumerate() {
-        sparkle_mesh.colored_vertex(point, color);
-        sparkle_mesh.add_triangle(0, index as u32 + 1, (index as u32 + 1) % 8 + 1);
-    }
-    painter.add(sparkle_mesh);
     if let Some(phase) = phase {
         let x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), phase);
         let intensity = (phase * std::f32::consts::PI).sin();

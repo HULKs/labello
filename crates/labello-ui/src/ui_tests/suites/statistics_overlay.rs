@@ -362,7 +362,8 @@ fn workflow_boost_shimmer_settles_and_respects_reduced_motion() {
     let label = "Goal post: Bounding box annotation · Goal post boxes · Annotate";
     let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
     let still = paint(&harness, tile);
-    assert!(still.len() >= 2, "the boost must have a persistent rim and sparkle");
+    assert_eq!(still.len(), 1, "the persistent boost has a rim without a corner star");
+    assert!(matches!(still[0], egui::Shape::Rect(_)));
     crate::set_reduced_motion(&harness.ctx, false);
     harness.get_by_role_and_label(egui::accesskit::Role::Button, label).hover();
     harness.run_steps(5);
@@ -376,7 +377,7 @@ fn workflow_boost_shimmer_settles_and_respects_reduced_motion() {
     harness.run_steps(5);
     let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
     let focused = paint(&harness, tile);
-    assert!(focused.len() >= 2);
+    assert_eq!(focused.len(), 1);
     assert!(!focused.iter().any(|shape| matches!(shape, egui::Shape::LineSegment { .. })),
         "reduced motion must not paint a moving shimmer");
     harness.run_steps(20);

@@ -10,7 +10,7 @@ Choose a class and activity in Workflow. The class heading and type icons are
 centered; configured activities share the card width. A workflow with existing
 objects has Objects and Overview buttons. Workflows without focusable sources
 show one normal annotation action. Every disabled choice has a reason icon.
-The boosted workflow has an amber rim, glow and sparkle, with a short shimmer
+The boosted workflow has an amber rim and glow, with a short shimmer
 when motion is enabled. Its tooltip and accessible description identify the boost.
 
 Objects displays one box or whole skeleton, zoomed for focused work. Confirm saves

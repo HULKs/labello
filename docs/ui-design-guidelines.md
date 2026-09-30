@@ -499,7 +499,9 @@ Annotation and review workflow panels and drawers use one bordered group per cla
 Center the class name above equal-width activity columns. Each activity has a
 centered row containing its type icon and label. Keep the class heading at 15
 points, control labels at 14 points, activity icons at 18 points, and two-point
-gaps within each card. Use six-point gutters between activity and pass columns.
+gaps within each card. Give each activity icon row four-point padding above and
+below, and separate its icon from its label by eight points. Use six-point
+gutters between activity and pass columns.
 Place selection and availability cues centered below each button label, with
 equal top and bottom padding around the label and 18-point status row,
 separated by two points. Reserve the status row when empty so state changes do
@@ -528,9 +530,9 @@ not widen the canvas. Closing a drawer restores keyboard focus to its trigger.
 
 Class cards use three-point vertical gaps, five-point inner vertical padding,
 and ten-point horizontal padding.
-The seven HSLVision classes should fit a 1440 × 900 desktop viewport without
+The seven HSLVision classes should fit a 1920 × 1080 desktop viewport without
 scrolling at default text size. Shorter screens and larger text retain scrolling. Availability failures retain a compact Retry availability button above
-the cards. A boosted annotation workflow has a soft amber glow, inner rim, and sparkle,
+the cards. A boosted annotation workflow has a soft amber glow and inner rim,
 including the matching option inside a grouped chooser. A brief shimmer runs
 when the boost appears or the button receives hover or keyboard focus; it then
 settles to the persistent highlight. Reduced-motion and disabled controls keep

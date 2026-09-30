@@ -102,12 +102,12 @@ impl LabelloApp {
                                     ui.spacing_mut().item_spacing.y = 2.0;
                                     let label = ui.painter().layout_no_wrap(activity.short_label().into(), egui::TextStyle::Button.resolve(ui.style()), theme::TEXT);
                                     let size = Self::WORKFLOW_ICON_SIZE;
-                                    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), size.max(label.size().y)), egui::Sense::hover());
-                                    let left = rect.center().x - (size + 4.0 + label.size().x) / 2.0;
+                                    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), size.max(label.size().y) + 8.0), egui::Sense::hover());
+                                    let left = rect.center().x - (size + 8.0 + label.size().x) / 2.0;
                                     let icon = egui::Rect::from_center_size(egui::pos2(left + size / 2.0, rect.center().y), egui::vec2(size, size));
                                     workflow_type_icon(ui, ui.id().with("type"), icon, &choices[0].annotation_type);
                                     if *activity == WorkflowActivity::Migration { paint_migration_type_badge(ui, icon); }
-                                    ui.painter().galley(egui::pos2(icon.right() + 4.0, rect.center().y - label.size().y / 2.0), label, theme::TEXT);
+                                    ui.painter().galley(egui::pos2(icon.right() + 8.0, rect.center().y - label.size().y / 2.0), label, theme::TEXT);
                                     let split = choices.iter().any(|choice| self.workflow_is_split(choice));
                                     if split {
                                         let label_width = ui.painter().layout_no_wrap(crate::glossary::OVERVIEW.into(), egui::TextStyle::Button.resolve(ui.style()), theme::TEXT).size().x;
@@ -170,7 +170,7 @@ impl LabelloApp {
                 ui.painter().line_segment([egui::pos2(x + 1.0, y - 2.0), egui::pos2(x + 4.0, y + 1.0)], stroke);
                 ui.painter().line_segment([egui::pos2(x + 4.0, y + 1.0), egui::pos2(x + 7.0, y - 2.0)], stroke);
             }
-            paint_workflow_boost(ui, &response, boost, None);
+            paint_workflow_boost(ui, &response, boost);
             let hover = if description.is_empty() { label.clone() } else { format!("{label}\n{description}") };
             let response = response.on_hover_text(&hover).on_disabled_hover_text(&hover);
             if response.gained_focus() { response.scroll_to_me(Some(egui::Align::Center)); }
