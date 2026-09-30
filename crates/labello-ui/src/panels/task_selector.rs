@@ -19,7 +19,7 @@ impl WorkflowActivity {
 }
 
 impl LabelloApp {
-    const WORKFLOW_ICON_SIZE: f32 = 18.0;
+    const WORKFLOW_ICON_SIZE: f32 = 28.0;
 
     pub(crate) fn workflow_panel_width(&self, _ctx: &egui::Context) -> f32 { 360.0 }
 
@@ -83,10 +83,10 @@ impl LabelloApp {
                 frame.show(ui, |ui| {
                     ui.set_width(width);
                     let mut font = egui::TextStyle::Button.resolve(ui.style());
-                    font.size *= 14.0 / theme::BODY_SIZE;
+                    font.size *= 13.0 / theme::BODY_SIZE;
                     ui.style_mut().text_styles.insert(egui::TextStyle::Button, font);
                     ui.spacing_mut().item_spacing.y = 2.0;
-                    let heading = ui.add_sized([width, 0.0], egui::Label::new(RichText::new(self.class_name(&class_id)).size(theme::BODY_SIZE).strong()).halign(egui::Align::Center).wrap());
+                    let heading = ui.add_sized([width, 0.0], egui::Label::new(RichText::new(self.class_name(&class_id)).size(17.0).strong()).halign(egui::Align::Center).wrap());
                     ui.ctx().accesskit_node_builder(heading.id, |node| { node.set_role(egui::accesskit::Role::Heading); node.set_label(self.class_name(&class_id)); });
                     let activities: Vec<_> = [WorkflowActivity::Boxes, WorkflowActivity::Migration, WorkflowActivity::Skeleton].into_iter().filter_map(|activity| {
                         let matching: Vec<_> = entries.iter().filter(|entry| self.workflow_primary_activity(entry) == activity).collect();
@@ -100,7 +100,9 @@ impl LabelloApp {
                             for (column, (activity, choices)) in columns.iter_mut().zip(row) {
                                 column.push_id(activity.short_label(), |ui| {
                                     ui.spacing_mut().item_spacing.y = 2.0;
-                                    let label = ui.painter().layout_no_wrap(activity.short_label().into(), egui::TextStyle::Button.resolve(ui.style()), theme::TEXT);
+                                    let mut type_font = egui::TextStyle::Button.resolve(ui.style());
+                                    type_font.size *= 14.0 / 13.0;
+                                    let label = ui.painter().layout_no_wrap(activity.short_label().into(), type_font, theme::TEXT);
                                     let size = Self::WORKFLOW_ICON_SIZE;
                                     let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), size.max(label.size().y) + 8.0), egui::Sense::hover());
                                     let left = rect.center().x - (size + 8.0 + label.size().x) / 2.0;

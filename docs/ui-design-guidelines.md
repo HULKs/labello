@@ -497,9 +497,9 @@ non-intersection and scroll reachability as well as viewport containment.
 
 Annotation and review workflow panels and drawers use one bordered group per class.
 Center the class name above equal-width activity columns. Each activity has a
-centered row containing its type icon and label. Keep the class heading at 15
-points, control labels at 14 points, activity icons at 18 points, and two-point
-gaps within each card. Give each activity icon row four-point padding above and
+centered row containing its type icon and label. Keep the class heading at 17
+points, activity labels at 14 points, button labels at 13 points, and activity
+icons at 28 points. Use two-point gaps within each card. Give each activity icon row four-point padding above and
 below, and separate its icon from its label by eight points. Use six-point
 gutters between activity and pass columns.
 Place selection and availability cues centered below each button label, with
