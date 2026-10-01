@@ -92,6 +92,8 @@ pub enum InspectorPreset {
     MigrationPass,
     MigrationFullImage,
     MigrationReview,
+    MigrationReviewObject,
+    MigrationReviewExcluded,
     MigrationCompanionAnnotation,
     MigrationDiscovery,
     MigrationDiscoveryReview,
@@ -104,7 +106,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 77] = [
+    pub const ALL: [Self; 79] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -173,6 +175,8 @@ impl InspectorPreset {
         Self::MigrationPass,
         Self::MigrationFullImage,
         Self::MigrationReview,
+        Self::MigrationReviewObject,
+        Self::MigrationReviewExcluded,
         Self::MigrationCompanionAnnotation,
         Self::MigrationDiscovery,
         Self::MigrationDiscoveryReview,
@@ -255,6 +259,8 @@ impl InspectorPreset {
             Self::MigrationPass => "migration-pass",
             Self::MigrationFullImage => "migration-full-image",
             Self::MigrationReview => "migration-review",
+            Self::MigrationReviewObject => "migration-review-object",
+            Self::MigrationReviewExcluded => "migration-review-excluded",
             Self::MigrationCompanionAnnotation => "migration-companion-annotation",
             Self::MigrationDiscovery => "migration-discovery",
             Self::MigrationDiscoveryReview => "migration-discovery-review",
@@ -762,6 +768,30 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
         InspectorPreset::MigrationPass => migration_preset(ctx, MigrationPreset::Pass),
         InspectorPreset::MigrationFullImage => migration_preset(ctx, MigrationPreset::FullImage),
         InspectorPreset::MigrationReview => migration_preset(ctx, MigrationPreset::Review),
+        InspectorPreset::MigrationReviewObject | InspectorPreset::MigrationReviewExcluded => {
+            let mut app = build(InspectorPreset::MigrationReview, ctx);
+            let task = app.selected_task().unwrap().clone();
+            let assignment = app.work.assignment.clone().unwrap();
+            let state = app.work.current_state.as_mut().unwrap();
+            let index = usize::from(preset == InspectorPreset::MigrationReviewExcluded);
+            let target = state.review_object_targets(&task).unwrap()[index].clone();
+            state.review_assignment_contexts.clear();
+            state.workflow_assignments.insert(
+                assignment.assignment_id.clone(),
+                labello_domain::WorkflowAssignmentContext {
+                    item: labello_domain::WorkflowItem::from_review_target(&target),
+                    task_fingerprint: labello_domain::workflow_task_fingerprint(&task),
+                    overview_fingerprint: None,
+                    review_target: Some(target),
+                    review_exception: false,
+                    source_assignment_id: None,
+                },
+            );
+            app.install_workflow_item();
+            app.work.inspector_panel_collapsed = true;
+            app.work.workflow_panel_collapsed = true;
+            return app;
+        }
         InspectorPreset::MigrationCompanionAnnotation => migration_companion_annotation_preset(ctx),
         InspectorPreset::MigrationDiscovery => migration_discovery_preset(ctx, false),
         InspectorPreset::MigrationDiscoveryReview => migration_discovery_preset(ctx, true),
