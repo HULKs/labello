@@ -10,9 +10,6 @@ use web_time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub(crate) enum PrelabelAction {
-    Retained(labello_client::PrelabelItemRequest),
-    Load(labello_client::PrelabelSuggestionRequest),
-    Check(labello_client::PrelabelSuggestionRequest),
     Admin(Option<PrelabelAdminCommand>),
     InspectModel {
         config_id: PrelabelConfigId,
@@ -21,34 +18,8 @@ pub(crate) enum PrelabelAction {
 }
 #[derive(Debug)]
 pub(crate) enum PrelabelReply {
-    Retained(Option<Box<RetainedPrelabels>>),
-    Hints(Box<PrelabelResponse>),
-    Generation(PrelabelGeneration),
     Admin(PrelabelAdminState),
     Model(PrelabelModelInspection),
-}
-type HintKey = (ImageId, TaskId, PrelabelConfigId);
-#[derive(Default)]
-pub(crate) struct PrelabelWorkState {
-    pub automatic: Option<AutomaticPrelabels>,
-    pub choices: BTreeMap<String, Option<PrelabelConfigId>>,
-    pub pending: Option<(u64, PrelabelAction)>,
-    pub hints: BTreeMap<HintKey, HintStatus>,
-    pub abort: Option<futures::future::AbortHandle>,
-}
-pub(crate) struct AutomaticPrelabels {
-    pub image: ImageId,
-    pub task: TaskId,
-    pub config: Option<PrelabelConfigId>,
-    pub checked_at: Instant,
-}
-
-pub(crate) struct HintStatus {
-    pub generation: Option<PrelabelGeneration>,
-    pub error: Option<String>,
-    pub from_batch: bool,
-    pub execution: Option<PrelabelExecutionKind>,
-    pub checked_at: Instant,
 }
 #[derive(Default)]
 pub(crate) struct PrelabelAdminUi {
@@ -70,234 +41,24 @@ pub(crate) struct ModelCheckUi {
 }
 
 impl LabelloApp {
-    fn prelabel_choice_key(&self, task: &TaskId) -> String {
-        format!("{}/{task}", self.config.dataset_id)
-    }
-
-    pub(crate) fn prelabel_choice(&self, task: &TaskId) -> Option<PrelabelConfigId> {
-        if !self.auth.prelabel_available {
-            return None;
-        }
-        let metadata = self.datasets.metadata.as_ref()?;
-        let task = metadata.task(task)?;
-        let available = |config: &&PrelabelConfig| {
-            config.available_to_annotators && config.validate_for_task(task).is_ok()
-        };
-        if let Some(choice) = self
-            .work
-            .prelabels
-            .choices
-            .get(&self.prelabel_choice_key(&task.task_id))
-        {
-            return choice
-                .as_ref()
-                .filter(|id| {
-                    metadata
-                        .prelabel_configs
-                        .iter()
-                        .filter(available)
-                        .any(|c| &c.config_id == *id)
-                })
-                .cloned();
-        }
-        let automatic = self.work.prelabels.automatic.as_ref()?;
-        if self.work.current.as_ref()?.image.image_id != automatic.image
-            || task.task_id != automatic.task
-        {
-            return None;
-        }
-        automatic
-            .config
-            .as_ref()
-            .filter(|id| {
-                metadata
-                    .prelabel_configs
-                    .iter()
-                    .filter(available)
-                    .any(|config| &config.config_id == *id)
-            })
-            .cloned()
-    }
-
     pub(crate) fn refresh_prelabels_if_due(&mut self, ctx: &egui::Context) {
-        if self.work.retired_image {
-            return;
-        }
-        if !self.auth.prelabel_available {
-            self.cancel_prelabel_load();
-            return;
-        }
-        if self.runtime.api.is_none() {
-            return;
-        }
-        if self.view == AppView::Admin && self.admin.section == crate::app::AdminSection::Automation
+        if self.runtime.api.is_none()
+            || !self.auth.prelabel_available
+            || self.view != AppView::Admin
+            || self.admin.section != crate::app::AdminSection::Automation
         {
-            let state = &self.admin.prelabels;
-            if state.pending.is_none()
-                && state
-                    .last_poll
-                    .is_none_or(|last| last.elapsed() >= Duration::from_secs(3))
-            {
-                self.request_prelabels(PrelabelAction::Admin(None));
-            }
-            ctx.request_repaint_after(Duration::from_secs(3));
-        }
-        if self.view != AppView::Annotate {
-            self.cancel_prelabel_load();
             return;
         }
-        let Some(task) = self.selected_task().map(|task| task.task_id.clone()) else {
-            return;
-        };
-        if !self
-            .work
-            .prelabels
-            .choices
-            .contains_key(&self.prelabel_choice_key(&task))
-        {
-            let Some(image) = self
-                .work
-                .current
-                .as_ref()
-                .map(|current| current.image.image_id.clone())
-            else {
-                self.cancel_prelabel_load();
-                return;
-            };
-            self.work
+        if self.admin.prelabels.pending.is_none()
+            && self
+                .admin
                 .prelabels
-                .hints
-                .retain(|(cached_image, cached_task, _), _| {
-                    cached_image == &image && cached_task == &task
-                });
-            if self
-                .work
-                .prelabels
-                .pending
-                .as_ref()
-                .is_some_and(|(_, action)| match action {
-                    PrelabelAction::Retained(query) => {
-                        query.image_id != image || query.task_id != task
-                    }
-                    PrelabelAction::Check(query) => {
-                        query.image_id != image || query.task_id != task
-                    }
-                    _ => true,
-                })
-            {
-                self.cancel_prelabel_load();
-            }
-            if let Some(config) = self.prelabel_choice(&task)
-                && let Some(status) =
-                    self.work
-                        .prelabels
-                        .hints
-                        .get(&(image.clone(), task.clone(), config.clone()))
-            {
-                if status.checked_at.elapsed() >= Duration::from_secs(2)
-                    && self.work.prelabels.pending.is_none()
-                {
-                    self.request_prelabels(PrelabelAction::Check(
-                        labello_client::PrelabelSuggestionRequest {
-                            image_id: image,
-                            task_id: task,
-                            config_id: config,
-                        },
-                    ));
-                }
-                ctx.request_repaint_after(Duration::from_secs(2));
-                return;
-            }
-            let due = self
-                .work
-                .prelabels
-                .automatic
-                .as_ref()
-                .is_none_or(|automatic| {
-                    automatic.image != image
-                        || automatic.task != task
-                        || automatic.checked_at.elapsed() >= Duration::from_secs(3)
-                });
-            if due && self.work.prelabels.pending.is_none() {
-                self.request_prelabels(PrelabelAction::Retained(
-                    labello_client::PrelabelItemRequest {
-                        image_id: image,
-                        task_id: task,
-                    },
-                ));
-            }
-            ctx.request_repaint_after(Duration::from_secs(3));
-            return;
-        }
-        if matches!(
-            self.work.prelabels.pending,
-            Some((_, PrelabelAction::Retained(_)))
-        ) {
-            self.cancel_prelabel_load();
-        }
-        let Some(config) = self.prelabel_choice(&task) else {
-            return;
-        };
-        let mut images = Vec::new();
-        if let Some(current) = &self.work.current {
-            images.push(current.image.image_id.clone());
-        }
-        images.extend(self.work.queue.prepared_image_ids());
-        self.work
-            .prelabels
-            .hints
-            .retain(|(image, _, _), _| images.contains(image));
-        if let Some((_, PrelabelAction::Load(query) | PrelabelAction::Check(query))) =
-            &self.work.prelabels.pending
+                .last_poll
+                .is_none_or(|last| last.elapsed() >= Duration::from_secs(3))
         {
-            let current_needs_hints = images.first().is_some_and(|image| {
-                !self.work.prelabels.hints.contains_key(&(
-                    image.clone(),
-                    task.clone(),
-                    config.clone(),
-                ))
-            });
-            if query.task_id != task
-                || query.config_id != config
-                || !images.contains(&query.image_id)
-                || (current_needs_hints && images.first() != Some(&query.image_id))
-            {
-                self.cancel_prelabel_load();
-            }
+            self.request_prelabels(PrelabelAction::Admin(None));
         }
-        if self.work.prelabels.pending.is_some() {
-            return;
-        }
-        for image in &images {
-            let key = (image.clone(), task.clone(), config.clone());
-            if !self.work.prelabels.hints.contains_key(&key) {
-                self.request_prelabels(PrelabelAction::Load(
-                    labello_client::PrelabelSuggestionRequest {
-                        image_id: image.clone(),
-                        task_id: task.clone(),
-                        config_id: config.clone(),
-                    },
-                ));
-                return;
-            }
-        }
-        if let Some(image) = images.first()
-            && let Some(status) =
-                self.work
-                    .prelabels
-                    .hints
-                    .get(&(image.clone(), task.clone(), config.clone()))
-            && status.checked_at.elapsed() >= Duration::from_secs(2)
-        {
-            self.request_prelabels(PrelabelAction::Check(
-                labello_client::PrelabelSuggestionRequest {
-                    image_id: image.clone(),
-                    task_id: task,
-                    config_id: config,
-                },
-            ));
-        }
-        ctx.request_repaint_after(Duration::from_secs(2));
+        ctx.request_repaint_after(Duration::from_secs(3));
     }
 
     pub(crate) fn request_prelabels(&mut self, action: PrelabelAction) {
@@ -334,196 +95,17 @@ impl LabelloApp {
             });
             return;
         }
-        let pending = if matches!(action, PrelabelAction::Admin(_)) {
-            &self.admin.prelabels.pending
-        } else {
-            &self.work.prelabels.pending
-        };
-        if pending.is_some() {
+        if self.admin.prelabels.pending.is_some() {
             return;
         }
         let request = self.request_identity(Some(self.config.dataset_id.clone()));
-        if matches!(action, PrelabelAction::Admin(_)) {
-            self.admin.prelabels.pending = Some((request.request_id, action.clone()));
-            self.admin.prelabels.last_poll = Some(Instant::now());
-        } else {
-            self.work.prelabels.pending = Some((request.request_id, action.clone()));
-        }
+        self.admin.prelabels.pending = Some((request.request_id, action.clone()));
+        self.admin.prelabels.last_poll = Some(Instant::now());
         self.queue_command(UiCommand::Prelabel {
             request,
             dataset_id: self.config.dataset_id.clone(),
             action,
         });
-    }
-
-    pub(crate) fn cancel_prelabel_load(&mut self) {
-        if let Some(abort) = self.work.prelabels.abort.take() {
-            abort.abort();
-        }
-        if let Some((request, _)) = self.work.prelabels.pending.take() {
-            self.runtime.active_requests.remove(&request);
-        }
-    }
-
-    pub(crate) fn prelabel_selector(&mut self, ui: &mut egui::Ui) {
-        let Some(task) = self.selected_task().cloned() else {
-            return;
-        };
-        let configs: Vec<_> = self
-            .datasets
-            .metadata
-            .as_ref()
-            .map(|metadata| {
-                metadata
-                    .prelabel_configs
-                    .iter()
-                    .filter(|c| c.available_to_annotators && c.validate_for_task(&task).is_ok())
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default();
-        if configs.is_empty() {
-            return;
-        }
-        let mut choice = self.prelabel_choice(&task.task_id);
-        let before = choice.clone();
-        let mut choice_clicked = false;
-        let refresh = ui
-            .horizontal(|ui| {
-                let model_width =
-                    (ui.available_width() - 44.0 - ui.spacing().item_spacing.x).max(0.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(model_width, 44.0),
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        egui::ComboBox::from_id_salt("prelabel_model")
-                            .truncate()
-                            .selected_text(
-                                choice
-                                    .as_ref()
-                                    .and_then(|id| configs.iter().find(|c| &c.config_id == id))
-                                    .map_or("No prelabels", |c| c.name.as_str()),
-                            )
-                            .width(model_width)
-                            .show_ui(ui, |ui| {
-                                choice_clicked |= ui
-                                    .selectable_value(&mut choice, None, "No prelabels")
-                                    .clicked();
-                                for config in &configs {
-                                    choice_clicked |= ui
-                                        .selectable_value(
-                                            &mut choice,
-                                            Some(config.config_id.clone()),
-                                            &config.name,
-                                        )
-                                        .clicked();
-                                }
-                            });
-                    },
-                );
-                let key = self.work.current.as_ref().and_then(|current| {
-                    Some((
-                        current.image.image_id.clone(),
-                        task.task_id.clone(),
-                        choice.clone()?,
-                    ))
-                });
-                let refresh = ui.add_enabled(
-                    before == choice
-                        && self.work.prelabels.pending.is_none()
-                        && key
-                            .as_ref()
-                            .is_some_and(|key| self.work.prelabels.hints.contains_key(key)),
-                    egui::Button::new("↻").min_size(egui::vec2(44.0, 44.0)),
-                );
-                refresh.widget_info(|| {
-                    egui::WidgetInfo::labeled(
-                        egui::WidgetType::Button,
-                        refresh.enabled(),
-                        crate::glossary::REFRESH_PRELABELS,
-                    )
-                });
-                refresh
-                    .on_hover_text(crate::glossary::REFRESH_PRELABELS)
-                    .clicked()
-                    .then_some(key)
-                    .flatten()
-            })
-            .inner;
-        if before != choice || choice_clicked {
-            self.cancel_prelabel_load();
-            self.work
-                .prelabels
-                .choices
-                .insert(self.prelabel_choice_key(&task.task_id), choice.clone());
-            self.work.prelabels.hints.clear();
-            if let Some(current) = &mut self.work.current {
-                current.prelabels.clear();
-            }
-            self.work.queue.clear_prelabels();
-            self.persist_workspace_preference();
-        }
-        if let Some(key) = refresh {
-            self.work.prelabels.hints.remove(&key);
-            if let Some(automatic) = &mut self.work.prelabels.automatic {
-                automatic.checked_at = Instant::now() - Duration::from_secs(3);
-            }
-        }
-        if let Some(config) = choice
-            && let Some(current) = &self.work.current
-        {
-            let key = (current.image.image_id.clone(), task.task_id.clone(), config);
-            if let Some(status) = self.work.prelabels.hints.get(&key) {
-                if let Some(error) = &status.error {
-                    ui.label(error);
-                }
-                if status
-                    .generation
-                    .as_ref()
-                    .is_some_and(|generation| generation.paused)
-                {
-                    ui.label(
-                        "Prelabels were removed. A dataset administrator can resume generation.",
-                    );
-                }
-                if status.from_batch {
-                    ui.label("Using dataset prelabels");
-                }
-                match status.execution {
-                    Some(PrelabelExecutionKind::ServerCuda) => {
-                        ui.small("Server CUDA");
-                    }
-                    Some(PrelabelExecutionKind::ServerWebGpu) => {
-                        ui.small("Server WebGPU");
-                    }
-                    Some(PrelabelExecutionKind::BrowserWebGpu) => {
-                        ui.label("Generated in your browser using WebGPU");
-                    }
-                    Some(PrelabelExecutionKind::BrowserCpu) => {
-                        let fallback =
-                            configs
-                                .iter()
-                                .find(|c| c.config_id == key.2)
-                                .is_some_and(|c| {
-                                    matches!(
-                                        c.execution,
-                                        PrelabelExecution::BrowserLocal {
-                                            acceleration: BrowserAcceleration::WebGpuPreferred
-                                        }
-                                    )
-                                });
-                        ui.label(if fallback {
-                            "WebGPU unavailable for this run; used browser CPU fallback"
-                        } else {
-                            "Generated in your browser using CPU"
-                        });
-                    }
-                    _ => {}
-                }
-            } else {
-                ui.label("Preparing prelabels… You can annotate while they load.");
-            }
-        }
     }
 
     pub(crate) fn prelabel_admin_panel(&mut self, ui: &mut egui::Ui) {

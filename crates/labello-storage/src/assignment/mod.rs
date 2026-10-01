@@ -22,6 +22,7 @@ pub(crate) mod presence;
 mod review;
 mod revision;
 mod transaction;
+mod workflow;
 
 pub(crate) use migration::append_guide_invalidation_payloads;
 pub use migration::*;
@@ -64,6 +65,9 @@ impl DatasetRepository {
         kind: AssignmentKind,
     ) -> StorageResult<Assignment> {
         let role = role_for_kind(&kind);
+        self.ensure_artifact_migration().await?;
+        let _config_guard = self.review_config_lock.read().await;
+        let _claim_guard = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset().await?;
         require_role(
             &metadata.role_assignments,
@@ -93,6 +97,7 @@ impl DatasetRepository {
             assignment: assignment.clone(),
         }];
         if kind == AssignmentKind::Annotation
+            && !state.workflow_assignments.contains_key(assignment_id)
             && state
                 .task_states
                 .get(task_id)
@@ -130,6 +135,24 @@ impl DatasetRepository {
         task_id: &TaskId,
         kind: AssignmentKind,
     ) -> StorageResult<Assignment> {
+        if self
+            .load_image_state(image_id)
+            .await?
+            .workflow_assignments
+            .contains_key(assignment_id)
+        {
+            return self
+                .reopen_workflow_item(
+                    user_id,
+                    AssignmentContext {
+                        assignment_id,
+                        image_id,
+                        task_id,
+                        kind,
+                    },
+                )
+                .await;
+        }
         if kind == AssignmentKind::Review {
             return self
                 .reopen_review_assignment(user_id, assignment_id, image_id, task_id)
@@ -341,6 +364,33 @@ impl DatasetRepository {
                 "review and adjudication assignments complete with their records".to_string(),
             ));
         }
+        if self
+            .load_image_state(image_id)
+            .await?
+            .workflow_assignments
+            .contains_key(assignment_id)
+        {
+            let state = self
+                .apply_annotation_batch(
+                    user_id,
+                    AssignmentContext {
+                        assignment_id,
+                        image_id,
+                        task_id,
+                        kind,
+                    },
+                    vec![],
+                    true,
+                )
+                .await?;
+            return state
+                .assignments
+                .into_iter()
+                .find(|a| a.assignment_id == *assignment_id)
+                .ok_or_else(|| {
+                    StorageError::AssignmentConflict("completed item assignment is missing".into())
+                });
+        }
         let metadata = self.load_dataset().await?;
         let task = metadata.task(task_id).ok_or_else(|| {
             StorageError::InvalidAssignment(format!("task {task_id} does not exist"))
@@ -409,6 +459,9 @@ impl DatasetRepository {
                 "annotation batches require an annotation assignment".to_string(),
             ));
         }
+        self.ensure_artifact_migration().await?;
+        let _config_guard = self.review_config_lock.read().await;
+        let _claim_guard = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset().await?;
         require_role(
             &metadata.role_assignments,
@@ -420,11 +473,6 @@ impl DatasetRepository {
         let task = metadata.task(task_id).ok_or_else(|| {
             StorageError::InvalidAssignment(format!("task {task_id} does not exist"))
         })?;
-        if task.manual_box_guide_migration.is_some() {
-            return Err(StorageError::InvalidAssignment(
-                "manual migration annotations require the migration command workflow".to_string(),
-            ));
-        }
         let image = metadata.images.get(image_id).ok_or_else(|| {
             StorageError::InvalidAssignment(format!("image {image_id} does not exist"))
         })?;
@@ -441,12 +489,42 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        if task.manual_box_guide_migration.is_some()
+            && !state
+                .workflow_assignments
+                .get(assignment_id)
+                .is_some_and(|context| {
+                    matches!(
+                        context.item,
+                        labello_domain::WorkflowItem::Object {
+                            object: labello_domain::WorkflowObject::Prelabel { .. }
+                                | labello_domain::WorkflowObject::Annotation { .. }
+                        }
+                    )
+                })
+        {
+            return Err(StorageError::InvalidAssignment(
+                "manual migration annotations require the migration command workflow".into(),
+            ));
+        }
         let actor = Actor {
             user_id: user_id.clone(),
             role: DatasetRole::Annotator,
         };
         let mut payloads =
             validate_annotation_batch(&state, task, image.dimensions(), &actor, payloads)?;
+        if state.workflow_assignments.contains_key(assignment_id) {
+            return self
+                .apply_workflow_annotation_unlocked(
+                    &state,
+                    task,
+                    &actor,
+                    assignment_id,
+                    payloads,
+                    complete,
+                )
+                .await;
+        }
         if let Some(existing) = state
             .assignments
             .iter()
@@ -557,6 +635,11 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        if state.workflow_assignments.contains_key(assignment_id) {
+            return Err(StorageError::InvalidAssignment(
+                "object queue mutations require an annotation batch".into(),
+            ));
+        }
         let now = labello_domain::now();
         let mut assignment = exact_active_assignment(
             &state.assignments,

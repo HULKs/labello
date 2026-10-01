@@ -232,10 +232,21 @@ The `workflow-availability` preset shows all ten server restriction icons,
 including a selected unavailable workflow, without image or annotation content.
 Use it to inspect disabled tooltips, marker alignment, and the workflow drawer.
 
-The `workflow-change` preset shows the blocking automatic workflow-change dialog
-without image content. Check the explanation, keyboard acknowledgment, Escape and
-outside-click behavior, and short-screen scrolling. It uses the shared production
-modal; live availability fallback and browser behavior require separate checks.
+The `workflow-boost` preset shows an unselected boosted workflow beneath another
+class. Its amber rim and glow use the production renderer; the native preset
+keeps the default static reduced-motion presentation. Chromium exercises the
+activation and hover shimmer with the browser motion preference.
+
+The `workflow-classes` preset models HSLVision's seven classes with box workflows
+and five split migration workflows, using synthetic data. At 1920 × 1080 the full
+picker fits without scrolling; shorter viewports exercise drawer scrolling.
+
+The `workflow-change` preset shows the nonmodal automatic workflow-change notice.
+Check that it remains visible after item loading, wraps within the viewport and can
+be dismissed while work remains available. The `annotation-objects`,
+`annotation-overview`, `review-objects` and `review-overview` presets include typed
+queue contexts for the split selector and item-scoped editor. They do not prove
+server claims, history or draft handoff; use disposable live data for those checks.
 
 `statistics-global` renders the aggregate of two synthetic dataset projections.
 `global-shortcuts` renders the explicit legacy preference selection above Setup.

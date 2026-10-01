@@ -8,8 +8,14 @@ impl LabelloApp {
             || self.work.pending_transition.is_some() || self.transition_is_current(&transition) {
             return;
         }
+        if self.workflow_context().is_some() && self.runtime.api.is_some() {
+            self.stage_transition(transition);
+            if self.assignment_has_work() { self.request_save(false); }
+            else { self.request_release(); }
+            return;
+        }
         if self.work.assignment.is_some() {
-            let automatic = matches!(transition, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_))
+            let automatic = matches!(transition, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_) | PendingTransition::WorkflowVariant(_, _))
                 && !self.assignment_has_work();
             if automatic && self.runtime.api.is_none() {
                 self.execute_transition(transition);
@@ -44,16 +50,28 @@ impl LabelloApp {
 
     pub(crate) fn execute_transition(&mut self, transition: PendingTransition) {
         match transition {
+            PendingTransition::WorkItemHistory(entry) => self.request_history_item(entry),
+            PendingTransition::WorkflowVariant(task_id, variant) => {
+                self.leave_current_workflow();
+                self.select_workflow(&task_id);
+                self.work.workflow.variant = variant;
+                self.work.workflow.variant_selected = true;
+                self.begin_workspace_epoch();
+                self.clear_current_image();
+                self.request_next_image();
+            }
             PendingTransition::About => {
                 self.execute_transition(PendingTransition::View(AppView::Setup));
                 self.setup.section = SetupSection::About;
                 self.request_build_information();
             }
             PendingTransition::Dataset(dataset_id, view) => {
+                self.leave_current_workflow();
                 self.clear_current_image();
                 self.open_dataset(dataset_id, view);
             }
             PendingTransition::Logout => {
+                self.leave_current_workflow();
                 self.clear_current_image();
                 self.request_logout();
             }
@@ -71,6 +89,7 @@ impl LabelloApp {
                 self.request_reopen_assignment(assignment);
             }
             PendingTransition::Workflow(task_id) => {
+                self.leave_current_workflow();
                 if self.select_workflow(&task_id) {
                     self.clear_previous_assignment();
                     self.begin_workspace_epoch();
@@ -79,7 +98,7 @@ impl LabelloApp {
                 }
             }
             PendingTransition::View(view) => {
-                self.work.automatic_workflow_change = None;
+                self.leave_current_workflow();
                 self.runtime.notice = None;
                 self.work.show_tutorial = false;
                 self.work.drawer = None;
@@ -111,6 +130,8 @@ impl LabelloApp {
             PendingTransition::Logout => false,
             PendingTransition::NextAssignment => false,
             PendingTransition::PreviousAssignment(_) => false,
+            PendingTransition::WorkItemHistory(_) => false,
+            PendingTransition::WorkflowVariant(task_id, variant) => self.work.selected_task_id.as_ref() == Some(task_id) && self.work.workflow.variant == *variant,
             PendingTransition::Workflow(task_id) => {
                 self.work.selected_task_id.as_ref() == Some(task_id)
             }
@@ -152,7 +173,7 @@ impl LabelloApp {
         {
             return;
         }
-        if self.advance_companion_guide() { return; }
+        if self.workflow_context().is_none() && self.advance_companion_guide() { return; }
         if self.confirm_prelabel_object() { return; }
         if self.loading.saving { return; }
         if let Some(issue) = self.submission_issue() {
@@ -169,6 +190,13 @@ impl LabelloApp {
 
     pub(crate) fn skip_assignment(&mut self) {
         if self.loading.saving || (self.work.assignment.is_none() && self.runtime.api.is_some()) {
+            return;
+        }
+        if self.workflow_context().is_some() {
+            self.work.workflow.excluded = self.workflow_item_ref();
+            self.stage_transition(PendingTransition::NextAssignment);
+            if self.assignment_has_work() { self.request_save(false); }
+            else { self.request_release(); }
             return;
         }
         if self.has_missing_object_draft() || (self.review_revision_active() && !self.work.staged_review_decisions.is_empty()) {
@@ -198,6 +226,13 @@ impl LabelloApp {
             || self.work.pending_transition.is_some()
             || self.runtime.api.is_none()
         {
+            return;
+        }
+        if self.workflow_context().is_some() {
+            let Some(entry) = self.previous_work_item().cloned() else { return; };
+            self.stage_transition(PendingTransition::WorkItemHistory(entry));
+            if self.assignment_has_work() { self.request_save(false); }
+            else { self.resume_work_item_navigation(); }
             return;
         }
         let Some(previous) = self.work.previous_assignment.clone() else {

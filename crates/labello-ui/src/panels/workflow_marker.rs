@@ -2,6 +2,11 @@
 pub(crate) enum WorkflowMarkerReason {
     Saving,
     ImageLoading,
+    SessionLoading,
+    DatasetLoading,
+    SigningOut,
+    MigrationBusy,
+    StatisticsOpen,
     Transition,
     Checking,
     CheckFailed,
@@ -14,9 +19,14 @@ impl WorkflowMarkerReason {
         match self {
             Self::Saving => "Saving changes",
             Self::ImageLoading => "Loading image",
-            Self::Transition => "Finish or cancel the current transition",
+            Self::SessionLoading => "Loading session",
+            Self::DatasetLoading => "Loading dataset",
+            Self::SigningOut => "Signing out",
+            Self::MigrationBusy => "Updating migration",
+            Self::StatisticsOpen => "Statistics dialog open",
+            Self::Transition => "Workflow transition pending",
             Self::Checking => "Checking for available work",
-            Self::CheckFailed => "Availability unknown. You can still try selecting this workflow",
+            Self::CheckFailed => "Availability unknown",
             Self::Unavailable(reason) => match reason {
                 R::BalanceLimit => "Other workflows need to catch up",
                 R::ReviewDisabled => "Review is disabled for this workflow",
@@ -27,6 +37,12 @@ impl WorkflowMarkerReason {
                 R::ReviewRevision => "Work is locked for review revision",
                 R::ImportExcluded => "Imported images are excluded from annotation",
                 R::ReviewFinalized => "Review is already complete",
+                R::WorkflowDisabled => "This workflow is disabled",
+                R::ObjectsPending => "Objects must be finished before Overview",
+                R::PreparationPending => "Dataset model is preparing objects",
+                R::PreparationFailed => "Dataset model needs administrator attention",
+                R::OverviewLimit => "Finish pending Overview work first",
+                R::NoObjects => "No objects remaining",
                 R::Unavailable => "No assignments available",
             },
         }
@@ -34,32 +50,36 @@ impl WorkflowMarkerReason {
 }
 
 impl LabelloApp {
+    pub(crate) fn workflow_interaction_block(&self) -> Option<WorkflowMarkerReason> {
+        use WorkflowMarkerReason as M;
+        let navigating = matches!(self.work.pending_transition,
+            Some(PendingTransition::NextAssignment | PendingTransition::PreviousAssignment(_)))
+            && (self.loading.image || (self.loading.saving && self.work.save_status != SaveStatus::Saving));
+        if self.saving_blocks_interaction() && !navigating { return Some(M::Saving); }
+        if self.loading.session { return Some(M::SessionLoading); }
+        if self.loading.logout { return Some(M::SigningOut); }
+        if self.loading.dataset { return Some(M::DatasetLoading); }
+        // Assignment release shares the save guard, but it is a navigation barrier.
+        if navigating { return Some(M::Transition); }
+        if self.loading.image { return Some(M::ImageLoading); }
+        if self.work.migration.busy { return Some(M::MigrationBusy); }
+        if self.work.pending_transition.is_some() { return Some(M::Transition); }
+        if self.navigation.statistics.open { return Some(M::StatisticsOpen); }
+        self.workspace_bars_loading().then_some(M::Checking)
+    }
+
     pub(crate) fn workflow_marker_reason(
         &self,
         task_id: &labello_domain::TaskId,
     ) -> Option<WorkflowMarkerReason> {
         use WorkflowMarkerReason as M;
-        let navigating = matches!(self.work.pending_transition,
-            Some(PendingTransition::NextAssignment | PendingTransition::PreviousAssignment(_)))
-            && (self.loading.image || (self.loading.saving && self.work.save_status != SaveStatus::Saving));
-        if self.saving_blocks_interaction() && !navigating {
-            return Some(M::Saving);
-        }
-        if self.loading.image && self.work.current.is_none() && self.initial_workspace_load() {
-            return Some(M::ImageLoading);
-        }
-        if self.work.pending_transition.is_some() && !navigating {
-            return Some(M::Transition);
-        }
+        if let Some(reason) = self.workflow_interaction_block() { return Some(reason); }
         let kind = self.assignment_kind()?;
         let availability = &self.work.availability;
         if availability.dataset_id.as_ref() != Some(&self.config.dataset_id)
             || availability.kind.as_ref() != Some(&kind)
         {
             return None;
-        }
-        if availability.error.is_some() {
-            return Some(M::CheckFailed);
         }
         // Retained known-unavailable cards remain disabled during a refresh.
         // Their restriction must remain visible rather than suggesting checking alone blocks them.
@@ -72,6 +92,7 @@ impl LabelloApp {
                     .unwrap_or(labello_domain::WorkflowUnavailableReason::Unavailable),
             ));
         }
+        if availability.error.is_some() { return Some(M::CheckFailed); }
         (availability.loading && self.work.current.is_none() && !availability.resolved && self.initial_workspace_load()).then_some(M::Checking)
     }
 }
@@ -81,6 +102,7 @@ fn paint_workflow_marker(
     rect: egui::Rect,
     selected: bool,
     reason: Option<WorkflowMarkerReason>,
+    reason_color: egui::Color32,
 ) {
     use WorkflowMarkerReason as M;
     use labello_domain::WorkflowUnavailableReason as R;
@@ -88,7 +110,7 @@ fn paint_workflow_marker(
     let center = rect.center();
     let origin = center - egui::vec2(9.0, 9.0);
     let point = |x, y| origin + egui::vec2(x, y);
-    let stroke = egui::Stroke::new(1.5, theme::TEXT_MUTED);
+    let stroke = egui::Stroke::new(1.5, reason_color);
     let line = |a: (f32, f32), b: (f32, f32)| {
         painter.line_segment([point(a.0, a.1), point(b.0, b.1)], stroke);
     };
@@ -148,7 +170,7 @@ fn paint_workflow_marker(
     };
     match reason {
         None => {}
-        Some(M::Saving | M::ImageLoading | M::Checking) => {
+        Some(M::Saving | M::ImageLoading | M::SessionLoading | M::DatasetLoading | M::SigningOut | M::MigrationBusy | M::Checking) => {
             // A static segmented spinner communicates waiting without continuous animation.
             for i in 0..8 {
                 let angle = i as f32 * std::f32::consts::TAU / 8.0;
@@ -157,10 +179,14 @@ fn paint_workflow_marker(
                     [center + direction * 5.0, center + direction * 8.0],
                     egui::Stroke::new(
                         1.5,
-                        theme::TEXT_MUTED.gamma_multiply(0.35 + i as f32 * 0.09),
+                        reason_color.gamma_multiply(0.35 + i as f32 * 0.09),
                     ),
                 );
             }
+        }
+        Some(M::StatisticsOpen) => {
+            painter.rect_stroke(egui::Rect::from_min_max(point(2.0, 3.0), point(16.0, 15.0)), 2.0, stroke, egui::StrokeKind::Inside);
+            line((2.0, 7.0), (16.0, 7.0));
         }
         Some(M::Transition) => {
             path(
@@ -190,9 +216,9 @@ fn paint_workflow_marker(
                 ],
                 false,
             );
-            painter.circle_filled(point(9.0, 14.0), 0.9, theme::TEXT_MUTED);
+            painter.circle_filled(point(9.0, 14.0), 0.9, reason_color);
         }
-        Some(M::Unavailable(R::BalanceLimit)) => {
+        Some(M::Unavailable(R::BalanceLimit | R::OverviewLimit)) => {
             line((9.0, 1.0), (9.0, 16.0));
             line((4.0, 16.0), (14.0, 16.0));
             line((2.0, 4.0), (16.0, 4.0));
@@ -200,13 +226,13 @@ fn paint_workflow_marker(
                 path(&[(x, 4.0), (x - 3.0, 11.0), (x + 3.0, 11.0)], true);
             }
         }
-        Some(M::Unavailable(R::ReviewDisabled)) => {
+        Some(M::Unavailable(R::ReviewDisabled | R::WorkflowDisabled)) => {
             shield();
             let cross_stroke = egui::Stroke::new(2.0, theme::TEXT);
             painter.line_segment([point(6.5, 6.0), point(11.5, 11.0)], cross_stroke);
             painter.line_segment([point(11.5, 6.0), point(6.5, 11.0)], cross_stroke);
         }
-        Some(M::Unavailable(R::EmptyDataset)) => {
+        Some(M::Unavailable(R::EmptyDataset | R::NoObjects)) => {
             line((0.0, 6.0), (0.0, 18.0));
             line((0.0, 18.0), (13.0, 18.0));
             image();
@@ -250,7 +276,7 @@ fn paint_workflow_marker(
             );
             lock();
         }
-        Some(M::Unavailable(R::ReviewRevision)) => {
+        Some(M::Unavailable(R::ReviewRevision | R::ObjectsPending)) => {
             shield();
             lock();
         }
@@ -265,7 +291,7 @@ fn paint_workflow_marker(
                 egui::Stroke::new(2.0, theme::TEXT),
             ));
         }
-        Some(M::Unavailable(R::Unavailable)) => {
+        Some(M::Unavailable(R::Unavailable | R::PreparationPending | R::PreparationFailed)) => {
             painter.circle_stroke(center, 8.0, stroke);
             line((5.0, 9.0), (13.0, 9.0));
         }

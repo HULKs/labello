@@ -10,10 +10,6 @@ use ort::{
 };
 use std::io::Cursor;
 
-#[cfg(target_arch = "wasm32")]
-mod browser;
-#[cfg(target_arch = "wasm32")]
-pub use browser::infer;
 #[cfg(not(target_arch = "wasm32"))]
 mod inspection;
 #[cfg(not(target_arch = "wasm32"))]

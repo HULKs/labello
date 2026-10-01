@@ -31,8 +31,15 @@ impl ImageState {
         }
         event.validate_shape()?;
         match &event.payload {
+            EventPayload::Workflow { event: workflow } => {
+                self.apply_workflow_event(workflow, event)?;
+            }
             EventPayload::WorkReturnedToReview { request, tasks } => {
-                self.apply_return_to_review(request, tasks, event)?
+                self.apply_return_to_review(request, tasks, event)?;
+                for task in &request.task_ids {
+                    self.workflow_review_barriers
+                        .insert(task.clone(), event.event_sequence);
+                }
             }
             EventPayload::MigrationCompanionLinked { companion } => {
                 self.apply_migration_companion(companion)?
@@ -42,7 +49,39 @@ impl ImageState {
                 previous_version,
                 ..
             } => {
+                let completed_in_overview = previous_version.is_some()
+                    && self
+                        .workflow_preparations
+                        .get(&annotation.task_id)
+                        .is_some_and(|p| {
+                            p.objects.iter().any(|object| {
+                                self.workflow_annotation_confirmed(&annotation.task_id, object)
+                                    && self.workflow_object_matches_annotation(
+                                        &crate::WorkflowItem::Object {
+                                            object: object.clone(),
+                                        },
+                                        annotation,
+                                    )
+                            })
+                        })
+                    && self.assignments.iter().any(|a| {
+                        a.task_id == annotation.task_id
+                            && a.assigned_to == event.actor_user_id
+                            && a.kind == AssignmentKind::Annotation
+                            && a.status == AssignmentStatus::Active
+                            && a.expires_at.is_some_and(|expiry| expiry > event.timestamp)
+                            && event.actor_role == crate::DatasetRole::Annotator
+                            && self.workflow_seen.contains_key(&a.assignment_id)
+                            && self
+                                .workflow_assignments
+                                .get(&a.assignment_id)
+                                .is_some_and(|c| c.item == crate::WorkflowItem::Overview)
+                    });
                 self.apply_annotation_version(annotation.clone(), *previous_version)?;
+                if completed_in_overview {
+                    self.workflow_overview_versions
+                        .insert(annotation.annotation_id.clone(), annotation.version);
+                }
                 self.invalidate_migration_target_annotation(&annotation.annotation_id);
                 if previous_version.is_some() {
                     self.mark_changed_guide(annotation, event);
@@ -309,6 +348,7 @@ impl ImageState {
         for task_id in crate::review::submitted_review_tasks(event) {
             self.capture_review_round(task_id, event);
         }
+        self.observe_workflow_contribution(event);
         self.current_sequence = event.event_sequence;
         Ok(())
     }

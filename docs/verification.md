@@ -164,6 +164,13 @@ application bars for review evidence. It does not prove migration-specific
 transactions, failure recovery or absence of every possible spinner; shared UI
 tests and native inspection cover those presentation states.
 
+For Objects/Overview queues, run `python apps/labello-wasm/tests/workflow_items.py
+--kind bounding_box` and repeat with `--kind skeleton`. It uses disposable
+production data to check cross-image Objects work, C → B → A → B → C history,
+separate annotation Overview completion, and focused review. Optional `--artifacts`
+captures only the workflow selector. Storage tests cover multi-user handoff,
+prelabel replacement, migration transactions, and exact score/replay invariants.
+
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
 It includes headless startup, MCP readiness checks, independent parallel
@@ -425,6 +432,11 @@ concurrent clients each perform five claim/submit/statistics/presence/availabili
 cycles. This is an accelerated contention workload, not a simulation of human
 labeling speed. Image delivery, browser rendering, TLS and proxy latency are
 outside this measurement; route handlers and response bodies are exercised.
+This benchmark uses the image-assignment endpoint, not Objects/Overview item
+display. Storage workflow regressions separately bound image-state and event-log
+reads during warm item claims, display and submission in both annotation and review,
+including claims after a prefix of finished images, and
+check retained and unseen reservation release on departure.
 
 ```sh
 cargo test --locked --release -p labello-api nine_client_polling_performance -- --ignored --nocapture

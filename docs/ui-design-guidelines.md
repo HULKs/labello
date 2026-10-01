@@ -76,7 +76,7 @@ qualify a term; compact synonyms must be listed in the glossary.
   enlarged text needs more room; retain every control and its 44-point target.
   If the control group cannot fit between the panel toggles, put it beneath them.
   On short compact workspaces, use six-point outer canvas gutters vertically to
-  retain image space; keep the migration canvas's inner scan gutter fixed.
+  retain image space.
 - Render each action once per layout. Keep primary work actions visible and move
   secondary actions to overflow when space is limited.
 - Wide work views use workflow, canvas, and inspector panes; Medium and Compact
@@ -210,7 +210,7 @@ has been recorded.
 - **Workspace:** keep the primary submit, save-and-advance, or confirm action at
   the bottom right in annotation, migration, and review, including compact layouts. Placed objects remain editable; expose placed-keypoint
   Visible/Occluded controls when allowed by the task. Migration overview uses
-  canvas clicks to create and select objects; omit Add missing object and Edit
+  canvas clicks to create and select objects; omit separate inspector Add missing object and Edit
   added object mode buttons. Preserve tested canvas geometry and gestures; keep Pan and Fit
   visible, with Refocus for review and migration. Omit explicit zoom buttons and
   percentage displays; keep configurable zoom actions and wheel, touchpad, and
@@ -220,18 +220,6 @@ has been recorded.
   near the canvas; prefer compact object summaries over coordinate-heavy
   labels. Show source images without a grid overlay in annotation, review, and
   migration canvases.
-- **Migration scan phase:** mark full-image annotation and review with a persistent
-  four-point information-blue outer frame and one-point light inner frame. Keep
-  a dark gap and an eight-point gutter outside the canvas in both focused and
-  overview phases, so the cue adds no image occlusion or phase-dependent layout
-  shift. The double-frame shape distinguishes it from object selection, warnings,
-  errors, and keyboard focus. It follows workflow phase rather than zoom and
-  adds no visible text. Hide it without an image preview. On phase entry, briefly
-  brighten the frame and contract the image and overlays together by about eight
-  percent, with one rebound and a small settle within 100 ms. Keep the animation
-  inside the image bounds and out of persisted view preferences. User input stops
-  it; zooming within the phase does not restart it. Respect reduced motion, with
-  the static frame as the default when no platform preference adapter is present.
 - **Image overlays:** use filled circles for visible keypoints and hollow
   diamonds for occluded keypoints in saved annotations, active drafts, reviewer
   corrections, and migration. Not-present keypoints have no image marker or
@@ -281,21 +269,21 @@ has been recorded.
   left edge, canvas controls centered, and Inspector at the right edge. Apply
   this ordering to both Annotation and Review. Keep this region compact enough to retain usable canvas height
   on short screens. The passive summary is not a keyboard focus stop; Inspector
-  receives focus back after its drawer closes. Keep
-  Previous image, Previous object, Discard changes, and Skip visible above the
-  bottom row, with Next object/Overview on the left and the decision on the right. Added migration objects also expose
+  receives focus back after its drawer closes. Keep Previous, Discard changes,
+  and Skip reachable beside the current item's decision. Added migration objects also expose
   Remove item. Icon fallback retains full names/tooltips. Short empty states scroll.
   Use Approve for unchanged items and Submit correction for valid edits. Space
   and Y/N follow the same [review flow](annotation.md#review-and-correct).
-  Reset requires another decision, navigation retains valid corrections, and only
-  the overview submits them. Incomplete additions block submission. Failed
+  Reset requires another decision. Objects submits its correction immediately;
+  Overview submits the image's corrections together. Navigation saves unfinished
+  proposals without confirming them. Incomplete additions block submission. Failed
   requests preserve exact retry identity. Reviewed keypoints have no extra
   selection circle.
   Revisions keep a visible Revising indication in the identity line and distinguish
   effective decisions from staged replacements without a redundant notice.
-  Previous image returns to the eligible previous assignment; Previous object
-  stays in the current image, retaining corrections and stopping at the first
-  review target. Migration retains its audited revisit/discard rules.
+  Previous follows retained item history across images; Skip saves partial work,
+  releases the item and prefers another available item. Historical whole-image
+  revisions retain their audited revisit/discard rules.
   Measure secondary actions with actual fonts, icons, and shortcuts. Show the
   longest prefix that fits, trying icons before overflow. Required controls wrap
   and remain visible. Moving a focused action to overflow transfers focus to its
@@ -304,7 +292,7 @@ has been recorded.
   displacing type/phase or adding a row. Short viewports retain identity, phase,
   and useful canvas height; migration bars remove spare padding.
 - **Saved reasons:** show only feedback matching the active image and workflow,
-  independent of the blocking workflow-change dialog. Lead
+  independent of the workflow-change notice. Lead
   with the event and explanation at a four-point gap; keep the 44-point dismiss
   target beside the content so it cannot inflate that gap. Use eight-point
   grouping gaps, existing text roles and quiet borders. Keep workflow and status
@@ -423,40 +411,31 @@ confirmation and cancellation apply to this navigation.
 
 ## Availability fallback feedback
 
-Automatic workflow selection opens a blocking modal titled "Workflow changed".
-Show the previous workflow's captured availability reason as visible wrapping
-text beside the same reason icon used in the workflow selector. Use the generic
-unavailable explanation for missing or mixed reasons; never infer completion
-from temporary unavailability. Show previous and new task/class names and readable
-annotation types with the existing type icons, and emphasize the new workflow. Use one
-44-point primary action, "Acknowledge and continue". Do not provide a close
-control or dismiss on Escape or outside clicks. Work remains blocked until the
-user activates the acknowledgment action.
-
-Constrain the modal to the viewport and scroll its entire contents on short
-screens or with long names and enlarged text. Expose the dialog title, modal
-state, full workflow identities, reason, and action through AccessKit. Start
-without a focused action to avoid consuming the completion key that caused the
-change. Tab reaches the action and scrolls it into view; explicit keyboard
-activation is supported. After acknowledgment, release dialog focus and retain
-the new workflow identity in the context bar and selector. Saved workflow-reason
-notices remain independent.
+Automatic selection shows a dismissible, nonmodal notice naming the destination
+and why it changed. Keep it visible across the following item load. It must not
+consume a confirmation shortcut or require acknowledgment. Use a 44-point close
+control and an accessible status label. Saved partial work and reservation cleanup
+follow the same path as explicit workflow switching.
 
 ## Current workflow marker
 
-The workflow selector reserves a fixed 20-point marker slot on every card. An
-available unselected workflow leaves it empty; the committed selected workflow
-has a small bright dot. A reason icon occupies the slot when restricted,
-checking, or unable to check. When selected, the dot moves to the icon's upper
-right. Pending candidates, hover and keyboard focus never acquire the dot.
+The committed selected workflow has a small bright dot. A reason icon indicates
+restricted, checking, or unable-to-check states. Annotation and review activities center
+these cues together below the label. Available unselected
+workflows have no status cue. Pending candidates, hover and keyboard focus never
+acquire the dot.
 
 Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
 stops or accessible names. Keep the selected fill/border and semantic selection.
-Saving precedes initial image loading, then a pending transition, then availability.
-Same-view assignment release and reopen requests leave the marker unchanged;
-they do not display a save or loading indicator.
-Once an image is displayed, image loads and availability refreshes are silent.
+Every disabled workflow tile and chooser option has a reason icon, including
+saving, session/dataset/image loading, sign-out, migration updates, transitions,
+modal blocks, assignment-resolution barriers, migration phases, and unavailable
+work. Saving precedes loading, migration updates, transitions and modal blocks,
+then activity-phase and availability restrictions. Same-view assignment release
+and reopen requests retain the loaded view at normal opacity and use a static
+transition reason on disabled workflows, without a false save or loading spinner.
+Background availability refreshes remain silent when they do not block interaction.
 Retained known restrictions remain visible during refresh. Unknown or failed
 availability alone never disables selection. A static segmented spinner avoids
 continuous animation. Specific server reasons require a supported workflow-wide
@@ -513,3 +492,51 @@ or descriptions. Keep compact footer decisions adjacent rather than distributing
 them through the available height. Conflict feedback names the other action and
 workspace context, with a filter to locate the affected rows. Verify text/control
 non-intersection and scroll reachability as well as viewport containment.
+
+### Annotation and review class groups
+
+Annotation and review workflow panels and drawers use one bordered group per class.
+Center the class name above equal-width activity columns. Each activity has a
+centered row containing its type icon and label. Keep the class heading at 17
+points, activity labels at 14 points, button labels at 13 points, and activity
+icons at 28 points. Use two-point gaps within each card. Give each activity icon row four-point padding above and
+below, and separate its icon from its label by eight points. Use six-point
+gutters between activity and pass columns.
+Place selection and availability cues centered below each button label, with
+equal top and bottom padding around the label and 18-point status row,
+separated by two points. Reserve the status row when empty so state changes do
+not shift controls. Buttons retain a minimum height of 44 points.
+Order configured activities left to right: bounding boxes, migration, then direct
+skeleton annotation. Omit unconfigured activities. Split activities place Objects
+and Overview side by side when their measured labels fit; otherwise stack them.
+Reflow complete activity groups on narrow screens before clipping labels.
+Unsplit activities use one Annotate or Review button. A small downward chevron indicates
+multiple workflows; keep the count in the chooser, tooltip, and accessible
+description instead of adding another line to the tile. Such tiles open a
+bounded, scrollable chooser with full workflow names and individual availability
+icons. Single-workflow tiles act directly. Review groups bounding-box and skeleton
+review workflows, including migrated skeletons, without exposing annotation
+migration actions. Show no explanatory text beneath activity or chooser buttons;
+reasons belong in state icons, tooltips, and accessible descriptions. Compact labels retain full activity and
+workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
+remain visible with a reason icon and state-only tooltip and accessible description. Do not present migration as active on images
+that support only direct skeleton annotation.
+
+The selected marker follows the chosen task and Objects/Overview variant.
+Overview never skips prerequisite Objects work. Keep both panels bounded at
+360 logical points, cap drawers to the viewport, wrap class headings and retain
+complete accessible names. Focused activities scroll into view; long text must
+not widen the canvas. Closing a drawer restores keyboard focus to its trigger.
+
+Class cards use three-point vertical gaps, five-point inner vertical padding,
+and ten-point horizontal padding.
+The seven HSLVision classes should fit a 1920 × 1080 desktop viewport without
+scrolling at default text size. Shorter screens and larger text retain scrolling. Availability failures retain a compact Retry availability button above
+the cards. A boosted annotation workflow has a soft amber glow and inner rim,
+including the matching option inside a grouped chooser. A brief shimmer runs
+when the boost appears or the button receives hover or keyboard focus; it then
+settles to the persistent highlight. Reduced-motion and disabled controls keep
+the highlight static. Native selection, focus, and availability remain distinct.
+Tooltips and accessible descriptions identify the boosted workflow without a
+percentage, countdown, focus label, or footer. Expired or unreliable boost data
+removes the highlight.

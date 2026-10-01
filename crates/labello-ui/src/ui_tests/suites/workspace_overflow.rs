@@ -196,7 +196,7 @@ fn workspace_overflow_dynamic_save_previous_and_loading_keep_one_command_locatio
         harness.state_mut().work.last_edit_at = Some(Instant::now());
         harness.run_steps(3);
         let previous = harness
-            .query_all_by_label_contains("Previous image")
+            .query_all_by_label("Previous")
             .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
             .count();
         assert_eq!(previous, 1);

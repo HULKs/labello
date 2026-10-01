@@ -129,11 +129,6 @@ redacted logs. Clients must display the `x-request-id`, not raw internal state.
 | `GET /datasets/{dataset_id}/keybindings` | Any role | Compatibility alias for the authenticated user's global `KeybindingSet` |
 | `PUT /datasets/{dataset_id}/keybindings` | Any role, same user | Compatibility alias saving the global `KeybindingSet` |
 | `POST /datasets/{dataset_id}/prelabel-model-check` | Data admin | Unsaved `{ location }` managed filename → `PrelabelModelInspection`; control JSON limited to 4 KiB; no inference image, configuration save, or hint mutation |
-| `POST /datasets/{dataset_id}/prelabel-suggestions` | Annotator; enabled config | `PrelabelSuggestionRequest { imageId, taskId, configId }` → `PrelabelResponse` |
-| `GET /datasets/{dataset_id}/prelabel-retained` | Annotator | `PrelabelItemRequest { imageId, taskId }` → first compatible nonempty `RetainedPrelabels { configId, response }` in configuration order, or null; validates current bindings, expiry and reset state; never executes a model; private, no-store |
-| `GET /datasets/{dataset_id}/prelabel-generation` | Annotator | Image/task/config query → `PrelabelGeneration` |
-| `POST /datasets/{dataset_id}/prelabel-browser-result` | Annotator; enabled browser config | Signed grant and candidates → certified `PrelabelResponse` |
-| `GET /datasets/{dataset_id}/prelabels/{config_id}/model` | Dataset role; available config, or data admin | Managed ONNX bytes; private, no-store |
 | `GET /datasets/{dataset_id}/prelabel-management` | Data admin | No input → `PrelabelAdminState` |
 | `POST /datasets/{dataset_id}/prelabel-management` | Data admin | Preflight/start/cancel/retry/reset/resume command → `PrelabelAdminState` |
 
@@ -329,6 +324,13 @@ inside the existing optional submission reason and retain its 2000-byte limit.
 
 | Method and path | Access | Input → output |
 | --- | --- | --- |
+| `POST /datasets/{dataset_id}/work-items/claim` | Annotator or reviewer for requested kind | `ClaimWorkflowRequest { selection: { taskId, kind, variant }, prefetch, excluded }` → `Assignment?`; variant is `objects` or `overview` |
+| `GET /datasets/{dataset_id}/work-items/availability` | Requested kind authorized by storage | `kind` query → `WorkflowAvailability[]`, including each variant's split flag and blocking reason |
+| `POST /datasets/{dataset_id}/work-items/display` | Exact active item owner | `AssignmentActionRequest` → `ImageState`; records durable seen state and renews the lease |
+| `POST /datasets/{dataset_id}/work-items/draft` | Exact active displayed item owner | `SaveWorkflowDraftRequest { assignment, geometry, expectedSequence }`, or `{ assignment, edits: { changes, reason }, expectedSequence }` → `ImageState`; geometry is an annotation Objects draft, edits are annotation Overview or reviewer proposals |
+| `GET /datasets/{dataset_id}/work-items/history` | Requested kind authorized by storage | `taskId`, `kind`, `variant` query → newest-first `WorkflowHistoryEntry[]` within the configured window |
+| `POST /datasets/{dataset_id}/work-items/reopen` | Owner of an eligible history visit | `AssignmentActionRequest` → renewed or reacquired `Assignment` |
+| `POST /datasets/{dataset_id}/work-items/leave` | Requested kind authorized by storage | `WorkflowSelection` → success; releases the caller's matching reservations |
 | `GET /datasets/{dataset_id}/assignments/availability` | Session; requested kind authorized by storage | `AssignmentAvailabilityRequest` query → `AssignmentAvailability` |
 | `POST /datasets/{dataset_id}/images/next` | Session; requested kind authorized by storage | `AssignNextRequest` → `Assignment?` |
 | `POST /datasets/{dataset_id}/images/{image_id}/assignments/revalidate` | Owner of exact active assignment | `AssignmentActionRequest` → `AssignmentRevalidation?` |
@@ -356,6 +358,18 @@ inside the existing optional submission reason and retain its 2000-byte limit.
 | `GET /datasets/{dataset_id}/offline-bundle` | Annotator | `OfflineBundleRequest` query → `OfflineBundle` |
 | `POST /datasets/{dataset_id}/offline-sync` | Annotator; same authenticated user and dataset | versioned `OfflineSyncRequest` → `OfflineSyncResult` |
 
+Work-item geometry and edit drafts are provisional; neither confirms work nor awards
+points. Edit proposals contain at most 10000 typed changes and 2000 bytes of reason.
+The sequence is compare-and-swap across reassignments; an exact retry is idempotent.
+Item-aware annotation batches and review/correction commands enforce the captured
+object or Overview scope. Raw event ingress cannot manufacture workflow events.
+
+Per-user inference, retained-hint discovery, generation polling, browser-result
+certification and model-byte routes have been removed. Their paths return 404.
+Administrator configuration and generation routes remain available. New/changed
+task bindings permit at most one prelabel configuration; unchanged legacy lists
+remain readable. Preparation is server-owned and includes both boxes and poses.
+
 The assignment ID, image ID, task ID, actor, kind, current sequence, and live
 state are validated at the transaction boundary. Possessing an ID is not
 authorization.
@@ -380,7 +394,7 @@ zero-count, and exact-boundary contract is maintained in
 [Assignment](assignment.md#completion-balance).
 
 Review reopening and replacement follow the strict
-[previous-review contract](assignment.md#previous-review-and-decision-revisions).
+[queue history contract](assignment.md#previous-skip-and-partial-work).
 `ReviewRevisionCommit` contains `reviews`, from 1 to 10001 `ReviewRecord` values.
 Each record must belong to the caller, have a unique ID and captured exact target,
 and contain at most 2000 bytes of comment. The final record is the task or
@@ -391,7 +405,7 @@ expired ownership, malformed replacement targets, and conflicting retries return
 409. Ordinary review commands cannot mutate a task held by an exclusive revision
 lease. Its owner may submit corrections through `review-corrections`.
 
-`ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
+`Workflow`, `ReviewAssignmentOpened`, `ReviewAssignmentFinished`, and
 `ReviewRevisionCommitted`, `ReviewCorrectionSubmitted`, and `MissingObjectEvidenceRecorded` are server-owned events. Raw event, annotation batch,
 admin repair, and offline sync ingress cannot publish them. Clients submit
 commands to the dedicated endpoints and never choose superseded review IDs.
@@ -420,6 +434,10 @@ commands cannot bypass substantive-correction requirements with `ReviewRecorded`
 rejections.
 
 ### Assignment availability reasons
+
+The `workflows` entries cover the requested kind and every authorized related kind,
+so cached view changes retain Objects/Overview eligibility. Each entry includes
+its kind in `selection`.
 
 `AssignmentAvailability` and each authorized `related` entry retain their
 `tasks` map of task IDs to booleans. An additive `reasons` map contains a bounded

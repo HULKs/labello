@@ -68,6 +68,7 @@ impl LabelloApp {
                                 self.request_prefetch();
                             }
                             let checked_at = labello_domain::now();
+                            self.work.availability.workflows = availability.workflows;
                             for related in availability.related {
                                 self.cache_assignment_availability(
                                     self.config.dataset_id.clone(),
@@ -79,8 +80,14 @@ impl LabelloApp {
                             }
                             self.work.availability.dataset_id =
                                 Some(self.config.dataset_id.clone());
-                            self.work.availability.kind = Some(availability.kind);
+                            self.work.availability.kind = Some(availability.kind.clone());
                             self.work.availability.tasks = availability.tasks;
+                            for entry in &self.work.availability.workflows {
+                                if entry.selection.kind == availability.kind
+                                    && entry.selection.variant == self.work.workflow.variant {
+                                    self.work.availability.tasks.insert(entry.selection.task_id.clone(), entry.available);
+                                }
+                            }
                             self.work.availability.reasons = availability.reasons;
                             self.work.availability.resolved = true;
                             self.work.availability.checked_at = Some(checked_at);

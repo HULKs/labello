@@ -207,7 +207,9 @@ impl DatasetRepository {
         image_id: &ImageId,
         task_id: &TaskId,
     ) -> StorageResult<Assignment> {
+        self.ensure_artifact_migration().await?;
         let _config_guard = self.review_config_lock.read().await;
+        let _admission_guard = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset().await?;
         require_role(
             &metadata.role_assignments,
@@ -227,6 +229,22 @@ impl DatasetRepository {
         let lock = self.image_lock(image_id);
         let _guard = lock.lock().await;
         let state = self.load_image_state(image_id).await?;
+        if state.workflow_assignments.contains_key(assignment_id) {
+            drop(_guard);
+            drop(_admission_guard);
+            drop(_config_guard);
+            return self
+                .reopen_workflow_item(
+                    user_id,
+                    super::AssignmentContext {
+                        assignment_id,
+                        image_id,
+                        task_id,
+                        kind: AssignmentKind::Review,
+                    },
+                )
+                .await;
+        }
         let source_index = state
             .assignments
             .iter()
@@ -410,7 +428,9 @@ impl DatasetRepository {
                 "rejection requires a substantive correction submission".into(),
             ));
         }
+        self.ensure_artifact_migration().await?;
         let _config_guard = self.review_config_lock.read().await;
+        let _admission_guard = self.assignment_claim_lock.lock().await;
         if context.kind != AssignmentKind::Review {
             return Err(conflict("revision requires a review assignment"));
         }

@@ -359,14 +359,10 @@ or discarded first. Browser-storage failure leaves work in the current tab.
 Deployment checks must include an open release A updating to B with warm browser
 caches and a deliberately persistent mismatch that stops after one attempt.
 
-## Browser inference assets
+## Inference deployment
 
-The Trunk pre-build hook downloads the pinned ONNX Runtime Web archive using
-Python 3 and verifies its SHA-256 before extracting an explicit allowlist into
-`target/onnx-runtime`. Builds require access to `registry.npmjs.org` unless the
-verified archive is cached. The complete Trunk distribution includes the
-`onnx/` runtime assets and license; publish it atomically with the client.
-Inference loads these assets from the client origin, without a public CDN.
-Serve `.mjs` as JavaScript and `.wasm` as WebAssembly. A restrictive CSP must
-permit the application's blob workers and WebAssembly compilation. See
-[ONNX Runtime Web deployment guidance](https://onnxruntime.ai/docs/tutorials/web/deploy.html).
+Model execution runs on the server. The browser distribution contains no ONNX
+Runtime Web assets and does not download models. Trunk builds no longer fetch
+an ONNX Runtime Web archive. Publish the complete browser distribution
+atomically with the server and configure server model execution as described
+in [prelabels](prelabels.md).

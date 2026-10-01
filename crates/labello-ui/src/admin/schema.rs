@@ -568,27 +568,26 @@ fn edit_workflow_basics(
         edit_skeleton(ui, index, skeleton);
     }
     if prelabel_available {
-        ui.label("Prelabel sources");
-        if prelabels.is_empty() {
-            ui.small("No prelabel sources configured.");
-        }
-        for prelabel in prelabels {
-            let mut enabled = task.prelabel_config_ids.contains(&prelabel.config_id);
-            if ui
-                .checkbox(
-                    &mut enabled,
-                    format!("{} ({})", prelabel.name, prelabel.config_id),
-                )
-                .changed()
-            {
-                if enabled {
-                    task.prelabel_config_ids.push(prelabel.config_id.clone());
-                } else {
-                    task.prelabel_config_ids
-                        .retain(|config_id| config_id != &prelabel.config_id);
+        let mut selected = task.prelabel_config_ids.iter().find(|id| prelabels.iter().any(|p| {
+            let mut candidate = task.clone();
+            candidate.enabled = true;
+            &p.config_id == *id && p.available_to_annotators && p.validate_for_task(&candidate).is_ok()
+        })).cloned();
+        let previous = selected.clone();
+        egui::ComboBox::from_id_salt(("workflow-prelabels", index))
+            .selected_text(selected.as_ref().and_then(|id| prelabels.iter().find(|p| &p.config_id == id)).map_or("No prelabels", |p| p.name.as_str()))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut selected, None, "No prelabels");
+                for prelabel in prelabels.iter().filter(|p| {
+                    let mut candidate = task.clone();
+                    candidate.enabled = true;
+                    candidate.prelabel_config_ids = vec![p.config_id.clone()];
+                    p.validate_for_task(&candidate).is_ok()
+                }) {
+                    ui.selectable_value(&mut selected, Some(prelabel.config_id.clone()), &prelabel.name);
                 }
-            }
-        }
+            }).response.on_hover_text("Active prelabel source for every annotator in this workflow");
+        if selected != previous || task.prelabel_config_ids.len() > 1 { task.prelabel_config_ids = selected.into_iter().collect(); }
     } else {
         crate::prelabel_flow::disabled_notice(ui);
     }
@@ -967,40 +966,6 @@ fn edit_prelabels(
             {
                 config.model.version = (!version.trim().is_empty()).then_some(version);
             }
-            let mut mode = match config.execution {
-                PrelabelExecution::ServerSide { .. } => 0,
-                PrelabelExecution::BrowserLocal {
-                    acceleration: BrowserAcceleration::WebGpuPreferred,
-                } => 1,
-                _ => 2,
-            };
-            let old_mode = mode;
-            egui::ComboBox::from_id_salt(("model_execution", index))
-                .width(ui.available_width().min(420.0))
-                .truncate()
-                .selected_text(
-                    [
-                        "Server GPU with CPU fallback",
-                        "Browser WebGPU with CPU fallback",
-                        "Browser CPU",
-                    ][mode],
-                )
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut mode, 0, "Server GPU with CPU fallback");
-                    ui.selectable_value(&mut mode, 1, "Browser WebGPU with CPU fallback");
-                    ui.selectable_value(&mut mode, 2, "Browser CPU");
-                });
-            if mode != old_mode {
-                config.execution = match mode {
-                    0 => PrelabelExecution::ServerSide { command: vec![] },
-                    1 => PrelabelExecution::BrowserLocal {
-                        acceleration: BrowserAcceleration::WebGpuPreferred,
-                    },
-                    _ => PrelabelExecution::BrowserLocal {
-                        acceleration: BrowserAcceleration::WasmCpuFallback,
-                    },
-                };
-            }
             edit_model_profile(ui, config, labels, tasks, checks);
             let mut iou = config.output_processing.iou_threshold();
             if prelabel_threshold_field(ui, "Overlap IoU", &mut iou).changed() {
@@ -1033,9 +998,7 @@ fn edit_prelabels(
                     version: None,
                     location: "model.onnx".to_string(),
                 },
-                execution: PrelabelExecution::BrowserLocal {
-                    acceleration: BrowserAcceleration::WasmCpuFallback,
-                },
+                execution: PrelabelExecution::ServerSide { command: vec![] },
                 output_processing: OutputProcessing {
                     confidence_threshold: 0.5,
                     suppress_overlaps_iou: None,

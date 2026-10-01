@@ -88,7 +88,8 @@ pub(super) fn validate_payload(
         | EventPayload::ReviewerCorrectionRecorded { .. }
         | EventPayload::LegacyAdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. } => {}
-        EventPayload::ReviewAssignmentOpened { .. }
+        EventPayload::Workflow { .. }
+        | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
         | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
@@ -271,7 +272,8 @@ pub(super) fn required_role_for_payload(
         EventPayload::AssignmentUpdated { .. } => Err(ApiError::BadRequest(
             "assignment events are created by assignment endpoints only".to_string(),
         )),
-        EventPayload::ReviewAssignmentOpened { .. }
+        EventPayload::Workflow { .. }
+        | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
         | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }
@@ -328,7 +330,8 @@ pub(super) fn validate_annotation_assignment_payload(
                     .to_string(),
             ));
         }
-        EventPayload::ReviewRecorded { .. }
+        EventPayload::Workflow { .. }
+        | EventPayload::ReviewRecorded { .. }
         | EventPayload::ReviewerCorrectionRecorded { .. }
         | EventPayload::LegacyAdjudicationRecorded { .. }
         | EventPayload::AssignmentUpdated { .. }
@@ -409,7 +412,8 @@ pub(super) fn validate_admin_repair_payload(
         | EventPayload::AssignmentUpdated { .. } => Err(ApiError::BadRequest(
             "assignment and reviewer correction state is managed by workflow endpoints".to_string(),
         )),
-        EventPayload::ReviewAssignmentOpened { .. }
+        EventPayload::Workflow { .. }
+        | EventPayload::ReviewAssignmentOpened { .. }
         | EventPayload::ReviewAssignmentFinished { .. }
         | EventPayload::WorkReturnedToReview { .. }
         | EventPayload::ReviewCorrectionSubmitted { .. }

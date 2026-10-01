@@ -13,120 +13,83 @@ prefetch claims account for outstanding assignments before reserving more work.
 
 For controls and the user sequence, see [annotation and review](annotation.md).
 
-## Single-reviewer completion
+## Objects and Overview
 
-Approval tasks admit one active reviewer per image and task. That reviewer
-performs object-level decisions and the final full-image check. Final approval
-atomically records the decision, marks the task `Completed` with its approved
-outcome, completes the owned assignment, and cancels any outstanding competing
-review leases. Rejection requires substantive corrections and returns work to a fresh
-`Submitted` review round.
-A task configured with review workflow `none` completes on annotation submission.
+Each task has an Objects queue and an Overview queue where applicable. A queue
+item is one object, including a whole skeleton, or one image respectively.
+The item lease captures its task definition, source identity and exact review
+version. Different objects on an image may have different owners; Overview
+excludes simultaneous object leases for that task.
 
-Task statistics use five mutually exclusive states: Pending, In progress,
-Awaiting review, Needs correction, and Completed. Approved and reviewer-corrected
-completed tasks both count as Completed. Enabled-task eligibility and excluded
-import coverage retain the completion-denominator rules above. Review decisions
-remain in audit history and contributor activity.
+Annotation prepares existing annotations, migration targets and managed prelabels
+before assigning work. Images with no focusable sources use Overview directly.
+The selector omits Objects when the workflow has no prepared objects. Pending
+model generation blocks unused work until it finishes or an administrator changes
+the managed configuration. Empty model results allow normal image annotation.
 
-## Reviewer correction submissions
+Confirming an object completes that item immediately and leaves the image's
+Overview outstanding. Skipped and partial objects still block Overview. Completing
+annotation Overview submits an approval task for review, or completes a task with
+review workflow `none`. Review Objects includes annotations added during annotation
+Overview. Review Overview waits for every current object decision and completes
+the task. Existing completed tasks are not reopened to impose new passes.
 
-Both ordinary and guided migration reviews accumulate unsaved corrections.
-A submission must edit geometry, add an annotation, remove an erroneous object,
-or change a canonical migration disposition. Empty changes, unchanged geometry,
-comment-only changes, unchanged exclusion reasons, bare rejection, and new
-missing-object markers cannot reject work. The legacy `allowReviewerCorrections`
-configuration field remains readable but no longer gates approval review.
+## Review eligibility and corrections
 
-The review UI edits the focused item directly. Approve is available for an
-unchanged item; Reject retains a valid correction locally and advances. Earlier
-corrections do not disable approval of another unchanged item. Reset restores the
-item and requires a new decision. A valid retained correction satisfies that item's
-rejection requirement when navigating to the overview; unchanged items still need
-explicit approval. Navigation alone does not approve items.
-The final overview permits adding missing annotations and revisiting existing
-items. Once every original item has a decision, it submits approval if there are
-no corrections, or submits the complete correction batch with rejection. Invalid
-or unfinished additions block submission. No corrected-item rejection reaches the
-server before this overview submission.
+Objects review excludes the object's final author. Earlier partial contributors
+may review it. Overview review excludes anyone who annotated, corrected, or
+recorded a review decision anywhere on the image, across tasks. Merely displaying
+or prefetching work does not count as a contribution.
 
-The transaction holds the configuration guard and image lock, reloads state,
-checks the exact reviewer lease, captured round, task definition and target
-fingerprint, validates the complete correction batch, then publishes all changes,
-reviewer attribution, rejection, assignment completion and fresh submission in
-one atomic event-log replacement. Canonical skeletons retain their guide/group
-identities. Discovered skeletons retain the derived-box pairing rules above.
+A reviewer may receive otherwise excluded work only when no independent review
+item is available in any accessible dataset review queue. Storage checks this
+under dataset admission at claim, display, mutation and history reacquisition.
+The assignment records the exception durably. Its decision is final and satisfies
+completion; it does not create a later independent-review obligation.
 
-Corrected work remains `Submitted` with no completion outcome. Other review
-leases are cancelled, and the same reviewer can claim a fresh assignment.
-One reviewer must approve every current object and the final image in the new
-round. Previous approvals remain historical evidence and cannot count toward it.
+Approve confirms the current unchanged item. A correction must change geometry,
+add/remove an annotation, or change a migration disposition. Comment-only and
+unchanged corrections cannot reject work. Objects corrections submit immediately
+without entering Overview. Overview edits missing objects in place.
 
-The correction ID and complete request identify an exact retry. Changed retries,
-stale versions or targets, lost ownership, and changed configuration fail without
-appending a partial correction. Cancelling navigation preserves staged edits;
-failed requests retain the immutable submission for retry. Browser recovery is
-best effort and does not replace the server event log.
+Corrections preserve approvals for unchanged objects. Added objects require an
+Objects review, then Overview. Editing an existing object requires another
+Overview, without an additional Objects pass solely for that edit. The correction
+receipt binds the exact corrected versions. Canonical migration geometry retains
+its guide/group identity; discovered skeletons retain their companion boxes.
 
-## Previous review and decision revisions
+The correction transaction checks ownership, captured definition, current versions
+and review eligibility, simulates the entire batch, then atomically publishes
+geometry, attribution, decision and receipt. Exact retries are idempotent. Changed
+retries, stale versions and lost leases append nothing. Historical whole-image
+review and revision records remain replayable with their original meaning.
 
-Review offers Previous and the configured Previous image shortcut, Arrow Left by
-default, for the immediately previous skipped or completed review in the same
-dataset and task. Background cleanup of an expired reservation does not count
-as a skipped review and does not replace the immediately previous review.
-A shared process-local index tracks terminal review history per reviewer and task.
-It is initialized with a bounded parallel scan before the first review claim and
-maintained from committed image state. Warm Previous checks read the index and
-the target image only; they do not load every other image's state or event log.
-The index tracks the latest finished review even when that review later becomes
-ineligible, so it cannot authorize falling back to an older review. Equal terminal
-timestamps retain the strict newer-than comparison. Per-image event sequences
-order observations, not events on different images.
+## Previous, Skip and partial work
 
-The client clears that reference when the dataset, task,
-account, or endpoint changes. It is not a history browser. The server validates
-the exact previous assignment and creates a new assignment ID and lease. A
-retry of the same opening returns that fresh active assignment. As in normal
-review, the reviewer may also be the original annotation submitter. Reopening
-still requires the Reviewer role and ownership of the exact previous review;
-it does not grant permission to revise another reviewer's decisions.
+Previous follows displayed items within a task, assignment kind and variant.
+`workflowQueue.historyDepth` defaults to 5 and accepts 0 through 100. The server
+keeps the current visit plus that many earlier visits. Returning from C to B to A
+preserves forward reservations; advancing returns through B and C. Reopening does
+not reorder the visit or duplicate its reward. The history index is derived from
+events and rebuilt after restart.
 
-A skipped normal review resumes its original submission round and preserves
-valid object decisions. A completed review opens an exclusive revision.
-Opening or cancelling that revision leaves the previous effective decisions,
-outcome, and completion counts unchanged. The reviewer stages object decisions
-locally, then explicitly commits the full-image decision. Approval requires all
-captured targets to be approved. Rejection requires a substantive correction submission.
+Skip saves unfinished work before releasing its lease. Claims prefer other
+eligible items before returning the skipped one. Object drafts persist partial
+keypoints without confirming the skeleton. Overview additions and reviewer edits
+are durable proposals, separate from committed annotations and review decisions.
+Another eligible worker can resume them. Drafts use exact item scope, geometry
+validation and compare-and-swap event sequences. Only explicit valid confirmation
+finishes the item and earns its applicable reward.
 
-Commit atomically supersedes the reviewer's captured decisions, appends their
-replacements, recomputes the task outcome and counts, and completes the fresh
-assignment. Historical reviews remain in the event log. Each reviewer counts
-at most once in the current submission round. An identical commit retry returns
-the recorded result without adding reviews; a different retry is a conflict.
+Leaving a workflow releases its current, prepared and retained history leases,
+while preserving saved work and visit history. Browser loss uses ordinary lease
+expiry. Returning to released or expired history rechecks owner, current version,
+role, definition and review eligibility. Changed or reassigned history is rejected;
+a failed opening preserves the current workspace.
 
-The original submission identity, task configuration, annotation versions,
-migration dispositions, dependencies, and confirmation must remain current.
-Later assignment attempts invalidate reopening even if their lease has expired.
-Later relevant events are ordered by event sequence, including when timestamps
-are equal. Another active lease also prevents reopening. The revision lease
-excludes competing task mutations and is checked again at commit. Configuration
-publication is serialized with revision validation and commit.
-
-Revision reviewers can edit, create, or remove annotations and correct guided
-migration dispositions using the same correction transaction as normal review.
-A correction ends the revision and creates a new submission round. Its rejection
-belongs to the old round; old approvals cannot finalize the corrected work.
-Migration revisions require a current valid confirmation; historical rejection
-that invalidated confirmation still needs the normal migration correction flow.
-Historical assignments created before captured review contexts were introduced
-remain replayable but cannot be reopened through Previous.
-
-Switching from changed review work uses a confirmation that preserves its
-correction or staged decisions when cancelled. Untouched reviews switch directly.
-The previous assignment is validated and loaded before releasing current work;
-a failed opening leaves the current workspace intact. Skipping or leaving a revision discards
-its local staged decisions only after confirmation; server decisions remain
-unchanged. Staged decisions are not persisted for browser reload recovery.
+Existing pre-queue assignments continue through their legacy transaction rules.
+Their historical completion and scores are preserved. They do not acquire new
+fallback-exception metadata retroactively.
 
 ## Completion balance
 
@@ -166,8 +129,7 @@ once; already counted work and expired leases contribute no additional count.
 Peer counts include only actual progress, never unfinished peer assignments.
 A projected gap equal to the window is permitted; a larger gap blocks prefetch
 before image data is fetched. For A=12, B=10 and a window of five, one active A
-and one prepared A leave room for one more A. Foreground and prefetch claims
-share a process-local admission guard while balance enforcement is enabled.
+and one prepared A leave room for one more A. Foreground and prefetch claims share a process-local dataset admission guard.
 
 Availability refreshes report which of the caller's reservations still fit the
 window, ordered by original claim time and assignment ID. Clients release
@@ -176,6 +138,13 @@ Configuration changes and peer corrections can invalidate earlier preparations;
 reconciliation follows the existing refresh interval, normally 30 seconds, and
 local mutations trigger refreshes. This is not a promise that concurrent
 foreground work can never move actual counts outside the window.
+
+An optional `workflowQueue.maxPendingOverviews` limits distinct images whose
+Objects work has begun and still needs Overview. It reserves capacity for active
+objects on new images and counts each image once. Further objects on an already
+started image remain eligible, so a crowded image cannot deadlock its own Overview.
+The default is no cap. Objects and Overview share task-level image balance;
+individual object completion never advances the completed-image count.
 
 ## Runtime consistency
 
@@ -231,12 +200,15 @@ The frozen imported migration target count does not grow when a companion is
 created. Migration review defaults to canonical dispositions, discovered skeletons
 in stable annotation-ID order, and then full-image confirmation. Exact current
 items may be approved in any order, including after an earlier locally retained
-correction. Final confirmation requires all current items to be approved by the
-reviewer in the current submission round. Each discovery
+correction. Overview requires current object receipts, which may belong to different
+reviewers. Each discovery
 decision binds the current exact skeleton version. A box review cannot approve
 its skeleton, and migration approval cannot approve its box.
 
 ## Direct canonical revisit
+
+This describes legacy image assignments. Queue assignments revisit a canonical
+object through Previous and validate its exact item lease.
 
 Direct canonical revisit records a `ManualSelection` dependency for a valid guide,
 including a previously annotated or excluded target. That selected target remains

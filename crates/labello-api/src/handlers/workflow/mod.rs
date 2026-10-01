@@ -27,6 +27,11 @@ use crate::{
 };
 
 mod event_policy;
+mod items;
+pub(crate) use items::{
+    claim_workflow_item, display_workflow_item, leave_workflow, reopen_workflow_item,
+    save_workflow_draft, workflow_availability, workflow_history,
+};
 
 use event_policy::{
     construct_annotation_mutation, required_role_for_payload, validate_admin_repair_payload,
@@ -58,11 +63,23 @@ pub(crate) async fn assignment_availability(
         .iter()
         .position(|(kind, _)| kind == &request.kind)
         .expect("the authorized requested kind must be included");
-    let (_, tasks) = availabilities.remove(requested);
+    let (_, mut tasks) = availabilities.remove(requested);
     let (size, eligible_assignments) = repo
         .preload_queue_policy(&actor.user_id, &request.kind)
         .await?;
+    let mut workflows = repo
+        .workflow_availability(&actor.user_id, request.kind.clone())
+        .await?;
+    summarize_workflows(&mut tasks, &workflows);
+    for (kind, tasks) in &mut availabilities {
+        let related_workflows = repo
+            .workflow_availability(&actor.user_id, kind.clone())
+            .await?;
+        summarize_workflows(tasks, &related_workflows);
+        workflows.extend(related_workflows);
+    }
     Ok(Json(AssignmentAvailability {
+        workflows,
         kind: request.kind,
         tasks: tasks
             .iter()
@@ -91,6 +108,25 @@ pub(crate) async fn assignment_availability(
             eligible_assignments,
         }),
     }))
+}
+
+fn summarize_workflows(
+    tasks: &mut std::collections::BTreeMap<
+        labello_domain::TaskId,
+        Option<labello_domain::WorkflowUnavailableReason>,
+    >,
+    workflows: &[labello_domain::WorkflowAvailability],
+) {
+    for (task, reason) in tasks {
+        let mut variants = workflows
+            .iter()
+            .filter(|workflow| workflow.selection.task_id == *task);
+        if variants.clone().any(|workflow| workflow.available) {
+            *reason = None;
+        } else if let Some(overview) = variants.next_back() {
+            *reason = overview.reason;
+        }
+    }
 }
 
 pub(crate) async fn assign_next(

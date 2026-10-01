@@ -12,7 +12,9 @@ impl DatasetRepository {
         image_id
             .validate_path_segment()
             .map_err(|_| StorageError::InvalidAssignment("invalid image identity".into()))?;
+        self.ensure_artifact_migration().await?;
         let _config_guard = self.review_config_lock.read().await;
+        let _admission_guard = self.assignment_claim_lock.lock().await;
         let metadata = self.load_dataset().await?;
         let role = [DatasetRole::Reviewer, DatasetRole::DataAdmin]
             .into_iter()

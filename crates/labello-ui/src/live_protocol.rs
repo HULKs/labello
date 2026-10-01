@@ -9,7 +9,7 @@ use labello_client::{
 use labello_domain::{
     AnnotationId, Assignment, AssignmentId, AssignmentKind, DatasetId, DatasetMetadata,
     DatasetRole, DatasetSnapshot, DatasetStats, ImageExplorerPage, ImageId, ImageState,
-    KeybindingSet, PrelabelConfigId, ReviewRecord, TaskId, UserId,
+    KeybindingSet, ReviewRecord, TaskId, UserId,
 };
 
 use crate::queue::QueuedImage;
@@ -179,6 +179,11 @@ impl std::fmt::Display for UiRequestError {
 
 #[derive(Debug)]
 pub(crate) enum UiMessage {
+    WorkflowHistoryLoaded {
+        request: RequestIdentity,
+        selection: labello_domain::WorkflowSelection,
+        result: Result<Vec<labello_domain::WorkflowHistoryEntry>, UiRequestError>,
+    },
     PrelabelFinished {
         request: RequestIdentity,
         result: Box<Result<crate::prelabel_flow::PrelabelReply, String>>,
@@ -435,6 +440,22 @@ pub(crate) enum UiMessage {
 }
 
 pub(crate) enum UiCommand {
+    WorkflowHistory {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+        selection: labello_domain::WorkflowSelection,
+    },
+    ReopenWorkItem {
+        request: RequestIdentity,
+        operation_id: u64,
+        dataset_id: DatasetId,
+        item: labello_client::AssignmentActionRequest,
+    },
+    LeaveWorkflow {
+        request: RequestIdentity,
+        dataset_id: DatasetId,
+        selection: labello_domain::WorkflowSelection,
+    },
     Prelabel {
         request: RequestIdentity,
         dataset_id: DatasetId,
@@ -633,19 +654,19 @@ pub(crate) enum UiCommand {
         operation_id: u64,
         dataset_id: DatasetId,
         task_id: TaskId,
-        prelabel_config_ids: Vec<PrelabelConfigId>,
+        variant: labello_domain::WorkflowVariant,
+        excluded_items: Vec<labello_domain::WorkflowItemRef>,
         kind: AssignmentKind,
         reclaim_assignment_id: Option<AssignmentId>,
-        excluded_image_ids: Vec<ImageId>,
     },
     PrefetchAssignment {
         request: RequestIdentity,
         operation_id: u64,
         dataset_id: DatasetId,
         task_id: TaskId,
-        prelabel_config_ids: Vec<PrelabelConfigId>,
+        variant: labello_domain::WorkflowVariant,
+        excluded_items: Vec<labello_domain::WorkflowItemRef>,
         kind: AssignmentKind,
-        excluded_image_ids: Vec<ImageId>,
     },
     RevalidatePreparedReview {
         request: RequestIdentity,
@@ -663,15 +684,12 @@ pub(crate) enum UiCommand {
         operation_id: u64,
         dataset_id: DatasetId,
         assignment: Assignment,
-        prelabel_config_ids: Vec<PrelabelConfigId>,
-        fetch_prelabels: bool,
     },
     ReopenAssignment {
         request: RequestIdentity,
         operation_id: u64,
         dataset_id: DatasetId,
         assignment: Assignment,
-        prelabel_config_ids: Vec<PrelabelConfigId>,
     },
     SaveAnnotations {
         request: RequestIdentity,
@@ -685,6 +703,7 @@ pub(crate) enum UiCommand {
         persisted: BTreeSet<AnnotationId>,
         modified: BTreeSet<AnnotationId>,
         submit: bool,
+        draft: Option<labello_client::SaveWorkflowDraftRequest>,
     },
     ReleaseAssignment {
         request: RequestIdentity,
@@ -768,6 +787,9 @@ impl UiCommand {
             | Self::Stats { request, .. }
             | Self::AssignmentAvailability { request, .. }
             | Self::SaveKeybindings { request, .. }
+            | Self::WorkflowHistory { request, .. }
+            | Self::ReopenWorkItem { request, .. }
+            | Self::LeaveWorkflow { request, .. }
             | Self::ClaimAssignment { request, .. }
             | Self::PrefetchAssignment { request, .. }
             | Self::RevalidatePreparedReview { request, .. }
@@ -1003,6 +1025,10 @@ impl UiMessage {
                 .as_ref()
                 .err()
                 .is_some_and(|error| error.unauthorized),
+            Self::WorkflowHistoryLoaded { result, .. } => result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error.unauthorized),
             Self::AssignmentAvailabilityLoaded { result, .. } => result
                 .as_ref()
                 .as_ref()
@@ -1067,6 +1093,7 @@ impl UiMessage {
             | Self::OverviewLoaded { request, .. }
             | Self::PreferencesLoaded { request, .. }
             | Self::StatsLoaded { request, .. }
+            | Self::WorkflowHistoryLoaded { request, .. }
             | Self::AssignmentAvailabilityLoaded { request, .. }
             | Self::KeybindingsSaved { request, .. }
             | Self::MigrationFinished { request, .. }

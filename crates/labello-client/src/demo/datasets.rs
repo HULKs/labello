@@ -70,6 +70,7 @@ impl DatasetApi for DemoLabelloApi {
             metadata.role_assignments = request.role_assignments;
             metadata.imbalance = request.imbalance;
             metadata.preload_queue_size = request.preload_queue_size;
+            metadata.workflow_queue = request.workflow_queue;
             metadata.bounding_box_visibility = request.bounding_box_visibility;
             metadata.prelabel_configs = request.prelabel_configs;
             metadata.updated_at = labello_domain::now();

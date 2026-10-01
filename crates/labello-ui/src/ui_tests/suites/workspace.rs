@@ -134,15 +134,15 @@ fn workers_select_class_specific_workflows() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
 
-    assert!(harness.query_all_by_label("Person boxes").next().is_some());
+    assert!(harness.query_all_by_label("Person: Bounding box annotation · Person boxes · Overview").next().is_some());
     assert!(harness.query_by_label("Current").is_none());
-    assert!(harness.query_all_by_label("Vehicle boxes").next().is_some());
-    click(&mut harness, "Vehicle boxes");
+    assert!(harness.query_all_by_label("Vehicle: Bounding box annotation · Vehicle boxes · Annotate").next().is_some());
+    click(&mut harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate");
     assert!(harness.query_by_label("Release and switch").is_none());
     step_until(&mut harness, 12, |app| {
         app.selected_class_id() == Some(&ClassId::from("vehicle")) && app.work.current.is_some()
     });
-    assert!(harness.query_all_by_label("Vehicle boxes").next().is_some());
+    assert!(harness.query_all_by_label("Vehicle: Bounding box annotation · Vehicle boxes · Annotate").next().is_some());
 
     assert_eq!(
         harness
@@ -170,7 +170,7 @@ fn workers_select_class_specific_workflows() {
 }
 
 #[test]
-fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
+fn workflow_selector_divides_each_class_into_equal_activity_columns() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     let mut skeleton = harness.state().work.tasks[0].clone();
@@ -190,32 +190,32 @@ fn workflow_selector_uses_equal_compact_cards_and_type_icons() {
     harness.step();
 
     let bounding_box = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview")
         .rect();
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate")
         .rect();
     let skeleton = harness
         .get_by_role_and_label(
             egui::accesskit::Role::Button,
-            "Person skeleton with a deliberately long workflow name",
+            "Person: Skeleton annotation · Person skeleton with a deliberately long workflow name · Overview",
         )
         .rect();
-    assert_eq!(bounding_box.width(), vehicle.width());
+    assert!((skeleton.right() - vehicle.right()).abs() < 2.0, "{bounding_box:?} {skeleton:?} {vehicle:?}");
     assert_eq!(bounding_box.width(), skeleton.width());
     assert_eq!(bounding_box.height(), vehicle.height());
     assert_eq!(bounding_box.height(), skeleton.height());
     assert!(
-        bounding_box.width() > LayoutMode::TASK_PANEL_WIDTH,
-        "the longest workflow pill should expand the workflow panel: {bounding_box:?}"
+        bounding_box.width() <= 360.0,
+        "long task names must not expand the panel: {bounding_box:?}"
     );
-    assert!(bounding_box.height() <= 52.0);
+    assert!(bounding_box.height() <= 94.0);
     assert!(
-        skeleton.top() - bounding_box.bottom() <= 8.0,
+        skeleton.left() > bounding_box.right() && skeleton.top() == bounding_box.top(),
         "bounding_box={bounding_box:?} skeleton={skeleton:?}"
     );
     assert!(
-        vehicle.top() - skeleton.bottom() <= 8.0,
+        vehicle.top() > skeleton.bottom(),
         "skeleton={skeleton:?} vehicle={vehicle:?}"
     );
     assert!(
@@ -251,7 +251,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     assert_eq!(collapse.bottom(), fit.bottom());
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview")
             .is_some()
     );
     let expanded_inspector_id = harness
@@ -284,7 +284,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     );
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview")
             .is_none()
     );
     assert!(
@@ -325,7 +325,7 @@ fn wide_workflow_panel_keeps_its_toggle_at_left_edge() {
     assert!(!harness.state().work.workflow_panel_collapsed);
     assert!(
         harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview")
             .is_some()
     );
     assert_eq!(
@@ -349,7 +349,7 @@ fn workflow_availability_disables_cards_skips_keyboard_cycles_and_retries_failur
         .unwrap();
     assert!(vehicle.accesskit_node().is_disabled());
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes");
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate");
     assert_eq!(
         vehicle.accesskit_node().description(),
         Some("No assignments available".to_string())
@@ -517,6 +517,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -542,12 +543,8 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
         app.work.selected_task_id.as_ref(),
         Some(&TaskId::from("bounding_box:vehicle"))
     );
-    assert!(
-        app.runtime.commands.is_empty(),
-        "fallback must be acknowledged before claim"
-    );
-    assert!(!app.loading.image);
-    acknowledge_presented_workflow_change(&mut app);
+    assert!(app.loading.image);
+    assert!(app.runtime.notice.as_deref().is_some_and(|notice| notice.contains("Workflow changed")));
     let UiCommand::ClaimAssignment { task_id, .. } = app.runtime.commands.pop_back().unwrap()
     else {
         panic!("expected assignment claim after availability");
@@ -558,8 +555,7 @@ fn assignment_load_waits_for_availability_and_selects_the_next_available_workflo
         AppView::Review,
     ));
 
-    assert!(app.runtime.commands.is_empty());
-    acknowledge_presented_workflow_change(&mut app);
+    assert!(app.loading.image);
     assert!(app.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment {
@@ -579,7 +575,6 @@ fn fresh_cached_availability_survives_reload_without_another_check() {
     let api = Rc::new(SpyApi::new());
     api.set_workflow_availability("bounding_box:person", false);
     let mut harness = workflow_change_harness(api.clone(), AppView::Annotate);
-    click(&mut harness, "Acknowledge and continue");
     step_until(&mut harness, 12, |app| app.work.current.is_some());
     step_until(&mut harness, 8, |app| {
         app.runtime
@@ -631,8 +626,7 @@ fn fresh_cached_availability_survives_reload_without_another_check() {
             .iter()
             .all(|command| !matches!(command, UiCommand::AssignmentAvailability { .. }))
     );
-    assert!(!reloaded.loading.image);
-    acknowledge_presented_workflow_change(&mut reloaded);
+    assert!(reloaded.loading.image);
     assert!(reloaded.runtime.commands.iter().any(|command| matches!(
         command,
         UiCommand::ClaimAssignment { task_id, .. }
@@ -784,7 +778,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
         .map(|task| (task.task_id.clone(), true))
         .collect();
     let preference = WorkspacePreference {
-        prelabel_choices: Default::default(),
+        workflow_variant: Default::default(),
         version: 2,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Annotate,
@@ -804,6 +798,7 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
             pan_y: 0.0,
         },
         availability: Some(StoredAssignmentAvailability {
+            workflows: Vec::new(),
                 reasons: Default::default(),
             kind: AssignmentKind::Annotation,
             tasks,
@@ -814,8 +809,9 @@ fn expired_or_wrong_scope_cached_availability_requires_a_new_check() {
     for stale in [
         preference.clone(),
         WorkspacePreference {
-        prelabel_choices: Default::default(),
+        workflow_variant: Default::default(),
             availability: Some(StoredAssignmentAvailability {
+            workflows: Vec::new(),
                 reasons: Default::default(),
                 kind: AssignmentKind::Review,
                 checked_at: labello_domain::now(),
@@ -878,6 +874,7 @@ fn failed_or_empty_availability_never_starts_an_assignment_load() {
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -1003,10 +1000,10 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
     assert_eq!(harness.state().work.queue.queue_size(), 2);
     assert!(!harness.state().loading.image);
     let selected_workflow =
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2/2".to_string())
+        None
     );
     assert!(
         harness.query_by_label("2/2").is_none(),
@@ -1016,9 +1013,9 @@ fn annotation_prefetch_fills_two_without_blocking_the_current_image() {
     harness.run_steps(3);
     assert!(
         harness
-            .query_by_label_contains("Loaded assignment queue: 2/2")
-            .is_some(),
-        "the selected workflow tooltip should expose the assignment queue"
+            .query_by_label_contains("Loaded assignment queue:")
+            .is_none(),
+        "selection buttons should not describe internal prefetch state"
     );
     assert!(harness.query_by_label("Assignment").is_none());
     let exclusions = api.exclusions();
@@ -1036,10 +1033,10 @@ fn review_prefetch_fills_two_and_promotes_the_next_loaded_assignment() {
 
     assert_eq!(api.counts().prelabel_suggestions, 0);
     let selected_workflow =
-        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes");
+        harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box review · Person boxes · Overview");
     assert_eq!(
         selected_workflow.accesskit_node().description(),
-        Some("Loaded assignment queue: 2/2".to_string())
+        None
     );
     let next = harness.state().work.queue.prepared_image_ids()[0].clone();
     let mut refreshed_state = ImageState::new(next.clone());
@@ -1470,7 +1467,7 @@ fn explicit_dataset_transition_suppresses_workspace_restoration() {
     app.config.dataset_id = DatasetId::from("new-dataset");
     app.datasets.requested_view = Some(AppView::Admin);
     app.runtime.persistence.preference = Some(WorkspacePreference {
-        prelabel_choices: Default::default(),
+        workflow_variant: Default::default(),
         version: 1,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Annotate,
@@ -1741,16 +1738,16 @@ fn previous_assignment_reopens_the_exact_skipped_image_from_compact_actions() {
             .is_some_and(|assignment| assignment.image_id != original.image_id)
             && app.work.previous_assignment.is_some()
     });
-    assert!(harness.query_by_label("Previous image").is_some());
+    assert!(harness.query_by_label("Previous").is_some());
 
     harness.set_size(egui::vec2(320.0, 568.0));
     harness.step();
     assert!(
         harness
-            .query_by_label_contains("Previous image")
+            .query_by_role_and_label(egui::accesskit::Role::Button, "Previous")
             .is_some()
     );
-    click_accesskit_button(&mut harness, "Previous image");
+    click_accesskit_button(&mut harness, "Previous");
     step_until(&mut harness, 20, |app| {
         app.work.assignment
             .as_ref()
@@ -1782,7 +1779,7 @@ fn previous_assignment_reopens_the_exact_submitted_image() {
             .is_some_and(|assignment| assignment.image_id != original.image_id)
             && app.work.previous_assignment.is_some()
     });
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     step_until(&mut harness, 20, |app| {
         app.work.assignment
             .as_ref()
@@ -1858,7 +1855,8 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
         Some(&skipped)
     );
     assert!(api.exclusions().last().unwrap().contains(&skipped));
-    assert_eq!(harness.state().workflow_queue_status().as_deref(), Some("Loaded assignment queue: 1/2 (refill failed; retrying)"));
+    assert_eq!(harness.state().work.queue.len(), 1);
+    assert!(harness.state().work.queue.failed());
 }
 
 #[test]
@@ -1967,7 +1965,7 @@ fn restored_adjudication_workspace_is_rejected_with_the_operational_message() {
         total_images: 1,
     }];
     app.runtime.persistence.preference = Some(WorkspacePreference {
-        prelabel_choices: Default::default(),
+        workflow_variant: Default::default(),
         version: 2,
         dataset_id: DatasetId::from("demo"),
         view: StoredView::Adjudicate,
@@ -2230,7 +2228,7 @@ fn dirty_workflow_changes_save_before_loading_the_new_assignment() {
 
     click(&mut harness, "Confirm & next");
     assert_eq!(harness.state().work.save_status, SaveStatus::Dirty);
-    click(&mut harness, "Vehicle boxes");
+    click(&mut harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate");
     assert!(
         harness
             .query_by_label("Switch active assignment?")
@@ -2729,7 +2727,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
         harness.step();
         harness.step();
         let canvas = harness.get_by_label("Annotation canvas").rect();
-        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous image");
+        let previous = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Previous");
         assert!(canvas.height() >= 60.0, "previous canvas at {width}x{height}: {canvas:?}, previous {:?}, accept {:?}, reject {:?}", previous.rect(), harness.query_by_label("Approve").map(|node| node.rect()), harness.query_by_label("Reject").map(|node| node.rect()));
         assert!(previous.rect().top() >= canvas.bottom() && previous.rect().bottom() <= height,
             "Previous must remain in the footer at {width}x{height}: {:?}", previous.rect());
@@ -2740,7 +2738,7 @@ fn previous_review_control_and_shortcut_preserve_the_current_correction_on_cance
     edit_test_review_box(harness.state_mut());
     harness.run_steps(4);
     let draft = harness.state().work.correction_draft.clone().unwrap();
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Cancel");
     assert_eq!(harness.state().work.correction_draft.as_ref().unwrap().correction_id, draft.correction_id);
@@ -2774,7 +2772,7 @@ fn previous_review_button_reopens_before_releasing_the_current_assignment() {
     let assignment_actions_before = api.assignment_actions().len();
     let previous_assignment_id = harness.state().work.previous_assignment.as_ref().unwrap().assignment_id.clone();
 
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     let assignment_actions = api.assignment_actions();
     let assignment_actions = &assignment_actions[assignment_actions_before..];
     assert_eq!(assignment_actions.first(), Some(&"reopen"));
@@ -2841,7 +2839,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     assert!(
         !scheduled.borrow().is_empty(),
         "Previous should have a delayed request"
@@ -2865,7 +2863,7 @@ fn delayed_previous_review_keeps_canvas_busy_state_and_replaces_on_success() {
         current_texture
     );
     assert!(harness.get_by_role_and_label(
-        egui::accesskit::Role::Button, "Previous image"
+        egui::accesskit::Role::Button, "Previous"
     ).accesskit_node().is_disabled());
     for label in ["Approve", "Submit correction"] {
         let action = harness.query_by_role_and_label(egui::accesskit::Role::Button, label);
@@ -3002,7 +3000,7 @@ fn delayed_confirmed_previous_review_hides_modal_and_keeps_canvas() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     assert!(
         harness
             .query_by_label("Discard reviewer correction?")
@@ -3106,7 +3104,7 @@ fn delayed_previous_review_failure_preserves_current_canvas() {
     harness
         .state_mut()
         .set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     harness.step();
     assert!(harness.state().loading.image);
     assert_eq!(
@@ -3182,7 +3180,7 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
     let released_before_previous = api.counts().release_assignment;
     api.fail_next_preview();
 
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     click(&mut harness, "Release and switch");
     step_until(&mut harness, 12, |app| !app.loading.saving && !app.loading.image);
@@ -3217,7 +3215,7 @@ fn failed_untouched_previous_request_renders_error_with_current_assignment() {
     });
     api.state.borrow_mut().reopenable_assignments.clear();
 
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     step_until(&mut harness, 12, |app| {
         !app.loading.image
             && app.runtime.error.as_deref().is_some_and(|error| {
@@ -3595,122 +3593,6 @@ fn untouched_assignment_navigation_releases_without_confirmation_and_preserves_f
 }
 
 #[test]
-fn acknowledged_workflow_change_does_not_return_after_assignment_and_queue_load() {
-    let api = Rc::new(SpyApi::new());
-    let mut harness = workflow_change_harness(api, AppView::Annotate);
-    click(&mut harness, "Acknowledge and continue");
-    step_until(&mut harness, 20, |app| {
-        app.work.current.is_some() && !app.work.queue.is_loading()
-    });
-    assert!(harness.state().work.automatic_workflow_change.is_none());
-    assert!(
-        harness
-            .query_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed")
-            .is_none()
-    );
-    assert!(
-        harness
-            .query_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
-            .is_some()
-    );
-}
-
-fn acknowledge_presented_workflow_change(app: &mut LabelloApp) {
-    let ctx = egui::Context::default();
-    for _ in 0..3 {
-        let _ = ctx.run_ui(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(1500.0, 780.0),
-                )),
-                ..Default::default()
-            },
-            |ui| {
-                app.central(ui, LayoutMode::Wide);
-                app.overlays(ui.ctx(), LayoutMode::Wide);
-            },
-        );
-    }
-    app.acknowledge_workflow_change();
-}
-
-#[test]
-fn short_review_fallback_waits_for_keyboard_acknowledgment_and_claims_once() {
-    let api = Rc::new(SpyApi::new());
-    let mut app = base_live_app(api.clone());
-    app.sync_work_config(api.metadata());
-    app.view = AppView::Review;
-    app.request_next_image();
-    let UiCommand::AssignmentAvailability { request, .. } =
-        app.runtime.commands.pop_back().unwrap()
-    else {
-        panic!("expected review availability before assignment claim");
-    };
-    app.runtime
-        .tx
-        .send(UiMessage::AssignmentAvailabilityLoaded {
-            checked_assignments: Vec::new(),
-            request,
-            result: Ok(labello_client::AssignmentAvailability {
-                queue: None,
-                reasons: Default::default(),
-                kind: AssignmentKind::Review,
-                tasks: BTreeMap::from([
-                    (TaskId::from("bounding_box:person"), false),
-                    (TaskId::from("bounding_box:vehicle"), true),
-                ]),
-                related: Vec::new(),
-            }),
-        })
-        .unwrap();
-    app.process_messages(&egui::Context::default());
-    assert!(app.runtime.commands.is_empty());
-    let mut harness = Harness::builder()
-        .with_size(egui::vec2(320.0, 320.0))
-        .build_ui_state(
-            |ui, app: &mut LabelloApp| {
-                app.central(ui, LayoutMode::Compact);
-                app.overlays(ui.ctx(), LayoutMode::Compact);
-            },
-            app,
-        );
-    harness.run_steps(4);
-    assert!(
-        harness
-            .query_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed")
-            .is_some()
-    );
-    assert_eq!(
-        harness
-            .state()
-            .runtime
-            .commands
-            .iter()
-            .filter(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
-            .count(),
-        0
-    );
-    harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
-        .focus();
-    harness.run_steps(4);
-    assert_control_inside(
-        &harness,
-        "Acknowledge and continue",
-        egui::accesskit::Role::Button,
-        320.0,
-        320.0,
-    );
-    harness.key_press(egui::Key::Enter);
-    harness.run_steps(4);
-    assert!(harness.state().work.automatic_workflow_change.is_none());
-    assert_eq!(harness.state().runtime.commands.iter().filter(|command| matches!(command,
-        UiCommand::ClaimAssignment { task_id, .. } if *task_id == TaskId::from("bounding_box:vehicle")
-    )).count(), 1);
-}
-
-#[test]
 fn saved_annotation_work_still_requires_navigation_confirmation() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_prelabel_work_harness(api);
@@ -3863,7 +3745,7 @@ fn review_correction_draft_counts_as_work_for_normal_and_previous_navigation() {
     previous.status = AssignmentStatus::Cancelled;
     harness.state_mut().work.previous_assignment = Some(previous);
     harness.step();
-    click(&mut harness, "Previous image");
+    click(&mut harness, "Previous");
     assert!(harness.query_by_label("Discard reviewer correction?").is_some());
     assert!(matches!(
         harness.state().work.pending_transition,
@@ -3925,63 +3807,6 @@ fn missing_object_history_is_read_only_navigable_and_separate_from_current_revie
 }
 
 #[test]
-fn automatic_workflow_change_scope_and_committed_selection_are_explicit() {
-    let api = Rc::new(SpyApi::new());
-    api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = workflow_change_harness(api, AppView::Annotate);
-    let app = harness.state_mut();
-    assert!(app.work.automatic_workflow_change.is_some());
-    assert!(!app.select_workflow(&TaskId::from("unknown")));
-    assert!(!app.select_workflow(&TaskId::from("bounding_box:vehicle")));
-    assert!(app.work.automatic_workflow_change.is_some());
-    app.clear_current_image();
-    assert!(
-        app.work.automatic_workflow_change.is_some(),
-        "image cleanup does not dismiss workflow feedback"
-    );
-    app.request_next_image();
-    assert!(
-        app.work.automatic_workflow_change.is_some(),
-        "retry does not dismiss workflow feedback"
-    );
-    let retained = app.work.automatic_workflow_change.clone().unwrap();
-    app.select_workflow(&TaskId::from("bounding_box:person"));
-    assert!(app.work.automatic_workflow_change.is_none());
-    app.work.automatic_workflow_change = Some(retained.clone());
-    app.begin_auth_epoch();
-    assert!(app.work.automatic_workflow_change.is_none());
-    app.work.automatic_workflow_change = Some(retained.clone());
-    app.config.dataset_id = DatasetId::from("another");
-    app.clear_workflow_change_outside_scope();
-    assert!(app.work.automatic_workflow_change.is_none());
-    app.config.dataset_id = retained.dataset_id.clone();
-    app.work.automatic_workflow_change = Some(retained);
-    app.execute_transition(crate::app::PendingTransition::View(AppView::Setup));
-    assert!(app.work.automatic_workflow_change.is_none());
-}
-
-#[test]
-fn later_automatic_workflow_change_replaces_the_actual_previous_identity() {
-    let api = Rc::new(SpyApi::new());
-    api.set_workflow_availability("bounding_box:person", false);
-    let mut harness = workflow_change_harness(api, AppView::Annotate);
-    click(&mut harness, "Acknowledge and continue");
-    step_until(&mut harness, 12, |app| app.work.current.is_some());
-    let app = harness.state_mut();
-    app.clear_current_image();
-    app.work.availability.tasks = BTreeMap::from([
-        (TaskId::from("bounding_box:person"), true),
-        (TaskId::from("bounding_box:vehicle"), false),
-    ]);
-    app.request_next_image();
-    let notice = app.work.automatic_workflow_change.as_ref().unwrap();
-    assert_eq!(notice.previous, "Vehicle boxes (Vehicle) · Bounding box");
-    assert_eq!(notice.current, "Person boxes (Person) · Bounding box");
-    assert!(notice.focus_pending);
-    assert!(!app.loading.image);
-}
-
-#[test]
 fn stale_availability_cannot_create_a_workflow_change_notice() {
     let api = Rc::new(SpyApi::new());
     let mut app = base_live_app(api.clone());
@@ -4000,6 +3825,7 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -4012,7 +3838,6 @@ fn stale_availability_cannot_create_a_workflow_change_notice() {
         })
         .unwrap();
     app.process_messages(&egui::Context::default());
-    assert!(app.work.automatic_workflow_change.is_none());
     assert_eq!(
         app.work.selected_task_id,
         Some(TaskId::from("bounding_box:person"))
@@ -4051,10 +3876,10 @@ fn workflow_dot_marks_only_the_committed_selection() {
     harness.set_size(egui::vec2(1500.0, 780.0));
     harness.run();
     let person = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Person boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Person boxes · Overview")
         .rect();
     let vehicle = harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate")
         .rect();
     assert_eq!(workflow_dot_centers(&harness, person).len(), 1);
     assert!(workflow_dot_centers(&harness, vehicle).is_empty());
@@ -4083,24 +3908,24 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
     let mut harness = loaded_prelabel_work_harness(Rc::new(SpyApi::new()));
     click(&mut harness, "Confirm & next");
     harness.run();
-    let before = assert_workflow_dot(&harness, "Person boxes", true);
+    let before = assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", true);
     harness
         .state_mut()
         .request_transition(crate::app::PendingTransition::Workflow(TaskId::from(
             "bounding_box:vehicle",
         )));
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
     harness.state_mut().cancel_pending_transition();
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", true);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate")
         .focus();
     harness.step();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
     harness
         .state_mut()
         .execute_transition(crate::app::PendingTransition::Workflow(TaskId::from(
@@ -4108,17 +3933,17 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
         )));
     step_until(&mut harness, 12, |app| app.work.current.is_some());
     harness.run();
-    let after = assert_workflow_dot(&harness, "Person boxes", false);
+    let after = assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", false);
     assert_eq!(before, after, "selection does not resize or shift cards");
-    let vehicle = assert_workflow_dot(&harness, "Vehicle boxes", true);
+    let vehicle = assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
     harness.hover_at(vehicle.center());
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
     harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+        .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate")
         .focus();
     harness.step();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
     harness
         .state_mut()
         .work
@@ -4126,17 +3951,17 @@ fn workflow_dot_preserves_selection_through_pending_cancel_and_commit() {
         .tasks
         .insert(TaskId::from("bounding_box:vehicle"), false);
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
     assert!(
         harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle boxes")
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate")
             .accesskit_node()
             .is_disabled()
     );
     harness.state_mut().work.selected_task_id = None;
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", false);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", false);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
 }
 
 #[test]
@@ -4145,12 +3970,11 @@ fn workflow_dot_and_persistent_fallback_notice_share_the_committed_identity() {
     api.set_workflow_availability("bounding_box:person", false);
     let mut harness = workflow_change_harness(api, AppView::Annotate);
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", false);
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
-    assert!(harness.state().work.automatic_workflow_change.is_some());
-    click(&mut harness, "Acknowledge and continue");
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", false);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
+    assert!(harness.state().work.workflow.change_notice.as_deref().is_some_and(|notice| notice.contains("Workflow changed")));
     harness.run();
-    assert_workflow_dot(&harness, "Vehicle boxes", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", true);
 }
 
 #[test]
@@ -4180,14 +4004,15 @@ fn workflow_dot_uses_the_same_decorative_slot_in_panel_and_drawer() {
             None
         };
         harness.run();
-        let selected = assert_workflow_dot(&harness, long, true);
-        let other = assert_workflow_dot(&harness, "Vehicle boxes", false);
+        let selected = assert_workflow_dot(&harness, &format!("Person: Bounding box annotation · {long} · Overview"), true);
+        let other = assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
         let dot = workflow_dot_centers(&harness, selected)[0];
         assert!(dot.x - 4.0 >= selected.left() && dot.x + 4.0 <= selected.right());
-        assert_eq!(selected.width(), other.width());
+        assert_eq!(selected.height(), other.height());
+        assert!((selected.right() - other.right()).abs() <= 1.0);
         assert!(selected.left() >= 0.0 && selected.right() <= width);
         let buttons = harness
-            .query_all_by_label(long)
+            .query_all_by_label(&format!("Person: Bounding box annotation · {long} · Overview"))
             .filter(|node| node.accesskit_node().role() == egui::accesskit::Role::Button)
             .count();
         assert_eq!(
@@ -4210,6 +4035,7 @@ fn workflow_dot_ignores_stale_availability() {
             checked_assignments: Vec::new(),
             request: stale,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -4222,9 +4048,8 @@ fn workflow_dot_ignores_stale_availability() {
         })
         .unwrap();
     harness.run();
-    assert_workflow_dot(&harness, "Person boxes", true);
-    assert_workflow_dot(&harness, "Vehicle boxes", false);
-    assert!(harness.state().work.automatic_workflow_change.is_none());
+    assert_workflow_dot(&harness, "Person: Bounding box annotation · Person boxes · Overview", true);
+    assert_workflow_dot(&harness, "Vehicle: Bounding box annotation · Vehicle boxes · Annotate", false);
 }
 
 #[test]
@@ -4431,12 +4256,13 @@ fn workflow_reason_icons_explain_disabled_cards_and_keep_selection_at_all_sizes(
             harness.set_size(egui::vec2(width,height));
             harness.state_mut().work.drawer = (width < 1288.0).then_some(Drawer::Workflow);
             harness.run();
-            let node = harness.get_by_role_and_label(egui::accesskit::Role::Button,long);
+            let accessible = format!("Person: Bounding box annotation · {long} · Overview");
+            let node = harness.get_by_role_and_label(egui::accesskit::Role::Button,&accessible);
             assert!(node.accesskit_node().is_disabled());
             assert!(node.accesskit_node().description().unwrap().starts_with(label));
-            let rect = assert_workflow_dot(&harness,long,true);
+            let rect = assert_workflow_dot(&harness,&format!("Person: Bounding box annotation · {long} · Overview"),true);
             assert!(rect.left() >= 0.0 && rect.right() <= width);
-            assert_workflow_dot(&harness,"Vehicle boxes",false);
+            assert_workflow_dot(&harness,"Vehicle: Bounding box annotation · Vehicle boxes · Annotate",false);
         }
     }
 }
@@ -4453,9 +4279,9 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     app.loading.saving = true;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Saving changes");
     app.loading.saving = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Loading image");
     app.loading.image = false;
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Finish or cancel the current transition");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Workflow transition pending");
     app.work.pending_transition = None;
     app.work.availability.loading = true;
     assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Other workflows need to catch up");
@@ -4464,11 +4290,11 @@ fn workflow_reason_precedence_and_unknown_availability_preserve_selection_rules(
     assert!(app.workflow_marker_reason(&task).is_none());
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.error = Some("failed".into());
-    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown. You can still try selecting this workflow");
+    assert_eq!(app.workflow_marker_reason(&task).unwrap().label(),"Availability unknown");
     assert_eq!(app.displayed_workflow_availability(&task),None);
     app.work.availability.loading = false;
     harness.run();
-    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button,"Person boxes").accesskit_node().is_disabled());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button,"Person: Bounding box annotation · Person boxes · Overview").accesskit_node().is_disabled());
 }
 
 #[test]
@@ -4489,6 +4315,7 @@ fn workflow_reasons_restore_with_their_cache_and_reject_stale_responses() {
         checked_assignments:Vec::new(),
         request:stale,
         result:Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
             queue:None,
             kind:AssignmentKind::Annotation,tasks:BTreeMap::from([(task.clone(),false)]),
             reasons:BTreeMap::from([(task.clone(),labello_domain::WorkflowUnavailableReason::ReviewDisabled)]),related:Vec::new(),
@@ -4511,114 +4338,27 @@ fn workflow_change_harness(api: Rc<SpyApi>, view: AppView) -> Harness<'static, L
         },
     );
     step_until(&mut harness, 12, |app| {
-        app.work.automatic_workflow_change.is_some()
+        app.work.current.is_some() && app.work.selected_task_id.as_ref() == Some(&TaskId::from("bounding_box:vehicle"))
     });
     harness.run_steps(4);
     harness
 }
 
 #[test]
-fn automatic_workflow_change_requires_acknowledgment_before_claiming() {
+fn automatic_workflow_switch_displays_notice_and_loads_without_acknowledgment() {
     for view in [AppView::Annotate, AppView::Review] {
         let api = Rc::new(SpyApi::new());
         let mut harness = workflow_change_harness(api.clone(), view);
-        assert_eq!(
-            api.counts().assign_next_image,
-            0,
-            "rendering must not claim the new workflow"
-        );
-        assert!(harness.state().work.current.is_none());
-        for key in [
-            egui::Key::Space,
-            egui::Key::Enter,
-            egui::Key::Escape,
-            egui::Key::N,
-        ] {
-            harness.key_press(key);
+        assert!(api.counts().assign_next_image > 0);
+        assert!(harness.state().work.workflow.change_notice.as_deref().is_some_and(|notice| notice.contains("Person boxes (Person)") && notice.contains("Vehicle boxes (Vehicle)")));
+        assert_eq!(harness.state().work.assignment.as_ref().unwrap().task_id, TaskId::from("bounding_box:vehicle"));
+        for size in [egui::vec2(1440.0, 900.0), egui::vec2(360.0, 640.0)] {
+            harness.set_size(size);
             harness.run_steps(3);
-            assert!(harness.state().work.automatic_workflow_change.is_some());
-            assert_eq!(api.counts().assign_next_image, 0);
+            assert!(harness.query_by_label("Acknowledge and continue").is_none());
+            assert!(harness.query_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed").is_none());
+            assert!(harness.query_by_label("Annotation canvas").is_some());
         }
-        harness.state_mut().request_next_image();
-        harness.state_mut().request_assignment_availability();
-        harness.state_mut().runtime.notice = Some("Unrelated update".into());
-        harness.run_steps(3);
-        assert_eq!(api.counts().assign_next_image, 0);
-        click(&mut harness, "Acknowledge and continue");
-        step_until(&mut harness, 12, |app| app.work.current.is_some());
-        assert!(harness.state().work.automatic_workflow_change.is_none());
-        assert_eq!(
-            harness.state().work.selected_task_id,
-            Some(TaskId::from("bounding_box:vehicle"))
-        );
-    }
-}
-
-#[test]
-fn workflow_change_blocks_loaded_annotation_review_and_migration_input() {
-    use crate::inspector_presets::{self, InspectorPreset};
-    for preset in [
-        InspectorPreset::Annotation,
-        InspectorPreset::ReviewCorrection,
-        InspectorPreset::MigrationObject,
-        InspectorPreset::MigrationReview,
-    ] {
-        let mut harness = Harness::builder()
-            .with_size(egui::vec2(1440.0, 1000.0))
-            .build_eframe(|cc| {
-                let mut app = inspector_presets::build(preset, &cc.egui_ctx);
-                app.work.automatic_workflow_change = Some(crate::app::AutomaticWorkflowChange {
-                    previous: "Previous task (Previous class) · Bounding box".into(),
-                    current: app.workflow_identity_label(app.selected_task().unwrap()),
-                    previous_type: AnnotationType::BoundingBox,
-                    current_type: app.selected_task().unwrap().annotation_type.clone(),
-                    reason: labello_domain::WorkflowUnavailableReason::Unavailable,
-                    dataset_id: app.config.dataset_id.clone(),
-                    view: app.view,
-                    focus_pending: true,
-                });
-                app
-            });
-        let generation = harness.state().work.edit_generation;
-        let annotations = harness.state().work.annotations.clone();
-        let cursor = harness.state().work.migration.cursor.clone();
-        for key in [
-            egui::Key::Space,
-            egui::Key::Enter,
-            egui::Key::Delete,
-            egui::Key::Escape,
-        ] {
-            harness.key_press(key);
-            harness.run_steps(3);
-        }
-        // Direct action dispatch and the first-frame shell guard both honor the pending decision.
-        harness
-            .state_mut()
-            .trigger_user_action(labello_domain::UserAction::NextImage);
-        let canvas = harness.get_by_label("Annotation canvas").rect();
-        let point = canvas.left_top() + egui::vec2(12.0, 12.0);
-        harness.event(egui::Event::PointerMoved(point));
-        for pressed in [true, false] {
-            harness.event(egui::Event::PointerButton {
-                pos: point,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            });
-            harness.run_steps(2);
-        }
-        assert!(
-            harness.state().work.automatic_workflow_change.is_some(),
-            "{preset:?}"
-        );
-        assert_eq!(
-            harness.state().work.edit_generation,
-            generation,
-            "{preset:?}"
-        );
-        assert_eq!(harness.state().work.annotations, annotations, "{preset:?}");
-        assert_eq!(harness.state().work.migration.cursor, cursor, "{preset:?}");
-        assert!(harness.state().work.pending_transition.is_none());
     }
 }
 
@@ -4637,6 +4377,7 @@ fn automatic_workflow_change_explains_the_captured_availability_reason() {
         ] {
             let app = harness.state_mut();
             let previous = TaskId::from("bounding_box:person");
+            app.clear_current_image();
             app.select_workflow(&previous);
             app.work.availability.reasons.clear();
             if let Some(reason) = reason {
@@ -4646,9 +4387,10 @@ fn automatic_workflow_change_explains_the_captured_availability_reason() {
             // Later refreshes must not rewrite why this particular switch happened.
             app.work.availability.reasons.insert(previous, R::ReviewDisabled);
             harness.run();
-            harness.get_by_label(label);
-            harness.get_by_label("Person boxes (Person) · Bounding box");
-            harness.get_by_label("Vehicle boxes (Vehicle) · Bounding box");
+            let notice = harness.state().work.workflow.change_notice.as_deref().unwrap();
+            assert!(notice.contains(label));
+            assert!(notice.contains("Person boxes (Person) · Bounding box"));
+            assert!(notice.contains("Vehicle boxes (Vehicle) · Bounding box"));
         }
     }
 }
@@ -4659,6 +4401,7 @@ fn automatic_workflow_change_distinguishes_same_names_and_retains_types() {
         let mut harness = workflow_change_harness(Rc::new(SpyApi::new()), view);
         let app = harness.state_mut();
         let previous = TaskId::from("bounding_box:person");
+        app.clear_current_image();
         app.select_workflow(&previous);
         let class = app.selected_task().unwrap().class_ids.clone();
         for task in &mut app.work.tasks {
@@ -4675,18 +4418,29 @@ fn automatic_workflow_change_distinguishes_same_names_and_retains_types() {
             }
         }
         app.request_next_image();
-        let notice = app.work.automatic_workflow_change.as_ref().unwrap();
-        assert_eq!(notice.previous_type, AnnotationType::BoundingBox);
-        assert_eq!(notice.current_type, AnnotationType::Skeleton);
+        let notice = app.work.workflow.change_notice.clone().unwrap();
+        assert!(notice.contains("Person (Person) · Bounding box"));
+        assert!(notice.contains("Person (Person) · Skeleton"));
         // Metadata refresh must not rename or change the icons of a pending transition.
         for task in &mut app.work.tasks {
             task.name = "Renamed".into();
             task.annotation_type = AnnotationType::BoundingBox;
         }
         harness.run();
-        harness.get_by_label("Person (Person) · Bounding box");
-        harness.get_by_label("Person (Person) · Skeleton");
-        assert!(harness.query_all_by_label("bounding box annotation type").next().is_some());
-        harness.get_by_label("skeleton annotation type");
+        assert_eq!(harness.state().work.workflow.change_notice.as_deref(), Some(notice.as_str()));
     }
+}
+
+#[test]
+fn annotation_workflows_omit_unconfigured_activities() {
+    let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
+    harness.run();
+    let heading = harness.get_by_role_and_label(egui::accesskit::Role::Heading, "Person");
+    let boxes = harness.get_by_role_and_label(
+        egui::accesskit::Role::Button,
+        "Person: Bounding box annotation · Person boxes · Overview",
+    );
+    assert!(heading.rect().bottom() < boxes.rect().top());
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Migration").is_none());
+    assert!(harness.query_by_role_and_label(egui::accesskit::Role::Button, "Person: Add missing objects").is_none());
 }

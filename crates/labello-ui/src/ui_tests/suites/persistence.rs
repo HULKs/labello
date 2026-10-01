@@ -200,6 +200,7 @@ fn assignment_availability_poll_is_scheduled_from_completion() {
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -239,7 +240,7 @@ fn assignment_availability_mutations_invalidate_current_and_persisted_state() {
     app.work.availability.checked_at = Some(labello_domain::now());
     app.work.availability.load_after_resolution = true;
     app.runtime.persistence.preference = Some(WorkspacePreference {
-                    prelabel_choices: Default::default(),
+                    workflow_variant: Default::default(),
         version: 2,
         dataset_id: app.config.dataset_id.clone(),
         view: StoredView::Annotate,
@@ -259,6 +260,7 @@ fn assignment_availability_mutations_invalidate_current_and_persisted_state() {
             pan_y: 0.0,
         },
         availability: Some(StoredAssignmentAvailability {
+            workflows: Vec::new(),
                 reasons: Default::default(),
             kind: AssignmentKind::Annotation,
             tasks: app.work.availability.tasks.clone(),
@@ -508,6 +510,7 @@ fn deliver_assignment_availability(
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -550,6 +553,7 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -578,6 +582,7 @@ fn stale_availability_is_discarded_after_refresh_and_dataset_switch() {
             checked_assignments: Vec::new(),
             request,
             result: Ok(labello_client::AssignmentAvailability {
+                workflows: Vec::new(),
                 queue: None,
                 reasons: Default::default(),
                 kind: AssignmentKind::Annotation,
@@ -1244,14 +1249,16 @@ fn overlapping_claims_remain_saveable_in_both_response_orders() {
             app.start_workflow_command(
                 api.clone(),
                 UiCommand::ClaimAssignment {
+                    variant: Default::default(),
+                    excluded_items: Vec::new(),
                     request,
                     operation_id,
                     dataset_id: DatasetId::from("demo"),
                     task_id: original.task_id.clone(),
-                    prelabel_config_ids: Vec::new(),
+
                     kind: AssignmentKind::Annotation,
                     reclaim_assignment_id: Some(original.assignment_id.clone()),
-                    excluded_image_ids: Vec::new(),
+
                 },
             );
         };
@@ -1368,14 +1375,16 @@ fn new_claim_waits_for_unused_reservation_release() {
     app.start_workflow_command(
         api.clone(),
         UiCommand::ClaimAssignment {
+            variant: Default::default(),
+            excluded_items: Vec::new(),
             request,
             operation_id,
             dataset_id: DatasetId::from("demo"),
             task_id: unused.task_id.clone(),
-            prelabel_config_ids: Vec::new(),
+
             kind: AssignmentKind::Annotation,
             reclaim_assignment_id: None,
-            excluded_image_ids: Vec::new(),
+
         },
     );
     assert_eq!(
@@ -2241,9 +2250,9 @@ fn shortcut_button_names_find_primary_action_and_previous_image() {
         harness.step();
         assert!(harness.query_by_label_contains("Record shortcut for Confirm / submit:").is_some(), "{name}");
     }
-    harness.state_mut().work.shortcut_settings.search = "Previous image".into();
+    harness.state_mut().work.shortcut_settings.search = "Previous".into();
     harness.step();
-    assert!(harness.query_by_label_contains("Record shortcut for Previous image:").is_some());
+    assert!(harness.query_by_label_contains("Record shortcut for Previous:").is_some());
     assert!(harness.query_by_label_contains("Record shortcut for Previous object:").is_none());
 }
 
@@ -2254,7 +2263,7 @@ fn shortcut_rows_keep_text_outside_controls_at_every_viewport() {
     harness.state_mut().open_shortcut_settings();
     for (width, height) in viewport_sizes() {
         harness.set_size(egui::vec2(width, height));
-        for query in ["Next guide", "pan drag", "Undo", "Previous image"] {
+        for query in ["Next guide", "pan drag", "Undo", "Previous"] {
             harness.state_mut().work.shortcut_settings.search = query.into();
             if let Some(draft) = harness.state_mut().work.shortcut_settings.draft.as_mut() {
                 draft.bindings.insert(labello_domain::UserAction::NextImage, labello_domain::KeyChord {
@@ -2265,7 +2274,7 @@ fn shortcut_rows_keep_text_outside_controls_at_every_viewport() {
             harness.step();
             for text in harness.query_all_by_role(Role::Label).filter(|node| {
                 let value = node.accesskit_node().value().unwrap_or_default();
-                ["Confirm / submit", "The primary work button:", "Pan", "Hold the modifier", "Use primary drag", "Undo", "Return to the last", "Previous image"]
+                ["Confirm / submit", "The primary work button:", "Pan", "Hold the modifier", "Use primary drag", "Undo", "Return to the last", "Previous"]
                     .iter().any(|prefix| value.starts_with(prefix))
             }) {
                 let rect = text.rect();
@@ -2297,7 +2306,7 @@ fn shortcut_conflicts_name_the_other_action_and_offer_a_filter() {
     assert_eq!(harness.state().work.shortcut_settings.search, "conflict");
     assert!(harness.query_by_label_contains("Record shortcut for Undo:").is_some());
     assert!(harness.query_by_label_contains("Record shortcut for Redo:").is_some());
-    assert!(harness.query_by_label_contains("Record shortcut for Previous image:").is_none());
+    assert!(harness.query_by_label_contains("Record shortcut for Previous:").is_none());
 }
 
 #[test]

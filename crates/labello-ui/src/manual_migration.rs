@@ -147,6 +147,17 @@ impl ManualMigrationState {
 
 impl LabelloApp {
     pub(crate) fn manual_migration_active(&self) -> bool {
+        if self.workflow_context().is_some_and(|context| {
+            matches!(
+                context.item,
+                labello_domain::WorkflowItem::Object {
+                    object: labello_domain::WorkflowObject::Prelabel { .. }
+                        | labello_domain::WorkflowObject::Annotation { .. }
+                }
+            )
+        }) {
+            return false;
+        }
         let Some(task) = self.selected_task() else {
             return false;
         };
@@ -191,6 +202,30 @@ impl LabelloApp {
             .current_state
             .as_ref()
             .and_then(|state| state.migration_cursor(&task_id, active_pass).ok());
+        let cursor = if let Some(context) = self.workflow_context() {
+            match &context.item {
+                labello_domain::WorkflowItem::Object {
+                    object: labello_domain::WorkflowObject::Migration { object_group_id },
+                } => self
+                    .work
+                    .current_state
+                    .as_ref()
+                    .and_then(|state| state.migration_target_sets.get(&task_id))
+                    .and_then(|set| {
+                        set.targets
+                            .iter()
+                            .find(|target| &target.object_group_id == object_group_id)
+                    })
+                    .map(|target| MigrationCursor::Object {
+                        object_group_id: object_group_id.clone(),
+                        sequence_index: target.sequence_index,
+                    }),
+                labello_domain::WorkflowItem::Overview => cursor,
+                _ => Some(MigrationCursor::FullImage),
+            }
+        } else {
+            cursor
+        };
         if self.work.migration.cursor != cursor {
             self.work.migration.cursor = cursor;
             self.work.migration.inspected_group_id = None;
@@ -237,7 +272,10 @@ impl LabelloApp {
         });
         let discovery_focus = self.current_migration_discovery_focus();
         let overview = self.view == AppView::Annotate
-            && matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage));
+            && (matches!(self.work.migration.cursor, Some(MigrationCursor::FullImage))
+                || self
+                    .workflow_context()
+                    .is_some_and(|context| context.item == labello_domain::WorkflowItem::Overview));
         self.work.canvas.set_review_focus(if overview {
             None
         } else {
@@ -488,57 +526,24 @@ impl LabelloApp {
                 .any(|annotation| &annotation.annotation_id == id)
         });
         self.style_review_correction_previews(&annotations, &mut annotation_styles);
-        // Reserve the same gutter in both phases so the cue never covers image
-        // pixels or changes the canvas transform when the workflow advances.
-        let scan_for_missing = (overview && self.work.migration.inspected_group_id.is_none())
-            || (self.view == AppView::Review && self.review_overview());
-        self.work
-            .canvas
-            .set_scan_phase((scan_for_missing && texture.is_some()).then(|| {
-                egui::Id::new((
-                    "migration-scan",
-                    self.workspace_epoch,
-                    &current.image.image_id,
-                    &self.work.selected_task_id,
-                    self.view == AppView::Review,
-                ))
-            }));
-        let framed = egui::Frame::new().inner_margin(8).show(ui, |ui| {
-            show_canvas_colored(
-                ui,
-                &mut self.work.canvas,
-                texture.as_ref(),
-                &annotations,
-                [current.image.width, current.image.height],
-                false,
-                selected.as_ref(),
-                interaction,
-                &edges,
-                &[],
-                theme::ANNOTATION,
-                &annotation_styles,
-                Some(&selectable_annotations),
-            )
-        });
-        if scan_for_missing && texture.is_some() {
-            let bounds = framed.response.rect;
-            let emphasis = self.work.canvas.scan_emphasis();
-            let color = theme::INFO.lerp_to_gamma(theme::TEXT, emphasis);
-            for (inset, radius, width, color) in
-                [(0.0, 26, 4.0, color), (6.0, 20, 1.0, theme::TEXT)]
-            {
-                ui.painter().rect_stroke(
-                    bounds.shrink(inset),
-                    egui::CornerRadius::same(radius),
-                    egui::Stroke::new(width, color),
-                    egui::StrokeKind::Inside,
-                );
-            }
-        }
+        let action = show_canvas_colored(
+            ui,
+            &mut self.work.canvas,
+            texture.as_ref(),
+            &annotations,
+            [current.image.width, current.image.height],
+            false,
+            selected.as_ref(),
+            interaction,
+            &edges,
+            &[],
+            theme::ANNOTATION,
+            &annotation_styles,
+            Some(&selectable_annotations),
+        );
         if self.workspace_bars_loading() {
             return;
         }
-        let action = framed.inner;
         if self.work.correction_draft.is_some() {
             match action {
                 Some(CanvasAction::PlaceKeypoint(point)) => {
@@ -1355,7 +1360,8 @@ impl LabelloApp {
         }
         let bar = self.displayed_migration_bar();
         let extra_actions = usize::from(bar.adding_missing_object) + usize::from(bar.keypoint_undo);
-        let count = (3 + extra_actions + usize::from(self.bar_has_previous_image())) as f32;
+        let count = (3 + extra_actions + usize::from(self.bar_has_previous_image())
+            - usize::from(self.workflow_context().is_some())) as f32;
         let width = ((ui.available_width() - 44.0 - count * ui.spacing().item_spacing.x) / count)
             .floor()
             .max(44.0);
@@ -1406,7 +1412,7 @@ impl LabelloApp {
                     && !self.loading.image
                     && !self.work.migration.busy
                     && self.work.pending_transition.is_none();
-                if workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
+                if self.workflow_context().is_none() && workspace_toolbar_button(ui, ready && self.can_edit_previous_migration_object(),
                     crate::glossary::PREVIOUS_OBJECT, WorkspaceActionIcon::Previous, width, theme::Intent::Neutral)
                     .on_hover_text("Edit the previous object in this image. Unsaved changes require confirmation. Stops at the first object.").clicked() {
                     self.trigger_user_action(labello_domain::UserAction::SelectPreviousObject);
@@ -1414,9 +1420,9 @@ impl LabelloApp {
                 if self.bar_has_previous_image()
                     && workspace_toolbar_button(
                         ui,
-                        ready && self.runtime.api.is_some(),
-                        crate::glossary::PREVIOUS_IMAGE,
-                        WorkspaceActionIcon::PreviousImage,
+                        ready && self.runtime.api.is_some() && (self.previous_work_item().is_some() || self.workflow_context().is_none()),
+                        crate::glossary::PREVIOUS,
+                        WorkspaceActionIcon::Previous,
                         width,
                         theme::Intent::Neutral,
                     )
@@ -1664,7 +1670,7 @@ impl LabelloApp {
             && ui
                 .add_enabled(
                     ready,
-                    egui::Button::new(crate::glossary::PREVIOUS_IMAGE).shortcut_text(
+                    egui::Button::new(crate::glossary::PREVIOUS).shortcut_text(
                         crate::theme::button_shortcut(
                             self.shortcut_text(ui.ctx(), labello_domain::UserAction::PreviousImage),
                         ),
@@ -2063,6 +2069,23 @@ impl LabelloApp {
     }
 
     pub(crate) fn canonical_migration_review_index(&self) -> usize {
+        if let Some(context) = self.workflow_context() {
+            let targets = self
+                .selected_task()
+                .and_then(|task| {
+                    self.work
+                        .current_state
+                        .as_ref()?
+                        .review_object_targets(task)
+                        .ok()
+                })
+                .unwrap_or_default();
+            return context
+                .review_target
+                .as_ref()
+                .and_then(|target| targets.iter().position(|candidate| candidate == target))
+                .unwrap_or(targets.len());
+        }
         if let Some(position) = self.work.review_corrections.position {
             return position;
         }
@@ -2119,6 +2142,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn can_edit_previous_migration_object(&self) -> bool {
+        if self.workflow_context().is_some() {
+            return false;
+        }
         if self.view != AppView::Annotate
             || self.work.migration.busy
             || self.work.migration.adding_missing_object
@@ -2179,6 +2205,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn inspect_migration_object(&mut self, direction: isize) {
+        if self.workflow_context().is_some() {
+            return;
+        }
         if self.view != AppView::Annotate
             || self.work.migration.busy
             || self.work.migration.adding_missing_object
@@ -2652,6 +2681,17 @@ impl LabelloApp {
                 _ => None,
             }
         });
+        let partial = self.workflow_context().and_then(|context| {
+            let state = self.work.current_state.as_ref()?;
+            let task = self.work.selected_task_id.as_ref()?;
+            if state.workflow_migration_object_complete(task, group_id) {
+                return None;
+            }
+            match &state.workflow_object_draft(task, &context.item)?.geometry {
+                AnnotationGeometry::Skeleton(skeleton) => Some(skeleton.clone()),
+                _ => None,
+            }
+        });
         let names: Vec<String> = self
             .selected_task()
             .and_then(|task| task.skeleton.as_ref())
@@ -2662,12 +2702,24 @@ impl LabelloApp {
                     .collect()
             })
             .unwrap_or_default();
+        let existing = partial.or(existing);
         self.work.migration.keypoint_index = existing
             .as_ref()
             .map(|skeleton| skeleton.keypoints.len())
             .unwrap_or(0);
-        self.work.migration.draft =
-            Some(existing.unwrap_or_else(|| ManualMigrationState::empty_skeleton(names)));
+        let mut geometry = ManualMigrationState::empty_skeleton(names);
+        if let Some(existing) = existing {
+            for keypoint in existing.keypoints {
+                if let Some(target) = geometry
+                    .keypoints
+                    .iter_mut()
+                    .find(|target| target.name == keypoint.name)
+                {
+                    *target = keypoint;
+                }
+            }
+        }
+        self.work.migration.draft = Some(geometry);
         self.work.migration.draft_group = Some(group_id.clone());
         self.work.migration.draft_dirty = false;
     }

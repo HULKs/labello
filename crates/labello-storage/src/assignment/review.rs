@@ -16,6 +16,16 @@ impl DatasetRepository {
         assignment_context: AssignmentContext<'_>,
         review: ReviewRecord,
     ) -> StorageResult<labello_domain::ImageState> {
+        if self
+            .load_image_state(assignment_context.image_id)
+            .await?
+            .workflow_assignments
+            .contains_key(assignment_context.assignment_id)
+        {
+            return self
+                .confirm_workflow_review(user_id, assignment_context, review)
+                .await;
+        }
         self.record_review_submission(user_id, assignment_context, review, None)
             .await
     }
@@ -47,7 +57,9 @@ impl DatasetRepository {
                 "rejection requires a substantive correction submission".into(),
             ));
         }
+        self.ensure_artifact_migration().await?;
         let _config_guard = self.review_config_lock.read().await;
+        let _admission_guard = self.assignment_claim_lock.lock().await;
         let AssignmentContext {
             assignment_id,
             image_id,

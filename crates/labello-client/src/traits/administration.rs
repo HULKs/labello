@@ -40,23 +40,6 @@ pub trait PrelabelApi {
         config: PrelabelConfig,
     ) -> ApiFuture<'a, PrelabelConfig>;
 
-    fn prelabel_suggestions<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, labello_domain::PrelabelResponse>;
-
-    fn retained_prelabels<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        request: crate::PrelabelItemRequest,
-    ) -> ApiFuture<'a, Option<labello_domain::RetainedPrelabels>>;
-
-    fn prelabel_generation<'a>(
-        &'a self,
-        dataset_id: &'a DatasetId,
-        request: PrelabelSuggestionRequest,
-    ) -> ApiFuture<'a, labello_domain::PrelabelGeneration>;
     fn prelabel_admin_state<'a>(
         &'a self,
         dataset_id: &'a DatasetId,

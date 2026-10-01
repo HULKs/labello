@@ -1281,12 +1281,18 @@ async fn assignment_availability_is_batched_authenticated_and_advisory() {
         BTreeSet::from(["review"]),
         "one scan should return the other authorized work-view caches"
     );
-    let competing = claim_assignment(&app, "other_annotator", "annotation").await;
+    let workflow_kinds = stale_available["workflows"]
+        .as_array().unwrap().iter()
+        .map(|entry| entry["selection"]["kind"].as_str().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(workflow_kinds, BTreeSet::from(["annotation", "review"]),
+        "related caches need Objects/Overview availability before changing views");
+    let claim = json!({ "selection": { "taskId": "bounding_box:pixel", "kind": "annotation", "variant": "overview" } });
+    let (status, competing) = import_json_request(&app, "POST", "/datasets/ds/work-items/claim", "other_annotator", None, claim.clone()).await;
+    assert_eq!(status, StatusCode::OK);
     assert!(!competing.is_null());
     assert!(
-        claim_assignment(&app, "admin", "annotation")
-            .await
-            .is_null(),
+        import_json_request(&app, "POST", "/datasets/ds/work-items/claim", "admin", None, claim).await.1.is_null(),
         "the claim response remains authoritative when an earlier availability result is stale"
     );
     let reserved = get_assignment_availability(&app, "admin", "annotation").await;

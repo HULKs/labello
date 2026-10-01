@@ -422,10 +422,11 @@ fn responsive_workspace_has_one_action_set_and_a_usable_canvas() {
             "canvas too short at {width}x{height}: {:?}",
             canvas.rect(),
         );
+        // The class groups reserve a bounded 360-point panel, independent of task-name length.
         let wide_baseline = match (width as u32, height as u32) {
-            (1288, 820) => Some((668.0, 593.0)),
-            (1366, 768) => Some((746.0, 541.0)),
-            (1440, 900) => Some((820.0, 673.0)),
+            (1288, 820) => Some((597.0, 593.0)),
+            (1366, 768) => Some((675.0, 541.0)),
+            (1440, 900) => Some((749.0, 673.0)),
             _ => None,
         };
         if let Some((baseline_width, baseline_height)) = wide_baseline {
@@ -1461,72 +1462,6 @@ fn setup_home_action_preserves_responsive_navigation_and_work_protection() {
 }
 
 #[test]
-fn automatic_workflow_dialog_is_accessible_with_long_names_and_short_viewports() {
-    let mut harness = workflow_change_harness(Rc::new(SpyApi::new()), AppView::Annotate);
-    let mut notice = harness
-        .state()
-        .work
-        .automatic_workflow_change
-        .clone()
-        .unwrap();
-    notice.previous =
-        "Previous task with a deliberately very long name (Previous class with a long name) · Bounding box".into();
-    notice.current =
-        "New task with a deliberately very long name (New class with a long name) · Skeleton".into();
-    notice.current_type = AnnotationType::Skeleton;
-    for font_size in [16.0, 24.0] {
-        harness.ctx.global_style_mut(|style| {
-            for text_style in [egui::TextStyle::Body, egui::TextStyle::Button] {
-                style
-                    .text_styles
-                    .insert(text_style, egui::FontId::proportional(font_size));
-            }
-        });
-        for (width, height) in viewport_sizes().into_iter().chain([(320.0, 320.0)]) {
-            harness.set_size(egui::vec2(width, height));
-            notice.focus_pending = true;
-            harness.state_mut().work.automatic_workflow_change = Some(notice.clone());
-            harness.run();
-            let dialog =
-                harness.get_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed");
-            assert!(dialog.accesskit_node().is_modal());
-            assert!(dialog.rect().left() >= 0.0 && dialog.rect().right() <= width);
-            assert!(dialog.rect().top() >= 0.0 && dialog.rect().bottom() <= height);
-            harness
-                .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
-                .focus();
-            harness.run();
-            assert_control_inside(
-                &harness,
-                "Acknowledge and continue",
-                egui::accesskit::Role::Button,
-                width,
-                height,
-            );
-            let button = harness
-                .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue");
-            assert!(button.rect().height() >= 44.0);
-            let dialog =
-                harness.get_by_role_and_label(egui::accesskit::Role::Dialog, "Workflow changed");
-            assert!(
-                button.rect().bottom() <= dialog.rect().bottom() - 12.0,
-                "action must not be clipped by the dialog"
-            );
-            harness.key_press(egui::Key::Escape);
-            harness.run();
-            assert!(harness.state().work.automatic_workflow_change.is_some());
-        }
-    }
-    harness
-        .get_by_role_and_label(egui::accesskit::Role::Button, "Acknowledge and continue")
-        .focus();
-    harness.run();
-    harness.key_press(egui::Key::Enter);
-    harness.run();
-    assert!(harness.state().work.automatic_workflow_change.is_none());
-}
-
-#[test]
 fn workspace_zoom_widgets_are_removed_in_all_layouts() {
     let mut harness = loaded_work_harness(Rc::new(SpyApi::new()));
     for (width, height) in viewport_sizes().into_iter().chain([(320.0, 320.0)]) {
@@ -1539,4 +1474,32 @@ fn workspace_zoom_widgets_are_removed_in_all_layouts() {
             assert_control_inside(&harness, label, egui::accesskit::Role::Button, width, height);
         }
     }
+}
+
+#[test]
+fn queued_refreshes_do_not_delay_next_work_until_another_frame() {
+    let api = Rc::new(SpyApi::new());
+    api.set_no_assignment(true);
+    let mut app = base_live_app(api.clone());
+    app.setup.started = true;
+    app.view = AppView::Stats;
+    for _ in 0..3 {
+        app.request_stats();
+        app.loading.stats = false;
+    }
+    let task_id = api.metadata().tasks[0].task_id.clone();
+    app.queue_command(UiCommand::ClaimAssignment {
+        request: test_request(&app, 9000, Some("demo")), operation_id: 9000,
+        dataset_id: "demo".into(), task_id, variant: labello_domain::WorkflowVariant::Objects,
+        excluded_items: vec![], kind: AssignmentKind::Annotation, reclaim_assignment_id: None,
+    });
+    app.start_frame_commands();
+    assert_eq!(api.counts().assign_next_image, 1, "next work must start in the same frame as queued refreshes");
+    assert!(app.runtime.commands.is_empty());
+    for _ in 0..12 {
+        app.request_stats();
+        app.loading.stats = false;
+    }
+    app.start_frame_commands();
+    assert_eq!(app.runtime.commands.len(), 4, "dispatch must retain a bounded frame budget");
 }

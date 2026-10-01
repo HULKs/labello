@@ -19,10 +19,10 @@ impl PrelabelService {
                 self.preflight(dataset, &repo, mappings).await?
             }
             PrelabelAdminCommand::Start { run_id } => {
-                self.start(dataset, repo, &run_id, false).await?
+                self.start(dataset, repo.clone(), &run_id, false).await?
             }
             PrelabelAdminCommand::Retry { run_id } => {
-                self.start(dataset, repo, &run_id, true).await?
+                self.start(dataset, repo.clone(), &run_id, true).await?
             }
             PrelabelAdminCommand::Cancel { run_id } => {
                 let mut control = self.lock(dataset).await?;
@@ -38,6 +38,23 @@ impl PrelabelService {
                         | PrelabelRunPhase::Ready
                         | PrelabelRunPhase::Interrupted
                 ) {
+                    if run.managed {
+                        for item in run
+                            .items
+                            .iter_mut()
+                            .filter(|item| item.outcome == PrelabelItemOutcome::Pending)
+                        {
+                            self.publish_managed(
+                                &repo,
+                                item,
+                                WorkflowPreparationStatus::Failed,
+                                vec![],
+                            )
+                            .await?;
+                            item.outcome = PrelabelItemOutcome::Failed;
+                        }
+                        update_counts(run);
+                    }
                     run.summary.phase = PrelabelRunPhase::Cancelled;
                     run.summary.updated_at = now();
                     self.commit(dataset, &mut control, next).await?;
@@ -47,10 +64,14 @@ impl PrelabelService {
                 }
             }
             PrelabelAdminCommand::Reset { scope } => {
-                self.change_scope(dataset, &repo, scope, true).await?
+                self.change_scope(dataset, &repo, scope, true).await?;
+                self.synchronize_workflows(dataset, repo.clone(), true)
+                    .await?;
             }
             PrelabelAdminCommand::Resume { scope } => {
-                self.change_scope(dataset, &repo, scope, false).await?
+                self.change_scope(dataset, &repo, scope, false).await?;
+                self.synchronize_workflows(dataset, repo.clone(), true)
+                    .await?;
             }
         }
         self.admin_state(dataset).await
@@ -179,11 +200,7 @@ impl PrelabelService {
         }
         let mut blockers = Vec::new();
         let mut models = BTreeMap::new();
-        let tasks: Vec<_> = metadata
-            .tasks
-            .iter()
-            .filter(|task| task.enabled && task.annotation_type == AnnotationType::BoundingBox)
-            .collect();
+        let tasks: Vec<_> = metadata.tasks.iter().filter(|task| task.enabled).collect();
         let mut remaining = Vec::new();
         for record in metadata.images.values() {
             let state = repo
@@ -246,7 +263,7 @@ impl PrelabelService {
         let ineligible = metadata
             .tasks
             .iter()
-            .filter(|task| task.annotation_type == AnnotationType::BoundingBox)
+            .filter(|task| task.enabled)
             .count()
             .saturating_mul(metadata.images.len())
             .saturating_sub(eligible);
@@ -274,6 +291,7 @@ impl PrelabelService {
         let timestamp = now();
         let mut next = control.clone();
         next.runs.push(Run {
+            managed: false,
             summary: PrelabelRunSummary {
                 run_id: uuid::Uuid::new_v4().to_string(),
                 phase: PrelabelRunPhase::Ready,
@@ -294,7 +312,7 @@ impl PrelabelService {
         self.commit(dataset, &mut control, next).await
     }
 
-    async fn start(
+    pub(super) async fn start(
         &self,
         dataset: &DatasetId,
         repo: DatasetRepository,
@@ -329,7 +347,7 @@ impl PrelabelService {
         {
             return Err(PrelabelFailure::NotReady);
         }
-        if !retry {
+        if !retry && !run.managed {
             // Preflight is advisory. Start must not silently omit work added since it ran.
             let metadata = repo
                 .load_dataset()
@@ -346,8 +364,7 @@ impl PrelabelService {
                     .await
                     .map_err(|_| PrelabelFailure::Storage)?;
                 if metadata.tasks.iter().any(|task| {
-                    task.annotation_type == AnnotationType::BoundingBox
-                        && prelabel_task_eligible(task, &state)
+                    prelabel_task_eligible(task, &state)
                         && !captured.contains(&(image, &task.task_id))
                 }) {
                     return Err(PrelabelFailure::NotReady);
@@ -355,7 +372,7 @@ impl PrelabelService {
             }
         }
         // An explicit start/retry resumes only the captured workflow/model pairs.
-        for item in &run.items {
+        for item in run.items.iter().filter(|_| !run.managed || retry) {
             if let Some(scope) = next
                 .scopes
                 .iter_mut()
@@ -382,14 +399,28 @@ impl PrelabelService {
         for item_index in 0..next.runs[index].items.len() {
             let item = next.runs[index].items[item_index].clone();
             if item.outcome == PrelabelItemOutcome::Pending
-                && let Some(cached) = next.results.get(&result_key(&item)?)
+                && let Some(cached) = self.retained_response(dataset, &next, &item).await?
             {
-                let outcome = if self.revalidate(&repo, &next, &item).await.is_err() {
+                let valid = self.revalidate(&repo, &next, &item).await.is_ok()
+                    && (!next.runs[index].managed
+                        || self.revalidate_managed(&repo, &item).await.is_ok());
+                let outcome = if !valid {
                     PrelabelItemOutcome::Skipped
-                } else if cached.empty {
-                    PrelabelItemOutcome::Empty
                 } else {
-                    PrelabelItemOutcome::Generated
+                    if next.runs[index].managed {
+                        self.publish_managed(
+                            &repo,
+                            &item,
+                            WorkflowPreparationStatus::Ready,
+                            cached.suggestions.clone(),
+                        )
+                        .await?;
+                    }
+                    if cached.suggestions.is_empty() {
+                        PrelabelItemOutcome::Empty
+                    } else {
+                        PrelabelItemOutcome::Generated
+                    }
                 };
                 next.runs[index].items[item_index].outcome = outcome;
             }
@@ -450,7 +481,7 @@ impl PrelabelService {
         }
         let _worker = RunWorker(self.inner.runner.clone(), owner.clone());
         loop {
-            let item = {
+            let (item, managed) = {
                 let mut control = self.lock(dataset).await?;
                 let run = control
                     .runs
@@ -465,7 +496,7 @@ impl PrelabelService {
                     .iter()
                     .position(|i| i.outcome == PrelabelItemOutcome::Pending)
                 {
-                    Some(index) => (index, run.items[index].clone()),
+                    Some(index) => ((index, run.items[index].clone()), run.managed),
                     None => {
                         let mut next = control.clone();
                         let run = next
@@ -484,6 +515,9 @@ impl PrelabelService {
                 let _permit = self.inner.workers.batch().await?;
                 let control = self.lock(dataset).await?;
                 self.revalidate(repo, &control, &item.1).await?;
+                if managed {
+                    self.revalidate_managed(repo, &item.1).await?;
+                }
                 drop(control);
                 let metadata = repo
                     .load_dataset()
@@ -519,7 +553,7 @@ impl PrelabelService {
             {
                 return Ok(());
             }
-            let result = match result {
+            let mut result = match result {
                 Ok((candidates, config, task, dimensions)) => {
                     match self.revalidate(repo, &control, &item.1).await {
                         Ok(()) => certify(
@@ -539,47 +573,82 @@ impl PrelabelService {
                 Err(error) => Err(error),
             };
             let mut next = control.clone();
+            if let Ok((suggestions, execution)) = &result {
+                self.check_result_size(suggestions)?;
+                let key = result_key(&item.1)?;
+                if next.results.len() >= self.inner.limits.max_retained_results
+                    && !next.results.contains_key(&key)
+                {
+                    return Err(PrelabelFailure::Limit);
+                }
+                let bytes = serde_json::to_vec_pretty(&suggestions)
+                    .map_err(|_| PrelabelFailure::Invalid)?
+                    .len() as u64
+                    + 1;
+                let retained_bytes: u64 = next
+                    .results
+                    .iter()
+                    .filter(|(existing, _)| *existing != &key)
+                    .map(|(_, result)| result.bytes)
+                    .sum();
+                if retained_bytes.saturating_add(bytes) > self.inner.limits.max_total_result_bytes {
+                    return Err(PrelabelFailure::Limit);
+                }
+                write_json_atomic(
+                    &self.directory(dataset)?.join(format!("result-{key}.json")),
+                    &suggestions,
+                )
+                .await
+                .map_err(|_| PrelabelFailure::Storage)?;
+                next.results.insert(
+                    key,
+                    CachedResult {
+                        execution: execution.clone(),
+                        task_id: item.1.task_id.clone(),
+                        config_id: item.1.config_id.clone(),
+                        created_at: now(),
+                        bytes,
+                        empty: suggestions.is_empty(),
+                    },
+                );
+                // Keep the item pending, but durably retain its result before queue
+                // publication. A restart can reuse this checkpoint after either
+                // publication or the final outcome update is interrupted.
+                self.commit(dataset, &mut control, next).await?;
+            }
+            if managed {
+                let publication = match &result {
+                    Ok((suggestions, _)) => {
+                        self.publish_managed(
+                            repo,
+                            &item.1,
+                            WorkflowPreparationStatus::Ready,
+                            suggestions.clone(),
+                        )
+                        .await
+                    }
+                    Err(PrelabelFailure::Stale | PrelabelFailure::Paused) => Ok(()),
+                    Err(_) => {
+                        self.publish_managed(
+                            repo,
+                            &item.1,
+                            WorkflowPreparationStatus::Failed,
+                            vec![],
+                        )
+                        .await
+                    }
+                };
+                if let Err(error) = publication {
+                    if error == PrelabelFailure::Stale {
+                        result = Err(error);
+                    } else {
+                        return Err(error);
+                    }
+                }
+            }
+            let mut next = control.clone();
             let outcome = match result {
-                Ok((suggestions, execution)) => {
-                    self.check_result_size(&suggestions)?;
-                    let key = result_key(&item.1)?;
-                    if next.results.len() >= self.inner.limits.max_retained_results
-                        && !next.results.contains_key(&key)
-                    {
-                        return Err(PrelabelFailure::Limit);
-                    }
-                    let bytes = serde_json::to_vec_pretty(&suggestions)
-                        .map_err(|_| PrelabelFailure::Invalid)?
-                        .len() as u64
-                        + 1;
-                    let retained_bytes: u64 = next
-                        .results
-                        .iter()
-                        .filter(|(existing, _)| *existing != &key)
-                        .map(|(_, result)| result.bytes)
-                        .sum();
-                    if retained_bytes.saturating_add(bytes)
-                        > self.inner.limits.max_total_result_bytes
-                    {
-                        return Err(PrelabelFailure::Limit);
-                    }
-                    write_json_atomic(
-                        &self.directory(dataset)?.join(format!("result-{key}.json")),
-                        &suggestions,
-                    )
-                    .await
-                    .map_err(|_| PrelabelFailure::Storage)?;
-                    next.results.insert(
-                        key,
-                        CachedResult {
-                            execution,
-                            task_id: item.1.task_id.clone(),
-                            config_id: item.1.config_id.clone(),
-                            created_at: now(),
-                            bytes,
-                            empty: suggestions.is_empty(),
-                        },
-                    );
+                Ok((suggestions, _)) => {
                     if suggestions.is_empty() {
                         PrelabelItemOutcome::Empty
                     } else {
@@ -603,7 +672,7 @@ impl PrelabelService {
     }
 }
 
-fn update_counts(run: &mut Run) {
+pub(super) fn update_counts(run: &mut Run) {
     let count = |outcome| {
         run.items
             .iter()

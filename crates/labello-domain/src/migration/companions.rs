@@ -121,6 +121,7 @@ impl ImageState {
                     && matches!(
                         annotation.origin,
                         AnnotationOrigin::Native { legacy_v2: false }
+                            | AnnotationOrigin::Prelabel { .. }
                     )
                     && matches!(
                         annotation.revision_source,
@@ -193,7 +194,7 @@ impl ImageState {
             || bounding_box.object_group_id.is_some()
             || !matches!(
                 skeleton.origin,
-                AnnotationOrigin::Native { legacy_v2: false }
+                AnnotationOrigin::Native { legacy_v2: false } | AnnotationOrigin::Prelabel { .. }
             )
             || !matches!(
                 skeleton.revision_source,

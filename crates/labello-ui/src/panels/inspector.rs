@@ -53,7 +53,7 @@ impl LabelloApp {
             self.keypoint_actions(ui);
         }
         match self.view {
-            AppView::Annotate => self.prelabel_panel(ui),
+            AppView::Annotate => {},
             AppView::Review => self.review_actions(ui, show_primary_actions),
             AppView::Setup | AppView::Admin | AppView::Stats | AppView::Inspect => {}
         }
@@ -123,7 +123,7 @@ impl LabelloApp {
         }
 
         ui.separator();
-        ui.label(RichText::new("Objects").strong());
+        ui.label(RichText::new(crate::glossary::OBJECTS).strong());
         for (annotation_id, number, class_name, geometry, confidence) in objects {
             let selected = self.work.selected_annotation.as_ref() == Some(&annotation_id);
             theme::selected_card_frame(selected).show(ui, |ui| {

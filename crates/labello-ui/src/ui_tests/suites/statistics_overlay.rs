@@ -313,10 +313,80 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
         app
     });
     harness.run_steps(4);
-    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_some());
+    let workflow = "Person: Bounding box annotation · Person bounding boxes · Annotate";
+    assert!(harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
+        .accesskit_node().description().unwrap().contains(crate::glossary::BOOSTED_WORKFLOW));
+    assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
     harness.state_mut().datasets.stats.scoring_focus.as_mut().unwrap().ends_at = labello_domain::now();
     harness.run_steps(3);
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
+        .accesskit_node().description().unwrap_or_default().contains(crate::glossary::BOOSTED_WORKFLOW));
+    let mut focused = harness.state().work.tasks[0].clone();
+    focused.task_id = "focus-other".into();
+    focused.name = "Other focused boxes".into();
+    harness.state_mut().datasets.stats.scoring_focus = Some(labello_domain::FocusWindow {
+        starts_at: labello_domain::now(), ends_at: labello_domain::now() + chrono::Duration::minutes(20),
+        task_id: Some(focused.task_id.clone()),
+    });
+    harness.state_mut().work.tasks.push(focused);
+    harness.run_steps(3);
+    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Annotate · Choose workflow");
+    assert!(trigger.accesskit_node().description().unwrap().contains("Boosted workflow"));
+    trigger.click();
+    harness.run_steps(3);
+    let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Other focused boxes · Annotate");
+    assert!(option.accesskit_node().description().unwrap().contains(crate::glossary::BOOSTED_WORKFLOW));
     assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn workflow_boost_shimmer_settles_and_respects_reduced_motion() {
+    use crate::inspector_presets::{self, InspectorPreset};
+    fn paint(harness: &Harness<'_, LabelloApp>, bounds: egui::Rect) -> Vec<egui::Shape> {
+        harness.output().shapes.iter().filter_map(|clipped| {
+            let shape = &clipped.shape;
+            let boost = match shape {
+                egui::Shape::Rect(rect) => rect.stroke.color == crate::theme::WARNING,
+                egui::Shape::Mesh(mesh) => mesh.vertices.first().is_some_and(|vertex| vertex.color == crate::theme::WARNING),
+                egui::Shape::LineSegment { points, .. } => points[0].distance(points[1]) == 2.0,
+                _ => false,
+            };
+            (boost && bounds.contains_rect(shape.visual_bounding_rect())).then(|| shape.clone())
+        }).collect()
+    }
+    let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 1000.0)).build_eframe(|ctx| {
+        inspector_presets::build(InspectorPreset::WorkflowBoost, &ctx.egui_ctx)
+    });
+    harness.run_steps(4);
+    let label = "Goal post: Bounding box annotation · Goal post boxes · Annotate";
+    let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+    let still = paint(&harness, tile);
+    assert_eq!(still.len(), 1, "the persistent boost has a rim without a corner star");
+    assert!(matches!(still[0], egui::Shape::Rect(_)));
+    crate::set_reduced_motion(&harness.ctx, false);
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, label).hover();
+    harness.run_steps(5);
+    assert_ne!(paint(&harness, tile), still, "hover should produce a visible shimmer");
+    harness.run_steps(100);
+    assert_eq!(paint(&harness, tile), still, "motion must settle to the persistent highlight");
+    harness.get_by_label("Open settings").hover();
+    harness.run_steps(3);
+    crate::set_reduced_motion(&harness.ctx, true);
+    harness.get_by_role_and_label(egui::accesskit::Role::Button, label).focus();
+    harness.run_steps(5);
+    let tile = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
+    let focused = paint(&harness, tile);
+    assert_eq!(focused.len(), 1);
+    assert!(!focused.iter().any(|shape| matches!(shape, egui::Shape::LineSegment { .. })),
+        "reduced motion must not paint a moving shimmer");
+    harness.run_steps(20);
+    assert_eq!(paint(&harness, tile), focused, "reduced motion keeps the boosted cue static");
+    harness.state_mut().datasets.stats_error = Some("Unavailable".into());
+    harness.run_steps(3);
+    assert!(paint(&harness, tile).is_empty());
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, label)
+        .accesskit_node().description().unwrap_or_default().contains(crate::glossary::BOOSTED_WORKFLOW));
 }
 
 #[cfg(feature = "inspector-presets")]

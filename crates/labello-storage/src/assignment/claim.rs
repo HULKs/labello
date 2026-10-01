@@ -341,6 +341,37 @@ impl DatasetRepository {
         task_id: &TaskId,
         kind: AssignmentKind,
     ) -> StorageResult<Option<(Assignment, labello_domain::ImageState)>> {
+        if self
+            .load_image_state(image_id)
+            .await?
+            .workflow_assignments
+            .contains_key(assignment_id)
+        {
+            return match self
+                .refresh_workflow_item(
+                    user_id,
+                    super::AssignmentContext {
+                        assignment_id,
+                        image_id,
+                        task_id,
+                        kind,
+                    },
+                    false,
+                )
+                .await
+            {
+                Ok(state) => Ok(state
+                    .assignments
+                    .iter()
+                    .find(|a| a.assignment_id == *assignment_id)
+                    .cloned()
+                    .map(|assignment| (assignment, state))),
+                Err(StorageError::AssignmentConflict(_) | StorageError::InvalidAssignment(_)) => {
+                    Ok(None)
+                }
+                Err(error) => Err(error),
+            };
+        }
         let _config_guard = self.review_config_lock.read().await;
         let metadata = self.load_dataset().await?;
         let role = role_for_kind(&kind);
@@ -690,7 +721,7 @@ impl DatasetRepository {
         Ok(AssignmentClaimOutcome::Unavailable)
     }
 
-    fn task_supports_assignment(
+    pub(super) fn task_supports_assignment(
         task: &TaskDefinition,
         kind: &AssignmentKind,
     ) -> StorageResult<bool> {
@@ -757,6 +788,14 @@ impl DatasetRepository {
         status: &TaskStatus,
         now: labello_domain::Timestamp,
     ) -> StorageResult<bool> {
+        if state.workflow_preparations.contains_key(&task.task_id)
+            || state.assignments.iter().any(|a| {
+                a.task_id == task.task_id
+                    && state.workflow_assignments.contains_key(&a.assignment_id)
+            })
+        {
+            return Ok(false);
+        }
         Ok(self
             .image_assignment_block(image_id, state, task, user_id, kind, status, now)
             .await?
@@ -842,7 +881,7 @@ impl DatasetRepository {
         Ok(None)
     }
 
-    async fn task_is_overrepresented(
+    pub(super) async fn task_is_overrepresented(
         &self,
         metadata: &DatasetMetadata,
         selected_task_id: &TaskId,
@@ -913,7 +952,7 @@ impl DatasetRepository {
     }
 }
 
-fn minimum_peer_count(
+pub(super) fn minimum_peer_count(
     metadata: &DatasetMetadata,
     task_id: &TaskId,
     counts: &std::collections::BTreeMap<TaskId, usize>,

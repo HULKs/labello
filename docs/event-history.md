@@ -237,3 +237,36 @@ Hidden annotation IDs are derived, not persisted as deletion flags. Migration
 confirmation hashes include skipped Pending target IDs when nonempty. Review
 fingerprints include the current exclusions when nonempty.
 Historical hashes and fingerprints remain unchanged for unfiltered histories.
+
+## Objects and Overview events
+
+The additive schema-3 `Workflow` payload contains `Prepared`, `AssignmentOpened`,
+`ItemSeen`, `DraftSaved`, `EditsSaved` and `ItemConfirmed` variants. The event log
+is authoritative for prepared sources and signed predictions, captured item leases,
+permanent seen markers, partial work and exact-version completion receipts.
+Version-2 encoding rejects these events; legacy decoding and historical completion
+keep their existing meanings. No retrospective fallback exception is invented.
+
+`Prepared` records the task's source identities, model/configuration digest,
+generation key and ready/pending/failed status. Replacement preserves seen items,
+and cannot introduce predictions into a displayed Overview or completed work.
+`AssignmentOpened` captures object/Overview scope, task identity, exact review target,
+any authorized fallback exception and the original history-visit identity.
+`ItemSeen` is separate from claim/prefetch, so an unseen reservation can refresh.
+
+`DraftSaved` records unfinished object geometry with a compare-and-swap sequence.
+`EditsSaved` records incomplete Overview additions or review corrections as typed
+proposals, separately from annotation versions and decisions. Reassignment can
+resume them. `ItemConfirmed` binds the final annotation/review version, finishes
+that item and supplies once-only score attribution. It does not finish a pending
+Overview. A later receipt clears an earlier edit proposal logically; its audit
+record remains. Review correction receipts preserve approvals for unchanged targets.
+
+Replay validates ownership, role, displayed state, item scope and sequence before
+applying each event. Cache projection version 3 also distinguishes empty edit
+proposals from contributions and records annotation versions revised in a displayed
+Overview after their Objects pass finished. These revisions preserve the original
+Objects receipt and score owner. Older caches rebuild from unchanged events.
+Events at every committed boundary must replay to the same state. Snapshot and
+offline serialization preserve the new fields; offline mutation cannot author
+server-owned workflow events or bypass an online item lease.

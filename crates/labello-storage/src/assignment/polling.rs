@@ -13,6 +13,7 @@ use std::{
 pub(crate) struct PollingImage {
     // Deliberately partial: only the fields consumed by assignment eligibility.
     pub(super) state: ImageState,
+    workflow: Arc<ImageState>,
     normal: BTreeMap<TaskId, FinalReviews>,
     migration: BTreeMap<TaskId, FinalReviews>,
 }
@@ -24,6 +25,10 @@ struct FinalReviews {
 }
 
 impl PollingImage {
+    pub(crate) fn completion(&self) -> crate::completion_projection::ImageCompletion {
+        crate::completion_projection::ImageCompletion::from_state(&self.state)
+    }
+
     fn new(state: &ImageState, events: &[EventLogEntry]) -> Self {
         let mut compact = ImageState::new(state.image_id.clone());
         compact.current_sequence = state.current_sequence;
@@ -84,6 +89,7 @@ impl PollingImage {
         }
         Self {
             state: compact,
+            workflow: Arc::new(state.clone()),
             normal,
             migration,
         }
@@ -102,6 +108,18 @@ impl PollingImage {
 }
 
 impl DatasetRepository {
+    pub(crate) async fn workflow_polling_state(
+        &self,
+        image: &ImageId,
+        visibility: labello_domain::BoundingBoxVisibility,
+    ) -> StorageResult<Arc<ImageState>> {
+        let mut state = self.polling_image(image).await?.workflow.clone();
+        if state.bounding_box_visibility != Some(visibility) {
+            Arc::make_mut(&mut state).bounding_box_visibility = Some(visibility);
+        }
+        Ok(state)
+    }
+
     pub(crate) async fn polling_image(&self, image: &ImageId) -> StorageResult<Arc<PollingImage>> {
         self.ensure_artifact_migration().await?;
         let lock = self.image_lock(image);

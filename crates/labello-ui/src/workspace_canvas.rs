@@ -39,7 +39,6 @@ impl LabelloApp {
             self.migration_workspace_canvas(ui);
             return;
         }
-        self.work.canvas.set_scan_phase(None);
         if let Some(current) = self.work.current.clone() {
             let texture = self.work.current_texture.clone();
             let mut annotations = self.annotation_objects();

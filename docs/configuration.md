@@ -468,15 +468,36 @@ setting `enforce = false`, disables assignment blocking. See
 [Assignment](assignment.md#completion-balance) for count, denominator, peer,
 zero-count, and exact-boundary semantics.
 
+## Item queue history and Overview backlog
+
+Administrators configure these settings in Automation. In `labello.dataset.toml`:
+
+```toml
+[workflowQueue]
+historyDepth = 5
+# maxPendingOverviews = 20
+```
+
+`historyDepth` accepts 0 through 100. It bounds backward navigation and the retained
+forward reservation window, in addition to the current item. `maxPendingOverviews`
+is optional and must be positive when present. It counts distinct images awaiting
+Overview, reserving capacity for active object work on new images. Already started
+images can finish their prerequisite objects even at the limit. Omission disables
+the limit. Objects and Overview share one task's image-based completion balance.
+
 ## Reviewer corrections
 
 Dataset task review configuration retains the legacy `allowReviewerCorrections`
 field for file and wire compatibility. Both `false` and `true` allow corrections
 in approval review; the administration UI no longer offers the switch. Every
 rejection requires substantive reviewer changes and creates a fresh review round.
-One reviewer approves all current-round objects and the final image, including
-guided migration. Historical `requiredReviews` values are normalized by the
-dataset review-policy upgrade.
+Each current-round object and the final Overview require one approval, including
+guided migration. Different reviewers may approve different items. Objects exclude
+the final annotation author; Overview excludes anyone who contributed annotation
+or review work to that image. Viewing or saving an empty proposal does not count
+as a contribution. A recorded self-review exception is allowed only when the user
+has no independent work available in any review queue in the dataset. Historical
+`requiredReviews` values are normalized by the dataset review-policy upgrade.
 
 ## Production guidance
 
@@ -487,13 +508,11 @@ for the supported guest layout and [operations](operations.md) for backup and re
 
 ## Prelabel models and limits
 
-Enable `[prelabel]` with an operator-managed `modelsRoot` to support server and
-browser model configurations. Omission disables model delivery, generation, and
-management. Add the section to `labello.server.toml` or the file selected by
+Enable `[prelabel]` with an operator-managed `modelsRoot` to support server-managed detection and pose models. Omission disables model inspection, generation and management. Add the section to `labello.server.toml` or the file selected by
 `LABELLO_CONFIG`, restart the server, and reload the web app. When omitted,
-Automation, workflow settings, and the annotation inspector show
-"Prelabeling is disabled by server configuration." The UI hides model/hint
-controls and does not request hints or poll hint management. Existing dataset
+Automation and workflow settings show
+"Prelabeling is disabled by server configuration." Annotators never have model
+selection or generation controls. Existing dataset
 model configurations and workflow bindings are preserved.
 
 `timeoutSeconds` defaults to 120 and accepts 1 through 300.
@@ -525,4 +544,4 @@ inference and model checks. Native runtime thread counts use `threadsPerWorker`;
 the included Tract backend is single-threaded. Idle processes expire within the
 configured interval plus at most 30 seconds, or earlier under capacity pressure.
 Interactive requests have priority between batch items. Up to 64 wait for admission
-for at most 30 seconds; saturation returns busy without disabling manual work.
+for at most 30 seconds; saturation returns busy; managed preparation reports its pending or failed state.

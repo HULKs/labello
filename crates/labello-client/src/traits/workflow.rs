@@ -8,6 +8,40 @@ pub trait TaskApi {
 }
 
 pub trait ImageApi {
+    fn workflow_availability<'a>(&'a self, _dataset_id: &'a DatasetId, _kind: labello_domain::AssignmentKind) -> ApiFuture<'a, Vec<labello_domain::WorkflowAvailability>> {
+        Box::pin(async { Err(ClientError::Demo("workflow queues are unavailable in this client".into())) })
+    }
+
+    fn workflow_history<'a>(&'a self, _dataset_id: &'a DatasetId, _selection: labello_domain::WorkflowSelection) -> ApiFuture<'a, Vec<labello_domain::WorkflowHistoryEntry>> {
+        Box::pin(async { Err(ClientError::Demo("workflow history is unavailable in this client".into())) })
+    }
+
+    fn reopen_workflow_item<'a>(&'a self, _dataset_id: &'a DatasetId, _request: AssignmentActionRequest) -> ApiFuture<'a, Assignment> {
+        Box::pin(async { Err(ClientError::Demo("workflow history is unavailable in this client".into())) })
+    }
+
+    fn leave_workflow<'a>(&'a self, _dataset_id: &'a DatasetId, _selection: labello_domain::WorkflowSelection) -> ApiFuture<'a, ()> {
+        Box::pin(async { Err(ClientError::Demo("workflow queues are unavailable in this client".into())) })
+    }
+
+    fn claim_workflow_item<'a>(
+        &'a self, _dataset_id: &'a DatasetId, _request: crate::ClaimWorkflowRequest,
+    ) -> ApiFuture<'a, Option<Assignment>> {
+        Box::pin(async { Err(ClientError::Demo("object queues are unavailable in this client".into())) })
+    }
+
+    fn display_workflow_item<'a>(
+        &'a self, _dataset_id: &'a DatasetId, _request: AssignmentActionRequest,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Demo("object queues are unavailable in this client".into())) })
+    }
+
+    fn save_workflow_draft<'a>(
+        &'a self, _dataset_id: &'a DatasetId, _request: crate::SaveWorkflowDraftRequest,
+    ) -> ApiFuture<'a, ImageState> {
+        Box::pin(async { Err(ClientError::Demo("object drafts are unavailable in this client".into())) })
+    }
+
     fn return_to_review<'a>(
         &'a self,
         _dataset_id: &'a DatasetId,

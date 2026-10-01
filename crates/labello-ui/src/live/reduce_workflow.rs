@@ -5,6 +5,16 @@ impl LabelloApp {
         message: UiMessage,
     ) -> Option<UiMessage> {
         match message {
+                UiMessage::WorkflowHistoryLoaded { request, selection, result } => {
+                    if self.work.workflow.history_request != Some(request.request_id) { return None; }
+                    self.work.workflow.history_request = None;
+                    if self.workflow_selection().as_ref() == Some(&selection) {
+                        match result {
+                            Ok(history) => self.work.workflow.history = history,
+                            Err(error) => self.runtime.error = Some(error.to_string()),
+                        }
+                    }
+                }
                 UiMessage::ImageLoaded {
                     request: _,
                     operation_id,
@@ -23,7 +33,7 @@ impl LabelloApp {
                             self.runtime.notice = None;
                             self.work
                                 .queue
-                                .remove_prepared_image(&loaded.assignment.image_id);
+                                .remove_prepared_assignment(&loaded.assignment);
                             if let Some(expected) =
                                 self.runtime.persistence.expected_assignment.take()
                                 && loaded.assignment.assignment_id != expected
@@ -34,7 +44,11 @@ impl LabelloApp {
                                 );
                                 self.request_previous_draft_status();
                             }
-                            self.apply_loaded_image(ctx, loaded);
+                            if loaded.workflow_item().is_some() {
+                                self.revalidate_prepared_review(loaded);
+                            } else {
+                                self.apply_loaded_image(ctx, loaded);
+                            }
                             self.refresh_assignment_availability_if_due();
                         }
                         Ok(None) => {
@@ -149,8 +163,14 @@ impl LabelloApp {
                     self.work.active_load_id = None;
                     self.loading.image = false;
                     self.work.pending_transition = None;
+                    let returning_forward = std::mem::take(&mut self.work.workflow.returning_forward);
                     match *result {
                         Ok(loaded) => {
+                            if loaded.workflow_item().is_some() {
+                                self.runtime.error = None;
+                                self.revalidate_prepared_review(loaded);
+                                return None;
+                            }
                             let decisions = self.work.previous_prelabel_decisions.take().filter(|decisions|
                                 decisions.dataset_id == self.config.dataset_id
                                     && decisions.image_id == loaded.assignment.image_id
@@ -176,6 +196,12 @@ impl LabelloApp {
                             self.request_assignment_availability();
                         }
                         Err(error) => {
+                            if returning_forward && !error.unauthorized {
+                                self.runtime.notice = Some("The next history item is unavailable. Continuing with available work.".into());
+                                self.retire_current_image();
+                                self.request_next_image();
+                                return None;
+                            }
                             let normalized_error = error.message.to_ascii_lowercase();
                             let expired = normalized_error.contains("lease")
                                 && normalized_error.contains("expired");
@@ -212,13 +238,11 @@ impl LabelloApp {
                                     == labello_domain::AssignmentStatus::Active
                                 && self.work.assignment.as_ref().is_some_and(|current| {
                                     current.task_id == loaded.assignment.task_id
-                                        && current.image_id != loaded.assignment.image_id
+                                        && self.workflow_item_ref().zip(loaded.workflow_item()).map_or(
+                                            current.image_id != loaded.assignment.image_id, |(current, next)| current != next)
                                 })
-                                && !self
-                                    .work
-                                    .queue
-                                    .prepared_image_ids()
-                                    .contains(&loaded.assignment.image_id) =>
+                                && !self.work.queue.contains_assignment(&loaded.assignment)
+                                && loaded.workflow_item().is_none_or(|item| !self.work.queue.prepared_work_items().contains(&item)) =>
                         {
                             self.work.one_shot_excluded_image_id = None;
                             self.work.queue.clear_failure();
@@ -313,6 +337,7 @@ impl LabelloApp {
                                     Some(
                                         crate::app::PendingTransition::NextAssignment
                                             | crate::app::PendingTransition::Workflow(_)
+                                            | crate::app::PendingTransition::WorkflowVariant(_, _)
                                             | crate::app::PendingTransition::View(
                                                 AppView::Annotate | AppView::Review
                                             )
@@ -326,6 +351,9 @@ impl LabelloApp {
                                         .expect("annotation mutations are dataset-scoped"),
                                     load_after_resolution,
                                 );
+                            } else if self.workflow_context().is_some() {
+                                if self.work.edit_generation == edit_generation { self.resume_work_item_navigation(); }
+                                else if self.work.pending_transition.is_some() { self.request_save(false); }
                             }
                         }
                         Err(error) => {
@@ -335,6 +363,7 @@ impl LabelloApp {
                             } else {
                                 SaveStatus::Dirty
                             };
+                            if self.workflow_context().is_some() { self.work.pending_transition = None; }
                             if completed {
                                 self.work.pending_transition = None;
                                 self.assignment_availability_mutation_completed(
@@ -404,6 +433,10 @@ impl LabelloApp {
                             self.runtime.error = None;
                             self.apply_state(state);
                             self.request_stats();
+                            if self.advance_work_item(ctx) {
+                                self.assignment_availability_mutation_completed(request.dataset_id.as_ref().expect("review dataset"), false);
+                                return None;
+                            }
                             if phase == crate::app::ReviewPhase::FullImage && let Some(assignment) = completed_assignment.as_ref() {
                                 self.clear_current_work_draft(assignment);
                             }
@@ -473,6 +506,10 @@ impl LabelloApp {
                             }
                             self.runtime.error = None;
                             self.request_stats();
+                            if self.advance_work_item(ctx) {
+                                self.assignment_availability_mutation_completed(request.dataset_id.as_ref().expect("correction dataset"), false);
+                                return None;
+                            }
                             if !self.promote_prepared_assignment(ctx, None) {
                                 self.retire_current_image();
                             }

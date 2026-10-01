@@ -499,7 +499,7 @@ fn mobile_review_footer_stays_visible_across_review_kinds_and_phases() {
                 let canvas = harness.get_by_label("Annotation canvas").rect();
                 assert!(canvas.height() >= 44.0, "{preset:?} {width}x{height}: {canvas:?}");
                 let mut row_y: Option<f32> = None;
-                for label in ["Previous image", "Discard changes", "Skip"] {
+                for label in ["Previous", "Discard changes", "Skip"] {
                     let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
                     assert!(rect.top() >= canvas.bottom() && rect.bottom() <= height);
                     assert!(rect.left() >= 0.0 && rect.right() <= width);
@@ -529,7 +529,7 @@ fn mobile_review_icon_fallback_keeps_large_text_actions_in_their_rows() {
             harness.run_steps(2);
         }
         let primary = if corrected { "Submit correction" } else { "Approve" };
-        for label in [primary, "Previous image", "Discard changes", "Skip", "Fit"] {
+        for label in [primary, "Previous", "Discard changes", "Skip", "Fit"] {
             let rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, label).rect();
             assert!(rect.left() >= 0.0 && rect.right() <= 390.0);
             assert!(rect.height() >= 44.0 && rect.height() < 60.0, "{label}: {rect:?}");
@@ -553,7 +553,7 @@ fn mobile_annotation_and_migration_toolbars_keep_large_text_controls_inline() {
                 assert!(rect.left() >= 0.0 && rect.right() <= 320.0, "{preset:?}: {label} {rect:?}");
             }
             let primary = harness.get_by_label_contains(match preset {
-                InspectorPreset::Annotation => "Submit & next",
+                InspectorPreset::Annotation => "Next object",
                 InspectorPreset::MigrationObject => "Save & next",
                 _ => "Submit",
             }).rect();
@@ -726,7 +726,7 @@ fn workspace_context_centers_content_between_edge_toggles() {
 #[test]
 fn annotation_context_uses_review_hierarchy_and_retains_summary_during_loads() {
     use crate::inspector_presets::{self, InspectorPreset::*};
-    for (preset, progress, kind) in [(Annotation, "Item 1 / 1", "Bounding boxes"), (MigrationObject, "Item 1 /", "Skeletons"), (MigrationFullImage, "Image overview", "Skeletons")] {
+    for (preset, progress, kind) in [(Annotation, "Object 1 of 2", "Bounding boxes"), (MigrationObject, "Item 1 /", "Skeletons"), (MigrationFullImage, "Image overview", "Skeletons")] {
         let app = inspector_presets::build(preset, &egui::Context::default());
         let mut h = Harness::builder().with_size(egui::vec2(390.0, 844.0)).build_eframe(|_| app);
         h.run_steps(4);

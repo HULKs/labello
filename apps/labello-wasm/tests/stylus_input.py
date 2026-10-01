@@ -130,7 +130,7 @@ class Scenario:
         require(response.ok, f"fixture-api-{response.status}")
         return await response.json()
 
-    async def seed(self, kind):
+    async def seed(self, kind, enabled=True):
         self.headers["x-csrf-token"] = (await self.request("POST", "/auth/local-admin"))["csrfToken"]
         metadata = await self.request("POST", "/datasets", data={
             "datasetId": "stylus", "name": "Stylus fixture", "adminUserId": "admin",
@@ -147,7 +147,7 @@ class Scenario:
                 "edges": [], "allowHidden": True, "allowAbsent": False,
             },
             "review": {"workflow": "none", "allowReviewerCorrections": False},
-            "prelabelConfigIds": [], "enabled": True,
+            "prelabelConfigIds": [], "enabled": enabled,
         }]
         await self.request("PUT", "/datasets/stylus/admin", data={
             key: metadata[key] for key in [
@@ -211,8 +211,15 @@ class Scenario:
         # Start at a fixed desktop viewport, then resize the annotation workspace.
         # App navigation is available even when Setup has no recommendation yet.
         await self.page.wait_for_timeout(1000)
-        await self.page.mouse.click(64, 28)  # Annotate in the desktop application bar.
-        self.bounds = await until(lambda: self.color_bounds(COLOR), "annotation-image-not-rendered")
+        async def annotation_ready():
+            bounds = await self.color_bounds(COLOR)
+            if bounds:
+                return bounds
+            # Initial dataset/auth loading can temporarily disable navigation.
+            await self.page.mouse.click(64, 28)  # Annotate in the desktop application bar.
+            await self.page.wait_for_timeout(250)
+            return None
+        self.bounds = await until(annotation_ready, "annotation-image-not-rendered")
         self.cdp = None
         if browser_name == "chromium":
             self.cdp = await self.context.new_cdp_session(self.page)

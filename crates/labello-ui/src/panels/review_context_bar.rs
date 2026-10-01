@@ -15,6 +15,11 @@ impl WorkspaceSummary {
         let current = app.work.current.as_ref();
         let progress = if current.is_none() {
             if app.work.assignment.is_some() { "Preview unavailable".into() } else { "No active assignment".into() }
+        } else if let Some(context) = app.workflow_context() {
+            match context.item.variant() {
+                labello_domain::WorkflowVariant::Objects => crate::glossary::OBJECTS.to_string(),
+                labello_domain::WorkflowVariant::Overview => "Image overview".to_string(),
+            }
         } else if app.manual_migration_active() {
             app.migration_context_progress()
         } else if let Some(progress) = app.prelabel_progress() {
@@ -52,6 +57,7 @@ impl WorkspaceSummary {
                 identity
             };
             let phase = match context.phase {
+                crate::review_context::ReviewContextPhase::Object { .. } if app.workflow_context().is_some() => crate::glossary::OBJECTS.to_string(),
                 crate::review_context::ReviewContextPhase::Object { number, total, .. } => format!("Item {number} / {total}"),
                 crate::review_context::ReviewContextPhase::FullImage { .. } => "Image overview".to_string(),
             };
@@ -197,9 +203,6 @@ impl LabelloApp {
         let content = self.displayed_workspace_summary();
         let text = self.context_summary_text(ui.ctx(), layout, ui.available_width());
         let valid = content.identity.is_some();
-        if !valid || self.work.drawer == Some(Drawer::Workflow) {
-            self.work.review_details_focus_return = None;
-        }
         if layout == LayoutMode::Compact { ui.spacing_mut().item_spacing.x = theme::SPACE_1; }
         let stacked = text.stacked;
         let height = if stacked { text.height + 46.0 } else { text.height.max(44.0) }

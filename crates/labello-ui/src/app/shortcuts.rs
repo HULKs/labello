@@ -94,8 +94,23 @@ impl LabelloApp {
 
     pub(crate) fn trigger_user_action(&mut self, action: labello_domain::UserAction) {
         use labello_domain::UserAction;
-        if self.work.automatic_workflow_change.is_some() { return; }
         if self.workspace_bars_loading() && action != UserAction::OpenSettings { return; }
+        if self.workflow_context().is_some()
+            && !self.loading.saving && !self.loading.image && !self.work.migration.busy
+            && self.work.pending_transition.is_none() && !self.work.canvas.is_dragging()
+        {
+            match action {
+                UserAction::PreviousImage | UserAction::SelectPreviousObject => {
+                    self.return_to_previous_assignment();
+                    return;
+                }
+                UserAction::SelectNextObject => {
+                    self.skip_assignment();
+                    return;
+                }
+                _ => {}
+            }
+        }
         if action == UserAction::NextImage && self.view == AppView::Review {
             self.confirm_review_item();
             return;
@@ -121,6 +136,7 @@ impl LabelloApp {
         }
         if self.view == AppView::Review && !self.loading.saving && !self.loading.image && !self.work.migration.busy && self.work.pending_transition.is_none() {
             match action {
+                UserAction::SelectPreviousObject if self.workflow_context().is_some() => { self.return_to_previous_assignment(); return; }
                 UserAction::SelectPreviousObject => { self.cycle_review_item(-1); return; }
                 UserAction::SelectNextObject => { self.cycle_review_item(1); return; }
                 _ => {}
@@ -212,6 +228,7 @@ impl LabelloApp {
                     return;
                 }
                 UserAction::SelectPreviousObject => {
+                    if self.workflow_context().is_some() { self.return_to_previous_assignment(); return; }
                     self.edit_previous_migration_object();
                     return;
                 }
@@ -234,7 +251,7 @@ impl LabelloApp {
             && self.work.pending_transition.is_none()
             && !self.work.canvas.is_dragging();
         let previous_ready = matches!(self.view, AppView::Annotate | AppView::Review)
-            && self.work.previous_assignment.is_some()
+            && (self.previous_work_item().is_some() || self.work.previous_assignment.is_some())
             && self.runtime.api.is_some()
             && !self.loading.saving
             && !self.loading.image
@@ -300,6 +317,7 @@ impl LabelloApp {
                 self.cycle_workflow(1)
             }
             UserAction::SelectPreviousObject if self.view == AppView::Annotate && ready => {
+                if self.workflow_context().is_some() { self.return_to_previous_assignment(); return; }
                 self.cycle_object(-1)
             }
             UserAction::SelectNextObject if self.view == AppView::Annotate && ready => {
@@ -385,7 +403,6 @@ impl LabelloApp {
         if !self.work_view()
             || ctx.text_edit_focused()
             || self.work.pending_transition.is_some()
-            || self.work.automatic_workflow_change.is_some()
             || self.work.migration.pending_companion_reconciliation.is_some()
             || self.work.migration.pending_reload_discard
             || self.work.show_settings

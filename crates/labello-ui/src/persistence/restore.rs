@@ -23,7 +23,6 @@ impl crate::app::LabelloApp {
         self.runtime.persistence.preference_desired_encoded =
             self.runtime.persistence.preference_encoded.clone();
         self.runtime.persistence.preference_retry.reset();
-        self.work.prelabels.choices = preference.as_ref().map(|p| p.prelabel_choices.clone()).unwrap_or_default();
         self.runtime.persistence.preference = preference;
         self.runtime.persistence.restoration_attempted = false;
         self.runtime.persistence.expected_assignment = None;
@@ -39,8 +38,6 @@ impl crate::app::LabelloApp {
     }
 
     pub(crate) fn isolate_browser_workspace(&mut self) {
-        self.cancel_prelabel_load();
-        self.work.prelabels = Default::default();
         self.work.image_transfers.cancel_all();
         self.work.image_transfers = Default::default();
         self.runtime.persistence.identity = None;
@@ -119,7 +116,7 @@ impl crate::app::LabelloApp {
         };
         let preference = WorkspacePreference {
             version: PREFERENCE_VERSION,
-            prelabel_choices: self.work.prelabels.choices.clone(),
+            workflow_variant: self.work.workflow.variant,
             dataset_id: self.config.dataset_id.clone(),
             view: stored_view(self.view),
             task_id: self.work.selected_task_id.clone(),
@@ -207,6 +204,7 @@ impl crate::app::LabelloApp {
             && self.work.availability.dataset_id.as_ref() == Some(&self.config.dataset_id)
             && self.work.availability.kind.as_ref() == Some(&kind))
         .then(|| StoredAssignmentAvailability {
+            workflows: self.work.availability.workflows.clone(),
             kind,
             tasks: self.work.availability.tasks.clone(),
             reasons: self.work.availability.reasons.clone(),
@@ -250,6 +248,7 @@ impl crate::app::LabelloApp {
         }
         self.work.availability.dataset_id = Some(self.config.dataset_id.clone());
         self.work.availability.kind = Some(kind);
+        self.work.availability.workflows = cached.workflows;
         self.work.availability.tasks = cached.tasks;
         self.work.availability.reasons = cached.reasons;
         self.work.availability.resolved = true;
@@ -403,7 +402,7 @@ impl crate::app::LabelloApp {
                     next_keypoint_hidden: self.work.next_keypoint_hidden,
                 })
             }
-            crate::app::AppView::Review => WorkDraftPayload::Review(ReviewDraft {
+            crate::app::AppView::Review if self.workflow_review_needs_browser_backup() => WorkDraftPayload::Review(ReviewDraft {
                 staged_corrections: Box::new(self.work.review_corrections.clone()),
                 target_annotation: self.work.selected_annotation.clone(),
                 correction: self

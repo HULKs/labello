@@ -38,6 +38,12 @@ pub(crate) enum PrelabelPrimaryAction {
 
 impl LabelloApp {
     pub(crate) fn prelabel_primary_action(&self) -> PrelabelPrimaryAction {
+        if self.workflow_context().is_some_and(|context| {
+            context.item.variant() == labello_domain::WorkflowVariant::Objects
+        }) && self.pending_prelabel_objects().is_empty()
+        {
+            return PrelabelPrimaryAction::Submit;
+        }
         if self
             .work
             .annotations
@@ -154,6 +160,11 @@ impl LabelloApp {
         &self,
     ) -> std::collections::BTreeMap<labello_domain::AnnotationId, labello_domain::AnnotationId>
     {
+        if self.workflow_context().is_some_and(|context| {
+            context.item.variant() == labello_domain::WorkflowVariant::Objects
+        }) {
+            return Default::default();
+        }
         let empty = labello_domain::ImageState::new("visibility".into());
         let state = self.work.current_state.as_ref().unwrap_or(&empty);
         let policy = if self.work.current_state.is_some() {
@@ -169,6 +180,13 @@ impl LabelloApp {
     }
 
     pub(crate) fn filter_visible_boxes(&self, annotations: &mut Vec<AnnotationVersion>) {
+        // A displayed queue item requires an explicit confirmation, including
+        // deletion when another workflow has since supplied the same object.
+        if self.workflow_context().is_some_and(|context| {
+            context.item.variant() == labello_domain::WorkflowVariant::Objects
+        }) {
+            return;
+        }
         let empty = labello_domain::ImageState::new("visibility".into());
         let state = self.work.current_state.as_ref().unwrap_or(&empty);
         let policy = if self.work.current_state.is_some() {
@@ -262,7 +280,12 @@ impl LabelloApp {
                 .retain(|item| item.annotation.annotation_id != id);
             self.work.prelabel_review.changed = true;
             self.mark_edited();
-            self.advance_prelabel_object();
+            if self.workflow_context().is_some() {
+                self.work.pending_transition = Some(crate::app::PendingTransition::NextAssignment);
+                self.request_save(true);
+            } else {
+                self.advance_prelabel_object();
+            }
             return true;
         }
         if let Some(evidence) = item.suggestion.evidence {
@@ -296,7 +319,12 @@ impl LabelloApp {
         self.work.annotations.push(annotation);
         self.recompute_modified_annotations();
         self.mark_edited();
-        self.advance_prelabel_object();
+        if self.workflow_context().is_some() {
+            self.work.pending_transition = Some(crate::app::PendingTransition::NextAssignment);
+            self.request_save(true);
+        } else {
+            self.advance_prelabel_object();
+        }
         true
     }
 
@@ -308,7 +336,9 @@ impl LabelloApp {
             return true;
         }
         self.record_edit();
-        if matches!(item.annotation.geometry, AnnotationGeometry::BoundingBox(_)) {
+        if self.workflow_context().is_some()
+            || matches!(item.annotation.geometry, AnnotationGeometry::BoundingBox(_))
+        {
             let pending = self
                 .work
                 .prelabel_review
@@ -365,9 +395,7 @@ impl LabelloApp {
     pub(crate) fn prelabel_progress(&self) -> Option<String> {
         if !self.work.prelabel_review.started
             || self.manual_migration_active()
-            || self.selected_task().is_none_or(|task| {
-                self.runtime.api.is_some() && self.prelabel_choice(&task.task_id).is_none()
-            })
+            || self.selected_task().is_none()
         {
             return None;
         }

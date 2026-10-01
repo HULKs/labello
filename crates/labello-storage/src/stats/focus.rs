@@ -23,6 +23,14 @@ impl DatasetRepository {
         events: &[EventLogEntry],
     ) -> StorageResult<()> {
         if events.iter().any(|event| {
+            if let EventPayload::Workflow { event } = &event.payload
+                && let labello_domain::WorkflowEvent::ItemConfirmed { confirmation } =
+                    event.as_ref()
+                && confirmation.review.is_none()
+                && confirmation.annotation.is_some()
+            {
+                return true;
+            }
             matches!(&event.payload,
                 EventPayload::TaskStateChanged { task_state }
                     if task_state.completed_by.is_some()

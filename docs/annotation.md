@@ -6,45 +6,37 @@ mutation. Inspect lets you browse images without claiming work.
 
 ## Annotate
 
-Draw bounding boxes or place the workflow's ordered keypoints. Select an existing
-object to edit it, and drag a placed keypoint to correct its position. New objects
-remain selected and editable after placement. Drawing a manual box preserves the
-current zoom and pan, including after reviewing prelabels. During prelabel review,
-Refocus explicitly zooms to the selected object. The inspector offers Visible and
-Occluded controls for positioned keypoints when the workflow allows occlusion.
-After releasing a placed or dragged keypoint, its editing visibility control and
-occlusion shortcut update that point without moving it. Clicking another placed
-point selects it for these controls. While a skeleton is incomplete, the separate
-placement controls still configure the next point.
-Submit & next stays at the bottom right, including compact layouts. Skeleton
-keypoints have three outcomes:
+Choose a class and activity in Workflow. The class heading and type icons are
+centered; configured activities share the card width. A workflow with existing
+objects has Objects and Overview buttons. Workflows without focusable sources
+show one normal annotation action. Every disabled choice has a reason icon.
+The boosted workflow has an amber rim and glow, with a short shimmer
+when motion is enabled. Its tooltip and accessible description identify the boost.
 
-| Outcome | Meaning | Canvas marker |
-| --- | --- | --- |
-| Visible | Exact positioned keypoint | Filled circle |
-| Occluded | Estimated position for a hidden keypoint | Hollow diamond |
-| Not present | Optional keypoint without coordinates | No marker or incident edge |
+Objects displays one box or whole skeleton, zoomed for focused work. Confirm saves
+and scores that item, then opens the next eligible Objects item, including across
+images. It does not enter Overview after the last object. Migration uses the same
+item boundary, with the current guide and skeleton keypoints.
 
-Autosave records edits, and Undo/Redo can restore earlier work as a new revision.
-Submission completes workflows without review; approval workflows enter a review
-round. Skipping releases work without approving it. Guided box-to-skeleton work
-has additional [migration](migration.md) steps.
+Overview displays the whole image and handles missing boxes or skeletons directly.
+It is available only when all prerequisite object work is complete. Both applicable
+passes are required. Complete Overview to submit the image for review or finish a
+workflow that has review disabled.
 
-The workflow selector identifies the current workflow and available work. Reason
-icons explain disabled cards through short tooltips and accessible descriptions.
-They distinguish completion balance, disabled review, an empty dataset, finished
-annotation or review, work awaiting submission, competing claims, review revisions,
-and excluded imports. Mixed restrictions use a generic unavailable icon.
-Submission, image loading, and a pending transition temporarily disable all cards
-and take precedence in that order. Background annotation saves keep workflow cards
-and keypoint controls stable and usable; the save indicator reports their progress.
-Switching workflows during autosave opens the usual confirmation, and submission
-or release waits until the current save finishes. Checking or failed availability alone leaves
-cards selectable; a known unavailable result remains visible during refresh.
-The current workflow keeps its white dot beside any reason icon. If
-availability causes an automatic switch, a persistent notice names the old and
-new workflow. The [focus bonus](scoring.md#focus-workflow) marks the current
-bonus workflow without changing assignment order.
+Drag to draw a box or place the skeleton's ordered keypoints. Box corners and edges
+resize it; dragging inside moves it. Use Visible or Occluded for positioned points
+when permitted, or Not present for an optional point without coordinates. A whole
+skeleton counts as one item regardless of its number of keypoints.
+
+Autosave preserves unfinished geometry. Skip saves partial work and releases it
+for another worker. Confirm remains at the bottom right, including compact layouts.
+The assignment and [migration](migration.md) guides describe exact completion rules.
+
+Switching workflows saves unfinished work and releases its reservations before
+loading the destination. Availability failures retain a visible reason; an unknown
+result remains selectable for retry. Automatic balance switches show a dismissible
+notice without blocking the new item. A configured Overview backlog limit may
+switch Objects to Overview so waiting images can finish.
 
 ## Canvas and shortcuts
 
@@ -83,7 +75,7 @@ A press while an action is unavailable does not queue a later submission.
 | Pan while editing | `Ctrl` plus primary-button drag, or middle-button drag; the modifier is configurable |
 | Refocus active object | `R`, or Refocus in review, migration, prelabel review, and selected migration companions |
 | Confirm / submit | `Space`; in review this acts on the focused item or final overview |
-| Previous image | Left arrow; subject to the previous-assignment eligibility rules |
+| Previous | Left arrow; returns to the previous eligible item in this queue |
 | Delete annotation | `Delete`; also discards a selected locally added review object |
 | Pen annotation | Primary-tip drag creates/moves/resizes boxes; tap places keypoints and drag moves them. See the [stylus contract](stylus-input.md) for tested event streams and pending device coverage. |
 
@@ -116,44 +108,37 @@ fallback. Gallery thumbnails use a separate 256-pixel profile.
 
 ## Review and correct
 
-1. Inspect each current object. **Approve** accepts an unchanged item.
-2. Correct erroneous geometry, remove an incorrect object, or change a migration
-   disposition. **Submit correction** retains that correction locally and moves
-   to the next item. Existing Y/N bindings remain available.
-3. Use Previous object, Next object, or Overview to revisit decisions. Reset item
-   restores the original and requires another decision. Discard corrections
-   clears all staged changes.
-4. At the image overview, add missing boxes or skeletons. Finishing one skeleton
-   retains it so you can add another. Delete removes the selected local addition.
-5. Once every original item has a decision and all additions are valid, submit
-   the final full-image decision. Without corrections, approval completes the
-   task. With corrections, submission saves the complete batch and starts a
-   fresh review round.
+Review starts only after annotation Overview is finished. In Objects, Approve
+confirms the current object; edit it and Submit correction to publish its correction.
+Both advance directly to another Objects item. Reset restores the original editor.
+In Overview, inspect the whole image and add or correct missing annotations in place.
+Approve finishes an unchanged image; Submit correction publishes its changes.
+Incomplete additions block confirmation but can be saved and skipped.
 
-Only the overview sends corrections to the server. Saving corrections never
-completes the task. One reviewer must approve every current object and the full
-image in the new round; the same reviewer may claim it. Previous approvals do
-not carry over. A rejection requires a substantive change: unchanged geometry,
-a comment alone, or a missing-object location marker cannot reject work.
+Added objects return to Objects review and then Overview. Movement or geometry
+edits require another Overview; unchanged object approvals remain valid.
+Normal Objects review excludes the final author. Overview excludes everyone who
+worked on that image. If no independent work exists anywhere in the user's dataset
+review queues, the server may grant a recorded final exception. See
+[review eligibility](assignment.md#review-eligibility-and-corrections).
 
-Optional correction reasons can describe an object or the full submission.
-Combined reasons, including object labels and separators, must fit 2000 UTF-8
-bytes. Migration exclusion requires a category and a note for Other. Failed
-requests retain the exact submission for retry.
+Correction reasons are optional and total at most 2000 UTF-8 bytes. Migration
+exclusions require a category and a note for Other. Failed requests preserve the
+exact submission for retry.
 
 ## Previous work and navigation
 
-Previous image can reopen the immediately previous eligible skipped or completed
-review in the same dataset and task. It is not a general history browser.
-Completed review opens a revision; the old outcome stays effective until the
-replacement is committed. Later work, changed configuration or targets, or a
-competing lease can make reopening unavailable. See the precise
-[previous-review rules](assignment.md#previous-review-and-decision-revisions).
+Previous follows the current workflow's queue. Objects moves by object; Overview
+moves by image. The default history depth is five and administrators can change it.
+Going C → B → A keeps B and C reserved; advancing returns through B and C before
+requesting new work. Reopening rechecks current ownership, versions and eligibility.
+A failed opening keeps the current workspace available.
 
-Untouched work can be released directly when leaving. Changed work prompts for a
-decision, and cancelling keeps the draft. A failed release or previous-review
-opening leaves the current workspace available. Statistics opens above the
-workspace and preserves the assignment, draft, selection, and canvas view.
+Skip saves partial work, releases the current item and prefers another available
+item. Leaving the workflow releases current, prepared and history reservations,
+while keeping saved work and visit history. Statistics opens above the workspace
+and preserves its assignment, editor and canvas. See
+[reservation rules](assignment.md#previous-skip-and-partial-work).
 
 ## Drafts, feedback, and connection state
 
@@ -186,13 +171,11 @@ prelabels, stylus support, or browser recovery.
 
 ## Model suggestions
 
-See [Model prelabels](prelabels.md) for selecting a model or no prelabels,
-loading and fallback states, overlap suppression, and confirming prelabels.
-Each object opens selected and zoomed in for editing. **Confirm & next** keeps it
-and advances; **Delete** or the Delete key removes it. The last object returns to
-the full image for **Submit & next**. Pending objects are never accepted by autosave.
-Hints load independently of the image. Model failures leave manual annotation
-available; confirmed objects follow the same submission and review workflow.
+[Model prelabels](prelabels.md) are configured by the dataset administrator.
+Users receive prepared Objects items without selecting or generating a model.
+Confirm & next accepts the current geometry; Delete marks a prediction for explicit
+confirmation. Saving or skipping a partial prediction does not accept it.
+The next item stays in Objects. Overview is selected separately for missing objects.
 
 ## Shortcut settings and button names
 
@@ -218,7 +201,7 @@ eligibility still depend on the selected task, assignment and loading state.
 | Setting (persisted action) | Buttons or other controls and current context |
 | --- | --- |
 | Confirm / submit (`next_image`) | Annotation: Submit & next; Confirm & next for pending prelabels; Next object to focus pending work; Next guide for companion boxes. Review: Approve or Submit correction. Migration: Save skeleton & advance / Save & next; Save missing object / Save object; Save object changes / Save changes; Keep current & advance / Keep & next; Confirm all guides & finish or Confirm no guides & finish / Confirm & finish. Object actions and final image submission retain their different semantics. |
-| Previous image (`previous_image`) | Previous image in annotation, review and migration; returns to the preceding eligible assignment. |
+| Previous (`previous_image`) | Previous item in annotation, review and migration, within the configured queue history. |
 | Undo (`undo_edit`) | Undo in annotation; Undo last keypoint in migration. Review correction uses fixed Ctrl/Cmd+Z, not this binding. |
 | Redo (`redo_edit`) | Redo in annotation. No migration or review redo. |
 | Save (`save_annotations`) | Save, inline or in More, in annotation. Migration object saves use Confirm / submit. |
@@ -226,7 +209,7 @@ eligibility still depend on the selected task, assignment and loading state.
 | Delete (`delete_annotation`) | Delete in annotation, including pending prelabels. Migration deletes a missing object being added, or removes the last guide keypoint. In review this shortcut only removes a selected new addition; Reset item is a different action. |
 | Previous workflow (`select_previous_workflow`) | Shortcut-only cycling; the Workflow panel also permits direct workflow selection. Annotation only. |
 | Next workflow (`select_next_workflow`) | Shortcut-only cycling of enabled workflows in annotation. |
-| Previous object (`select_previous_object`) | Previous object in annotation and migration; migration also revisits earlier guides. Review has a Previous object button, but its keyboard context currently excludes this binding. |
+| Previous object (`select_previous_object`) | Historical alias for Previous in item queues; hidden from new shortcut configuration. |
 | Next object (`select_next_object`) | Next object in migration and shortcut-only annotation selection. The prelabel primary Next object uses Confirm / submit. Review's Next object button is not dispatched by this binding. |
 | Visible / Occluded (`toggle_keypoint_hidden`) | Visible and Occluded controls for the editing target or next placement; only where the task allows occlusion. |
 | Not present (`mark_keypoint_absent`) | Mark a named keypoint as not present in annotation; Not present in migration. Requires an eligible optional point. |

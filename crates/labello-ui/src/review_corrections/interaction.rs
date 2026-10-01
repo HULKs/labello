@@ -3,6 +3,13 @@ use labello_domain::{ReviewDecision, ReviewTarget};
 
 impl LabelloApp {
     pub(crate) fn review_object_targets(&self) -> Vec<ReviewTarget> {
+        if let Some(context) = self.workflow_context() {
+            return if context.item.variant() == labello_domain::WorkflowVariant::Overview {
+                Vec::new()
+            } else {
+                context.review_target.iter().cloned().collect()
+            };
+        }
         self.selected_task()
             .and_then(|task| {
                 self.work
@@ -15,6 +22,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn review_position(&self) -> usize {
+        if self.workflow_context().is_some() {
+            return 0;
+        }
         if self.manual_migration_active() {
             self.work.migration.review_index
         } else {
@@ -29,6 +39,9 @@ impl LabelloApp {
     }
 
     pub(crate) fn review_overview(&self) -> bool {
+        if let Some(context) = self.workflow_context() {
+            return context.item.variant() == labello_domain::WorkflowVariant::Overview;
+        }
         self.review_position() == self.review_object_targets().len()
     }
 
@@ -273,7 +286,7 @@ impl LabelloApp {
         if !self.retain_review_editor() {
             return false;
         }
-        if overview {
+        if overview || self.workflow_context().is_some() {
             self.submit_staged_review_corrections()
         } else {
             self.finish_local_review_item();

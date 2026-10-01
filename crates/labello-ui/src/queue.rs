@@ -30,27 +30,29 @@ pub struct ImageQueue {
 }
 
 impl ImageQueue {
-    pub(crate) fn clear_prelabels(&mut self) {
-        for item in &mut self.items {
-            item.prelabels.clear();
-        }
-        for item in &mut self.prepared {
-            item.queued.prelabels.clear();
-        }
+    pub(crate) fn prepared_work_items(&self) -> Vec<labello_domain::WorkflowItemRef> {
+        self.prepared
+            .iter()
+            .map(|loaded| {
+                loaded
+                    .workflow_item()
+                    .unwrap_or_else(|| labello_domain::WorkflowItemRef {
+                        image_id: loaded.assignment.image_id.clone(),
+                        item: labello_domain::WorkflowItem::Overview,
+                    })
+            })
+            .collect()
     }
 
-    pub(crate) fn set_prelabels(
+    pub(crate) fn remove_prepared_assignment(
         &mut self,
-        image_id: &labello_domain::ImageId,
-        hints: Vec<PrelabelSuggestion>,
-    ) {
-        if let Some(item) = self
+        assignment: &labello_domain::Assignment,
+    ) -> Option<LoadedImage> {
+        let index = self
             .prepared
-            .iter_mut()
-            .find(|item| &item.queued.image.image_id == image_id)
-        {
-            item.queued.prelabels = hints;
-        }
+            .iter()
+            .position(|loaded| loaded.assignment.assignment_id == assignment.assignment_id)?;
+        self.prepared.remove(index)
     }
     pub fn new(queue_size: usize) -> Self {
         Self {
@@ -161,6 +163,7 @@ impl ImageQueue {
             .map(|failed| self.retry_delay.saturating_sub(failed.elapsed()))
     }
 
+    #[cfg(test)]
     pub(crate) fn wait_reason(&self) -> Option<QueueWaitReason> {
         self.wait_reason
     }
@@ -213,17 +216,6 @@ impl ImageQueue {
             loaded.assignment.assignment_id == assignment.assignment_id
                 && loaded.assignment.image_id == assignment.image_id
         })
-    }
-
-    pub(crate) fn remove_prepared_image(
-        &mut self,
-        image_id: &labello_domain::ImageId,
-    ) -> Option<LoadedImage> {
-        let index = self
-            .prepared
-            .iter()
-            .position(|loaded| &loaded.assignment.image_id == image_id)?;
-        self.prepared.remove(index)
     }
 
     pub(crate) fn drain_prepared_assignments(&mut self) -> Vec<labello_domain::Assignment> {

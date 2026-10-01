@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use labello_domain::{
     AnnotationGeometry, AnnotationId, Assignment, AssignmentId, AssignmentKind, ClassId,
     CorrectionId, DatasetId, DatasetRole, DatasetRoleAssignment, EventLogEntry, EventPayload,
-    ImageId, ImageRecord, ImbalanceConfig, LabelClass, PrelabelConfig, PrelabelConfigId,
-    TaskDefinition, TaskId, TaskStatus, UserAccount, UserId,
+    ImageId, ImageRecord, ImbalanceConfig, LabelClass, PrelabelConfig, TaskDefinition, TaskId,
+    TaskStatus, UserAccount, UserId,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 

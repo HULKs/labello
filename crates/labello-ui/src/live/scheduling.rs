@@ -36,6 +36,7 @@ impl LabelloApp {
             .availability
             .cache
             .push(crate::app::CachedAssignmentAvailability {
+                workflows: self.work.availability.workflows.iter().filter(|entry| entry.selection.kind == kind).cloned().collect(),
                 dataset_id,
                 kind,
                 tasks,
@@ -132,6 +133,7 @@ impl LabelloApp {
         }
         self.work.availability.dataset_id = Some(dataset_id);
         self.work.availability.kind = Some(kind);
+        self.work.availability.workflows = cached.workflows;
         self.work.availability.tasks = cached.tasks;
         self.work.availability.reasons = cached.reasons;
         self.work.availability.resolved = true;

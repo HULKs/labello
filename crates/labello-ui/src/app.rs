@@ -124,6 +124,8 @@ pub(crate) enum Drawer {
 pub(crate) enum PendingTransition {
     NextAssignment,
     PreviousAssignment(Assignment),
+    WorkItemHistory(labello_domain::WorkflowHistoryEntry),
+    WorkflowVariant(TaskId, labello_domain::WorkflowVariant),
     Workflow(TaskId),
     View(AppView),
     About,
@@ -201,6 +203,7 @@ pub(crate) struct LoadingState {
 
 #[derive(Default)]
 pub(crate) struct AssignmentAvailabilityState {
+    pub(crate) workflows: Vec<labello_domain::WorkflowAvailability>,
     pub(crate) dataset_id: Option<DatasetId>,
     pub(crate) kind: Option<AssignmentKind>,
     pub(crate) tasks: std::collections::BTreeMap<TaskId, bool>,
@@ -218,6 +221,7 @@ pub(crate) struct AssignmentAvailabilityState {
 
 #[derive(Clone)]
 pub(crate) struct CachedAssignmentAvailability {
+    pub(crate) workflows: Vec<labello_domain::WorkflowAvailability>,
     pub(crate) dataset_id: DatasetId,
     pub(crate) kind: AssignmentKind,
     pub(crate) tasks: std::collections::BTreeMap<TaskId, bool>,
@@ -407,24 +411,12 @@ pub(crate) struct StatisticsOverlayState {
     pub(crate) restore_focus: Option<egui::Id>,
 }
 
-#[derive(Clone)]
-pub(crate) struct AutomaticWorkflowChange {
-    pub(crate) previous: String,
-    pub(crate) current: String,
-    pub(crate) previous_type: AnnotationType,
-    pub(crate) current_type: AnnotationType,
-    pub(crate) reason: labello_domain::WorkflowUnavailableReason,
-    pub(crate) dataset_id: DatasetId,
-    pub(crate) view: AppView,
-    pub(crate) focus_pending: bool,
-}
-
 pub struct WorkState {
+    pub(crate) workflow: crate::work_items::WorkflowSession,
     pub(crate) image_transfers: crate::image_transfer::ImageTransfers,
     pub(crate) classes: Vec<LabelClass>,
     pub(crate) tasks: Vec<TaskDefinition>,
     pub(crate) selected_task_id: Option<TaskId>,
-    pub(crate) automatic_workflow_change: Option<AutomaticWorkflowChange>,
     pub(crate) review_submitters: Vec<labello_client::ReviewSubmitter>,
     pub(crate) reason_notice: Option<crate::workflow_reasons::ReasonNotice>,
     pub(crate) tool: Tool,
@@ -444,7 +436,6 @@ pub struct WorkState {
     pub(crate) accepted_prelabels: Vec<String>,
     pub(crate) prelabel_evidence:
         std::collections::BTreeMap<AnnotationId, Box<labello_domain::PrelabelEvidence>>,
-    pub(crate) prelabels: crate::prelabel_flow::PrelabelWorkState,
     pub(crate) prelabel_review: crate::prelabel_review::PrelabelReview,
     pub(crate) selected_annotation: Option<AnnotationId>,
     pub(crate) active_skeleton: Option<AnnotationId>,
@@ -469,7 +460,7 @@ pub struct WorkState {
     pub(crate) show_tutorial: bool,
     pub(crate) pending_transition: Option<PendingTransition>,
     pub(crate) drawer: Option<Drawer>,
-    pub(crate) review_details_focus_return: Option<egui::Id>,
+    pub(crate) work_panel_focus_return: Option<egui::Id>,
     pub(crate) workflow_panel_collapsed: bool,
     pub(crate) inspector_panel_collapsed: bool,
     pub(crate) show_settings: bool,

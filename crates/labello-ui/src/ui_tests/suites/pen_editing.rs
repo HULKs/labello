@@ -226,7 +226,7 @@ fn migration_overview_creates_and_selects_objects_on_canvas_preserving_edits_and
         app.work.inspector_panel_collapsed = true;
         let mut harness = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_eframe(|_| app);
         harness.run_steps(3);
-        assert!(harness.query_by_label_contains("Add missing object").is_none());
+        assert!(harness.query_by_label("Add missing object").is_none());
         assert!(harness.query_by_label_contains("Edit added").is_none());
         let first = harness.get_by_label("Annotation canvas").rect().center();
         drag_at(&mut harness, first - egui::vec2(0.0, 25.0), first);
@@ -300,7 +300,7 @@ fn background_keypoint_save_keeps_controls_live_and_preserves_newer_edits() {
         let mut harness = loaded_work_harness(api.clone());
         step_until(&mut harness, 12, |app| !app.loading.stats && !app.work.availability.loading);
         let workflow = harness.state().selected_workflow().unwrap();
-        let label = workflow.label();
+        let label = harness.state().workflow_entry_label(&workflow, Some(crate::panels::WorkflowActivity::Skeleton));
         let workflow_rect = harness.get_by_role_and_label(egui::accesskit::Role::Button, &label).rect();
         let center = harness.get_by_label("Annotation canvas").rect().center();
         click_at(&mut harness, center);
@@ -373,7 +373,7 @@ fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() 
     harness.step();
     click_accesskit_button(&mut harness, &destination.label());
     assert_eq!(harness.state().work.pending_transition,
-        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+        Some(crate::app::PendingTransition::WorkflowVariant(destination.task_id.clone(), labello_domain::WorkflowVariant::Overview)));
     assert!(harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
     assert!(!harness.get_by_label("Cancel").accesskit_node().is_disabled());
     click_accesskit_button(&mut harness, "Cancel");
@@ -387,7 +387,7 @@ fn workflow_switch_during_background_save_waits_for_save_and_can_be_cancelled() 
     step_until(&mut harness, 12, |app| !app.loading.saving);
     assert!(!harness.get_by_label("Submit and switch").accesskit_node().is_disabled());
     assert_eq!(harness.state().work.pending_transition,
-        Some(crate::app::PendingTransition::Workflow(destination.task_id.clone())));
+        Some(crate::app::PendingTransition::WorkflowVariant(destination.task_id.clone(), labello_domain::WorkflowVariant::Overview)));
     click_accesskit_button(&mut harness, "Submit and switch");
     step_until(&mut harness, 20, |app| app.work.selected_task_id.as_ref() == Some(&destination.task_id) && !app.loading.saving);
 }

@@ -19,14 +19,28 @@ impl LabelloApp {
         if let Some(config) = self.datasets.admin_config.as_mut() {
             ui.add_enabled_ui(enabled, |ui| {
                 admin_card(ui, "Image preloading card", |ui| {
-                    ui.heading("Image preloading");
+                    ui.heading("Work queues");
                     ui.horizontal_wrapped(|ui| {
-                        let label = ui.label("Upcoming images");
+                        let label = ui.label("Preloaded items");
                         ui.add(egui::DragValue::new(&mut config.preload_queue_size)
                             .range(1..=labello_domain::MAX_PRELOAD_QUEUE_SIZE))
                             .labelled_by(label.id);
                     });
                     ui.small("Preload upcoming annotation and review work. Larger queues use more memory and reserve more work. Balance limits may keep the queue below this target.");
+                    ui.horizontal_wrapped(|ui| {
+                        let label = ui.label("Previous items");
+                        ui.add(egui::DragValue::new(&mut config.workflow_queue.history_depth).range(0..=labello_domain::MAX_WORKFLOW_HISTORY_DEPTH)).labelled_by(label.id);
+                    });
+                    let mut limited = config.workflow_queue.max_pending_overviews.is_some();
+                    if ui.checkbox(&mut limited, "Limit images awaiting Overview").changed() {
+                        config.workflow_queue.max_pending_overviews = limited.then_some(10);
+                    }
+                    if let Some(limit) = &mut config.workflow_queue.max_pending_overviews {
+                        ui.horizontal_wrapped(|ui| {
+                            let label = ui.label("Images awaiting Overview");
+                            ui.add(egui::DragValue::new(limit).range(1..=100_000)).labelled_by(label.id);
+                        });
+                    }
                 });
                 admin_card(ui, "Overlapping boxes card", |ui| {
                     ui.heading("Overlapping boxes");

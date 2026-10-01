@@ -21,8 +21,8 @@ use labello_client::{
     CreateDatasetRequest, DatasetApi, DatasetSummary, DatasetUser, ImageApi, ImageExplorerQuery,
     ImageFile, ImagePreview, ImportApi, IngestJob, IngestJobStatus, IngestReport, KeybindingApi,
     OAuthCallbackRequest, OAuthLoginRequest, OfflineApi, OfflineBundleRequest, PrelabelApi,
-    PrelabelSuggestionRequest, ReviewApi, SessionInfo, SetDatasetRolesRequest, SnapshotFile,
-    StatsApi, TaskApi, UpdateDatasetConfigRequest, UserApi,
+    ReviewApi, SessionInfo, SetDatasetRolesRequest, SnapshotFile, StatsApi, TaskApi,
+    UpdateDatasetConfigRequest, UserApi,
 };
 use labello_domain::{
     AnnotationGeometry, AnnotationOrigin, AnnotationType, Assignment, AssignmentId, AssignmentKind,
@@ -89,6 +89,7 @@ include!("suites/presence.rs");
 
 include!("suites/workflow_reasons.rs");
 mod prelabels;
+mod work_items;
 
 include!("suites/loading_bars.rs");
 

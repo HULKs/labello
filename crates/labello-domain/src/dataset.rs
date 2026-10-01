@@ -43,6 +43,8 @@ pub struct DatasetMetadata {
     #[serde(default = "default_preload_queue_size")]
     pub preload_queue_size: usize,
     #[serde(default)]
+    pub workflow_queue: crate::WorkflowQueueConfig,
+    #[serde(default)]
     pub bounding_box_visibility: crate::BoundingBoxVisibility,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
@@ -64,6 +66,7 @@ impl DatasetMetadata {
             role_assignments: Vec::new(),
             imbalance: None,
             preload_queue_size: DEFAULT_PRELOAD_QUEUE_SIZE,
+            workflow_queue: crate::WorkflowQueueConfig::default(),
             bounding_box_visibility: crate::BoundingBoxVisibility::default(),
             prelabel_configs: Vec::new(),
         }
@@ -107,6 +110,8 @@ pub struct DatasetConfig {
     #[serde(default = "default_preload_queue_size")]
     pub preload_queue_size: usize,
     #[serde(default)]
+    pub workflow_queue: crate::WorkflowQueueConfig,
+    #[serde(default)]
     pub bounding_box_visibility: crate::BoundingBoxVisibility,
     pub prelabel_configs: Vec<PrelabelConfig>,
 }
@@ -132,6 +137,7 @@ impl DatasetConfig {
             role_assignments: metadata.role_assignments.clone(),
             imbalance: metadata.imbalance.clone(),
             preload_queue_size: metadata.preload_queue_size,
+            workflow_queue: metadata.workflow_queue.clone(),
             bounding_box_visibility: metadata.bounding_box_visibility,
             prelabel_configs: metadata.prelabel_configs.clone(),
         }
@@ -157,6 +163,7 @@ impl DatasetConfig {
             role_assignments: self.role_assignments,
             imbalance: self.imbalance,
             preload_queue_size: self.preload_queue_size,
+            workflow_queue: self.workflow_queue,
             bounding_box_visibility: self.bounding_box_visibility,
             prelabel_configs: self.prelabel_configs,
         }

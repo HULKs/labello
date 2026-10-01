@@ -3,6 +3,7 @@ use labello_domain::{
     MigrationReviewCorrection, ReviewCorrectionChange, ReviewCorrectionSubmission,
 };
 use std::collections::BTreeSet;
+mod workflow;
 
 impl DatasetRepository {
     pub async fn submit_review_corrections(
@@ -12,6 +13,16 @@ impl DatasetRepository {
         submission: ReviewCorrectionSubmission,
     ) -> StorageResult<ImageState> {
         submission.validate()?;
+        if self
+            .load_image_state(context.image_id)
+            .await?
+            .workflow_assignments
+            .contains_key(context.assignment_id)
+        {
+            return self
+                .submit_workflow_corrections(user_id, context, submission)
+                .await;
+        }
         let (_config_guard, metadata, image) = self.load_migration_inputs(context.image_id).await?;
         require_role(
             &metadata.role_assignments,

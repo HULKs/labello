@@ -16,6 +16,12 @@ pub enum WorkflowUnavailableReason {
     ReviewRevision,
     ImportExcluded,
     ReviewFinalized,
+    WorkflowDisabled,
+    ObjectsPending,
+    PreparationPending,
+    PreparationFailed,
+    OverviewLimit,
+    NoObjects,
     #[serde(other)]
     Unavailable,
 }

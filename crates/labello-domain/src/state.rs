@@ -53,6 +53,31 @@ pub struct ImageState {
     pub task_states: BTreeMap<TaskId, TaskState>,
     pub assignments: Vec<Assignment>,
     #[serde(default)]
+    pub workflow_preparations: BTreeMap<TaskId, crate::WorkflowPreparation>,
+    #[serde(default)]
+    pub workflow_assignments: BTreeMap<crate::AssignmentId, crate::WorkflowAssignmentContext>,
+    #[serde(default)]
+    pub workflow_seen: BTreeMap<crate::AssignmentId, crate::WorkflowSeen>,
+    #[serde(default)]
+    pub workflow_confirmations: BTreeMap<crate::AssignmentId, crate::WorkflowConfirmation>,
+    #[serde(default)]
+    pub workflow_confirmation_sequences: BTreeMap<crate::AssignmentId, u64>,
+    #[serde(default)]
+    pub workflow_review_barriers: BTreeMap<TaskId, u64>,
+    /// Annotation versions edited in Overview after their Objects pass finished.
+    #[serde(default)]
+    pub workflow_overview_versions: BTreeMap<AnnotationId, u32>,
+    #[serde(default)]
+    pub workflow_review_sequences: BTreeMap<crate::ReviewId, u64>,
+    #[serde(default)]
+    pub workflow_drafts: BTreeMap<crate::AssignmentId, crate::WorkflowDraft>,
+    #[serde(default)]
+    pub workflow_edit_drafts: BTreeMap<crate::AssignmentId, crate::WorkflowEditDraft>,
+    #[serde(default)]
+    pub workflow_contributors: BTreeSet<crate::UserId>,
+    #[serde(default)]
+    pub migration_authors: BTreeMap<TaskId, BTreeMap<ObjectGroupId, crate::UserId>>,
+    #[serde(default)]
     pub import_ids: BTreeSet<ImportId>,
     #[serde(default)]
     pub import_coverage: BTreeMap<TaskId, ImportCoverage>,
@@ -80,7 +105,7 @@ impl ImageState {
             image_id,
             current_sequence: 0,
             bounding_box_visibility: None,
-            review_projection_version: 1,
+            review_projection_version: 3,
             annotations: BTreeMap::new(),
             reviews: Vec::new(),
             review_rounds: BTreeMap::new(),
@@ -96,6 +121,18 @@ impl ImageState {
             adjudications: Vec::new(),
             task_states: BTreeMap::new(),
             assignments: Vec::new(),
+            workflow_preparations: BTreeMap::new(),
+            workflow_assignments: BTreeMap::new(),
+            workflow_seen: BTreeMap::new(),
+            workflow_confirmations: BTreeMap::new(),
+            workflow_confirmation_sequences: BTreeMap::new(),
+            workflow_review_barriers: BTreeMap::new(),
+            workflow_overview_versions: BTreeMap::new(),
+            workflow_review_sequences: BTreeMap::new(),
+            workflow_drafts: BTreeMap::new(),
+            workflow_edit_drafts: BTreeMap::new(),
+            workflow_contributors: BTreeSet::new(),
+            migration_authors: BTreeMap::new(),
             import_ids: BTreeSet::new(),
             import_coverage: BTreeMap::new(),
             included_import_tasks: BTreeSet::new(),
@@ -116,6 +153,7 @@ mod migration_replay;
 mod query;
 mod replay;
 mod review_replay;
+mod workflow_replay;
 
 pub fn rebuild_state(image_id: ImageId, events: &[EventLogEntry]) -> DomainResult<ImageState> {
     let mut state = ImageState::new(image_id);

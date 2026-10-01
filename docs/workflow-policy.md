@@ -111,3 +111,38 @@ with it. Replay uses that historical policy, while live reads overlay the curren
 configuration. See [event history](event-history.md#bounding-box-visibility) for
 wire compatibility. Visibility changes alone do not append deletion events,
 change historical task completion, or alter export selection.
+
+## Item queue ownership
+
+`labello-domain/workflow` owns object identity, preparation, partial geometry and
+edit proposals, confirmation receipts, independent-review policy and replayable
+item history. `state/workflow_replay.rs` validates each workflow event boundary.
+It has no filesystem, HTTP or UI dependencies.
+
+`labello-storage/assignment/workflow` owns queue candidates, live eligibility,
+display/seen publication, history reacquisition, draft transactions and reservation
+release. Dataset admission serializes independent-review fallback, claims and
+mutations before per-image locks. Configuration guards precede admission.
+Availability is advisory and reads reusable image projections without holding
+dataset admission; every claim and mutation repeats its applicable checks.
+`prelabel/workflow.rs` owns dataset-managed preparation and generation scheduling.
+
+Display and departure use the invalidated image projections to locate releasable
+reservations. Only candidate images are reloaded under their image locks; exact
+ownership, workflow selection and retained history are checked again before
+release. Claims also use these projections to skip finished, excluded and unavailable items
+before reloading a candidate under its image lock. Unprepared annotation images
+are evaluated with their prospective preparation, and the selected image still
+publishes preparation and validates the exact lease transaction under that lock.
+Warm navigation does not reread unrelated image histories.
+
+The client exposes typed work-item requests; API handlers validate request identity
+and authenticate the actor. `labello-ui/work_items` projects one leased item into
+its editor and navigates server history. It does not decide final completion,
+independent-review exceptions, score ownership or prelabel configuration.
+
+Overview edits to an already confirmed object preserve its finished Objects pass.
+Replay tracks the versions revised in a displayed annotation Overview separately
+from the original completion receipt, preserving its score ownership. Editing an
+object in Objects still requires confirmation. Empty saved edit proposals do not
+make their author an image contributor; actual proposals and decisions do.

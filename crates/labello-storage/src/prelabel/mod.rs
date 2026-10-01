@@ -1,4 +1,5 @@
-//! Derived hints are private, disposable data. This service never writes workflow events.
+//! Model execution and private job control. Published workflow preparations are
+//! durable events; retained inference results remain disposable accelerators.
 use crate::{
     DatasetRepository,
     fsjson::{read_json, write_json_atomic},
@@ -20,6 +21,7 @@ mod predictions;
 mod runs;
 #[cfg(test)]
 mod tests;
+mod workflow;
 pub use predictions::AcceptanceGuard;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -132,6 +134,7 @@ struct Inner {
     workers: admission::Admission,
     datasets: Mutex<BTreeMap<DatasetId, Arc<Mutex<Control>>>>,
     running: Mutex<BTreeMap<String, watch::Sender<bool>>>,
+    managed_sync: Mutex<BTreeMap<DatasetId, (std::time::Instant, String)>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -179,6 +182,8 @@ struct CachedResult {
 struct Run {
     summary: PrelabelRunSummary,
     items: Vec<WorkItem>,
+    #[serde(default)]
+    managed: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct WorkItem {
@@ -219,6 +224,7 @@ impl PrelabelService {
                 runner,
                 datasets: Mutex::new(BTreeMap::new()),
                 running: Mutex::new(BTreeMap::new()),
+                managed_sync: Mutex::new(BTreeMap::new()),
             }),
         })
     }

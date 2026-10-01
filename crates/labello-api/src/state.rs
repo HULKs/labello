@@ -65,6 +65,63 @@ impl ApiState {
         }
     }
 
+    /// Uses the same repository instances as HTTP requests so preparation and
+    /// display share admission locks. The executable owns scheduling/shutdown.
+    pub async fn maintain_workflow_prelabels(&self) -> ApiResult<()> {
+        let io_error = |source| labello_storage::StorageError::Io {
+            path: self.datasets_root.as_ref().clone(),
+            source,
+        };
+        let mut entries = match tokio::fs::read_dir(self.datasets_root()).await {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(io_error(error).into()),
+        };
+        while let Some(entry) = entries.next_entry().await.map_err(io_error)? {
+            if !entry.file_type().await.map_err(io_error)?.is_dir() {
+                continue;
+            }
+            let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            let dataset = DatasetId::from(name);
+            if dataset.validate_path_segment().is_err()
+                || !tokio::fs::try_exists(entry.path().join("labello.dataset.toml"))
+                    .await
+                    .map_err(io_error)?
+            {
+                continue;
+            }
+            let repo = self.repo(&dataset)?;
+            if self
+                .synchronize_workflow_prelabels(&dataset, &repo, false)
+                .await
+                .is_err()
+            {
+                // One unavailable dataset must not stop preparation for others.
+                tracing::warn!(event = "prelabels.maintenance.dataset_failed", dataset_id = %dataset);
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn synchronize_workflow_prelabels(
+        &self,
+        dataset: &DatasetId,
+        repo: &labello_storage::DatasetRepository,
+        force: bool,
+    ) -> crate::error::ApiResult<()> {
+        if let Some(service) = &self.prelabel_service {
+            service
+                .synchronize_workflows(dataset, repo.clone(), force)
+                .await
+                .map_err(crate::handlers::prelabels::failure)?;
+        } else {
+            repo.prepare_workflows_without_inference().await?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn lock_prelabel_configuration(
         &self,
         dataset: &DatasetId,

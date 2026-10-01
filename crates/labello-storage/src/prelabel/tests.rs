@@ -74,12 +74,29 @@ impl PrelabelRunner for Arc<Runner> {
                     task_id: task.task_id,
                     class_id: "person".into(),
                     confidence: 0.9,
-                    geometry: AnnotationGeometry::BoundingBox(BoundingBox {
-                        x: 0.1,
-                        y: 0.1,
-                        width: 0.3,
-                        height: 0.3,
-                    }),
+                    geometry: if task.annotation_type == AnnotationType::Skeleton {
+                        AnnotationGeometry::Skeleton(SkeletonGeometry {
+                            keypoints: task
+                                .skeleton
+                                .as_ref()
+                                .unwrap()
+                                .keypoints
+                                .iter()
+                                .map(|k| KeypointAnnotation {
+                                    name: k.name.clone(),
+                                    state: KeypointState::Visible,
+                                    point: Some(NormalizedPoint { x: 0.2, y: 0.3 }),
+                                })
+                                .collect(),
+                        })
+                    } else {
+                        AnnotationGeometry::BoundingBox(BoundingBox {
+                            x: 0.1,
+                            y: 0.1,
+                            width: 0.3,
+                            height: 0.3,
+                        })
+                    },
                     evidence: None,
                 }],
             })
@@ -93,6 +110,8 @@ struct Fixture {
     runner: Arc<Runner>,
     dataset: DatasetId,
 }
+
+mod workflow;
 
 #[tokio::test]
 async fn batch_cache_retains_gpu_execution_for_predictions_and_empty_results() {
@@ -632,7 +651,10 @@ async fn reset_is_scoped_idempotent_and_invalidates_evidence_without_touching_co
             .paused
     );
     assert_eq!(f.repo.load_dataset_config().await.unwrap(), config);
-    assert_eq!(f.runner.calls.load(Ordering::SeqCst), 1);
+    // Reset pauses only the selected workflow. Automatic preparation continues
+    // for the other workflow without changing its configuration or generation.
+    assert_eq!(f.finish().await.runs[0].generated, 3);
+    assert_eq!(f.runner.calls.load(Ordering::SeqCst), 4);
     f.command(PrelabelAdminCommand::Resume { scope }).await;
     assert!(!f.hints().await.generation.paused);
     assert!(matches!(

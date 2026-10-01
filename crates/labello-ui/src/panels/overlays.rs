@@ -116,7 +116,7 @@ impl LabelloApp {
             return;
         }
         if (self.loading.saving || self.loading.image) && !self.assignment_has_work()
-            && (matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_))
+            && (matches!(pending, PendingTransition::View(_) | PendingTransition::About | PendingTransition::Workflow(_) | PendingTransition::WorkflowVariant(_, _))
                 || (self.view == AppView::Review && matches!(pending, PendingTransition::PreviousAssignment(_)))) {
             return;
         }
@@ -355,7 +355,8 @@ impl LabelloApp {
             PendingTransition::Logout => crate::glossary::SIGN_OUT.to_string(),
             PendingTransition::NextAssignment => "Next assignment".to_string(),
             PendingTransition::PreviousAssignment(_) => "Previous assignment".to_string(),
-            PendingTransition::Workflow(task_id) => self
+            PendingTransition::WorkItemHistory(_) => crate::glossary::PREVIOUS.to_string(),
+            PendingTransition::Workflow(task_id) | PendingTransition::WorkflowVariant(task_id, _) => self
                 .workflow_choices()
                 .into_iter()
                 .find(|workflow| workflow.task_id == *task_id)
@@ -525,6 +526,10 @@ impl LabelloApp {
                 let mut action_list = |ui: &mut egui::Ui| {
                     let mut current_category = "";
                     for action in ordered_shortcut_actions() {
+                        if matches!(action, labello_domain::UserAction::SelectPreviousObject
+                            | labello_domain::UserAction::SelectNextObject
+                            | labello_domain::UserAction::SelectPreviousPrelabel
+                            | labello_domain::UserAction::SelectNextPrelabel) { continue; }
                         if !self.auth.prelabel_available
                             && matches!(
                                 action,

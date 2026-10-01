@@ -123,9 +123,26 @@ async fn serve() -> anyhow::Result<()> {
         "labello server listening"
     );
     let shutdown_state = state.clone();
+    let preparation_state = state.clone();
+    let preparation = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if preparation_state
+                .maintain_workflow_prelabels()
+                .await
+                .is_err()
+            {
+                tracing::warn!(event = "prelabels.maintenance.failed");
+            }
+        }
+    });
     axum::serve(listener, router(state))
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
+            preparation.abort();
+            let _ = preparation.await;
             shutdown_state.shutdown_exports().await;
             shutdown_state.shutdown_prelabels().await;
         })
