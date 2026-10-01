@@ -169,9 +169,13 @@ from zero points. Policy and historical credit are defined in
 [Contribution scoring](scoring.md). These fields use the existing authenticated,
 dataset-authorized statistics endpoint.
 
-Counts derive from existing events: labeling counts first image–task submissions
-per person; reviews count distinct decisions; accepted/rejected counts belong to
-the reviewed human work. Corrections count as rejections; imports and automatic
+Counts derive from existing events: labeling counts completed Objects and Overview
+items per person, image and task. A whole skeleton is one item. Legacy image/task
+submissions occupy the Overview slot, so compatibility events and later receipts
+cannot double count them. Item reviews count once per person, image, task and
+item; legacy reviews retain distinct-decision counting. Partial saves, Skip,
+retries and unchanged history reconfirmations add no credit. Accepted/rejected
+counts belong to the reviewed human work. Corrections count as rejections; imports and automatic
 work earn no human credit. Activity uses the submission/review date; revised
 decisions count on commit and retain earlier activity. Clients
 calculate periods, ranks, and acceptance percentages. Existing response fields,

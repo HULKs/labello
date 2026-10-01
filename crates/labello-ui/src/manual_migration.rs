@@ -1831,6 +1831,10 @@ impl LabelloApp {
         if self.work.migration.busy {
             return;
         }
+        if self.workflow_context().is_some() {
+            self.request_review(decision);
+            return;
+        }
         let Some((task_id, target)) = self.current_migration_review_target() else {
             return;
         };

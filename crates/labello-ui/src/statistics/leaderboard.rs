@@ -716,9 +716,9 @@ impl LeaderboardState {
                 ui.label("Reviewing a label earns 30% of its base value once per reviewer. Rejection deducts 50% once per label; an accepted geometry correction earns its author 20% once. Correction never refunds the rejection. Review and correction points receive no bonuses or daily-tier progress.");
                 ui.label("Score = 10 × square root of total points, rounded down. Rankings use exact points. Periods include deductions made during that period, so period scores can be negative. Historical work earns points; focus bonuses begin when scoring is activated.");
             }
-            ui.label("Streak: reach 20 labeled submissions or 30 reviews per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
-            ui.label("Labeled: distinct image–workflow submissions per person, including empty results. Resubmissions count once. Imported and automatic work earn no labeling credit.");
-            ui.label("Reviewed: review decisions made. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
+            ui.label("Streak: complete 20 annotation items or 30 review items per UTC day in this dataset. Gray flames still need today's goal; lit flames have reached it. Missing a day resets the streak. Streaks always use full history, regardless of the selected period.");
+            ui.label("Labeled: completed annotation Objects and Overview items per person, including empty Overviews. A whole skeleton is one item. Partial saves, Skip and repeated confirmations add no credit. Legacy image–workflow submissions count once. Imported and automatic work earn no labeling credit.");
+            ui.label("Reviewed: completed review Objects and Overview items per person. Repeated confirmations add no credit; legacy reviews count distinct decisions. Acceptance: approvals received / all reviews received on your work. Corrections count as rejections. Unattributable reviews do not affect acceptance.");
             ui.label("Acceptance shows accepted / reviewed counts. No reviews means no rating. Equal scores share rank; acceptance ties list larger samples first.");
         });
     }

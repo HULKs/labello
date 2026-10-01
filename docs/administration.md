@@ -114,8 +114,12 @@ from zero activity. Acceptance percentages accompany review counts.
 [Scoring](scoring.md) defines per-object rewards, daily tiers, focus bonuses,
 rejections, and the compressed displayed score.
 
-Daily streaks require 20 distinct image/task submissions or 30 reviews per dataset
-per UTC day. Flames and day counts appear beside contributors in the leaderboard
+Daily streaks require 20 annotation items or 30 review items per dataset
+per UTC day. Each completed Objects item and Overview item counts once per user,
+image and task. A whole skeleton is one item; partial saves, Skip and unchanged
+history reconfirmations add no credit. Legacy image/task submissions retain one
+unit, shared with any later Overview receipt to avoid duplicate credit. Flames
+and day counts appear beside contributors in the leaderboard
 and in the top bar. The top-bar flame opens Statistics. Streaks are derived from
 contributor history; reduced-motion settings suppress the goal animation.
 

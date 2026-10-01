@@ -182,10 +182,40 @@ async def run(kind, artifacts=None):
                 await page.keyboard.press("Space")
                 review = await until(lambda: next_display(before), "review-did-not-advance")
                 require(review[1]["item"]["kind"] == "object", "review-entered-overview")
+                for index in range(3):
+                    before = len(displayed)
+                    await page.keyboard.press("Space")
+                    if index < 2:
+                        await until(lambda: next_display(before), "next-review-object-not-displayed")
+                async def objects_reviewed():
+                    states = [await scenario.request("GET", f"/datasets/stylus/images/{image}") for image in images]
+                    return sum(1 for state in states for receipt in state.get("workflowConfirmations", {}).values()
+                               if receipt.get("review")) == 4
+                await until(objects_reviewed, "object-reviews-not-confirmed")
+                await page.wait_for_timeout(800)
+                before = len(displayed)
+                await page.mouse.click(260, 200)
+                review = await until(lambda: next_display(before), "review-overview-not-selected")
+                require(review[1]["item"]["kind"] == "overview", "review-overview-selected-object")
+                for index in range(2):
+                    before = len(displayed)
+                    if index == 0:
+                        await page.keyboard.press("Space")
+                        await until(lambda: next_display(before), "next-review-overview-not-displayed")
+                    else:
+                        await page.mouse.click(1380, 968)  # Visible Approve action in the bottom bar.
+                async def completed():
+                    states = [await scenario.request("GET", f"/datasets/stylus/images/{image}") for image in images]
+                    return all(state["taskStates"][task["taskId"]]["status"] == "completed" for state in states)
+                await until(completed, "review-overviews-not-completed")
+                stats = await scenario.request("GET", "/datasets/stylus/stats")
+                days = [day for person in stats["contributors"].values() for day in person["history"]]
+                require(sum(day["labeled"] for day in days) == 6, "annotation-item-streak-count")
+                require(sum(day["reviewed"] for day in days) == 6, "review-item-streak-count")
                 require(not scenario.errors, "browser-page-error")
                 print(json.dumps({"result": "passed", "browser": browser.version, "kind": kind,
                                   "images": 2, "objects": 4, "history": "C-B-A-B-C", "annotation_overviews": 2, "overview_edit_autosave": True,
-                                  "review": "focused advance and recorded fallback", "viewport": [1440, 1000]}))
+                                  "review": "4 Objects and 2 Overview, shortcut and button", "streak_units": {"annotation": 6, "review": 6}, "viewport": [1440, 1000]}))
             finally:
                 if artifacts and hasattr(scenario, "page"):
                     await scenario.page.screenshot(path=str(Path(artifacts) / f"navigation-{kind}.png"), clip={"x": 0, "y": 0, "width": 1440, "height": 108}, scale="css")

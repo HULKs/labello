@@ -19,10 +19,10 @@ fn daily_flame_threshold_motion_and_header_fit() {
     harness.step();
     let identity = egui::Id::new(("daily-flame", &harness.state().config.dataset_id, &user,
         harness.state().auth_epoch, harness.state().workspace_epoch, today));
-    assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 labels today · 0/30 reviews today · Flame unlit").rect().height() >= 44.0);
+    assert!(harness.get_by_label_contains("Your streak: 1 day streak · 19/20 annotation items today · 0/30 review items today · Flame unlit").rect().height() >= 44.0);
     harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].labeled = 20;
     harness.step();
-    assert!(harness.query_by_label("Your streak: 2 day streak · 20/20 labels today · 0/30 reviews today · Flame lit.").is_some());
+    assert!(harness.query_by_label("Your streak: 2 day streak · 20/20 annotation items today · 0/30 review items today · Flame lit.").is_some());
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
     for _ in 0..60 { harness.step(); }
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_none()));
@@ -44,10 +44,10 @@ fn daily_flame_threshold_motion_and_header_fit() {
     day.labeled = 0;
     day.reviewed = 29;
     harness.step();
-    assert!(harness.query_by_label_contains("0/20 labels today · 29/30 reviews today · Flame unlit").is_some());
+    assert!(harness.query_by_label_contains("0/20 annotation items today · 29/30 review items today · Flame unlit").is_some());
     harness.state_mut().datasets.stats.contributors.as_mut().unwrap().get_mut(&user).unwrap().history[1].reviewed = 30;
     harness.step();
-    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 0/20 labels today · 30/30 reviews today · Flame lit").is_some());
+    assert!(harness.query_by_label_contains("Your streak: 2 day streak · 0/20 annotation items today · 30/30 review items today · Flame lit").is_some());
     assert!(harness.ctx.data(|data| data.get_temp::<(Option<bool>, Option<f64>)>(identity).unwrap().1.is_some()));
     harness.state_mut().datasets.stats_error = Some("Unavailable".into());
     harness.step();
@@ -1489,4 +1489,22 @@ fn global_statistics_failure_waits_for_overview_retry_without_a_work_dataset() {
     harness.step();
     harness.get_by_label("Statistics unavailable");
     harness.get_by_label("Retry statistics");
+}
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn streak_item_tooltip_wraps_inside_narrow_viewports() {
+    for width in [320.0, 390.0, 600.0] {
+        let mut harness = Harness::builder().with_size(egui::vec2(width, 568.0)).build_eframe(|ctx| {
+            crate::inspector_presets::build(crate::inspector_presets::InspectorPreset::StreakLit, &ctx.egui_ctx)
+        });
+        harness.get_by_label("Close statistics").click();
+        harness.run_steps(3);
+        harness.ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        harness.get_by_label_contains("Your streak:").hover();
+        harness.run_steps(5);
+        let tooltip = harness.get_by_role_and_label(egui::accesskit::Role::Label,
+            "Your streak: 4 day streak · 20/20 annotation items today · 2/30 review items today · Flame lit.");
+        assert!(tooltip.rect().left() >= 0.0 && tooltip.rect().right() <= width, "tooltip exceeds viewport");
+    }
 }

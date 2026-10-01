@@ -167,7 +167,9 @@ tests and native inspection cover those presentation states.
 For Objects/Overview queues, run `python apps/labello-wasm/tests/workflow_items.py
 --kind bounding_box` and repeat with `--kind skeleton`. It uses disposable
 production data to check cross-image Objects work, C → B → A → B → C history,
-separate annotation Overview completion, and focused review. Optional `--artifacts`
+separate annotation Overview completion, focused review, review Overview submission
+through the shortcut and visible action, and one streak unit per completed item.
+Optional `--artifacts`
 captures only the workflow selector. Storage tests cover multi-user handoff,
 prelabel replacement, migration transactions, and exact score/replay invariants.
 

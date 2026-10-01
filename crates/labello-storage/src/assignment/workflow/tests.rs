@@ -428,6 +428,15 @@ async fn completed_object_history_does_not_duplicate_visit_or_completion() {
             .workflow_pending_objects(&task)
             .is_empty()
     );
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats[&users[0]]
+            .history
+            .iter()
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -605,6 +614,43 @@ async fn unfinished_skeleton_keypoints_are_durable_without_confirming_an_annotat
         repo.save_workflow_draft(&users[1], context(&second), partial, 0)
             .await
             .is_err()
+    );
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats
+            .values()
+            .flat_map(|s| &s.history)
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        0
+    );
+    let mut annotation = resumed
+        .current_annotation(&AnnotationId::from("pose"))
+        .unwrap()
+        .clone();
+    annotation.version += 1;
+    annotation.author_user_id = users[1].clone();
+    repo.apply_annotation_batch(
+        &users[1],
+        context(&second),
+        vec![EventPayload::AnnotationVersionCreated {
+            annotation,
+            previous_version: Some(1),
+            reason: None,
+        }],
+        true,
+    )
+    .await
+    .unwrap();
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats[&users[1]]
+            .history
+            .iter()
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        1,
+        "a whole skeleton counts once for its finisher"
     );
 }
 
@@ -851,6 +897,31 @@ async fn workflow_corrections_preserve_approvals_and_only_additions_need_objects
             .sum::<i64>(),
         400
     );
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats[&users[0]]
+            .history
+            .iter()
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        3
+    );
+    assert_eq!(
+        stats[&users[1]]
+            .history
+            .iter()
+            .map(|d| d.reviewed)
+            .sum::<usize>(),
+        4
+    );
+    assert_eq!(
+        stats[&users[2]]
+            .history
+            .iter()
+            .map(|d| d.reviewed)
+            .sum::<usize>(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1029,6 +1100,35 @@ async fn objects_finish_individually_before_overview_and_retry_does_not_publish_
         .await
         .unwrap();
     assert_eq!(submitted.task_states[&task].status, TaskStatus::Submitted);
+    let contributors = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        contributors[&users[0]]
+            .history
+            .iter()
+            .map(|day| day.labeled)
+            .sum::<usize>(),
+        1,
+        "Objects confirmation earns streak credit before Overview"
+    );
+    assert_eq!(
+        contributors[&users[1]]
+            .history
+            .iter()
+            .map(|day| day.labeled)
+            .sum::<usize>(),
+        1,
+        "Overview receipt and task submission count only once"
+    );
+    let restarted = DatasetRepository::new(_temp.path());
+    assert_eq!(
+        restarted
+            .dataset_stats()
+            .await
+            .unwrap()
+            .contributors
+            .unwrap(),
+        contributors
+    );
     assert_eq!(
         submitted,
         labello_domain::rebuild_state(
@@ -1133,6 +1233,21 @@ async fn skip_preserves_saved_geometry_and_releases_object_to_another_worker() {
     repo.apply_annotation_batch(&users[1], context(&next), vec![], true)
         .await
         .unwrap();
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats
+            .get(&users[0])
+            .map_or(0, |s| s.history.iter().map(|d| d.labeled).sum::<usize>()),
+        0
+    );
+    assert_eq!(
+        stats[&users[1]]
+            .history
+            .iter()
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1256,6 +1371,37 @@ async fn review_waits_for_annotation_overview_then_objects_and_records_final_fal
         .await
         .unwrap();
     assert_eq!(state.task_states[&task].status, TaskStatus::Completed);
+    let stats = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        stats[&users[0]]
+            .history
+            .iter()
+            .map(|d| d.labeled)
+            .sum::<usize>(),
+        2
+    );
+    assert_eq!(
+        stats[&users[1]]
+            .history
+            .iter()
+            .map(|d| d.reviewed)
+            .sum::<usize>(),
+        2
+    );
+    let reopened = repo
+        .reopen_workflow_item(&users[1], context(&overview))
+        .await
+        .unwrap();
+    approve_item(&repo, &users[1], &reopened).await;
+    let repeated = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        repeated[&users[1]]
+            .history
+            .iter()
+            .map(|d| d.reviewed)
+            .sum::<usize>(),
+        2
+    );
 }
 
 #[tokio::test]
