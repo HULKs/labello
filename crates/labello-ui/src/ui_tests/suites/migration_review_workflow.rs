@@ -265,3 +265,31 @@ fn excluded_workflow_review_can_still_submit_a_changed_exclusion_reason() {
         }]
     ));
 }
+
+#[cfg(feature = "inspector-presets")]
+#[test]
+fn migration_overview_approval_uses_the_leased_workflow_target() {
+    let mut app = migration_workflow_review(false);
+    let assignment = app.work.assignment.clone().unwrap();
+    let task = app.selected_task().unwrap().clone();
+    let state = app.work.current_state.as_mut().unwrap();
+    let target = state.review_targets(&task).unwrap().last().unwrap().clone();
+    let context = state.workflow_assignments.get_mut(&assignment.assignment_id).unwrap();
+    context.item = labello_domain::WorkflowItem::Overview;
+    context.review_target = Some(target.clone());
+    app.discard_correction();
+    app.install_workflow_item();
+    app.runtime.api = Some(Rc::new(SpyApi::new()));
+    app.runtime.commands.clear();
+    assert!(app.review_overview());
+    assert!(app.review_can_approve());
+    app.work.migration.busy = true;
+    app.trigger_migration_review_action(labello_domain::ReviewDecision::Approved);
+    assert!(app.runtime.commands.is_empty());
+    app.work.migration.busy = false;
+    app.confirm_review_item();
+    assert!(app.runtime.commands.iter().any(|command| matches!(command,
+        UiCommand::Review { review, phase: crate::app::ReviewPhase::FullImage, .. }
+            if review.target == target)), "Overview must use the captured target and the item review transaction");
+    assert!(!app.runtime.commands.iter().any(|command| matches!(command, UiCommand::Migration { .. })));
+}

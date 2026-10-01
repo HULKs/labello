@@ -5314,6 +5314,16 @@ async fn overview_revisits_canonical_migration_with_its_own_lease_through_replay
         TaskStatus::Submitted
     );
     assert_eq!(result.image_state.workflow_confirmations.len(), 2);
+    let contributors = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        contributors[&f.annotator]
+            .history
+            .iter()
+            .map(|day| day.labeled)
+            .sum::<usize>(),
+        2,
+        "migration Objects and Overview each advance the streak once"
+    );
     let events = repo.load_events(&f.image_id).await.unwrap();
     for boundary in 0..=events.len() {
         rebuild_state(f.image_id.clone(), &events[..boundary]).unwrap();
@@ -5451,6 +5461,62 @@ async fn excluded_workflow_review_correction_persists_and_retries_without_legacy
     assert!(
         overview.is_some(),
         "the corrected image requires Overview review after Objects review"
+    );
+    let overview = overview.unwrap();
+    let displayed = repo
+        .display_workflow_item(&f.reviewers[0], context(&overview))
+        .await
+        .unwrap();
+    let decision = ReviewRecord {
+        review_id: labello_domain::ReviewId::generate(),
+        target: displayed.workflow_assignments[&overview.assignment_id]
+            .review_target
+            .clone()
+            .unwrap(),
+        reviewer_user_id: f.reviewers[0].clone(),
+        decision: ReviewDecision::Approved,
+        timestamp: labello_domain::now(),
+        comment: None,
+    };
+    assert!(
+        repo.confirm_workflow_review(&f.reviewers[1], context(&overview), decision.clone())
+            .await
+            .is_err()
+    );
+    let completed = repo
+        .confirm_workflow_review(&f.reviewers[0], context(&overview), decision.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        completed.task_states[&f.task_id].status,
+        TaskStatus::Completed
+    );
+    assert_eq!(
+        repo.confirm_workflow_review(&f.reviewers[0], context(&overview), decision)
+            .await
+            .unwrap(),
+        completed
+    );
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        completed
+    );
+    let contributors = repo.dataset_stats().await.unwrap().contributors.unwrap();
+    assert_eq!(
+        contributors[&f.reviewers[0]]
+            .history
+            .iter()
+            .map(|day| day.reviewed)
+            .sum::<usize>(),
+        2
+    );
+    assert_eq!(
+        contributors[&f.reviewers[1]]
+            .history
+            .iter()
+            .map(|day| day.reviewed)
+            .sum::<usize>(),
+        1
     );
 }
 

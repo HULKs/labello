@@ -1,9 +1,14 @@
 # Contribution scoring
 
-Scores belong to one dataset and user. Existing contributor activity counts remain
-available and retain their earlier meaning: `labeled` counts submitted image/task
-combinations, whereas the score's daily `labels` counts individual annotation
-objects. An empty submission advances activity but earns no label points.
+Scores belong to one dataset and user. Contributor activity and score counts are
+separate: `labeled` counts completed annotation Objects and Overview items,
+whereas the score's daily `labels` counts individual annotation objects. A whole
+skeleton is one item. An empty Overview advances activity but earns no label
+points. Item activity counts once per user, image, task and item, including review
+items. Legacy submissions retain one unit in the Overview slot; legacy reviews
+retain distinct-decision counting. Partial saves, Skip, retries and unchanged
+history reconfirmations add no activity. These activity counts drive streaks;
+the score reward policy below is unchanged.
 
 ## Rewards
 

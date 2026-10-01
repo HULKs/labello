@@ -220,6 +220,10 @@ immediately; Overview submits its image changes together. Historical whole-image
 revision approval remains staged. Reset invalidates the affected decision.
 Unchanged items still require approval, even when other items have corrections.
 
+Migration review queue items submit through the shared item-review command using
+the server-captured target, including Overview. Only legacy whole-image migration
+assignments use positional migration-review target selection and its endpoint.
+
 Overview additions retain editor and undo history after completion. The next blank
 canvas placement starts another object. Reopened or recovered completed additions
 are staged before another starts; editing an earlier point in an unfinished

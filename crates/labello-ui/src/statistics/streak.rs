@@ -32,12 +32,19 @@ pub(super) fn badge(ui: &mut egui::Ui, streak: LabelStreak, name: &str) {
     }
     let details = description(streak, name);
     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &details));
-    response.response.on_hover_text(details);
+    details_tooltip(response.response, &details);
+}
+
+fn details_tooltip(response: egui::Response, details: &str) -> egui::Response {
+    response.on_hover_ui(|ui| {
+        ui.set_max_width((ui.ctx().content_rect().width() - 32.0).clamp(1.0, 480.0));
+        ui.add(egui::Label::new(details).wrap());
+    })
 }
 
 fn description(streak: LabelStreak, name: &str) -> String {
     format!(
-        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} labels today · {}/{DAILY_REVIEW_GOAL} reviews today · Flame {}.",
+        "{name}: {} day streak · {}/{DAILY_LABEL_GOAL} annotation items today · {}/{DAILY_REVIEW_GOAL} review items today · Flame {}.",
         streak.days,
         streak.labeled_today,
         streak.reviewed_today,
@@ -177,7 +184,7 @@ impl LabelloApp {
                 scale,
             );
         }
-        let response = response.response.on_hover_text(&details);
+        let response = details_tooltip(response.response, &details);
         if self.navigation.statistics.restore_focus == Some(response.id)
             && ui
                 .ctx()
