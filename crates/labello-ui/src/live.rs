@@ -186,6 +186,14 @@ impl LabelloApp {
         }
     }
 
+    pub(crate) fn start_frame_commands(&mut self) {
+        // Starting an async request does not wait for it. Dispatch a bounded
+        // batch so background refreshes do not add frames to item navigation.
+        for _ in 0..self.runtime.commands.len().min(8) {
+            self.start_next_command();
+        }
+    }
+
     pub(crate) fn start_next_command(&mut self) {
         let Some(command) = self.runtime.commands.pop_front() else {
             return;

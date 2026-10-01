@@ -211,7 +211,7 @@ impl eframe::App for LabelloApp {
         self.queue_current_drafts();
         self.persist_workspace_preference();
         self.advance_build_reload(ui.ctx());
-        self.start_next_command();
+        self.start_frame_commands();
         if self.work.save_status == SaveStatus::Dirty
             && let Some(edited) = self.work.last_edit_at
         {

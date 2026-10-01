@@ -293,8 +293,35 @@ async fn workflow_advancing_reloads_only_changed_images() {
         .roles
         .insert(DatasetRole::Reviewer);
     repo.save_dataset(&metadata).await.unwrap();
-    for image in ["img_0", "img_1"] {
+    for image in ["img_8", "img_9"] {
         seed(&repo, &task, &users[0], image, "box").await;
+    }
+    // Put finished images before the two remaining candidates in queue order.
+    for image in metadata
+        .images
+        .keys()
+        .filter(|id| id.as_str() != "img_8" && id.as_str() != "img_9")
+    {
+        repo.append_payload(
+            image,
+            &Actor {
+                user_id: users[0].clone(),
+                role: DatasetRole::Annotator,
+            },
+            EventPayload::TaskStateChanged {
+                task_state: TaskState {
+                    task_id: task.clone(),
+                    status: TaskStatus::Completed,
+                    outcome: None,
+                    assigned_to: None,
+                    completed_by: Some(users[0].clone()),
+                    completed_at: Some(labello_domain::now()),
+                    updated_at: labello_domain::now(),
+                },
+            },
+        )
+        .await
+        .unwrap();
     }
     repo.prepare_review_history().await.unwrap();
     for (kind, user) in [
@@ -311,11 +338,23 @@ async fn workflow_advancing_reloads_only_changed_images() {
                 .await
                 .unwrap();
             for _ in 0..2 {
+                repo.reset_image_state_load_count();
+                repo.reset_event_load_count();
                 let item = repo
                     .claim_workflow_item(user, &selection, &[])
                     .await
                     .unwrap()
                     .unwrap();
+                assert!(
+                    repo.image_state_load_count() <= 4,
+                    "{kind:?} {variant:?} claim must skip finished images: {} loads",
+                    repo.image_state_load_count()
+                );
+                assert!(
+                    repo.event_load_count() <= 6,
+                    "{kind:?} {variant:?} claim must skip finished histories: {} loads",
+                    repo.event_load_count()
+                );
                 // Isolate warm navigation from the separate score-window initialization.
                 repo.scoring_focus(labello_domain::now()).await.unwrap();
                 repo.reset_image_state_load_count();

@@ -20,7 +20,10 @@ Closed `UiCommand` and `UiMessage` enums define the async boundary. The live loo
 checks request ownership before delegating to feature reducers and dispatchers.
 `live/ownership.rs` owns request IDs, auth/workspace/import epochs, command
 rollback, stale-response rejection, and prepared-assignment cleanup. Feature
-reducers use that gate rather than introducing their own.
+reducers use that gate rather than introducing their own. Each frame starts up to
+eight already-queued requests in order. Dependencies still enter the queue only
+after their prerequisite response; background refreshes do not add a frame each
+before item activation. The bounded batch leaves rendering time for the UI.
 
 Structured unauthorized failures survive dispatch. After an accepted failure is
 reduced, the root coalesces a session recheck. Recovery blocks work commands and

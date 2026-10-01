@@ -645,6 +645,52 @@ impl DatasetRepository {
                 {
                     continue;
                 }
+                // Use invalidated projections to skip unrelated histories. Admission
+                // serializes claims; the selected image is still reloaded and validated
+                // under its lock before any preparation or lease is published.
+                let projected = self
+                    .workflow_polling_state(image_id, metadata.bounding_box_visibility)
+                    .await?;
+                let mut prepared;
+                let projected = if selection.kind == AssignmentKind::Annotation
+                    && projected.assignment_eligible(&task.task_id)
+                    && !projected.workflow_preparations.contains_key(&task.task_id)
+                {
+                    if labello_domain::workflow_prelabel_config(&metadata, task).is_some() {
+                        continue;
+                    }
+                    prepared = projected.as_ref().clone();
+                    prepared
+                        .workflow_preparations
+                        .insert(task.task_id.clone(), initial_preparation(&projected, task));
+                    &prepared
+                } else {
+                    projected.as_ref()
+                };
+                let now = labello_domain::now();
+                if !candidates(projected, task, selection)?
+                    .iter()
+                    .any(|context| {
+                        excluded.contains(&WorkflowItemRef {
+                            image_id: image_id.clone(),
+                            item: context.item.clone(),
+                        }) == allow_excluded
+                            && (claimable(projected, selection, context, now)
+                                || projected.assignments.iter().any(|a| {
+                                    a.task_id == task.task_id
+                                        && a.kind == selection.kind
+                                        && a.assigned_to == *user
+                                        && a.status == AssignmentStatus::Active
+                                        && !assignment_is_expired(a, now)
+                                        && projected
+                                            .workflow_assignments
+                                            .get(&a.assignment_id)
+                                            .is_some_and(|held| held.item == context.item)
+                                }))
+                    })
+                {
+                    continue;
+                }
                 let lock = self.image_lock(image_id);
                 let _image = lock.lock().await;
                 let mut state = self.load_image_state(image_id).await?;

@@ -434,7 +434,8 @@ labeling speed. Image delivery, browser rendering, TLS and proxy latency are
 outside this measurement; route handlers and response bodies are exercised.
 This benchmark uses the image-assignment endpoint, not Objects/Overview item
 display. Storage workflow regressions separately bound image-state and event-log
-reads during warm item display/submission in both annotation and review, and
+reads during warm item claims, display and submission in both annotation and review,
+including claims after a prefix of finished images, and
 check retained and unseen reservation release on departure.
 
 ```sh

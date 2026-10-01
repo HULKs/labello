@@ -1475,3 +1475,31 @@ fn workspace_zoom_widgets_are_removed_in_all_layouts() {
         }
     }
 }
+
+#[test]
+fn queued_refreshes_do_not_delay_next_work_until_another_frame() {
+    let api = Rc::new(SpyApi::new());
+    api.set_no_assignment(true);
+    let mut app = base_live_app(api.clone());
+    app.setup.started = true;
+    app.view = AppView::Stats;
+    for _ in 0..3 {
+        app.request_stats();
+        app.loading.stats = false;
+    }
+    let task_id = api.metadata().tasks[0].task_id.clone();
+    app.queue_command(UiCommand::ClaimAssignment {
+        request: test_request(&app, 9000, Some("demo")), operation_id: 9000,
+        dataset_id: "demo".into(), task_id, variant: labello_domain::WorkflowVariant::Objects,
+        excluded_items: vec![], kind: AssignmentKind::Annotation, reclaim_assignment_id: None,
+    });
+    app.start_frame_commands();
+    assert_eq!(api.counts().assign_next_image, 1, "next work must start in the same frame as queued refreshes");
+    assert!(app.runtime.commands.is_empty());
+    for _ in 0..12 {
+        app.request_stats();
+        app.loading.stats = false;
+    }
+    app.start_frame_commands();
+    assert_eq!(app.runtime.commands.len(), 4, "dispatch must retain a bounded frame budget");
+}

@@ -130,7 +130,11 @@ dataset admission; every claim and mutation repeats its applicable checks.
 Display and departure use the invalidated image projections to locate releasable
 reservations. Only candidate images are reloaded under their image locks; exact
 ownership, workflow selection and retained history are checked again before
-release. Warm navigation does not reread unrelated image histories.
+release. Claims also use these projections to skip finished, excluded and unavailable items
+before reloading a candidate under its image lock. Unprepared annotation images
+are evaluated with their prospective preparation, and the selected image still
+publishes preparation and validates the exact lease transaction under that lock.
+Warm navigation does not reread unrelated image histories.
 
 The client exposes typed work-item requests; API handlers validate request identity
 and authenticate the actor. `labello-ui/work_items` projects one leased item into
