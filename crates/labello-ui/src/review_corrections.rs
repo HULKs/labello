@@ -335,11 +335,25 @@ impl LabelloApp {
         else {
             return false;
         };
-        let Some(captured) = self.work.current_state.as_ref().and_then(|state| {
-            state
-                .review_assignment_contexts
-                .get(&assignment.assignment_id)
-        }) else {
+        let context = self.work.current_state.as_ref().and_then(|state| {
+            if state
+                .workflow_assignments
+                .contains_key(&assignment.assignment_id)
+            {
+                let task = self.selected_task()?;
+                Some((
+                    state.review_round(&assignment.task_id)?.clone(),
+                    state.review_target_fingerprint(task),
+                ))
+            } else {
+                let captured = state
+                    .review_assignment_contexts
+                    .get(&assignment.assignment_id)?;
+                Some((captured.round.clone(), captured.target_fingerprint.clone()))
+            }
+        });
+        let Some((round, target_fingerprint)) = context else {
+            self.runtime.error = Some("Review context is unavailable. Save and skip this item, then reopen it to retry your correction.".into());
             return false;
         };
         let reason = self.correction_reason_text();
@@ -349,8 +363,8 @@ impl LabelloApp {
             .submission
             .get_or_insert_with(|| ReviewCorrectionSubmission {
                 correction_id: CorrectionId::generate(),
-                round: captured.round.clone(),
-                target_fingerprint: captured.target_fingerprint.clone(),
+                round,
+                target_fingerprint,
                 changes: self.work.review_corrections.changes.clone(),
                 reason: (!reason.is_empty()).then_some(reason),
             })
@@ -462,34 +476,6 @@ impl LabelloApp {
                     object_group_id, ..
                 } => {
                     self.review_exclusion_menu(ui, object_group_id.clone(), ready);
-                    if self.work.correction_draft.is_none()
-                        && let Some(target) = self
-                            .selected_task()
-                            .and_then(|task| {
-                                self.work
-                                    .current_state
-                                    .as_ref()?
-                                    .migration_target_sets
-                                    .get(&task.task_id)
-                            })
-                            .and_then(|set| {
-                                set.targets
-                                    .iter()
-                                    .find(|target| target.object_group_id == object_group_id)
-                            })
-                            .cloned()
-                        && ui
-                            .add_enabled(
-                                ready,
-                                egui::Button::new("Create skeleton for excluded object"),
-                            )
-                            .clicked()
-                    {
-                        self.begin_new_review_object(Some((
-                            target.reserved_skeleton_annotation_id,
-                            object_group_id,
-                        )));
-                    }
                 }
                 _ => {}
             }
@@ -633,6 +619,42 @@ impl LabelloApp {
         } else {
             self.keep_review_change(change);
         }
+    }
+
+    pub(crate) fn excluded_review_creation_target(
+        &self,
+    ) -> Option<(AnnotationId, labello_domain::ObjectGroupId)> {
+        if self.view != AppView::Review || self.work.correction_draft.is_some() {
+            return None;
+        }
+        let labello_domain::ReviewTarget::MigrationDisposition {
+            object_group_id, ..
+        } = self.focused_review_target()?
+        else {
+            return None;
+        };
+        let task = self.selected_task()?;
+        let state = self.work.current_state.as_ref()?;
+        let disposition = state
+            .migration_dispositions
+            .get(&task.task_id)?
+            .get(&object_group_id)?;
+        if !matches!(
+            disposition.status,
+            MigrationDispositionStatus::Excluded { .. }
+        ) {
+            return None;
+        }
+        let target = state
+            .migration_target_sets
+            .get(&task.task_id)?
+            .targets
+            .iter()
+            .find(|target| target.object_group_id == object_group_id)?;
+        Some((
+            target.reserved_skeleton_annotation_id.clone(),
+            object_group_id,
+        ))
     }
 
     pub(crate) fn begin_new_review_object(

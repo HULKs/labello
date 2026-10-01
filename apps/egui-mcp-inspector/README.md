@@ -251,3 +251,8 @@ server claims, history or draft handoff; use disposable live data for those chec
 `statistics-global` renders the aggregate of two synthetic dataset projections.
 `global-shortcuts` renders the explicit legacy preference selection above Setup.
 Both use the shared production renderers without account or image data.
+
+The `migration-review-object` and `migration-review-excluded` presets use Objects
+review assignments without legacy review contexts. They show read-only source-box
+context and the bottom-bar skeleton creation action with the Inspector collapsed.
+They prove shared rendering; use live browser checks for correction submission.

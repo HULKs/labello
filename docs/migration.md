@@ -115,3 +115,16 @@ For transaction, retry, and compatibility details, see
 [assignment](assignment.md#migration-companions),
 [API commands](api.md#manual-migration-routes), and
 [persistence](event-history.md#discovered-migration-companions).
+
+## Review excluded objects
+
+Objects review shows the source bounding box alongside its migrated skeleton or
+keypoint as a read-only guide. Refocus returns to that source box.
+
+For an excluded object, use **Create skeleton for excluded object** in the bottom
+bar, place its keypoints, and **Submit correction**. On narrow screens the creation
+button uses connected keypoints with a plus sign, retaining its full accessible
+name and tooltip. The Inspector can stay closed. Exclusion reasons remain editable
+in the Inspector. A valid correction replaces the exclusion and advances review;
+failed submissions preserve the correction for retry. The existing Objects and
+Overview review requirements still apply.

@@ -25,6 +25,34 @@ impl LabelloApp {
             })
     }
 
+    pub(crate) fn review_source_box(&self) -> Option<labello_domain::AnnotationVersion> {
+        if self.view != AppView::Review || self.review_overview() {
+            return None;
+        }
+        let state = self.work.current_state.as_ref()?;
+        let task = self.selected_task()?;
+        let group = match self.focused_review_target()? {
+            labello_domain::ReviewTarget::AnnotationVersion { annotation_id, .. } => state
+                .current_annotation(&annotation_id)?
+                .object_group_id
+                .clone()?,
+            labello_domain::ReviewTarget::MigrationDisposition {
+                object_group_id, ..
+            } => object_group_id,
+            _ => return None,
+        };
+        let target = state
+            .migration_target_sets
+            .get(&task.task_id)?
+            .targets
+            .iter()
+            .find(|target| target.object_group_id == group)?;
+        state
+            .current_annotation(&target.guide_annotation_id)
+            .filter(|guide| !guide.deleted)
+            .cloned()
+    }
+
     pub(crate) fn workspace_canvas(&mut self, ui: &mut egui::Ui) {
         if self.workspace_bars_loading() {
             let opacity = ui.opacity();
@@ -76,6 +104,7 @@ impl LabelloApp {
                     annotations.push(source);
                 }
             }
+            let source_box = self.review_source_box();
             let skeleton_edges = self
                 .selected_task()
                 .and_then(|task| task.skeleton.as_ref())
@@ -133,7 +162,7 @@ impl LabelloApp {
                     .set_review_focus(if self.review_overview() {
                         None
                     } else {
-                        review_annotation
+                        source_box.as_ref().or(review_annotation)
                     });
             } else if self.view == AppView::Annotate {
                 let focus = selected_annotation.as_ref().and_then(|id| {
@@ -173,6 +202,14 @@ impl LabelloApp {
             let mut missing_action = None;
             let mut styles = std::collections::BTreeMap::new();
             self.style_review_correction_previews(&annotations, &mut styles);
+            if let Some(guide) = source_box {
+                styles.insert(
+                    guide.annotation_id.clone(),
+                    crate::canvas::CanvasAnnotationStyle::dashed(theme::ACCENT_HOVER),
+                );
+                // Context only: keep the guide outside editable state and selectable IDs.
+                annotations.push(guide);
+            }
             if self.work.annotations.iter().any(|annotation| {
                 Some(&annotation.annotation_id) == selected_annotation.as_ref()
                     && self.companion_needs_box(annotation)

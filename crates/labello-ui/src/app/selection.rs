@@ -157,6 +157,9 @@ impl LabelloApp {
         if self.workflow_context().is_some_and(|context| context.item == labello_domain::WorkflowItem::Overview) {
             return None;
         }
+        if let Some(guide) = self.review_source_box() {
+            return Some(guide);
+        }
         if self.manual_migration_active() {
             return self.current_migration_guide();
         }

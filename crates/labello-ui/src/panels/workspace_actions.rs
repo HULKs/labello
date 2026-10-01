@@ -1,6 +1,6 @@
 impl LabelloApp {
     pub(crate) fn review_secondary_action_count(&self) -> usize {
-        2 + usize::from(self.workflow_context().is_none()) + usize::from(self.bar_has_previous_image()) + usize::from(self.bar_review_removable())
+        2 + usize::from(self.workflow_context().is_none()) + usize::from(self.bar_has_previous_image()) + usize::from(self.bar_review_removable()) + usize::from(self.excluded_review_creation_target().is_some())
     }
 
     fn review_bottom_actions(&mut self, ui: &mut egui::Ui) {
@@ -15,6 +15,12 @@ impl LabelloApp {
             app.review_object_navigation(ui, width);
             app.previous_review_action(ui, width);
             app.discard_review_action(ui, width);
+            if let Some(target) = app.excluded_review_creation_target()
+                && workspace_action_button(ui, ready && app.work.review_corrections.submission.is_none(),
+                    "Create skeleton for excluded object", WorkspaceActionIcon::CreateSkeleton, width, theme::Intent::Neutral).clicked()
+            {
+                app.begin_new_review_object(Some(target));
+            }
             if removable && workspace_action_button(ui, ready && app.work.review_corrections.submission.is_none(), "Remove item", WorkspaceActionIcon::Remove, width, theme::Intent::Error).clicked() {
                 app.remove_migration_review_item();
             }
@@ -249,7 +255,7 @@ fn text_button_width(ui: &egui::Ui, label: &str) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum WorkspaceActionIcon { Approve, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Remove, Pan, Refocus }
+pub(crate) enum WorkspaceActionIcon { Approve, Previous, Discard, Skip, Fit, Save, Next, Undo, Redo, Remove, Pan, Refocus, CreateSkeleton }
 
 pub(crate) fn workspace_action_button(ui: &mut egui::Ui, enabled: bool, label: &str, icon: WorkspaceActionIcon, width: Option<f32>, intent: theme::Intent) -> egui::Response {
     let enabled = enabled && ui.is_enabled();
@@ -278,6 +284,16 @@ fn paint_workspace_action_icon(ui: &egui::Ui, response: &egui::Response, icon: W
             WorkspaceActionIcon::Skip | WorkspaceActionIcon::Next | WorkspaceActionIcon::Redo => { line(point(-7.0, -7.0), point(4.0, 0.0)); line(point(4.0, 0.0), point(-7.0, 7.0)); line(point(8.0, -8.0), point(8.0, 8.0)); }
             WorkspaceActionIcon::Save => { ui.painter().rect_stroke(egui::Rect::from_center_size(center, egui::vec2(18.0, 18.0)), 1.0, stroke, egui::StrokeKind::Inside); line(point(-5.0, -8.0), point(-5.0, -1.0)); line(point(-5.0, -1.0), point(5.0, -1.0)); line(point(5.0, -1.0), point(5.0, -8.0)); }
             WorkspaceActionIcon::Remove => { line(point(-8.0, -6.0), point(8.0, -6.0)); line(point(-5.0, -3.0), point(-5.0, 8.0)); line(point(-5.0, 8.0), point(5.0, 8.0)); line(point(5.0, 8.0), point(5.0, -3.0)); }
+            WorkspaceActionIcon::CreateSkeleton => {
+                for (a, b) in [((-8.0, 7.0), (-3.0, 0.0)), ((-3.0, 0.0), (-7.0, -7.0)), ((-3.0, 0.0), (3.0, 6.0))] {
+                    line(point(a.0, a.1), point(b.0, b.1));
+                }
+                for (x, y) in [(-8.0, 7.0), (-3.0, 0.0), (-7.0, -7.0), (3.0, 6.0)] {
+                    ui.painter().circle_filled(point(x, y), 2.5, stroke.color);
+                }
+                line(point(3.0, -6.0), point(11.0, -6.0));
+                line(point(7.0, -10.0), point(7.0, -2.0));
+            }
             WorkspaceActionIcon::Pan => { line(point(-9.0, 0.0), point(9.0, 0.0)); line(point(0.0, -9.0), point(0.0, 9.0)); for (x, y) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] { line(point(x * 9.0, y * 9.0), point(x * 5.0 - y * 3.0, y * 5.0 + x * 3.0)); line(point(x * 9.0, y * 9.0), point(x * 5.0 + y * 3.0, y * 5.0 - x * 3.0)); } }
             WorkspaceActionIcon::Refocus => { ui.painter().circle_stroke(center, 9.0, stroke); ui.painter().circle_stroke(center, 4.0, stroke); }
             WorkspaceActionIcon::Fit => { for (x, y) in [(-1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)] { line(point(x * 9.0, y * 4.0), point(x * 9.0, y * 9.0)); line(point(x * 9.0, y * 9.0), point(x * 4.0, y * 9.0)); } }

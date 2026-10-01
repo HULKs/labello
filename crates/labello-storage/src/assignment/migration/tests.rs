@@ -5323,3 +5323,187 @@ async fn overview_revisits_canonical_migration_with_its_own_lease_through_replay
         result.image_state
     );
 }
+
+#[tokio::test]
+async fn excluded_workflow_review_correction_persists_and_retries_without_legacy_context() {
+    use labello_domain::{
+        CorrectionId, MigrationReviewCorrection, ReviewCorrectionChange,
+        ReviewCorrectionSubmission, WorkflowSelection, WorkflowVariant,
+    };
+    let f = excluded_review_fixture().await;
+    let repo = &f.repository;
+    let selection = WorkflowSelection {
+        task_id: f.task_id.clone(),
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Objects,
+    };
+    let review_selection = WorkflowSelection {
+        kind: AssignmentKind::Review,
+        ..selection
+    };
+    let review = repo
+        .claim_workflow_item(&f.reviewers[0], &review_selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let before = repo
+        .display_workflow_item(&f.reviewers[0], context(&review))
+        .await
+        .unwrap();
+    assert!(
+        !before
+            .review_assignment_contexts
+            .contains_key(&review.assignment_id)
+    );
+    let metadata = repo.load_dataset().await.unwrap();
+    let task = metadata.task(&f.task_id).unwrap();
+    let group = &f.targets[0].object_group_id;
+    let submission = ReviewCorrectionSubmission {
+        correction_id: CorrectionId::generate(),
+        round: before.review_round(&f.task_id).unwrap().clone(),
+        target_fingerprint: before.review_target_fingerprint(task),
+        changes: vec![ReviewCorrectionChange::MigrationObject {
+            object_group_id: group.clone(),
+            expected_disposition_version: before.migration_dispositions[&f.task_id][group]
+                .disposition_version,
+            replacement: MigrationReviewCorrection::Skeleton {
+                skeleton: skeleton(0.5),
+            },
+        }],
+        reason: None,
+    };
+    assert!(
+        repo.submit_review_corrections(&f.reviewers[1], context(&review), submission.clone())
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.load_image_state(&f.image_id).await.unwrap(), before);
+    let after = repo
+        .submit_review_corrections(&f.reviewers[0], context(&review), submission.clone())
+        .await
+        .unwrap();
+    assert!(matches!(
+        after.migration_dispositions[&f.task_id][group].status,
+        MigrationDispositionStatus::Annotated { .. }
+    ));
+    let annotation = after
+        .current_annotation(&f.targets[0].reserved_skeleton_annotation_id)
+        .unwrap();
+    assert_eq!(annotation.object_group_id.as_ref(), Some(group));
+    assert_eq!(
+        annotation.geometry,
+        AnnotationGeometry::Skeleton(skeleton(0.5))
+    );
+    assert_eq!(
+        repo.submit_review_corrections(&f.reviewers[0], context(&review), submission)
+            .await
+            .unwrap(),
+        after
+    );
+    assert_eq!(repo.rebuild_image_state(&f.image_id).await.unwrap(), after);
+    let events = repo.load_events(&f.image_id).await.unwrap();
+    for boundary in 0..=events.len() {
+        rebuild_state(f.image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(after.task_states[&f.task_id].status, TaskStatus::Submitted);
+    assert_eq!(
+        after.workflow_pending_reviews(task).unwrap().len(),
+        1,
+        "a newly created skeleton requires Objects review"
+    );
+    let next = repo
+        .claim_workflow_item(&f.reviewers[1], &review_selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let displayed = repo
+        .display_workflow_item(&f.reviewers[1], context(&next))
+        .await
+        .unwrap();
+    repo.confirm_workflow_review(
+        &f.reviewers[1],
+        context(&next),
+        ReviewRecord {
+            review_id: labello_domain::ReviewId::generate(),
+            target: displayed.workflow_assignments[&next.assignment_id]
+                .review_target
+                .clone()
+                .unwrap(),
+            reviewer_user_id: f.reviewers[1].clone(),
+            decision: ReviewDecision::Approved,
+            timestamp: labello_domain::now(),
+            comment: None,
+        },
+    )
+    .await
+    .unwrap();
+    let overview = repo
+        .claim_workflow_item(
+            &f.reviewers[0],
+            &WorkflowSelection {
+                variant: WorkflowVariant::Overview,
+                ..review_selection
+            },
+            &[],
+        )
+        .await
+        .unwrap();
+    assert!(
+        overview.is_some(),
+        "the corrected image requires Overview review after Objects review"
+    );
+}
+
+async fn excluded_review_fixture() -> Fixture {
+    let f = fixture(ReviewWorkflow::Approval, 1).await;
+    let repo = &f.repository;
+    let object = claim_annotator(&f).await;
+    let before = repo.load_image_state(&f.image_id).await.unwrap();
+    repo.exclude_migration_target(
+        &f.annotator,
+        context(&object),
+        None,
+        &expectation(&before, &f.task_id, &f.targets[0]),
+        MigrationExclusionReason::ObjectNotPresent,
+        None,
+        "exclude-object",
+    )
+    .await
+    .unwrap();
+    let state = repo.load_image_state(&f.image_id).await.unwrap();
+    let target_hash = &state.migration_target_sets[&f.task_id].target_set_hash;
+    let state_hash = state.current_migration_state_hash(&f.task_id).unwrap();
+    repo.confirm_and_submit_migration(
+        &f.annotator,
+        context(&object),
+        target_hash,
+        &state_hash,
+        &migration_confirmation_hash(target_hash, &state_hash).unwrap(),
+        "finish-overview",
+    )
+    .await
+    .unwrap();
+    f
+}
+
+#[tokio::test]
+#[ignore = "writes disposable migration review data for live browser verification"]
+async fn export_excluded_review_browser_fixture() {
+    let f = excluded_review_fixture().await;
+    let destination = std::path::PathBuf::from(
+        std::env::var("LABELLO_REVIEW_BROWSER_FIXTURE").expect("fixture destination"),
+    );
+    fn copy_tree(source: &std::path::Path, destination: &std::path::Path) {
+        std::fs::create_dir(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let target = destination.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    copy_tree(f._temp.path(), &destination);
+}

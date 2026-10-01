@@ -101,3 +101,5 @@ include!("suites/pen_editing.rs");
 include!("suites/completion_input.rs");
 
 include!("suites/box_visibility.rs");
+
+include!("suites/migration_review_workflow.rs");

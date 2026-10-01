@@ -228,7 +228,16 @@ toggle Visible/Hidden; hidden placement resets to Visible after use. Delete
 annotation discards the selected local addition as a whole, with text-focus,
 busy-state, and overlay guards. Invalid additions block confirmation.
 
-Each item submission sends its scoped correction batch. Failure retains
+Objects review projects a migrated skeleton's source box as a read-only guide,
+including automatic focus and Refocus. The guide never enters editable annotation
+state or selectable canvas IDs. Excluded-object review exposes Create skeleton for
+excluded object in the bottom action bar, with a skeleton-plus icon when the label
+does not fit. The Inspector retains exclusion-reason editing.
+
+Each item submission sends its scoped correction batch. Workflow assignments use
+the loaded state's review round and target fingerprint; historical assignments
+retain their captured review context. Missing context reports a recovery action
+and preserves staged corrections. Failure retains
 an immutable retry request. The server preserves unchanged approvals and requires
 Objects review for additions and Overview review for edited images. Review context is derived from exact assignment and
 target identity, never stale display state. Completed migration review retains
