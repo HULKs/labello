@@ -1,0 +1,56 @@
+{
+  "browser": "Firefox",
+  "version": "151.0",
+  "graphics": "Xvfb/Mesa software rendering",
+  "dpr": 1,
+  "zoom": 1,
+  "before_source": "bc557f1d025587592cdb01bacfdea4dcc7c5fd97",
+  "after_source_base": "bc557f1d025587592cdb01bacfdea4dcc7c5fd97",
+  "after_source_diff_digest": "19192928f77e2957ceac9f3c37cb6937f7df5c3b9c476cc920e19fa4e52f3cd0",
+  "captured_uncommitted": true,
+  "loading_fixture": "WASM response held to retain the HTML placeholder, same condition before and after",
+  "datasets_fixture": "Disposable signed-in administrator, one dataset and one synthetic image; no image or annotations appear in captures",
+  "after_source_commit": "18179da479ede5820f1389960afe19b26c61ca27",
+  "captures": [
+    {
+      "file": "after-datasets-1440x1000.png",
+      "sha256": "d0a265601430b8fbdc6fca332f13c4daa0a84afed2bc57aa99459e694f709055"
+    },
+    {
+      "file": "after-datasets-390x844.png",
+      "sha256": "59c804f5954125e2058ccf2025f89b9ce22476bbec94f91e2214173e3f85289d"
+    },
+    {
+      "file": "after-loading-1440x1000.png",
+      "sha256": "660e0059f640167f9f9d17d8129b089c3dc9caa4803d561123019f0974852fec"
+    },
+    {
+      "file": "after-login-1440x1000.png",
+      "sha256": "e3196b079fa86ec76fa07ede6f84b8f7e2ff1b633a1c7a2cbf8d4e4226c7be73"
+    },
+    {
+      "file": "after-login-390x844.png",
+      "sha256": "61b52c060e19494db7e44bc6251f8ea1c1b6a76140625be24a36691431f69882"
+    },
+    {
+      "file": "before-datasets-1440x1000.png",
+      "sha256": "d0a265601430b8fbdc6fca332f13c4daa0a84afed2bc57aa99459e694f709055"
+    },
+    {
+      "file": "before-datasets-390x844.png",
+      "sha256": "59c804f5954125e2058ccf2025f89b9ce22476bbec94f91e2214173e3f85289d"
+    },
+    {
+      "file": "before-loading-1440x1000.png",
+      "sha256": "007d93cf8d10883b0c970ff0a3d6c818c6a62d3b7f93c7ecf7dda6a4b1acede9"
+    },
+    {
+      "file": "before-login-1440x1000.png",
+      "sha256": "11548ee22afc6b88206645bccf17a89f13e04cb111e96f5ad17c61303e51481e"
+    },
+    {
+      "file": "before-login-390x844.png",
+      "sha256": "6f09b3cff80ef0a14ea937c91e5be01d2d5b30133e4f3244cd31777b568fba4b"
+    }
+  ]
+}

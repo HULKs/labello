@@ -1,0 +1,159 @@
+{
+  "base": "bc557f1d025587592cdb01bacfdea4dcc7c5fd97",
+  "source": "18179da479ede5820f1389960afe19b26c61ca27",
+  "diff_digest": "19192928f77e2957ceac9f3c37cb6937f7df5c3b9c476cc920e19fa4e52f3cd0",
+  "files": [
+    {
+      "path": ".github/workflows/release.yml",
+      "sha256": "69bb64d9cd244a54cdbe360e620a52b0ea59978672110017d7de540e5e77dd03"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "3eb70eb6586eb658a0dc86fd9bf4ea2813f951d01264a5f21f675a055087c2b3"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "ee4a85434f696651b3fe83997546275991c51231b92213a6554349c307dd0526"
+    },
+    {
+      "path": "README.md",
+      "sha256": "8fe05084cea25bb57223ee682d1f44a0b5149179a7dc5afee760285d81f3d4f4"
+    },
+    {
+      "path": "apps/egui-mcp-inspector/Cargo.lock",
+      "sha256": "63bba0ab0ae186c2e5a7e5fa915495cff9175005a7cb47a4cdb95e3e717cd4a1"
+    },
+    {
+      "path": "apps/labello-wasm/.cargo/config.toml",
+      "sha256": "91a502066e179b2525929d903b188b1b6bb10e6b105a81b33a834497c50481a4"
+    },
+    {
+      "path": "apps/labello-wasm/Trunk.toml",
+      "sha256": "865d7957a467607dec5bdcc8b928910195d00352c67327987b6dac46ad5d9a5a"
+    },
+    {
+      "path": "apps/labello-wasm/index.html",
+      "sha256": "a5a12c27d62ff313718818c9df0921cdd13332da216d39eb295e9e1aab548d1e"
+    },
+    {
+      "path": "apps/labello-wasm/src/config.rs",
+      "sha256": "90e534a7ce9545810849bc0572cf146804255e5683b5491ad18fb2292cfd2f5f"
+    },
+    {
+      "path": "apps/labello-wasm/src/lib.rs",
+      "sha256": "857b6a8d2771604f642380bd7cd1ac1c76830c43d4f938d3bf70b7160bf0587f"
+    },
+    {
+      "path": "apps/labello-wasm/src/pen_input.rs",
+      "sha256": "c358ad62cb2b1dabbc9358983170a2fb8b2d48aee76178c2716e930efa054c1c"
+    },
+    {
+      "path": "apps/labello-wasm/tests/startup.py",
+      "sha256": "180ea39d8e9c209ec2210bd197cc1baff034bf08a1d78aca3400500318cb0b33"
+    },
+    {
+      "path": "apps/labello-wasm/tests/stylus_input.py",
+      "sha256": "22d7178cf1c58ed8042bec79a4357b79c9763c18f4d5bda3322be30b54139248"
+    },
+    {
+      "path": "assets/labello-icon.png",
+      "sha256": "9195380cc9015422d56fb4e580c7eab67132db9f209798a9ad1cd7c167d3d206"
+    },
+    {
+      "path": "crates/labello-ui/Cargo.toml",
+      "sha256": "b2772f797b143ed4ead55deac965af78cfe5ef8f14421e892f99d88c05fda824"
+    },
+    {
+      "path": "crates/labello-ui/src/app.rs",
+      "sha256": "a245a65e4b711b2d075cf383a4753966e07ea49d539c60f3472642418ce5572f"
+    },
+    {
+      "path": "crates/labello-ui/src/app/construction.rs",
+      "sha256": "93820229b3ad7457a062221161823c52eee15064eb854eb0356ea366fd610bf6"
+    },
+    {
+      "path": "crates/labello-ui/src/app/shell.rs",
+      "sha256": "10354373b0c91ef9a2faf2441af238df83160e57f1098454e5151608a2a40066"
+    },
+    {
+      "path": "crates/labello-ui/src/live/dispatch_auth.rs",
+      "sha256": "1ad5d370b3c7c646d5d0f1da643dc22d284a1d21532fc6a9a464f14f8bebf7f0"
+    },
+    {
+      "path": "crates/labello-ui/src/live/ownership.rs",
+      "sha256": "bd2c9e8520e152b41bd6e9106cb91be509ab63f3c2d37ba4e50148b318424690"
+    },
+    {
+      "path": "crates/labello-ui/src/live/reduce_session.rs",
+      "sha256": "1e26a2189a849c925b1142d1f1ab4fa4e57cb8383bb4e0dd668dcd6329937a9c"
+    },
+    {
+      "path": "crates/labello-ui/src/live/session.rs",
+      "sha256": "a09dbb96a2c78e5a75d0249ee71b0f2c7ff21360fbdd56f2e71e6521d8081f4b"
+    },
+    {
+      "path": "crates/labello-ui/src/live_protocol.rs",
+      "sha256": "d0dccc07da3aa321e009f6f3bae0d0ba24557c49e0e77e707d698bb55ad8eb91"
+    },
+    {
+      "path": "crates/labello-ui/src/panels/app_bar.rs",
+      "sha256": "5b6fc881abc262151150da2d4d1ae69e6d9cd1ed1dedab5512296e990d88df79"
+    },
+    {
+      "path": "crates/labello-ui/src/setup.rs",
+      "sha256": "c68edcb90e8235ac3f390694ff366da12c2647b37af9d6dfc09fa5e3cf212c11"
+    },
+    {
+      "path": "crates/labello-ui/src/theme.rs",
+      "sha256": "a934860cb62b6b03d6bb046af285eea86a81036da2cec222d0d6e61ae58fb207"
+    },
+    {
+      "path": "crates/labello-ui/src/ui_tests/suites/setup.rs",
+      "sha256": "6235968308494d61e4788d295ea241a563dc6baa92c6198f3d1d6f9f294c7510"
+    },
+    {
+      "path": "crates/labello-ui/src/ui_tests/support/api_fake.rs",
+      "sha256": "d373a4ffc435d3daa23351298339233d58b08d6f6b9409bc1010d7f0c039d0a5"
+    },
+    {
+      "path": "deployment/caddy/live/Caddyfile",
+      "sha256": "d613e273c40849f8836b90a7b4425f8e4f1f6a1278d44c8c70ceefc0c5df691a"
+    },
+    {
+      "path": "docs/configuration.md",
+      "sha256": "16b13c56fefeba79a61ddc60b2b0097937b3e453561de42925251413fce2fa24"
+    },
+    {
+      "path": "docs/deployment.md",
+      "sha256": "b9288046093806a862c0ac83df6515b766a5e6f3e582ec496e9cf248b9c985ef"
+    },
+    {
+      "path": "docs/limitations.md",
+      "sha256": "bd29373b91972528df57466a169741c92d9dae019f8978f9ad9af326831714b8"
+    },
+    {
+      "path": "docs/ui-ownership.md",
+      "sha256": "da5c338da94395399b6a61f7786c913ae267deb6a39c6ac43372c04d22c25c0a"
+    },
+    {
+      "path": "docs/verification.md",
+      "sha256": "ab2d7372873f8ca8bfb405909130fcc2d4490c63a285bc6981fe7fa6c02f0e38"
+    },
+    {
+      "path": "tools/labello-deploy/Cargo.toml",
+      "sha256": "7af7dacef761aa5128ece37fc5a8add3b252678ada26b0b17eb827dc4e567ae5"
+    },
+    {
+      "path": "tools/labello-deploy/src/browser.rs",
+      "sha256": "e6b7d1191aaa94db24e1aad912d9a8a1858e805b987c4a7a8a48e265f3b3841a"
+    },
+    {
+      "path": "tools/labello-deploy/src/lib.rs",
+      "sha256": "9e1ee65bc25cc893f3bbc86dbb2c96f165a2b5dbe5b743b18c000c3c9466422f"
+    },
+    {
+      "path": "tools/labello-deploy/src/main.rs",
+      "sha256": "e12d5077482d9abd42d8f41abe7e3bd3eb0ff0d61df98760d81c4b12ae257da6"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "source": "18179da479ede5820f1389960afe19b26c61ca27",
+  "production_verified": false,
+  "objective_achieved": false,
+  "environment": {
+    "firefox_graphics": "Xvfb/Mesa software rendering",
+    "chromium_graphics": "SwiftShader",
+    "browser_process_reused": true,
+    "http_contexts_isolated": true,
+    "production_authenticated_measurement": false,
+    "dataset_fixture": "one accessible dataset containing one synthetic image, no saved workspace preference"
+  },
+  "measurements": {
+    "firefox-original": {
+      "browser": "firefox",
+      "version": "151.0",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "screen": "datasets",
+      "dpr": 1,
+      "zoom": 1,
+      "cold_contexts": 3,
+      "encoding": "identity",
+      "browser_process_reused": true,
+      "mbps_per_response": 50,
+      "latency_ms": 40,
+      "median_ms": 4382,
+      "max_ms": 4437,
+      "budget_ms": 1000,
+      "pass": false,
+      "failure_cases": [
+        "invalid-config",
+        "auth-options-unavailable",
+        "signed-out"
+      ]
+    },
+    "firefox-optimized": {
+      "browser": "firefox",
+      "version": "151.0",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "screen": "datasets",
+      "dpr": 1,
+      "zoom": 1,
+      "cold_contexts": 5,
+      "encoding": "br",
+      "browser_process_reused": true,
+      "mbps_per_response": 50,
+      "latency_ms": 40,
+      "median_ms": 1228,
+      "max_ms": 1412,
+      "budget_ms": 1000,
+      "pass": false,
+      "failure_cases": [
+        "invalid-config",
+        "auth-options-unavailable",
+        "signed-out"
+      ]
+    },
+    "chromium-optimized": {
+      "browser": "chromium",
+      "version": "149.0.7827.55",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "screen": "datasets",
+      "dpr": 1,
+      "zoom": 1,
+      "cold_contexts": 5,
+      "encoding": "br",
+      "browser_process_reused": true,
+      "mbps_per_response": 50,
+      "latency_ms": 40,
+      "median_ms": 861.5,
+      "max_ms": 912.7,
+      "budget_ms": 1000,
+      "pass": true,
+      "failure_cases": [
+        "invalid-config",
+        "auth-options-unavailable",
+        "signed-out"
+      ]
+    },
+    "firefox-unthrottled": {
+      "browser": "firefox",
+      "version": "151.0",
+      "viewport": [
+        1440,
+        1000
+      ],
+      "screen": "datasets",
+      "dpr": 1,
+      "zoom": 1,
+      "cold_contexts": 5,
+      "encoding": "br",
+      "browser_process_reused": true,
+      "mbps_per_response": 0.0,
+      "latency_ms": 0.0,
+      "median_ms": 749,
+      "max_ms": 1170,
+      "budget_ms": 1000,
+      "pass": true,
+      "failure_cases": [
+        "invalid-config",
+        "auth-options-unavailable",
+        "signed-out"
+      ]
+    }
+  },
+  "assets": {
+    "production_baseline_wire_bytes": 19277536,
+    "optimized_raw_bytes": 9595023,
+    "optimized_brotli_bytes": 2893769,
+    "wasm_sha256": "8268727af2ac89bd07402daa595a29eecb1c04fb8f62056dfd8acab5fd513782",
+    "wire_reduction_percent": 84.99
+  }
+}
