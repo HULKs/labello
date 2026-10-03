@@ -139,6 +139,7 @@ jobs:
           mkdir -p "$release_dir" "$candidate/server" "$candidate/browser"
           install -m 0755 target/release/labello-server "$candidate/server/labello-server"
           cp -a apps/labello-wasm/dist/. "$candidate/browser/"
+          target/release/labello-deploy compress-browser "$candidate/browser"
           printf '{"releaseTag":"%s","sourceCommit":"%s"}\n' \
             "$VERSION" "$SOURCE_COMMIT" > "$candidate/browser/release.json"
 

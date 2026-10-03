@@ -199,7 +199,9 @@ supported only when it ends in `/`, for example
 that does not repeat the URL. An HTTP 404 means the runtime file is absent and
 uses the legacy fallback. Other fetch failures stop startup.
 
-The runtime file is fetched without browser caching on each page load. It is a
+The HTML bootstrap starts the runtime-file fetch alongside WASM loading,
+without browser caching on each page load. Rust validates that response before
+starting API requests. It is a
 public artifact and must never contain OAuth credentials, cookies, tokens, or
 other secrets. Static hosting must return a real 404 for an absent
 `labello.client.json`, rather than rewriting that path to `index.html`.

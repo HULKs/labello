@@ -266,7 +266,7 @@ impl LabelloApp {
                 egui::Button::new("Retry sign-in options")
                     .min_size(egui::vec2(ui.available_width(), 44.0)),
             )) {
-                self.request_auth_options();
+                self.request_session_initialization();
             }
         } else if !self.auth.checked || self.loading.session {
             ui.horizontal(|ui| {
@@ -341,7 +341,7 @@ impl LabelloApp {
                     egui::Button::new("Retry sign-in options")
                         .min_size(egui::vec2(ui.available_width(), 44.0)),
                 )) {
-                    self.request_auth_options();
+                    self.request_session_initialization();
                 }
             }
         }

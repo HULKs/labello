@@ -13,7 +13,6 @@ inspector-presets = []
 blake3.workspace = true
 eframe.workspace = true
 egui.workspace = true
-egui_extras = { version = "0.35", default-features = false, features = ["svg"] }
 ehttp = { version = "0.7.1", default-features = false }
 image.workspace = true
 futures.workspace = true

@@ -54,6 +54,10 @@ async fn run() -> Result<(), JsValue> {
         .dyn_into::<web_sys::HtmlCanvasElement>()?;
     let browser_config = config::load().await?;
     let config = app_config_from_url(&browser_config)?;
+    let mut app = labello_ui::LabelloApp::live_http(config);
+    app.start_session();
+    // Poll discovery before synchronous WebGL setup blocks the browser thread.
+    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await?;
     let options = eframe::WebOptions::default();
     let runner = eframe::WebRunner::new();
     let input_runner = runner.clone();
@@ -64,7 +68,6 @@ async fn run() -> Result<(), JsValue> {
             Box::new(move |creation_context| {
                 labello_ui::theme::apply(&creation_context.egui_ctx);
                 motion::install(&creation_context.egui_ctx);
-                let mut app = labello_ui::LabelloApp::live_http(config.clone());
                 build_information::install(&mut app, &creation_context.egui_ctx);
                 app.set_import_chunk_uploader(std::rc::Rc::new(|request| {
                     Box::pin(raw_import::upload_chunk(request))
@@ -84,7 +87,6 @@ async fn run() -> Result<(), JsValue> {
             }),
         )
         .await?;
-    remove_startup_status();
     Ok(())
 }
 

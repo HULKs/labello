@@ -16,6 +16,9 @@ use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod browser;
+pub use browser::compress_browser_assets;
+
 const JOURNAL_SCHEMA: u32 = 2;
 const MANIFEST_SCHEMA: u32 = 1;
 const RELEASE_METADATA_SCHEMA: u32 = 1;

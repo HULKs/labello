@@ -25,6 +25,29 @@ eight already-queued requests in order. Dependencies still enter the queue only
 after their prerequisite response; background refreshes do not add a frame each
 before item activation. The bounded batch leaves rendering time for the UI.
 
+Initial authentication requests sign-in options and the current session in
+parallel under one request identity. The reducer publishes the session only
+after both responses arrive and sign-in options succeed. Dataset and preference
+requests then use the restored session. Browser bootstrap starts discovery
+before graphics initialization and the first layout; endpoint changes and logout
+invalidate the combined response through the central request gate.
+
+During browser startup the existing HTML loading placeholder remains visible
+while the shared reducers, refreshes and persistence queues restore the initial
+workspace. The UI skips intermediate login/catalog layouts until the session,
+dataset, assignment and draft recovery settle. It then renders the workspace or
+the applicable sign-in, empty or failure state. An already-ready image does not
+wait for a background availability refresh. Later navigation uses the usual
+retained UI and loading bars.
+Startup waits for browser draft readiness only while the assignment lease is
+valid; an expired assignment remains visible through the usual work UI.
+
+The app bar uses the bundled 256-pixel PNG copy of the SVG app icon and caches
+one texture per egui context. This keeps SVG parsing and rasterization out of the
+browser client. The SVG remains the favicon and loading-placeholder asset. To
+regenerate the PNG from the SVG with ImageMagick, run
+`convert -background none assets/labello-icon.svg -resize 256x256 -strip PNG32:assets/labello-icon.png`.
+
 Structured unauthorized failures survive dispatch. After an accepted failure is
 reduced, the root coalesces a session recheck. Recovery blocks work commands and
 hides account-scoped content while retaining the draft for its original account.

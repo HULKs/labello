@@ -6,8 +6,10 @@ impl eframe::App for LabelloApp {
                 return;
             }
         }
-        ui.painter()
-            .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        if !self.runtime.starting {
+            ui.painter()
+                .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        }
         self.process_messages(ui.ctx());
         if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
             // Navigation is asynchronous. Do not accept edits after the final
@@ -40,6 +42,19 @@ impl eframe::App for LabelloApp {
         self.refresh_export_if_due(ui.ctx());
         self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
+        if self.runtime.starting {
+            if self.initial_workspace_pending() {
+                // Keep the HTML loading placeholder while driving the same
+                // reducers and queues. Intermediate login/catalog layouts would
+                // block browser response callbacks and are immediately replaced.
+                self.start_frame_commands();
+                ui.ctx().request_repaint_after(Duration::from_millis(16));
+                return;
+            }
+            self.runtime.starting = false;
+            ui.painter()
+                .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        }
         self.handle_shortcuts(ui.ctx());
         if !ui.ctx().text_edit_focused() {
             // egui also activates focused controls on repeated Space/Enter. Run

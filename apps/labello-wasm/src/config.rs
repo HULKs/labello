@@ -95,11 +95,16 @@ pub(crate) async fn load() -> Result<BrowserConfig, wasm_bindgen::JsValue> {
         .headers()
         .set("accept", "application/json")
         .map_err(|_| config_error("cannot request browser runtime configuration"))?;
-    let response = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|_| config_error("cannot load browser runtime configuration"))?
-        .dyn_into::<web_sys::Response>()
-        .map_err(|_| config_error("browser runtime configuration response is invalid"))?;
+    let prefetched = js_sys::Reflect::get(&window, &"__labelloRuntimeConfig".into())
+        .ok()
+        .and_then(|value| value.dyn_into::<js_sys::Promise>().ok());
+    let response = wasm_bindgen_futures::JsFuture::from(
+        prefetched.unwrap_or_else(|| window.fetch_with_request(&request)),
+    )
+    .await
+    .map_err(|_| config_error("cannot load browser runtime configuration"))?
+    .dyn_into::<web_sys::Response>()
+    .map_err(|_| config_error("browser runtime configuration response is invalid"))?;
     if response.status() == 404 {
         return Ok(BrowserConfig::default());
     }

@@ -1,7 +1,7 @@
 impl LabelloApp {
     pub(crate) fn start_setup_load(&mut self) {
         if self.runtime.api.is_some() && !self.auth.options_checked && !self.loading.session {
-            self.request_auth_options();
+            self.request_session_initialization();
         } else if self.runtime.api.is_some()
             && self.auth.options_checked
             && !self.auth.checked
@@ -51,7 +51,7 @@ impl LabelloApp {
         self.view = AppView::Setup;
     }
 
-    pub(crate) fn request_auth_options(&mut self) {
+    pub(crate) fn request_session_initialization(&mut self) {
         if self.runtime.api.is_none() {
             return;
         }
@@ -66,7 +66,10 @@ impl LabelloApp {
         self.auth.session_error = None;
         self.auth.checked = false;
         self.loading.session = true;
-        self.queue_command(UiCommand::AuthOptions { request });
+        self.auth.session_request_id = request.request_id;
+        self.auth.active_session_request_id = Some(request.request_id);
+        self.auth.local_admin_login_pending = false;
+        self.queue_command(UiCommand::InitializeSession { request });
     }
 
     pub(crate) fn request_logout(&mut self) {

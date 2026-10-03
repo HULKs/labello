@@ -2,7 +2,8 @@ use std::{env, io, path::PathBuf, process::ExitCode};
 
 use anyhow::{Context, Result, bail};
 use labello_deploy::{
-    DeploymentManager, RealPlatform, ReceiveOptions, create_release_manifest, verify_release_assets,
+    DeploymentManager, RealPlatform, ReceiveOptions, compress_browser_assets,
+    create_release_manifest, verify_release_assets,
 };
 
 fn main() -> ExitCode {
@@ -23,6 +24,10 @@ fn run() -> Result<()> {
         .unwrap_or_else(|| PathBuf::from("/var/lib/labello"));
 
     match command.as_str() {
+        "compress-browser" => {
+            let browser_root = one_argument(&mut arguments, "browser root")?;
+            compress_browser_assets(PathBuf::from(browser_root))?;
+        }
         "manifest" => {
             let candidate_root = arguments.next().context("missing candidate root")?;
             let release_tag = arguments.next().context("missing release tag")?;

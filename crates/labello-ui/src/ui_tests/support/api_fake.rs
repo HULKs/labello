@@ -273,6 +273,7 @@ pub(super) struct SpyState {
     pub(super) summary_roles: Vec<DatasetRole>,
     pub(super) users: Vec<DatasetUser>,
     pub(super) fail_me: bool,
+    pub(super) auth_options_pending: bool,
     pub(super) last_image_query: Option<ImageExplorerQuery>,
     pub(super) last_oauth_return_to: Option<String>,
     pub(super) snapshots: Vec<DatasetSnapshot>,
@@ -409,6 +410,7 @@ impl SpyState {
             ],
             users,
             fail_me: false,
+            auth_options_pending: false,
             last_image_query: None,
             last_oauth_return_to: None,
             snapshots: Vec::new(),
@@ -2314,9 +2316,14 @@ impl AuthApi for SpyApi {
 
     fn auth_options<'a>(&'a self) -> ApiFuture<'a, AuthOptions> {
         self.state.borrow_mut().counts.auth_options += 1;
-        ready(Ok(AuthOptions {
-            github_oauth: true,
-            local_admin_login: true,
+        Box::pin(futures::future::poll_fn(move |_| {
+            if self.state.borrow().auth_options_pending {
+                return std::task::Poll::Pending;
+            }
+            std::task::Poll::Ready(Ok(AuthOptions {
+                github_oauth: true,
+                local_admin_login: true,
+            }))
         }))
     }
 

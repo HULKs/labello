@@ -265,9 +265,10 @@ pub(crate) enum UiMessage {
         request: RequestIdentity,
         result: Box<Result<labello_client::ManualMigrationCommandResult, UiRequestError>>,
     },
-    AuthOptionsLoaded {
+    SessionInitialized {
         request: RequestIdentity,
-        result: Result<AuthOptions, UiRequestError>,
+        options: Result<AuthOptions, UiRequestError>,
+        session: Result<SessionInfo, UiRequestError>,
     },
     SessionLoaded {
         request: RequestIdentity,
@@ -549,7 +550,7 @@ pub(crate) enum UiCommand {
         action: MigrationAction,
         idempotency_key: String,
     },
-    AuthOptions {
+    InitializeSession {
         request: RequestIdentity,
     },
     Session {
@@ -763,7 +764,7 @@ impl UiCommand {
             | Self::BuildInformation { request }
             | Self::Export { request, .. }
             | Self::Prelabel { request, .. }
-            | Self::AuthOptions { request }
+            | Self::InitializeSession { request }
             | Self::Session { request }
             | Self::LocalAdminLogin { request }
             | Self::Logout { request }
@@ -1064,7 +1065,7 @@ impl UiMessage {
             | Self::BuildInformationCopied { request, .. }
             | Self::ExportFinished { request, .. }
             | Self::PrelabelFinished { request, .. }
-            | Self::AuthOptionsLoaded { request, .. }
+            | Self::SessionInitialized { request, .. }
             | Self::SessionLoaded { request, .. }
             | Self::LogoutFinished { request, .. }
             | Self::GithubLoginUrl { request, .. }
