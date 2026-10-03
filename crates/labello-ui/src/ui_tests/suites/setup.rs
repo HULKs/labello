@@ -1,4 +1,108 @@
 #[test]
+fn browser_startup_skips_intermediate_layouts_until_the_catalog_is_ready() {
+    let api = Rc::new(SpyApi::new());
+    let scheduled = Rc::new(RefCell::new(Vec::new()));
+    let scheduled_for_spawner = scheduled.clone();
+    let mut app = base_live_app(api.clone());
+    app.set_native_task_spawner(move |task| scheduled_for_spawner.borrow_mut().push(task));
+    app.start_session();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|_| app);
+    assert!(harness.state().starting());
+    assert!(harness.query_by_label("Sign in with GitHub").is_none());
+    assert!(harness.query_by_label("Datasets").is_none());
+    for _ in 0..4 {
+        let tasks = std::mem::take(&mut *scheduled.borrow_mut());
+        for task in tasks {
+            poll_ready_task(task);
+        }
+        harness.step();
+        if !harness.state().starting() { break; }
+    }
+    assert!(!harness.state().starting());
+    assert_eq!(api.counts().me, 1);
+    assert_eq!(api.counts().list_datasets, 1);
+    assert!(harness.query_by_label("Continue with Demo Dataset").is_some());
+}
+
+#[test]
+fn browser_startup_does_not_wait_for_background_availability_with_ready_work() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    assert!(!app.initial_workspace_pending());
+    app.runtime.starting = true;
+    app.work.availability.loading = true;
+    harness.step();
+    assert!(!harness.state().starting());
+    assert!(harness.state().work.current.is_some());
+    assert!(harness.query_by_label("Open settings").is_some());
+}
+
+#[test]
+fn browser_startup_reveals_work_when_its_lease_has_expired() {
+    let api = Rc::new(SpyApi::new());
+    let mut harness = loaded_work_harness(api);
+    let app = harness.state_mut();
+    app.work.assignment.as_mut().unwrap().expires_at =
+        Some(now() - chrono::Duration::seconds(1));
+    app.runtime.persistence.work_ready = None;
+    app.runtime.starting = true;
+    harness.step();
+    assert!(!harness.state().starting());
+    assert!(harness.query_by_label("Open settings").is_some());
+}
+
+#[test]
+fn browser_startup_reveals_login_when_the_session_has_expired() {
+    let api = Rc::new(SpyApi::new());
+    api.fail_me();
+    let mut app = base_live_app(api.clone());
+    app.start_session();
+    let mut harness = Harness::builder()
+        .with_size(egui::vec2(1000.0, 780.0))
+        .build_eframe(|_| app);
+    harness.run_steps(2);
+    assert!(!harness.state().starting());
+    assert_eq!(api.counts().list_datasets, 0);
+    assert!(harness.query_by_label("Sign in with GitHub").is_some());
+    assert!(harness.query_by_label("Continue as local admin").is_some());
+}
+
+#[test]
+fn session_restoration_starts_while_auth_options_are_pending() {
+    let api = Rc::new(SpyApi::new());
+    api.state.borrow_mut().auth_options_pending = true;
+    let mut app = base_live_app(api.clone());
+    let scheduled = Rc::new(RefCell::new(None));
+    let scheduled_for_spawner = scheduled.clone();
+    app.set_native_task_spawner(move |future| {
+        *scheduled_for_spawner.borrow_mut() = Some(future);
+    });
+    app.request_session_initialization();
+    app.start_next_command();
+    let mut task = scheduled.borrow_mut().take().unwrap();
+    let mut context = std::task::Context::from_waker(futures::task::noop_waker_ref());
+    assert!(task.as_mut().poll(&mut context).is_pending());
+    assert_eq!(api.counts().auth_options, 1);
+    assert_eq!(api.counts().me, 1);
+    assert!(app.auth.account.is_none());
+    assert_eq!(api.counts().list_datasets, 0);
+
+    api.state.borrow_mut().auth_options_pending = false;
+    assert!(task.as_mut().poll(&mut context).is_ready());
+    app.process_messages(&egui::Context::default());
+    assert!(app.auth.options_checked);
+    assert!(app.auth.checked);
+    assert!(app.auth.account.is_some());
+    app.runtime.native_task_spawner = None;
+    app.start_frame_commands();
+    assert_eq!(api.counts().me, 1);
+    assert_eq!(api.counts().list_datasets, 1);
+}
+
+#[test]
 fn session_is_restored_before_datasets_load_and_logout_clears_it() {
     let api = Rc::new(SpyApi::new());
     let mut harness = live_harness(api.clone());
@@ -72,13 +176,14 @@ fn auth_options_failure_clears_state_from_the_previous_endpoint() {
     app.datasets.stats_error = Some("old statistics error".to_string());
     app.runtime.notice = Some("Signed in as Previous User".to_string());
     app.view = AppView::Admin;
-    app.request_auth_options();
+    app.request_session_initialization();
     let request = app.runtime.commands.back().unwrap().request().clone();
     app.runtime
         .tx
-        .send(UiMessage::AuthOptionsLoaded {
+        .send(UiMessage::SessionInitialized {
             request,
-            result: Err("server unavailable".to_string().into()),
+            options: Err("server unavailable".to_string().into()),
+            session: futures::executor::block_on(api.me()).map_err(Into::into),
         })
         .unwrap();
 
@@ -390,14 +495,15 @@ fn expired_session_blocks_commands_and_retains_draft_for_the_same_account() {
     assert!(app.auth.account.is_none());
     assert!(app.auth.session_error.is_none());
     assert_eq!(app.work.annotations, draft);
-    app.request_auth_options();
+    app.request_session_initialization();
     let request = app.runtime.commands.front().unwrap().request().clone();
     app.runtime.commands.clear();
     app.runtime
         .tx
-        .send(UiMessage::AuthOptionsLoaded {
+        .send(UiMessage::SessionInitialized {
             request,
-            result: Err("temporary options failure".to_string().into()),
+            options: Err("temporary options failure".to_string().into()),
+            session: Err("session unavailable".to_string().into()),
         })
         .unwrap();
     app.process_messages(&context);

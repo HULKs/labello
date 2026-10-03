@@ -189,6 +189,26 @@ credentials, persistence, folder import, responsive layout, input, and failure
 paths. Record browser version, viewport, DPR/zoom, accessibility inspection, and
 unsupported coverage. Do not infer browser behavior from the native inspector.
 
+For startup performance, build the server and release browser distribution,
+then run `cargo run --locked --release -p labello-deploy -- compress-browser
+apps/labello-wasm/dist`. Use the isolated Python environment from the
+[browser input procedure](stylus-input.md#automated-browser-procedure) to run
+`python apps/labello-wasm/tests/startup.py --browser chromium`, then Firefox
+with `--browser firefox --headed` under the documented Xvfb setup when needed.
+The default benchmark uses five fresh contexts, 50 Mbps per static response
+and 40 ms latency per request in one reused browser process. It carries only a
+disposable session across contexts. The default `--screen datasets` measures
+the first draw of the fixture's recommended-dataset button and verifies that
+clicking it opens the dataset. The draw probe uses a fixed point inside that
+button at the benchmark viewport, confirmed by an in-memory screenshot.
+It fails when median navigation-to-dataset-list-draw time reaches 1000 ms.
+Use `--screen restored-image` to carry a workspace preference and measure the
+first draw of the restored synthetic image instead. Reports contain timings,
+aggregate sizes and bounded request categories only. Optional `--mbps`,
+`--latency-ms`, `--runs`, `--dist` and `--budget-ms` select a measurement profile.
+This local network model does not prove production TLS, throughput, API latency
+or user hardware; verify those after the authorized browser and Caddy rollout.
+
 Pen-input changes also run the focused production-client checks in
 [Stylus input](stylus-input.md#automated-browser-procedure). Record CDP-generated
 events separately from scripted DOM events. iPadOS Safari/Firefox support requires

@@ -4,7 +4,7 @@ impl LabelloApp {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = theme::SPACE_3;
                 ui.add(
-                    egui::Image::new(egui::include_image!("../../../../assets/labello-icon.svg"))
+                    egui::Image::new((theme::app_icon(ui.ctx()).id(), egui::vec2(256.0, 256.0)))
                         .fit_to_exact_size(egui::vec2(36.0, 36.0))
                         .alt_text("Labello icon"),
                 );

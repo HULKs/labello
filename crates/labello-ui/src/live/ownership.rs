@@ -132,7 +132,7 @@ impl LabelloApp {
             && !matches!(
                 command,
                 UiCommand::BuildInformation { .. }
-                    | UiCommand::AuthOptions { .. }
+                    | UiCommand::InitializeSession { .. }
                     | UiCommand::Session { .. }
                     | UiCommand::LocalAdminLogin { .. }
                     | UiCommand::GithubLogin { .. }
@@ -236,8 +236,9 @@ impl LabelloApp {
                 self.builds.checked = true;
                 self.builds.server = None;
             }
-            UiCommand::AuthOptions { .. } => {
+            UiCommand::InitializeSession { .. } => {
                 self.loading.session = false;
+                self.auth.active_session_request_id = None;
                 self.auth.options_checked = true;
                 self.auth.checked = true;
             }

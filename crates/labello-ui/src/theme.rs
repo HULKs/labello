@@ -84,7 +84,6 @@ enum ButtonKind {
 }
 
 pub fn apply(ctx: &egui::Context) {
-    egui_extras::install_image_loaders(ctx);
     ctx.set_fonts(font_definitions());
     ctx.set_global_style(app_style());
 }
@@ -99,11 +98,33 @@ pub(crate) fn apply_fallback(ctx: &egui::Context) -> bool {
     if fonts_ready {
         ctx.set_global_style(app_style());
     } else {
-        egui_extras::install_image_loaders(ctx);
         ctx.set_fonts(font_definitions());
         ctx.request_discard("install Labello fonts before layout");
     }
     fonts_ready
+}
+
+pub(crate) fn app_icon(ctx: &egui::Context) -> egui::TextureHandle {
+    let id = Id::new("labello.app_icon");
+    if let Some(texture) = ctx.data(|data| data.get_temp::<egui::TextureHandle>(id)) {
+        return texture;
+    }
+    let image = image::load_from_memory_with_format(
+        include_bytes!("../../../assets/labello-icon.png"),
+        image::ImageFormat::Png,
+    )
+    .expect("the bundled Labello icon must be a valid PNG")
+    .into_rgba8();
+    let texture = ctx.load_texture(
+        "Labello icon",
+        egui::ColorImage::from_rgba_unmultiplied(
+            [image.width() as usize, image.height() as usize],
+            image.as_raw(),
+        ),
+        egui::TextureOptions::LINEAR,
+    );
+    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
+    texture
 }
 
 fn font_definitions() -> FontDefinitions {

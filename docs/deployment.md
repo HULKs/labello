@@ -153,6 +153,30 @@ manager rejects missing, additional, duplicate, non-regular, non-UTF-8, unsafe,
 or hash-mismatched files and confirms that the browser inventory names the
 same release.
 
+Trunk release builds select the `wasm-release` Cargo profile with size
+optimization, whole-program LTO and one codegen unit, then run Binaryen 123's
+WASM size optimizer. Image decoding, pixel conversion, font shaping and
+rasterization dependencies use speed optimization within that profile.
+Development browser builds and native release profiles
+retain their usual settings.
+The browser's Cargo configuration enables 128-bit WebAssembly SIMD for both
+development and release builds. Native targets retain their usual target
+features. Browser engines must support WebAssembly SIMD to load the client.
+
+Before creating browser and deployment inventories, the release job runs
+`labello-deploy compress-browser <browser-root>` to generate deterministic
+Brotli and gzip sidecars for WASM and JavaScript, including nested snippets.
+Both original assets and sidecars enter the inventories and attestations.
+Runtime configuration is excluded from compression.
+
+The live Caddy configuration prefers these sidecars, with dynamic zstd/gzip
+compression as a fallback. Its explicit response matcher includes
+`application/wasm` on older Caddy versions too. Hashed WASM and JavaScript
+receive a one-year immutable cache lifetime; the entry page, release metadata
+and JavaScript snippets require revalidation, and runtime configuration stays
+`no-store`. Existing guests need the updated live Caddyfile installed and
+reloaded as well as the new browser release to enable this delivery behavior.
+
 The release workflow generates GitHub build-provenance attestations for every
 asset. Deployment requires the `HULKs/labello` repository, the release workflow
 path, `refs/heads/main`, and the exact dispatched source digest. The deploy job

@@ -65,3 +65,29 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 web-time = "1"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+# Pixel conversion, image decoding and font rasterization run before the first
+# usable browser frame. Keep these loops fast while sizing the rest of the app.
+[profile.wasm-release.package.image]
+opt-level = 3
+
+[profile.wasm-release.package.image-webp]
+opt-level = 3
+
+[profile.wasm-release.package.epaint]
+opt-level = 3
+
+[profile.wasm-release.package.vello_cpu]
+opt-level = 3
+
+[profile.wasm-release.package.skrifa]
+opt-level = 3
+
+[profile.wasm-release.package.harfrust]
+opt-level = 3

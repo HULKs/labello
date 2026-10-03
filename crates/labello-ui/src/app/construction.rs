@@ -149,6 +149,43 @@ impl LabelloApp {
         app
     }
 
+    /// Start session discovery before graphics initialization and layout.
+    pub fn start_session(&mut self) {
+        self.runtime.starting = true;
+        self.start_setup_load();
+        self.start_frame_commands();
+    }
+
+    pub fn starting(&self) -> bool {
+        self.runtime.starting
+    }
+
+    pub(crate) fn initial_workspace_pending(&self) -> bool {
+        if self.runtime.api.is_none()
+            || self.runtime.error.is_some()
+            || self.runtime.storage_error.is_some()
+            || self.auth.options_error.is_some()
+            || self.auth.session_error.is_some()
+        {
+            return false;
+        }
+        if !self.auth.checked || self.loading.session {
+            return true;
+        }
+        if self.auth.account.is_none() {
+            return false;
+        }
+        self.loading.datasets
+            || self.loading.dataset
+            || self.loading.image
+            || (self.work.current.is_none() && self.work.availability.loading)
+            || self.work.assignment.as_ref().is_some_and(|assignment| {
+                self.runtime.persistence.identity.is_some()
+                    && self.runtime.persistence.work_ready.as_ref() != Some(&assignment.assignment_id)
+                    && assignment.expires_at.is_none_or(|expires_at| expires_at > labello_domain::now())
+            })
+    }
+
     pub fn set_import_chunk_uploader(
         &mut self,
         uploader: crate::import_flow::RawImportChunkUploader,

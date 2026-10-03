@@ -74,12 +74,12 @@ class QuietFiles(http.server.SimpleHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def application():
+def application(handler_type=QuietFiles, dist=None):
     require((ROOT / "target/debug/labello-server").is_file(), "server-build-missing")
-    dist = ROOT / "apps/labello-wasm/dist"
+    dist = dist or ROOT / "apps/labello-wasm/dist"
     require((dist / "index.html").is_file(), "wasm-build-missing")
     with tempfile.TemporaryDirectory(prefix="labello-stylus-") as directory:
-        handler = functools.partial(QuietFiles, directory=str(dist))
+        handler = functools.partial(handler_type, directory=str(dist))
         with http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as frontend:
             thread = threading.Thread(target=frontend.serve_forever, daemon=True)
             thread.start()
@@ -120,7 +120,7 @@ def application():
 
 class Scenario:
     def __init__(self, context, origin, api):
-        self.context, self.origin, self.api = context, origin, api
+        self.context, self.origin, self.api = context, origin, api.rstrip("/")
         self.headers = {"Origin": origin}
 
     async def request(self, method, path, **kwargs):
@@ -199,7 +199,7 @@ class Scenario:
             await self.page.add_init_script("""document.addEventListener('pointerdown', e => {
                 if (e.pointerType === 'pen') e.stopImmediatePropagation();
             }, true);""")
-        await self.page.goto(self.origin + "/?api=" + self.api + "&dataset=stylus")
+        await self.page.goto(self.origin + "/?api=" + self.api + "/&dataset=stylus")
         await self.page.locator("#startup-status").wait_for(state="detached", timeout=30000)
         async def canvas_ready():
             return await self.page.evaluate("""() => {

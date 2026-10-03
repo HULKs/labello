@@ -114,16 +114,21 @@ impl LabelloApp {
                         }
                     }
                 }
-                UiMessage::AuthOptionsLoaded { result, .. } => {
+                UiMessage::SessionInitialized { request, options, session } => {
                     self.loading.session = false;
                     self.auth.options_checked = true;
-                    match result {
+                    match options {
                         Ok(options) => {
                             self.auth.options_error = None;
                             self.auth.options = options;
                             self.runtime.error = None;
+                            return self.reduce_session_message(ctx, UiMessage::SessionLoaded {
+                                request,
+                                result: session,
+                            });
                         }
                         Err(error) => {
+                            self.auth.active_session_request_id = None;
                             if self.auth.recovery.is_none() {
                                 self.clear_authenticated_state();
                             }

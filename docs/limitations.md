@@ -39,6 +39,8 @@ for the supported workflows.
 
 ## Persistence and compatibility
 
+- The browser build requires 128-bit WebAssembly SIMD. Engine support is listed
+  in the [WebAssembly feature table](https://webassembly.org/features/).
 - Current dataset configuration and keybindings are versioned TOML, while image
   indexes, state, events, schemas, snapshots, and import records use JSON or
   JSONL.
@@ -50,8 +52,8 @@ for the supported workflows.
 
 ## Operations
 
-- There is no general browser end-to-end test suite. The focused stylus check
-  exercises production WASM/API input with disposable data. `egui_kittest` and
+- There is no general browser end-to-end test suite. Focused startup and stylus
+  checks exercise production WASM/API behavior with disposable data. `egui_kittest` and
   the native inspector do not validate WASM networking, cookies, IndexedDB,
   browser input, or deployed responsive behavior.
 - Ingest jobs and some derived caches are process-local and do not survive

@@ -1,5 +1,19 @@
 {$LABELLO_SITE_ADDRESS} {
-    encode zstd gzip
+    encode zstd gzip {
+        match {
+            header Content-Type text/*
+            header Content-Type application/json*
+            header Content-Type application/javascript*
+            header Content-Type application/wasm*
+            header Content-Type application/xhtml+xml*
+            header Content-Type application/atom+xml*
+            header Content-Type application/rss+xml*
+            header Content-Type image/svg+xml*
+            header Content-Type font/*
+            header Content-Type application/font*
+            header Content-Type application/ttf*
+        }
+    }
 
     handle_path /api/* {
         reverse_proxy 127.0.0.1:8080
@@ -13,6 +27,12 @@
 
     handle {
         root * /var/lib/labello/releases/current/browser
-        file_server
+        @immutable path_regexp ^/labello-wasm-[0-9a-f]+(_bg\.wasm|\.js)$
+        header @immutable Cache-Control "public, max-age=31536000, immutable"
+        @entry path / /index.html /release.json /snippets/*
+        header @entry Cache-Control "no-cache"
+        file_server {
+            precompressed br gzip
+        }
     }
 }

@@ -11,10 +11,12 @@ impl LabelloApp {
                     result: api.build_information().await.map_err(UiRequestError::from),
                 }
             }),
-            UiCommand::AuthOptions { request } => self.spawn_message(request.clone(), async move {
-                UiMessage::AuthOptionsLoaded {
+            UiCommand::InitializeSession { request } => self.spawn_message(request.clone(), async move {
+                let (options, session) = futures::join!(api.auth_options(), api.me());
+                UiMessage::SessionInitialized {
                     request,
-                    result: api.auth_options().await.map_err(UiRequestError::from),
+                    options: options.map_err(UiRequestError::from),
+                    session: session.map_err(UiRequestError::from),
                 }
             }),
             UiCommand::Session { request } => self.spawn_message(request.clone(), async move {

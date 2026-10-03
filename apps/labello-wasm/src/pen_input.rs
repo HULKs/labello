@@ -142,6 +142,9 @@ impl eframe::App for BrowserApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui, frame);
+        if !self.app.starting() {
+            crate::remove_startup_status();
+        }
     }
 }
 
