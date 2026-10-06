@@ -317,6 +317,10 @@ independently of Inspector visibility.
 reopen, reload, and prefetch. Failures never request Standard, legacy RGBA, or
 original bytes. Native and WASM decoding use the same bounds and geometry.
 `image_transfer` owns cancellation; existing request epochs reject stale replies.
+It also retains up to eight decoded working previews, bounded to 32 MiB, by
+dataset and immutable image identity. Auth/workspace invalidation replaces the
+cache, so late transfers cannot repopulate the new scope. Reusing pixels still
+reloads image metadata and authoritative state and requires display validation.
 Old `:data-saver` preferences are ignored. The dispatcher requests another frame
 while commands remain, including after discarding superseded requests.
 
@@ -325,6 +329,10 @@ load ownership across invalidation until replies are reduced, because repeated
 claims may share an assignment ID. Current/prepared work and queued commands
 retain their exact reservation. New loads wait for pending releases; stale and
 failed-prefetch cleanup use the original API instance.
+Activating an image removes its assignment from the prepared queue and drops
+same-image leases that the fresh state explicitly marks finished or cancelled.
+Unknown newer reservations remain queued. These removals do not release the
+active assignment or send redundant releases for already ended leases.
 
 The dataset's `preloadQueueSize` owns the annotation/review target. Resizing
 returns surplus reservations to the centralized cleanup owner. Prefetch uses

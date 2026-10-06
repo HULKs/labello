@@ -468,6 +468,7 @@ impl LabelloApp {
     }
 
     fn invalidate_async_ownership(&mut self) {
+        self.work.image_transfers.clear_previews();
         self.work.workflow.history_request = None;
         if self.auth.recovery.is_some() {
             self.inspection.suspend_requests();

@@ -743,3 +743,55 @@ fn failed_save_before_previous_reports_the_error_without_navigating() {
             .contains("Could not save before returning")
     );
 }
+
+#[test]
+fn activating_history_removes_its_prefetched_copy_without_releasing_the_active_lease() {
+    let mut app = object_app();
+    app.runtime.api = Some(Rc::new(SpyApi::new()));
+    let loaded = crate::app::LoadedImage {
+        prepared_until: None,
+        review_submitters: vec![],
+        reasons: vec![],
+        assignment: app.work.assignment.clone().unwrap(),
+        queued: app.work.current.clone().unwrap(),
+        annotations: app.work.annotations.clone(),
+        state: app.work.current_state.clone().unwrap(),
+        color_image: None,
+    };
+    app.work.queue.clear();
+    assert!(app.work.queue.push_prepared(loaded.clone()));
+    app.apply_loaded_image(&egui::Context::default(), loaded.clone());
+    assert!(!app.work.queue.contains_assignment(&loaded.assignment));
+    assert_eq!(app.work.assignment.as_ref(), Some(&loaded.assignment));
+    assert!(!app.runtime.reservation_cleanup.has_pending_releases());
+}
+
+#[test]
+fn history_activation_drops_cancelled_prefetch_but_preserves_newer_reservations() {
+    let mut app = object_app();
+    let mut loaded = crate::app::LoadedImage {
+        prepared_until: None,
+        review_submitters: vec![],
+        reasons: vec![],
+        assignment: app.work.assignment.clone().unwrap(),
+        queued: app.work.current.clone().unwrap(),
+        annotations: app.work.annotations.clone(),
+        state: app.work.current_state.clone().unwrap(),
+        color_image: None,
+    };
+    let mut cancelled = loaded.clone();
+    cancelled.assignment.assignment_id = "cancelled-prefetch".into();
+    let mut recorded = cancelled.assignment.clone();
+    recorded.status = labello_domain::AssignmentStatus::Cancelled;
+    loaded.state.assignments.push(recorded);
+    let mut newer = loaded.clone();
+    newer.assignment.assignment_id = "newer-prefetch".into();
+    app.work.queue.clear();
+    app.work.queue.set_queue_size(2);
+    assert!(app.work.queue.push_prepared(cancelled.clone()));
+    assert!(app.work.queue.push_prepared(newer.clone()));
+    app.apply_loaded_image(&egui::Context::default(), loaded);
+    assert!(!app.work.queue.contains_assignment(&cancelled.assignment));
+    assert!(app.work.queue.contains_assignment(&newer.assignment));
+    assert!(!app.runtime.reservation_cleanup.has_pending_releases());
+}

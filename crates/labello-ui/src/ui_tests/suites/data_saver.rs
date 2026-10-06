@@ -12,6 +12,10 @@ fn annotation_and_review_load_prefetch_and_retry_only_data_saver() {
         assert!(before >= 3);
         harness.state_mut().retry_assignment_load();
         step_until(&mut harness, 20, |app| !app.loading.image);
+        assert_eq!(api.counts().get_encoded_image_preview, before);
+        harness.state_mut().work.image_transfers.clear_previews();
+        harness.state_mut().retry_assignment_load();
+        step_until(&mut harness, 20, |app| !app.loading.image);
         assert!(api.counts().get_encoded_image_preview > before);
         assert!(api.state.borrow().preview_profiles.iter().all(|profile|
             *profile == labello_client::ImagePreviewProfile::DataSaverV1));

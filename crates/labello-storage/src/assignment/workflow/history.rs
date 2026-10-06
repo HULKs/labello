@@ -55,11 +55,12 @@ impl DatasetRepository {
                 .await?;
         let lock = self.image_lock(requested.image_id);
         let _image = lock.lock().await;
-        let state = self.load_image_state(requested.image_id).await?;
+        let mut state = self.load_image_state(requested.image_id).await?;
         let source = state
             .assignments
             .iter()
             .find(|a| a.assignment_id == *requested.assignment_id)
+            .cloned()
             .ok_or_else(|| {
                 StorageError::AssignmentConflict("history item no longer exists".into())
             })?;
@@ -102,7 +103,8 @@ impl DatasetRepository {
         }
         validate_definition(&captured, task)?;
         let now = labello_domain::now();
-        if let Some(existing) = state.assignments.iter().find(|a| {
+        let mut payloads = Vec::new();
+        for existing in state.assignments.iter_mut().filter(|a| {
             a.assigned_to == *user
                 && a.task_id == task.task_id
                 && a.kind == selection.kind
@@ -113,7 +115,22 @@ impl DatasetRepository {
                     .get(&a.assignment_id)
                     .is_some_and(|c| c.item == captured.item)
         }) {
-            return Ok(existing.clone());
+            let held = &state.workflow_assignments[&existing.assignment_id];
+            if held
+                .source_assignment_id
+                .as_ref()
+                .unwrap_or(&existing.assignment_id)
+                == &root
+            {
+                return Ok(existing.clone());
+            }
+            // A fresh prefetch is not the historical visit being requested.
+            // Replace its lease atomically so display retains the visit's order.
+            existing.status = AssignmentStatus::Cancelled;
+            existing.updated_at = now;
+            payloads.push(EventPayload::AssignmentUpdated {
+                assignment: existing.clone(),
+            });
         }
         if !claimable(&state, &selection, &captured, now) {
             return Err(StorageError::AssignmentConflict(
@@ -193,16 +210,17 @@ impl DatasetRepository {
             created_at: now,
             updated_at: now,
         };
+        payloads.push(workflow_payload(WorkflowEvent::AssignmentOpened {
+            assignment: assignment.clone(),
+            context: captured,
+        }));
         self.append_payloads_unlocked(
             requested.image_id,
             &Actor {
                 user_id: user.clone(),
                 role: role_for_kind(&requested.kind),
             },
-            vec![workflow_payload(WorkflowEvent::AssignmentOpened {
-                assignment: assignment.clone(),
-                context: captured,
-            })],
+            payloads,
         )
         .await?;
         Ok(assignment)

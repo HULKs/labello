@@ -167,6 +167,15 @@ impl LabelloApp {
             }
             Some(self.work.migration.clone())
         } else { None };
+        // History can reuse or replace a prefetched lease. Drop the displayed
+        // copy and leases the authoritative response says have already ended.
+        let _ = self.work.queue.retain_prepared(|prepared| {
+            prepared.assignment.assignment_id != loaded.assignment.assignment_id
+                && (prepared.assignment.image_id != loaded.assignment.image_id
+                    || loaded.state.assignments.iter().find(|stored|
+                        stored.assignment_id == prepared.assignment.assignment_id)
+                        .is_none_or(|stored| stored.status == labello_domain::AssignmentStatus::Active))
+        });
         let image_id = loaded.queued.image.image_id.clone();
         let same_assignment = self.work.assignment.as_ref().is_some_and(|assignment| {
             assignment.assignment_id == loaded.assignment.assignment_id

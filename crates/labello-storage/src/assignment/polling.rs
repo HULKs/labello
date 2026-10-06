@@ -13,7 +13,7 @@ use std::{
 pub(crate) struct PollingImage {
     // Deliberately partial: only the fields consumed by assignment eligibility.
     pub(super) state: ImageState,
-    workflow: Arc<ImageState>,
+    workflow: parking_lot::Mutex<Arc<ImageState>>,
     normal: BTreeMap<TaskId, FinalReviews>,
     migration: BTreeMap<TaskId, FinalReviews>,
 }
@@ -89,7 +89,7 @@ impl PollingImage {
         }
         Self {
             state: compact,
-            workflow: Arc::new(state.clone()),
+            workflow: parking_lot::Mutex::new(Arc::new(state.clone())),
             normal,
             migration,
         }
@@ -113,11 +113,12 @@ impl DatasetRepository {
         image: &ImageId,
         visibility: labello_domain::BoundingBoxVisibility,
     ) -> StorageResult<Arc<ImageState>> {
-        let mut state = self.polling_image(image).await?.workflow.clone();
+        let image = self.polling_image(image).await?;
+        let mut state = image.workflow.lock();
         if state.bounding_box_visibility != Some(visibility) {
             Arc::make_mut(&mut state).bounding_box_visibility = Some(visibility);
         }
-        Ok(state)
+        Ok(state.clone())
     }
 
     pub(crate) async fn polling_image(&self, image: &ImageId) -> StorageResult<Arc<PollingImage>> {
