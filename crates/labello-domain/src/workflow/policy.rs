@@ -227,6 +227,61 @@ impl ImageState {
         }
     }
 
+    /// An independent Overview approval does not disqualify its author from
+    /// revisiting that same captured review. New claims still use contributor
+    /// exclusion; storage separately validates current targets and ownership.
+    pub fn workflow_assignment_independent_reviewer(
+        &self,
+        context: &WorkflowAssignmentContext,
+        user: &UserId,
+    ) -> bool {
+        let Some(target) = &context.review_target else {
+            return false;
+        };
+        if self.workflow_independent_reviewer(&context.item, target, user) {
+            return true;
+        }
+        let Some(root) = &context.source_assignment_id else {
+            return false;
+        };
+        let Some(source) = self.assignments.iter().find(|a| &a.assignment_id == root) else {
+            return false;
+        };
+        let Some(original) = self.workflow_assignments.get(root) else {
+            return false;
+        };
+        if context.item != WorkflowItem::Overview
+            || source.assigned_to != *user
+            || source.kind != AssignmentKind::Review
+            || original.item != context.item
+            || original.source_assignment_id.is_some()
+            || original.review_exception
+            || original.review_target != context.review_target
+            || original.task_fingerprint != context.task_fingerprint
+            || original.overview_fingerprint != context.overview_fingerprint
+            || !self.workflow_seen.contains_key(root)
+        {
+            return false;
+        }
+        self.workflow_confirmations
+            .iter()
+            .any(|(id, confirmation)| {
+                self.workflow_assignments.get(id).is_some_and(|captured| {
+                    (id == root || captured.source_assignment_id.as_ref() == Some(root))
+                        && !captured.review_exception
+                        && captured.item == context.item
+                        && captured.review_target == context.review_target
+                        && captured.task_fingerprint == context.task_fingerprint
+                        && captured.overview_fingerprint == context.overview_fingerprint
+                }) && confirmation.task_id == source.task_id
+                    && confirmation.review.as_ref().is_some_and(|review| {
+                        review.reviewer_user_id == *user
+                            && review.decision == ReviewDecision::Approved
+                            && review.target == *target
+                    })
+            })
+    }
+
     pub fn workflow_independent_reviewer(
         &self,
         item: &WorkflowItem,

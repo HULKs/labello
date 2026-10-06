@@ -97,6 +97,7 @@ impl LabelloApp {
                     }
                     self.work.active_load_id = None;
                     self.loading.image = false;
+                    let history = std::mem::take(&mut self.work.workflow.revalidating_history);
                     match *result {
                         Ok(Some(revalidated)) => {
                             let expected = cached.assignment.clone();
@@ -120,11 +121,12 @@ impl LabelloApp {
                                     expected,
                                     Some(assignment),
                                 );
-                                self.clear_current_image();
+                                if !history { self.clear_current_image(); }
                                 self.runtime.error = Some(
                                     "Prepared review revalidation returned inconsistent work."
                                         .to_string(),
                                 );
+                                if history { self.work.workflow.navigation_error = self.runtime.error.clone(); }
                                 return None;
                             }
                             cached.assignment = assignment;
@@ -137,6 +139,10 @@ impl LabelloApp {
                         }
                         Ok(None) => {
                             self.release_reservation(dataset_id, cached.assignment);
+                            if history {
+                                self.work.workflow.navigation_error = Some("Could not return to the previous item. It is no longer available.".into());
+                                return None;
+                            }
                             self.runtime.error = None;
                             if !self.promote_prepared_assignment(ctx, None) {
                                 self.retire_current_image();
@@ -145,7 +151,9 @@ impl LabelloApp {
                         }
                         Err(error) => {
                             self.release_reservation(dataset_id, cached.assignment);
-                            self.clear_current_image();
+                            if history {
+                                self.work.workflow.navigation_error = Some(format!("Could not return to the previous item. {error}"));
+                            } else { self.clear_current_image(); }
                             self.runtime.error = Some(error.to_string());
                             self.request_assignment_availability();
                         }
@@ -168,7 +176,7 @@ impl LabelloApp {
                         Ok(loaded) => {
                             if loaded.workflow_item().is_some() {
                                 self.runtime.error = None;
-                                self.revalidate_prepared_review(loaded);
+                                self.work.workflow.revalidating_history = self.revalidate_prepared_review(loaded);
                                 return None;
                             }
                             let decisions = self.work.previous_prelabel_decisions.take().filter(|decisions|
@@ -210,6 +218,7 @@ impl LabelloApp {
                             } else if let Some(assignment) = assignment {
                                 self.work.previous_assignment = Some(assignment);
                             }
+                            self.work.workflow.navigation_error = Some(format!("Could not return to the previous item. {error}"));
                             self.runtime.error = Some(error.to_string());
                             if expired && self.work.assignment.is_none() {
                                 self.request_next_image();
@@ -363,6 +372,10 @@ impl LabelloApp {
                             } else {
                                 SaveStatus::Dirty
                             };
+                            if matches!(self.work.pending_transition,
+                                Some(crate::app::PendingTransition::WorkItemHistory(_) | crate::app::PendingTransition::PreviousAssignment(_))) {
+                                self.work.workflow.navigation_error = Some(format!("Could not save before returning to the previous item. {error}"));
+                            }
                             if self.workflow_context().is_some() { self.work.pending_transition = None; }
                             if completed {
                                 self.work.pending_transition = None;

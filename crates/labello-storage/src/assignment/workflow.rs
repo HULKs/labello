@@ -332,7 +332,7 @@ impl DatasetRepository {
                 "review target changed or needs a correction transaction".into(),
             ));
         }
-        let independent = state.workflow_independent_reviewer(&context.item, &review.target, user);
+        let independent = state.workflow_assignment_independent_reviewer(context, user);
         if !independent && (!context.review_exception || independent_available) {
             return Err(StorageError::AssignmentConflict(
                 "independent review work is available".into(),
@@ -1064,8 +1064,8 @@ impl DatasetRepository {
                 }
             }
         }
-        if let Some(target) = &captured.review_target
-            && !state.workflow_independent_reviewer(&captured.item, target, user)
+        if captured.review_target.is_some()
+            && !state.workflow_assignment_independent_reviewer(captured, user)
             && (!captured.review_exception || independent_available)
         {
             return Err(StorageError::AssignmentConflict(

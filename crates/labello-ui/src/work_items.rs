@@ -16,6 +16,8 @@ pub(crate) struct WorkflowSession {
     pub current_root: Option<labello_domain::AssignmentId>,
     pub excluded: Option<WorkflowItemRef>,
     pub change_notice: Option<String>,
+    pub navigation_error: Option<String>,
+    pub revalidating_history: bool,
     pub returning_forward: bool,
 }
 

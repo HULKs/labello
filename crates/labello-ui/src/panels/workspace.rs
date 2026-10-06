@@ -18,16 +18,20 @@ impl LabelloApp {
         }
         let canvas_rect = ui.available_rect_before_wrap();
         self.workspace_canvas(ui);
-        self.workflow_change_notice(ui.ctx(), canvas_rect);
+        self.workflow_notice(ui.ctx(), canvas_rect);
         self.saved_workflow_reason_notice(ui.ctx(), canvas_rect);
     }
 
-    fn workflow_change_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
-        let Some(message) = self.work.workflow.change_notice.clone() else { return; };
+    fn workflow_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        let error = self.work.workflow.navigation_error.is_some();
+        let Some(message) = self.work.workflow.navigation_error.clone()
+            .or_else(|| self.work.workflow.change_notice.clone()) else { return; };
+        let dismiss = if error { "Dismiss navigation error" } else { "Dismiss workflow change" };
+        let name = if error { "Navigation error" } else { "Workflow change notice" };
         let frame = theme::inset_frame();
         let width = (canvas.width() - 16.0 - frame.total_margin().sum().x).clamp(80.0, 480.0);
         let height = (canvas.height() - 16.0 - frame.total_margin().sum().y).clamp(44.0, 160.0);
-        let notice = egui::Area::new(egui::Id::new("workflow-change-notice"))
+        let notice = egui::Area::new(egui::Id::new(name))
             .order(egui::Order::Foreground)
             .fixed_pos(egui::pos2(canvas.center().x, canvas.top() + 8.0))
             .pivot(egui::Align2::CENTER_TOP)
@@ -36,19 +40,22 @@ impl LabelloApp {
                 frame.show(ui, |ui| {
                     ui.set_width(width);
                     ui.horizontal_top(|ui| {
-                        let close = ui.add_sized(egui::vec2(44.0, 44.0), egui::Button::new("×")).on_hover_text("Dismiss workflow change");
-                        close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Dismiss workflow change"));
-                        if close.clicked() { self.work.workflow.change_notice = None; }
+                        let close = ui.add_sized(egui::vec2(44.0, 44.0), egui::Button::new("×")).on_hover_text(dismiss);
+                        close.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, dismiss));
+                        if close.clicked() {
+                            if error { self.work.workflow.navigation_error = None; }
+                            else { self.work.workflow.change_notice = None; }
+                        }
                         egui::ScrollArea::vertical().max_height(height).min_scrolled_height(height)
                             .scroll_source(crate::pointer_input::scroll_source(ctx))
                             .show(ui, |ui| {
                                 let label = ui.add(egui::Label::new(message).wrap());
-                                ctx.accesskit_node_builder(label.id, |node| node.set_role(egui::accesskit::Role::Status));
+                                ctx.accesskit_node_builder(label.id, |node| node.set_role(if error { egui::accesskit::Role::Alert } else { egui::accesskit::Role::Status }));
                             });
                     });
                 });
             });
-        notice.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Workflow change notice"));
+        notice.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, name));
     }
 
     fn saved_workflow_reason_notice(&mut self, ctx: &egui::Context, canvas: egui::Rect) {

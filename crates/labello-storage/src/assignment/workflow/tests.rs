@@ -2045,3 +2045,5 @@ async fn workflow_polling_rechecks_lease_expiry_without_reloading_images() {
     );
     assert_eq!(repo.image_state_load_count(), 0);
 }
+
+mod history;

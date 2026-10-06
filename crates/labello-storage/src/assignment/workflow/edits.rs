@@ -45,7 +45,7 @@ impl DatasetRepository {
         validate_definition(context, task)?;
         if let Some(target) = &context.review_target
             && (!state.review_targets(task)?.contains(target)
-                || (!state.workflow_independent_reviewer(&context.item, target, user)
+                || (!state.workflow_assignment_independent_reviewer(context, user)
                     && (!context.review_exception || independent_available)))
         {
             return Err(StorageError::AssignmentConflict(

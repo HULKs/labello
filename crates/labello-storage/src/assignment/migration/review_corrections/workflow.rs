@@ -100,7 +100,7 @@ impl DatasetRepository {
                 return Err(conflict("Overview targets or prerequisites changed"));
             }
         }
-        if !state.workflow_independent_reviewer(&captured.item, target, user)
+        if !state.workflow_assignment_independent_reviewer(captured, user)
             && (!captured.review_exception || independent_available)
         {
             return Err(conflict("independent review work is available"));

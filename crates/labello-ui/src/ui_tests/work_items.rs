@@ -594,3 +594,152 @@ fn review_navigation_does_not_back_up_pristine_or_server_saved_edits() {
         "viewing or skipping a review item is not an edit"
     );
 }
+
+#[test]
+fn previous_failure_is_visible_and_keeps_the_current_workspace() {
+    for size in [
+        egui::vec2(1440.0, 1000.0),
+        egui::vec2(390.0, 844.0),
+        egui::vec2(320.0, 320.0),
+    ] {
+        let mut app = object_app();
+        let current = app.work.assignment.clone();
+        let annotations = app.work.annotations.clone();
+        let operation_id = app.begin_load();
+        let request = test_request(&app, operation_id, Some(app.config.dataset_id.as_str()));
+        app.runtime.active_requests.insert(operation_id);
+        app.runtime
+            .tx
+            .send(UiMessage::PreviousAssignmentLoaded {
+                request,
+                operation_id,
+                assignment: None,
+                result: Box::new(Err(
+                    "Another worker has changed or reviewed this history item."
+                        .to_owned()
+                        .into(),
+                )),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.work.assignment, current);
+        assert_eq!(app.work.annotations, annotations);
+        assert!(!app.loading.image);
+        let message = app.work.workflow.navigation_error.clone().unwrap();
+        let mut harness = Harness::builder().with_size(size).build_eframe(|_| app);
+        harness.run();
+        harness.get(
+            egui_kittest::kittest::By::new()
+                .role(egui::accesskit::Role::Alert)
+                .value(&message),
+        );
+        let canvas = harness.get_by_label("Annotation canvas").rect();
+        let notice = harness.get_by_label("Navigation error").rect();
+        assert!(
+            canvas.expand(1.0).contains_rect(notice),
+            "{canvas:?} {notice:?}"
+        );
+        let dismiss = harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Dismiss navigation error");
+        assert!(notice.contains_rect(dismiss.rect()));
+        dismiss.focus();
+        harness.key_press(egui::Key::Enter);
+        harness.run();
+        assert!(harness.state().work.workflow.navigation_error.is_none());
+        assert_eq!(harness.state().work.assignment, current);
+    }
+}
+
+#[test]
+fn navigation_error_clears_on_retry_or_workflow_departure() {
+    let mut app = object_app();
+    app.work.workflow.navigation_error = Some("Previous failed".into());
+    app.begin_load();
+    assert!(app.work.workflow.navigation_error.is_none());
+    app.work.workflow.navigation_error = Some("Previous failed".into());
+    app.leave_current_workflow();
+    assert!(app.work.workflow.navigation_error.is_none());
+}
+
+#[test]
+fn failed_history_display_revalidation_preserves_current_edits() {
+    for unavailable in [false, true] {
+        let mut app = object_app();
+        let current = app.work.assignment.clone();
+        let annotations = app.work.annotations.clone();
+        let cached = crate::app::LoadedImage {
+            prepared_until: None,
+            review_submitters: vec![],
+            reasons: vec![],
+            assignment: app.work.assignment.clone().unwrap(),
+            queued: app.work.current.clone().unwrap(),
+            annotations: annotations.clone(),
+            state: app.work.current_state.clone().unwrap(),
+            color_image: None,
+        };
+        let operation_id = app.begin_load();
+        app.work.workflow.revalidating_history = true;
+        let request = test_request(&app, operation_id, Some(app.config.dataset_id.as_str()));
+        app.runtime.active_requests.insert(operation_id);
+        app.runtime
+            .tx
+            .send(UiMessage::PreparedReviewRevalidated {
+                request,
+                operation_id,
+                cached: Box::new(cached),
+                result: Box::new(if unavailable {
+                    Ok(None)
+                } else {
+                    Err("Review target changed".to_owned().into())
+                }),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert_eq!(app.work.assignment, current);
+        assert_eq!(app.work.annotations, annotations);
+        assert!(app.work.workflow.navigation_error.is_some());
+        assert!(!app.work.workflow.revalidating_history);
+        assert!(!app.loading.image);
+    }
+}
+
+#[test]
+fn failed_save_before_previous_reports_the_error_without_navigating() {
+    let mut app = object_app();
+    let current = app.work.assignment.clone().unwrap();
+    let annotations = app.work.annotations.clone();
+    app.work.pending_transition = Some(crate::app::PendingTransition::WorkItemHistory(
+        WorkflowHistoryEntry {
+            image_id: "earlier".into(),
+            assignment_id: "earlier".into(),
+            seen_at: labello_domain::now(),
+        },
+    ));
+    let operation_id = app.begin_operation();
+    let request = test_request(&app, operation_id, Some(app.config.dataset_id.as_str()));
+    app.runtime.active_requests.insert(operation_id);
+    app.runtime
+        .tx
+        .send(UiMessage::SaveFinished {
+            request,
+            operation_id,
+            assignment_id: current.assignment_id.clone(),
+            edit_generation: app.work.edit_generation,
+            completed: false,
+            result: Box::new(Err("Draft could not be saved".to_owned().into())),
+        })
+        .unwrap();
+    app.process_messages(&egui::Context::default());
+    assert_eq!(app.work.assignment.as_ref(), Some(&current));
+    assert_eq!(app.work.annotations, annotations);
+    assert_eq!(app.work.save_status, SaveStatus::Retry);
+    assert!(app.work.pending_transition.is_none());
+    assert!(
+        app.work
+            .workflow
+            .navigation_error
+            .as_deref()
+            .unwrap()
+            .contains("Could not save before returning")
+    );
+}

@@ -29,6 +29,8 @@ impl LabelloApp {
         self.work.workflow.current_root = None;
         self.work.workflow.excluded = None;
         self.work.workflow.change_notice = None;
+        self.work.workflow.navigation_error = None;
+        self.work.workflow.revalidating_history = false;
         self.work.workflow.variant_selected = false;
         self.work.workflow.returning_forward = false;
     }

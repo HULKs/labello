@@ -1092,6 +1092,8 @@ impl LabelloApp {
     }
 
     pub(crate) fn begin_load(&mut self) -> u64 {
+        self.work.workflow.navigation_error = None;
+        self.work.workflow.revalidating_history = false;
         let operation_id = self.next_operation();
         self.work.active_load_id = Some(operation_id);
         self.loading.image = true;

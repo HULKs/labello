@@ -631,3 +631,7 @@ failed saves retain the editor and lease. Prefetch identities include the item,
 so multiple objects on one image remain distinct. Activation records display/seen;
 prefetch only revalidates. Reservation cleanup waits for in-flight claims before
 releasing the workflow. Shared rendering presents one Previous and Skip action.
+A failed save before Previous, refused Previous request or history display revalidation retains the current
+workspace and exposes a dismissible navigation error in the canvas notice area,
+with an accessible alert role. It takes precedence over a workflow-change notice.
+Retry and workflow departure clear it; stale responses cannot create it.

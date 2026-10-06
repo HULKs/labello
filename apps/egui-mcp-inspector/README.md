@@ -241,6 +241,10 @@ The `workflow-classes` preset models HSLVision's seven classes with box workflow
 and five split migration workflows, using synthetic data. At 1920 × 1080 the full
 picker fits without scrolling; shorter viewports exercise drawer scrolling.
 
+The `navigation-failure` preset shows a refused Previous action above the retained
+Overview review workspace. Its dismissible alert uses the same shared renderer
+as workflow-change notices. It does not exercise server history eligibility.
+
 The `workflow-change` preset shows the nonmodal automatic workflow-change notice.
 Check that it remains visible after item loading, wraps within the viewport and can
 be dismissed while work remains available. The `annotation-objects`,

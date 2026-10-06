@@ -253,6 +253,11 @@ and cannot introduce predictions into a displayed Overview or completed work.
 `AssignmentOpened` captures object/Overview scope, task identity, exact review target,
 any authorized fallback exception and the original history-visit identity.
 `ItemSeen` is separate from claim/prefetch, so an unseen reservation can refresh.
+For a history Overview, replay can derive independent eligibility from the same
+user's original displayed visit and an approved confirmation in that visit's
+lineage. Captured target and task/Overview fingerprints must agree, and the
+original visit must not have used fallback. Contributor history is preserved;
+no event fields, schema version or cache projection change is required.
 
 `DraftSaved` records unfinished object geometry with a compare-and-swap sequence.
 `EditsSaved` records incomplete Overview additions or review corrections as typed

@@ -41,6 +41,14 @@ may review it. Overview review excludes anyone who annotated, corrected, or
 recorded a review decision anywhere on the image, across tasks. Merely displaying
 or prefetching work does not count as a contribution.
 
+History can revisit the same reviewer's independently approved Overview despite
+that approval adding them as a contributor. The original displayed visit, approved
+target and captured fingerprints must match; ordinary ownership, history-window,
+current-target and intervening-worker checks still apply. This preserves the
+original independent review classification through display, draft saves and
+correction/submission. It does not grant independence to new reviews or to a
+history visit originally admitted through the self-review fallback.
+
 A reviewer may receive otherwise excluded work only when no independent review
 item is available in any accessible dataset review queue. Storage checks this
 under dataset admission at claim, display, mutation and history reacquisition.

@@ -144,6 +144,7 @@ impl DatasetRepository {
                 "another worker has changed or reviewed this history item".into(),
             ));
         }
+        captured.source_assignment_id = Some(root);
         if requested.kind == AssignmentKind::Review {
             if !state
                 .task_states
@@ -160,7 +161,7 @@ impl DatasetRepository {
                     "history review target has changed".into(),
                 ));
             }
-            let independent = state.workflow_independent_reviewer(&captured.item, target, user);
+            let independent = state.workflow_assignment_independent_reviewer(&captured, user);
             if !independent && independent_available {
                 return Err(StorageError::AssignmentConflict(
                     "independent review work is available".into(),
@@ -181,7 +182,6 @@ impl DatasetRepository {
                 "object work must finish before Overview".into(),
             ));
         }
-        captured.source_assignment_id = Some(root);
         let assignment = Assignment {
             assignment_id: AssignmentId::generate(),
             image_id: requested.image_id.clone(),
