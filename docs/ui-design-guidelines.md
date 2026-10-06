@@ -428,7 +428,7 @@ acquire the dot.
 Use line icons with short tooltips available on disabled cards and equivalent
 AccessKit descriptions on the existing workflow button. Markers add no focus
 stops or accessible names. Keep the selected fill/border and semantic selection.
-Every disabled workflow tile and chooser option has a reason icon, including
+Every disabled workflow pass cell has a reason icon, including
 saving, session/dataset/image loading, sign-out, migration updates, transitions,
 modal blocks, assignment-resolution barriers, migration phases, and unavailable
 work. Saving precedes loading, migration updates, transitions and modal blocks,
@@ -495,45 +495,45 @@ non-intersection and scroll reachability as well as viewport containment.
 
 ### Annotation and review class groups
 
-Annotation and review workflow panels and drawers use one bordered group per class.
-Center the class name above equal-width activity columns. Each activity has a
-centered row containing its type icon and label. Keep the class heading at 17
-points, activity labels at 14 points, button labels at 13 points, and activity
-icons at 28 points. Use two-point gaps within each card. Give each activity icon row four-point padding above and
-below, and separate its icon from its label by eight points. Use six-point
-gutters between activity and pass columns.
-Place selection and availability cues centered below each button label, with
-equal top and bottom padding around the label and 18-point status row,
-separated by two points. Reserve the status row when empty so state changes do
-not shift controls. Buttons retain a minimum height of 44 points.
-Order configured activities left to right: bounding boxes, migration, then direct
-skeleton annotation. Omit unconfigured activities. Split activities place Objects
-and Overview side by side when their measured labels fit; otherwise stack them.
-Reflow complete activity groups on narrow screens before clipping labels.
-Unsplit activities use one Annotate or Review button. A small downward chevron indicates
-multiple workflows; keep the count in the chooser, tooltip, and accessible
-description instead of adding another line to the tile. Such tiles open a
-bounded, scrollable chooser with full workflow names and individual availability
-icons. Single-workflow tiles act directly. Review groups bounding-box and skeleton
-review workflows, including migrated skeletons, without exposing annotation
-migration actions. Show no explanatory text beneath activity or chooser buttons;
-reasons belong in state icons, tooltips, and accessible descriptions. Compact labels retain full activity and
-workflow names in accessible names and tooltips. Configured activities that are temporarily blocked
-remain visible with a reason icon and state-only tooltip and accessible description. Do not present migration as active on images
-that support only direct skeleton annotation.
+Annotation and review workflow panels and drawers list workflows by class.
+Each class starts with a left-aligned 15-point heading followed by a thin rule;
+classes are separated by eight points, with no card frame. Each configured
+activity is one row with a 24-point type icon, an eight-point gap, and a
+14-point label. Order activities top to bottom: bounding boxes, migration,
+then direct skeleton annotation. Omit unconfigured activities.
+
+Objects and Overview are two right-aligned pass columns shared by every row,
+named once in a 12-point header above the scroll area. The header is omitted
+when no workflow is split. Cells are 64 points wide, six points apart,
+and at least 44 points tall. They contain no text: a muted ring marks an
+available pass, a filled dot marks the selected pass, and the existing reason
+icon marks a blocked pass. A selected blocked pass shows the dot beside the
+reason icon. Cells have no frame until hovered, focused or selected.
+Unsplit workflows work on the complete image and use only the Overview cell;
+their accessible name ends in Annotate or Review.
+
+When one activity has several workflows, its icon and label form a heading row
+and each workflow follows as an indented row with its 13-point wrapped name and
+its own pass cells. Do not open a separate chooser. Review groups
+bounding-box and skeleton review workflows, including migrated skeletons,
+without exposing annotation migration actions. Show no explanatory text beside
+or beneath cells; reasons belong in state icons, tooltips, and accessible
+descriptions. Accessible names and tooltips carry the class, activity,
+workflow, and pass. Configured workflows that are temporarily blocked remain
+visible with a reason icon and state-only tooltip and accessible description.
+Do not present migration as active on images that support only direct skeleton
+annotation.
 
 The selected marker follows the chosen task and Objects/Overview variant.
-Overview never skips prerequisite Objects work. Keep both panels bounded at
-360 logical points, cap drawers to the viewport, wrap class headings and retain
-complete accessible names. Focused activities scroll into view; long text must
+Overview never skips prerequisite Objects work. Size both panels to the widest
+unwrapped class, activity or workflow name, between 240 and 360 logical points, cap drawers to the viewport, wrap class headings and retain
+complete accessible names. Focused pass cells scroll into view; long text must
 not widen the canvas. Closing a drawer restores keyboard focus to its trigger.
 
-Class cards use three-point vertical gaps, five-point inner vertical padding,
-and ten-point horizontal padding.
-The seven HSLVision classes should fit a 1920 × 1080 desktop viewport without
+Rows use two-point vertical gaps. The seven HSLVision classes should fit a 1920 × 1080 desktop viewport without
 scrolling at default text size. Shorter screens and larger text retain scrolling. Availability failures retain a compact Retry availability button above
-the cards. A boosted annotation workflow has a soft amber glow and inner rim,
-including the matching option inside a grouped chooser. A brief shimmer runs
+the classes. A boosted annotation workflow has a soft amber glow and inner rim on each of
+its pass cells. A brief shimmer runs
 when the boost appears or the button receives hover or keyboard focus; it then
 settles to the persistent highlight. Reduced-motion and disabled controls keep
 the highlight static. Native selection, focus, and availability remain distinct.

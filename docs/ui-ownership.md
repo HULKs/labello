@@ -582,29 +582,31 @@ no cross-dataset atomic snapshot or large-server performance guarantee.
 ## Class workflow navigation
 
 In Annotate and Review, `panels/task_selector.rs` groups enabled one-class tasks under their
-class identity. Each class is one card with its name above equal-width activity
-columns: bounding-box annotation, migration, and direct skeleton annotation when
-applicable. Each split activity contains Objects and Overview buttons; an unsplit
-activity uses one Annotate or Review button. Review uses bounding-box and skeleton review activities
-and retains its existing task-transition and correction guards. Unconfigured activities do not take up columns;
-multiple tasks within one activity use a single tile with a dropdown chevron.
-The count appears in its tooltip, accessible description, and chooser. Row height
-is measured from the activity labels with a stable status slot and shared padding.
-The bounded chooser wraps full task names, marks the selected task, explains disabled
-options, and restores focus on dismissal. Single-task activities act directly.
+class identity. Each class is a heading followed by one row per activity:
+bounding-box annotation, migration, and direct skeleton annotation when
+applicable. Every row places its passes in two right-aligned columns, Objects
+and Overview, whose names appear once in `workflow_pass_header`. The panel and
+drawer hosts render that header outside their scroll areas. Unsplit workflows
+use only the Overview cell and keep an Annotate or Review accessible name.
+Review uses bounding-box and skeleton review activities and retains its existing
+task-transition and correction guards. Unconfigured activities take up no rows.
+Multiple tasks within one activity become indented rows with wrapped task names
+and their own pass cells under a shared activity heading; there is no chooser.
+Every pass cell acts directly.
 The shared workflow selection guard supplies both disabled state and its reason
-icon for activity tiles and chooser options. Phase restrictions, all blocking
+icon for every pass cell. Phase restrictions, all blocking
 loads, saving, migration updates, transitions, and modal blocks have state-only
 tooltips and accessible descriptions. No explanatory text or focus-bonus footer
-appears beneath selection buttons. The availability retry control sits above
-the class cards.
-`panels/workflow_boost.rs` paints the boosted activity and matching chooser option
+appears beside the cells. The availability retry control sits above
+the classes.
+`panels/workflow_boost.rs` paints the boosted workflow's pass cells
 without changing layout or native button state. It uses the shared reduced-motion
 preference, defaults to static rendering without an adapter, and requests frames
 only during its bounded activation/hover/focus shimmer. The scoring window remains
-authoritative; failed statistics or expiry remove the cue. Class cards use the
-ordinary item spacing without an extra spacer between groups.
-The annotation panel has bounded width; task names wrap or truncate without
+authoritative; failed statistics or expiry remove the cue. Classes are
+separated by a fixed eight-point gap.
+The panel width fits the widest unwrapped class heading, activity label or
+shared-activity task name between 240 and 360 points; longer task names wrap or truncate without
 expanding the canvas layout, and accessible names include class, activity, and
 task. Temporarily blocked configured activities remain disabled with an explanation.
 

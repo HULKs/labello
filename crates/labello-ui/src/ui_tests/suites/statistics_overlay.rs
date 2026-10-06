@@ -330,10 +330,8 @@ fn contribution_score_sort_history_and_focus_marker_are_accessible() {
     });
     harness.state_mut().work.tasks.push(focused);
     harness.run_steps(3);
-    let trigger = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Annotate · Choose workflow");
-    assert!(trigger.accesskit_node().description().unwrap().contains("Boosted workflow"));
-    trigger.click();
-    harness.run_steps(3);
+    assert!(!harness.get_by_role_and_label(egui::accesskit::Role::Button, workflow)
+        .accesskit_node().description().unwrap_or_default().contains(crate::glossary::BOOSTED_WORKFLOW));
     let option = harness.get_by_role_and_label(egui::accesskit::Role::Button, "Person: Bounding box annotation · Other focused boxes · Annotate");
     assert!(option.accesskit_node().description().unwrap().contains(crate::glossary::BOOSTED_WORKFLOW));
     assert!(harness.query_by_label("Focus · +25% · 20 min left").is_none());
