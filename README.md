@@ -101,7 +101,8 @@ migration behavior, and export preservation.
 
 Labello is under active development. These boundaries matter when choosing it:
 
-- Browser startup requires WebAssembly SIMD support.
+- Browser startup requires WebAssembly SIMD support. Working previews also require
+  `createImageBitmap` and `OffscreenCanvas` support.
 - Browser drafts are best-effort recovery. Offline annotation and conflict
   resolution are unavailable; there is no supported native desktop client.
 - Independent multi-annotator labeling is unavailable.

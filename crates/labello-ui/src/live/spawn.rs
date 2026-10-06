@@ -6,12 +6,22 @@ impl LabelloApp {
         let tx = self.runtime.tx.clone();
         let repaint_ctx = self.runtime.repaint_ctx.clone();
         #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = tx.send(future.await);
-            if let Some(ctx) = repaint_ctx {
-                ctx.request_repaint();
+        {
+            let mut task = Box::pin(async move {
+                let _ = tx.send(future.await);
+                if let Some(ctx) = repaint_ctx {
+                    ctx.request_repaint();
+                }
+            });
+            // Start fetch before egui paints this frame. spawn_local otherwise
+            // waits for the next microtask. Its unconditional first poll replaces
+            // this temporary waker, including when completion raced that handoff.
+            let waker = futures::task::noop_waker();
+            let mut context = std::task::Context::from_waker(&waker);
+            if task.as_mut().poll(&mut context).is_pending() {
+                wasm_bindgen_futures::spawn_local(task);
             }
-        });
+        }
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(spawn) = &self.runtime.native_task_spawner {

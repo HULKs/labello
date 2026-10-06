@@ -17,6 +17,9 @@ impl eframe::App for LabelloApp {
             ui.centered_and_justified(|ui| { ui.label("Updating Labello..."); });
             return;
         }
+        // Reducers can queue the next navigation request. Start it before drawing
+        // the retained image so networking overlaps this frame's rendering.
+        self.start_frame_commands();
         if !self.work_view() {
             self.work.work_panel_focus_return = None;
         }

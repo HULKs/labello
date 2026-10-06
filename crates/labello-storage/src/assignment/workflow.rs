@@ -599,27 +599,27 @@ impl DatasetRepository {
                 .await?;
         let progress = self.assignment_progress(&selection.kind).await?;
         let mut unseen = 0;
+        let mut owned_images = std::collections::BTreeSet::new();
         for image in metadata.images.keys() {
             let state = self
                 .workflow_polling_state(image, metadata.bounding_box_visibility)
                 .await?;
-            unseen += state
-                .assignments
-                .iter()
-                .filter(|a| {
-                    a.assigned_to == *user
-                        && a.task_id == selection.task_id
-                        && a.kind == selection.kind
-                        && a.status == AssignmentStatus::Active
-                        && !assignment_is_expired(a, labello_domain::now())
-                        && !state.workflow_seen.contains_key(&a.assignment_id)
-                        && state
-                            .workflow_assignments
-                            .get(&a.assignment_id)
-                            .is_some_and(|c| c.item.variant() == selection.variant)
-                })
-                .count();
+            for assignment in state.assignments.iter().filter(|a| {
+                a.assigned_to == *user
+                    && a.task_id == selection.task_id
+                    && a.kind == selection.kind
+                    && a.status == AssignmentStatus::Active
+                    && !assignment_is_expired(a, labello_domain::now())
+                    && state
+                        .workflow_assignments
+                        .get(&a.assignment_id)
+                        .is_some_and(|c| c.item.variant() == selection.variant)
+            }) {
+                owned_images.insert(image.clone());
+                unseen += usize::from(!state.workflow_seen.contains_key(&assignment.assignment_id));
+            }
         }
+        let reservation_available = unseen < metadata.preload_queue_size + usize::from(!prefetch);
         let restricted_images = if selection.variant == WorkflowVariant::Objects {
             if let Some(limit) = metadata.workflow_queue.max_pending_overviews {
                 let in_flight = self
@@ -639,6 +639,11 @@ impl DatasetRepository {
                 break;
             }
             for image_id in metadata.images.keys() {
+                // At capacity only existing leases can be returned. Avoid preparing
+                // or reloading unrelated images while holding dataset admission.
+                if !reservation_available && !owned_images.contains(image_id) {
+                    continue;
+                }
                 if restricted_images
                     .as_ref()
                     .is_some_and(|images| !images.contains(image_id))
@@ -675,7 +680,8 @@ impl DatasetRepository {
                             image_id: image_id.clone(),
                             item: context.item.clone(),
                         }) == allow_excluded
-                            && (claimable(projected, selection, context, now)
+                            && ((reservation_available
+                                && claimable(projected, selection, context, now))
                                 || projected.assignments.iter().any(|a| {
                                     a.task_id == task.task_id
                                         && a.kind == selection.kind

@@ -52,9 +52,11 @@ impl LabelloApp {
                             self.refresh_assignment_availability_if_due();
                         }
                         Ok(None) => {
+                            let continuing = self.work.retired_image;
                             self.work.one_shot_excluded_image_id = None;
                             self.runtime.persistence.expected_assignment = None;
                             self.clear_current_image();
+                            self.work.availability.load_after_resolution |= continuing;
                             self.runtime.error = None;
                             self.runtime.notice = Some(
                                 match self.view {
@@ -98,6 +100,10 @@ impl LabelloApp {
                     self.work.active_load_id = None;
                     self.loading.image = false;
                     let history = std::mem::take(&mut self.work.workflow.revalidating_history);
+                    if history {
+                        self.work.pending_transition = None;
+                        self.work.workflow.returning_forward = false;
+                    }
                     match *result {
                         Ok(Some(revalidated)) => {
                             let expected = cached.assignment.clone();
@@ -172,6 +178,7 @@ impl LabelloApp {
                     self.loading.image = false;
                     self.work.pending_transition = None;
                     let returning_forward = std::mem::take(&mut self.work.workflow.returning_forward);
+                    self.work.workflow.revalidating_history = false;
                     match *result {
                         Ok(loaded) => {
                             if loaded.workflow_item().is_some() {

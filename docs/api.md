@@ -523,9 +523,13 @@ Errors never include source paths or decoder text.
 
 `ImageApi::get_encoded_image_preview` returns `EncodedImagePreview`, separate
 from `ImagePreview::rgba`. HTTP clients bound streaming response bytes and
-validate MIME/profile/metadata; native and WASM use the same bounded Rust WebP
-decoder. The UI always requests Data Saver v1 for working-image loads, reloads,
-retries and prefetch. Generation, transfer and decode errors propagate without
+validate MIME/profile/metadata and check encoded WebP dimensions before pixel
+allocation. Native clients use the bounded Rust WebP decoder. The browser UI
+uses asynchronous `createImageBitmap` decoding and an offscreen canvas, checks
+the decoded dimensions and RGBA length, and closes the bitmap after copying its
+pixels. This keeps prefetch decoding from blocking browser input. Browser decode
+errors use bounded messages without decoder details. The UI always requests
+Data Saver v1 for working-image loads, reloads, retries and prefetch. Generation, transfer and decode errors propagate without
 requesting Standard, legacy RGBA or original bytes. The encoded route retains
 its Standard v1 default for API callers that omit the profile. Image assignment,
 annotation geometry and draft state are independent of the representation.

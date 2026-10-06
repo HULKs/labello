@@ -1191,9 +1191,8 @@ fn empty_prepared_queue_retains_display_until_replacement_is_ready() {
     harness.state_mut().work.queue.clear();
 
     click(&mut harness, "Submit & next");
-    harness.step();
     assert!(harness.state().work.availability.loading);
-    assert!(!harness.state().loading.image);
+    assert!(harness.state().loading.image);
     assert!(harness.state().work.current.is_some());
     assert!(harness.state().work.retired_image);
     assert!(harness.state().work.assignment.is_none());

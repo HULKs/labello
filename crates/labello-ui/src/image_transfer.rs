@@ -1,3 +1,8 @@
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use browser::decode_browser_preview;
+
 use std::{
     cell::RefCell,
     collections::{BTreeMap, VecDeque},

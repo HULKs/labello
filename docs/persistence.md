@@ -372,6 +372,10 @@ still checked, and claims still reload authoritative state under the image lock.
 Workflow polling shares the cached visibility-adjusted state. It copies that
 state only when the visibility policy changes while an older reader still holds
 it; image mutations retain the existing invalidation contract.
+At reservation capacity, claims consider only images with an active lease owned
+by that user in the selected workflow. They do not prepare or reload unrelated
+images under dataset admission. Existing leases remain reusable, and foreground
+claims retain their extra reservation slot.
 When an item is displayed, history reservation cleanup checks only images in the
 user's recorded workflow visits. It still reloads releasable assignments under
 the image lock. Workflow departure also scans for unseen prefetch reservations.

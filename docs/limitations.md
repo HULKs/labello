@@ -40,7 +40,9 @@ for the supported workflows.
 ## Persistence and compatibility
 
 - The browser build requires 128-bit WebAssembly SIMD. Engine support is listed
-  in the [WebAssembly feature table](https://webassembly.org/features/).
+  in the [WebAssembly feature table](https://webassembly.org/features/). Working
+  previews require `createImageBitmap` and `OffscreenCanvas` for asynchronous
+  decoding; decoder failures do not fall back to another image representation.
 - Current dataset configuration and keybindings are versioned TOML, while image
   indexes, state, events, schemas, snapshots, and import records use JSON or
   JSONL.

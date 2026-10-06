@@ -16,6 +16,7 @@ fn valid() -> EncodedImagePreview {
 #[test]
 fn encoded_preview_decodes_to_real_rgba_and_rejects_untrusted_metadata() {
     let preview = valid();
+    preview.validate().unwrap();
     let decoded = preview.decode().unwrap();
     assert_eq!(decoded.rgba, [18, 23, 34, 255]);
     assert_eq!(decoded.image_id, preview.image_id);
@@ -33,7 +34,8 @@ fn encoded_preview_decodes_to_real_rgba_and_rejects_untrusted_metadata() {
     ] {
         let mut preview = valid();
         mutate(&mut preview);
-        let error = preview.decode().unwrap_err().to_string();
+        let error = preview.validate().unwrap_err().to_string();
+        assert_eq!(error, preview.decode().unwrap_err().to_string());
         assert!(error.contains("invalid or oversized image preview"));
         assert!(!error.contains("private content"));
     }
@@ -44,9 +46,11 @@ fn data_saver_uses_the_same_bounded_decoder() {
     let mut preview = valid();
     preview.profile = ImagePreviewProfile::DataSaverV1;
     preview.webp = include_bytes!("../demo/fixtures/data-saver.webp").to_vec();
+    preview.validate().unwrap();
     assert_eq!(preview.decode().unwrap().rgba.len(), 4);
     preview.width = 1281;
     preview.original_width = 1281;
+    assert!(preview.validate().is_err());
     assert!(preview.decode().is_err());
 }
 

@@ -11,6 +11,64 @@ fn context(assignment: &Assignment) -> AssignmentContext<'_> {
 }
 
 #[tokio::test]
+async fn full_prefetch_queue_skips_unreservable_images_but_reuses_owned_items() {
+    for variant in [WorkflowVariant::Objects, WorkflowVariant::Overview] {
+        let (_temp, repo, task, users) =
+            crate::assignment::tests::annotation_repo(32, &["author"]).await;
+        let mut metadata = repo.load_dataset().await.unwrap();
+        metadata.preload_queue_size = 1;
+        repo.save_dataset(&metadata).await.unwrap();
+        if variant == WorkflowVariant::Objects {
+            for image in metadata.images.keys() {
+                seed(&repo, &task, &users[0], image.as_str(), "box").await;
+            }
+        }
+        let selection = WorkflowSelection {
+            task_id: task,
+            kind: AssignmentKind::Annotation,
+            variant,
+        };
+        let held = repo
+            .claim_workflow_item_with_prefetch(&users[0], &selection, &[], true)
+            .await
+            .unwrap()
+            .unwrap();
+        let state = repo.load_image_state(&held.image_id).await.unwrap();
+        let excluded = vec![WorkflowItemRef {
+            image_id: held.image_id.clone(),
+            item: state.workflow_assignments[&held.assignment_id].item.clone(),
+        }];
+        repo.workflow_availability(&users[0], AssignmentKind::Annotation)
+            .await
+            .unwrap();
+        repo.reset_image_state_load_count();
+        assert!(
+            repo.claim_workflow_item_with_prefetch(&users[0], &selection, &excluded, true)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            repo.image_state_load_count(),
+            0,
+            "a full {variant:?} queue must not reload or prepare unreservable images"
+        );
+        let reused = repo
+            .claim_workflow_item_with_prefetch(&users[0], &selection, &[], true)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reused.assignment_id, held.assignment_id);
+        let foreground = repo
+            .claim_workflow_item(&users[0], &selection, &excluded)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(foreground.assignment_id, held.assignment_id);
+    }
+}
+
+#[tokio::test]
 async fn object_prefetch_keeps_distinct_items_on_one_image_and_respects_exclusions() {
     let (_temp, repo, task, users) = crate::assignment::tests::annotation_repo(1, &["a"]).await;
     let mut metadata = repo.load_dataset().await.unwrap();

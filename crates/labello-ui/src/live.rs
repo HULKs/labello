@@ -195,10 +195,16 @@ impl LabelloApp {
     }
 
     pub(crate) fn start_next_command(&mut self) {
-        let Some(command) = self.runtime.commands.pop_front() else {
+        // Background statistics can compete with image loading and response
+        // processing. Keep their request ownership, but let navigation finish first.
+        let defer_stats = self.loading.image && !self.statistics_visible();
+        let can_start =
+            |command: &UiCommand| !defer_stats || !matches!(command, UiCommand::Stats { .. });
+        let Some(index) = self.runtime.commands.iter().position(can_start) else {
             return;
         };
-        if !self.runtime.commands.is_empty()
+        let command = self.runtime.commands.remove(index).expect("queued command");
+        if self.runtime.commands.iter().any(can_start)
             && let Some(ctx) = &self.runtime.repaint_ctx
         {
             ctx.request_repaint();

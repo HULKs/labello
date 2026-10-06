@@ -113,6 +113,7 @@ impl LabelloApp {
                 Some(self.work.image_transfers.transfer(*operation_id))
             }
             UiCommand::ReopenWorkItem { operation_id, .. } => {
+                self.work.workflow.revalidating_history = true;
                 Some(self.work.image_transfers.transfer(*operation_id))
             }
             _ => None,
@@ -161,18 +162,31 @@ impl LabelloApp {
                         };
                     }
                 };
-                let result = load_image(
-                    api,
-                    dataset_id,
+                let cached = match load_image(
+                    api.clone(),
+                    dataset_id.clone(),
                     assignment.clone(),
                     transfer.expect("item image transfer"),
                 )
                 .await
-                .map_err(UiRequestError::from);
-                UiMessage::PreviousAssignmentLoaded {
+                {
+                    Ok(cached) => cached,
+                    Err(error) => {
+                        return UiMessage::PreviousAssignmentLoaded {
+                            request,
+                            operation_id,
+                            assignment: Some(assignment),
+                            result: Box::new(Err(error.into())),
+                        };
+                    }
+                };
+                let result = revalidate_loaded_image(api.as_ref(), &dataset_id, &cached)
+                    .await
+                    .map_err(UiRequestError::from);
+                UiMessage::PreparedReviewRevalidated {
                     request,
                     operation_id,
-                    assignment: Some(assignment),
+                    cached: Box::new(cached),
                     result: Box::new(result),
                 }
             }),
@@ -315,36 +329,9 @@ impl LabelloApp {
                 dataset_id,
                 cached,
             } => self.spawn_message(request.clone(), async move {
-                let result = if cached.workflow_item().is_some() {
-                    api.display_workflow_item(&dataset_id, assignment_action(&cached.assignment))
-                        .await
-                        .and_then(|state| {
-                            let assignment = state
-                                .assignments
-                                .iter()
-                                .find(|assignment| {
-                                    assignment.assignment_id == cached.assignment.assignment_id
-                                })
-                                .cloned()
-                                .ok_or_else(|| {
-                                    labello_client::ClientError::Demo(
-                                        "Displayed item is missing its assignment".into(),
-                                    )
-                                })?;
-                            Ok(Some(labello_client::AssignmentRevalidation {
-                                assignment,
-                                state,
-                            }))
-                        })
-                } else {
-                    api.revalidate_assignment(
-                        &dataset_id,
-                        &cached.assignment.image_id,
-                        assignment_action(&cached.assignment),
-                    )
+                let result = revalidate_loaded_image(api.as_ref(), &dataset_id, &cached)
                     .await
-                }
-                .map_err(UiRequestError::from);
+                    .map_err(UiRequestError::from);
                 UiMessage::PreparedReviewRevalidated {
                     request,
                     operation_id,
@@ -594,6 +581,13 @@ impl LabelloApp {
         let mut availability_matches = self.work.availability.dataset_id.as_ref()
             == Some(&self.config.dataset_id)
             && self.work.availability.kind.as_ref() == Some(&kind);
+        // Continuing an established workflow does not need the advisory dataset
+        // scan. The claim still enforces current roles, limits and eligibility.
+        // An empty claim clears the retired image and returns to availability routing.
+        if availability_matches && self.work.retired_image && self.work.workflow.variant_selected {
+            self.claim_next_workflow_item(task.task_id, kind);
+            return;
+        }
         if (!availability_matches || !self.work.availability.resolved)
             && self.restore_cached_assignment_availability()
         {
@@ -683,6 +677,10 @@ impl LabelloApp {
                 .expect("selected available workflow")
                 .clone()
         };
+        self.claim_next_workflow_item(task.task_id, kind);
+    }
+
+    fn claim_next_workflow_item(&mut self, task_id: labello_domain::TaskId, kind: AssignmentKind) {
         self.work.availability.load_after_resolution = false;
         let operation_id = self.begin_load();
         let request = self.operation_identity(operation_id, self.config.dataset_id.clone());
@@ -690,7 +688,7 @@ impl LabelloApp {
             request,
             operation_id,
             dataset_id: self.config.dataset_id.clone(),
-            task_id: task.task_id,
+            task_id,
             variant: self.work.workflow.variant,
             excluded_items: self.workflow_exclusions(),
             kind,
@@ -700,6 +698,8 @@ impl LabelloApp {
 
     pub(crate) fn request_prefetch(&mut self) {
         if !matches!(self.view, AppView::Annotate | AppView::Review)
+            || self.loading.image
+            || self.forward_work_item().is_some()
             || self.work.assignment.is_none()
             || self.work.current.is_none()
             || self.work.queue.is_loading()
@@ -1253,13 +1253,21 @@ pub(crate) async fn load_working_preview(
     dataset_id: &labello_domain::DatasetId,
     image_id: &labello_domain::ImageId,
 ) -> labello_client::ClientResult<labello_client::ImagePreview> {
-    api.get_encoded_image_preview(
-        dataset_id,
-        image_id,
-        labello_client::ImagePreviewProfile::DataSaverV1,
-    )
-    .await?
-    .decode()
+    let encoded = api
+        .get_encoded_image_preview(
+            dataset_id,
+            image_id,
+            labello_client::ImagePreviewProfile::DataSaverV1,
+        )
+        .await?;
+    #[cfg(target_arch = "wasm32")]
+    {
+        crate::image_transfer::decode_browser_preview(encoded).await
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        encoded.decode()
+    }
 }
 
 fn assignment_action(assignment: &Assignment) -> AssignmentActionRequest {
@@ -1268,5 +1276,39 @@ fn assignment_action(assignment: &Assignment) -> AssignmentActionRequest {
         image_id: assignment.image_id.clone(),
         task_id: assignment.task_id.clone(),
         kind: assignment.kind.clone(),
+    }
+}
+
+async fn revalidate_loaded_image(
+    api: &dyn LabelloApi,
+    dataset_id: &labello_domain::DatasetId,
+    cached: &LoadedImage,
+) -> labello_client::ClientResult<Option<labello_client::AssignmentRevalidation>> {
+    if cached.workflow_item().is_some() {
+        api.display_workflow_item(dataset_id, assignment_action(&cached.assignment))
+            .await
+            .and_then(|state| {
+                let assignment = state
+                    .assignments
+                    .iter()
+                    .find(|assignment| assignment.assignment_id == cached.assignment.assignment_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        labello_client::ClientError::Demo(
+                            "Displayed item is missing its assignment".into(),
+                        )
+                    })?;
+                Ok(Some(labello_client::AssignmentRevalidation {
+                    assignment,
+                    state,
+                }))
+            })
+    } else {
+        api.revalidate_assignment(
+            dataset_id,
+            &cached.assignment.image_id,
+            assignment_action(&cached.assignment),
+        )
+        .await
     }
 }
