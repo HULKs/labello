@@ -170,7 +170,7 @@ fn workers_select_class_specific_workflows() {
 }
 
 #[test]
-fn workflow_selector_divides_each_class_into_equal_activity_columns() {
+fn workflow_selector_stacks_class_activities_in_shared_pass_columns() {
     let api = Rc::new(SpyApi::new());
     let mut harness = loaded_work_harness(api);
     let mut skeleton = harness.state().work.tasks[0].clone();
@@ -201,23 +201,13 @@ fn workflow_selector_divides_each_class_into_equal_activity_columns() {
             "Person: Skeleton annotation · Person skeleton with a deliberately long workflow name · Overview",
         )
         .rect();
-    assert!((skeleton.right() - vehicle.right()).abs() < 2.0, "{bounding_box:?} {skeleton:?} {vehicle:?}");
-    assert_eq!(bounding_box.width(), skeleton.width());
-    assert_eq!(bounding_box.height(), vehicle.height());
-    assert_eq!(bounding_box.height(), skeleton.height());
-    assert!(
-        bounding_box.width() <= 360.0,
-        "long task names must not expand the panel: {bounding_box:?}"
-    );
-    assert!(bounding_box.height() <= 94.0);
-    assert!(
-        skeleton.left() > bounding_box.right() && skeleton.top() == bounding_box.top(),
-        "bounding_box={bounding_box:?} skeleton={skeleton:?}"
-    );
-    assert!(
-        vehicle.top() > skeleton.bottom(),
-        "skeleton={skeleton:?} vehicle={vehicle:?}"
-    );
+    for rect in [skeleton, vehicle] {
+        assert_eq!((rect.left(), rect.width()), (bounding_box.left(), bounding_box.width()), "Overview cells share one column");
+    }
+    assert!(bounding_box.right() <= 360.0, "long task names must not expand the panel: {bounding_box:?}");
+    assert!(bounding_box.height() >= 44.0 && bounding_box.height() == skeleton.height());
+    assert!(skeleton.top() > bounding_box.bottom(), "bounding_box={bounding_box:?} skeleton={skeleton:?}");
+    assert!(vehicle.top() > skeleton.bottom(), "skeleton={skeleton:?} vehicle={vehicle:?}");
     assert!(
         harness
             .query_all_by_label("bounding box annotation type")

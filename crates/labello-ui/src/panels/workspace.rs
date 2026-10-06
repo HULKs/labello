@@ -162,8 +162,9 @@ impl LabelloApp {
                             close = button.clicked();
                         });
                     });
+                    if drawer == Drawer::Workflow { self.workflow_pass_header(ui); }
                     egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx()))
-                        .max_height((max_height - 54.0).max(80.0))
+                        .max_height((max_height - 54.0 - if drawer == Drawer::Workflow { 22.0 } else { 0.0 }).max(80.0))
                         .show(ui, |ui| match drawer {
                             Drawer::Workflow => self.task_panel(ui),
                             Drawer::Inspector => self.right_panel(ui, false),

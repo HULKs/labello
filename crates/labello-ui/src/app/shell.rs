@@ -154,6 +154,7 @@ impl eframe::App for LabelloApp {
                     .exact_size(workflow_panel_width)
                     .frame(theme::side_frame())
                     .show(ui, |ui| {
+                        self.workflow_pass_header(ui);
                         egui::ScrollArea::vertical().scroll_source(crate::pointer_input::scroll_source(ui.ctx())).show(ui, |ui| self.task_panel(ui));
                     });
             } else {
