@@ -217,6 +217,29 @@ impl ReviewHistoryCache {
             .collect())
     }
 
+    pub(crate) fn workflow_history_images(
+        &self,
+        user: &UserId,
+        selection: &labello_domain::WorkflowSelection,
+    ) -> StorageResult<BTreeSet<ImageId>> {
+        let inner = self.inner.lock();
+        let projection = inner.projection.as_ref().ok_or_else(|| {
+            StorageError::AssignmentConflict("workflow history is refreshing".into())
+        })?;
+        let key = (
+            user.clone(),
+            selection.task_id.clone(),
+            selection.kind == AssignmentKind::Review,
+            selection.variant,
+        );
+        Ok(projection
+            .workflow
+            .get(&key)
+            .into_iter()
+            .flat_map(|visits| visits.iter().map(|(_, _, image, _)| image.clone()))
+            .collect())
+    }
+
     #[cfg(test)]
     pub(crate) async fn pause_before_publish(&self) -> Arc<ReviewHistoryPublishPause> {
         let pause = Arc::new(ReviewHistoryPublishPause::default());

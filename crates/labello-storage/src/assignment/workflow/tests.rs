@@ -2047,3 +2047,32 @@ async fn workflow_polling_rechecks_lease_expiry_without_reloading_images() {
 }
 
 mod history;
+
+#[tokio::test]
+async fn displaying_history_does_not_load_unvisited_images_for_reservation_cleanup() {
+    let (_temp, repo, task, users) =
+        crate::assignment::tests::annotation_repo(16, &["author"]).await;
+    let selection = WorkflowSelection {
+        task_id: task,
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Overview,
+    };
+    let item = repo
+        .claim_workflow_item(&users[0], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(&users[0], context(&item))
+        .await
+        .unwrap();
+    repo.polling_images.lock().clear();
+    repo.reset_image_state_load_count();
+    repo.display_workflow_item(&users[0], context(&item))
+        .await
+        .unwrap();
+    assert!(
+        repo.image_state_load_count() <= 4,
+        "display cleanup loaded {} images despite only one history visit",
+        repo.image_state_load_count()
+    );
+}

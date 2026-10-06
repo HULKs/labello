@@ -258,6 +258,9 @@ user's original displayed visit and an approved confirmation in that visit's
 lineage. Captured target and task/Overview fingerprints must agree, and the
 original visit must not have used fallback. Contributor history is preserved;
 no event fields, schema version or cache projection change is required.
+An unchanged migration annotation Overview revisit appends only its
+`ItemConfirmed` receipt. It retains the original `MigrationFullImageConfirmed`
+and task submission events, so review identity and completion credit do not reset.
 
 `DraftSaved` records unfinished object geometry with a compare-and-swap sequence.
 `EditsSaved` records incomplete Overview additions or review corrections as typed

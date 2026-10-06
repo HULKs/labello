@@ -51,6 +51,10 @@ previously saved objects can be left without another confirmation. Failed saves
 preserve the draft; a pending one-keypoint placement resumes after successful
 retry. Saving objects does not confirm or finish the image. Use Submit at the
 bottom right to complete full-image confirmation, including images without guides.
+Previous can reopen a submitted or completed annotation Overview. Submitting that
+visit without edits completes the history assignment while preserving the original
+migration confirmation, task completion and review round. Exact retries do not
+create another submission or completion credit; stale digests still reject.
 
 Delete or Remove added object removes the whole selected added skeleton. An
 unsaved addition is discarded locally and immediately returns to the overview.
