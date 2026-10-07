@@ -5573,3 +5573,142 @@ async fn export_excluded_review_browser_fixture() {
     }
     copy_tree(f._temp.path(), &destination);
 }
+
+#[tokio::test]
+async fn previous_migration_overview_retains_independence_through_correction() {
+    use labello_domain::{
+        CorrectionId, MigrationReviewCorrection, ReviewCorrectionChange,
+        ReviewCorrectionSubmission, WorkflowEdits, WorkflowSelection, WorkflowVariant,
+    };
+    let f = excluded_review_fixture().await;
+    let repo = &f.repository;
+    let selection = WorkflowSelection {
+        task_id: f.task_id.clone(),
+        kind: AssignmentKind::Review,
+        variant: WorkflowVariant::Objects,
+    };
+    let object = repo
+        .claim_workflow_item(&f.reviewers[0], &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let displayed = repo
+        .display_workflow_item(&f.reviewers[0], context(&object))
+        .await
+        .unwrap();
+    repo.confirm_workflow_review(
+        &f.reviewers[0],
+        context(&object),
+        ReviewRecord {
+            review_id: labello_domain::ReviewId::generate(),
+            target: displayed.workflow_assignments[&object.assignment_id]
+                .review_target
+                .clone()
+                .unwrap(),
+            reviewer_user_id: f.reviewers[0].clone(),
+            decision: ReviewDecision::Approved,
+            timestamp: labello_domain::now(),
+            comment: None,
+        },
+    )
+    .await
+    .unwrap();
+    let overview = repo
+        .claim_workflow_item(
+            &f.reviewers[1],
+            &WorkflowSelection {
+                variant: WorkflowVariant::Overview,
+                ..selection
+            },
+            &[],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let displayed = repo
+        .display_workflow_item(&f.reviewers[1], context(&overview))
+        .await
+        .unwrap();
+    assert!(!displayed.workflow_assignments[&overview.assignment_id].review_exception);
+    repo.confirm_workflow_review(
+        &f.reviewers[1],
+        context(&overview),
+        ReviewRecord {
+            review_id: labello_domain::ReviewId::generate(),
+            target: displayed.workflow_assignments[&overview.assignment_id]
+                .review_target
+                .clone()
+                .unwrap(),
+            reviewer_user_id: f.reviewers[1].clone(),
+            decision: ReviewDecision::Approved,
+            timestamp: labello_domain::now(),
+            comment: None,
+        },
+    )
+    .await
+    .unwrap();
+    let reopened = repo
+        .reopen_workflow_item(&f.reviewers[1], context(&overview))
+        .await
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&f.reviewers[1], context(&reopened))
+        .await
+        .unwrap();
+    assert!(!state.workflow_assignments[&reopened.assignment_id].review_exception);
+    let metadata = repo.load_dataset().await.unwrap();
+    let task = metadata.task(&f.task_id).unwrap();
+    let group = &f.targets[0].object_group_id;
+    let changes = vec![ReviewCorrectionChange::MigrationObject {
+        object_group_id: group.clone(),
+        expected_disposition_version: state.migration_dispositions[&f.task_id][group]
+            .disposition_version,
+        replacement: MigrationReviewCorrection::Skeleton {
+            skeleton: skeleton(0.5),
+        },
+    }];
+    repo.save_workflow_edits(
+        &f.reviewers[1],
+        context(&reopened),
+        WorkflowEdits {
+            changes: changes.clone(),
+            reason: None,
+        },
+        0,
+    )
+    .await
+    .unwrap();
+    repo.display_workflow_item(&f.reviewers[1], context(&reopened))
+        .await
+        .unwrap();
+    let submission = ReviewCorrectionSubmission {
+        correction_id: CorrectionId::generate(),
+        round: state.review_round(&f.task_id).unwrap().clone(),
+        target_fingerprint: state.review_target_fingerprint(task),
+        changes,
+        reason: None,
+    };
+    let corrected = repo
+        .submit_review_corrections(&f.reviewers[1], context(&reopened), submission.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        corrected.task_states[&f.task_id].status,
+        TaskStatus::Submitted
+    );
+    assert_eq!(
+        repo.submit_review_corrections(&f.reviewers[1], context(&reopened), submission)
+            .await
+            .unwrap(),
+        corrected
+    );
+    assert!(
+        repo.reopen_workflow_item(&f.reviewers[1], context(&overview))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        corrected
+    );
+}

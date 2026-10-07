@@ -283,9 +283,8 @@ impl ImageState {
                     && (self.review_target_task(target) != Some(&assignment.task_id)
                         || !context.item.matches_review_target(target)
                         || (!context.review_exception
-                            && !self.workflow_independent_reviewer(
-                                &context.item,
-                                target,
+                            && !self.workflow_assignment_independent_reviewer(
+                                context,
                                 &event.actor_user_id,
                             )))
                 {

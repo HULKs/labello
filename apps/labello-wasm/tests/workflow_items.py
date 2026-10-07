@@ -140,7 +140,7 @@ async def run(kind, artifacts=None):
                 await until(objects_finished, "objects-not-confirmed")
                 await page.wait_for_timeout(800)
                 before = len(displayed)
-                await page.mouse.click(260, 200)  # Overview beside Objects in the single-class selector.
+                await page.mouse.click(206, 200)  # Overview beside Objects in the single-class selector.
                 overview = await until(lambda: next_display(before), "overview-not-selected")
                 require(overview[1]["item"]["kind"] == "overview", "overview-selected-object")
                 if artifacts:
@@ -194,7 +194,7 @@ async def run(kind, artifacts=None):
                 await until(objects_reviewed, "object-reviews-not-confirmed")
                 await page.wait_for_timeout(800)
                 before = len(displayed)
-                await page.mouse.click(260, 200)
+                await page.mouse.click(206, 200)
                 review = await until(lambda: next_display(before), "review-overview-not-selected")
                 require(review[1]["item"]["kind"] == "overview", "review-overview-selected-object")
                 for index in range(2):

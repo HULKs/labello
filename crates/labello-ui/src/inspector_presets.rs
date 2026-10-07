@@ -47,6 +47,7 @@ pub enum InspectorPreset {
     ReviewNextImage,
     MigrationNextImage,
     WorkflowChange,
+    NavigationFailure,
     WorkflowReasons,
     WorkflowAvailability,
     WorkflowBoost,
@@ -106,7 +107,7 @@ pub enum InspectorPreset {
 }
 
 impl InspectorPreset {
-    pub const ALL: [Self; 79] = [
+    pub const ALL: [Self; 80] = [
         Self::DatasetGallery,
         Self::DatasetInspection,
         Self::Annotation,
@@ -130,6 +131,7 @@ impl InspectorPreset {
         Self::ReviewNextImage,
         Self::MigrationNextImage,
         Self::WorkflowChange,
+        Self::NavigationFailure,
         Self::WorkflowReasons,
         Self::WorkflowAvailability,
         Self::WorkflowBoost,
@@ -216,6 +218,7 @@ impl InspectorPreset {
             Self::WorkflowBoost => "workflow-boost",
             Self::WorkflowClasses => "workflow-classes",
             Self::WorkflowChange => "workflow-change",
+            Self::NavigationFailure => "navigation-failure",
             Self::WorkflowReasons => "workflow-reasons",
             Self::Admin => "admin",
             Self::PrelabelsDisabled => "prelabels-disabled",
@@ -551,6 +554,11 @@ pub fn build(preset: InspectorPreset, ctx: &egui::Context) -> LabelloApp {
             app
         }
         InspectorPreset::Review => work_preset(AssignmentKind::Review, ctx),
+        InspectorPreset::NavigationFailure => {
+            let mut app = queue_work_preset(ctx, InspectorPreset::ReviewOverview);
+            app.work.workflow.navigation_error = Some("Could not return to the previous item. Another worker has changed or reviewed this history item.".into());
+            app
+        }
         InspectorPreset::WorkflowChange => {
             let mut app = work_preset(AssignmentKind::Annotation, ctx);
             app.runtime.notice = Some(format!(

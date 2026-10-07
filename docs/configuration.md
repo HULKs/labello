@@ -500,6 +500,10 @@ or review work to that image. Viewing or saving an empty proposal does not count
 as a contribution. A recorded self-review exception is allowed only when the user
 has no independent work available in any review queue in the dataset. Historical
 `requiredReviews` values are normalized by the dataset review-policy upgrade.
+Revisiting one's own independently approved Overview retains its original
+eligibility when the history target and captured fingerprints remain valid.
+Other available review work does not block that revisit. New reviews and history
+originally admitted by fallback retain the dataset-wide exclusion checks.
 
 ## Production guidance
 
