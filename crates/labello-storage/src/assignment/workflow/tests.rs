@@ -2076,3 +2076,38 @@ async fn displaying_history_does_not_load_unvisited_images_for_reservation_clean
         repo.image_state_load_count()
     );
 }
+
+#[tokio::test]
+async fn repeated_workflow_polling_shares_the_visibility_adjusted_state() {
+    let (_temp, repo, _, _) = crate::assignment::tests::annotation_repo(1, &["author"]).await;
+    let metadata = repo.load_dataset().await.unwrap();
+    let image = metadata.images.keys().next().unwrap();
+    let first = repo
+        .workflow_polling_state(image, metadata.bounding_box_visibility)
+        .await
+        .unwrap();
+    let second = repo
+        .workflow_polling_state(image, metadata.bounding_box_visibility)
+        .await
+        .unwrap();
+    assert!(
+        std::sync::Arc::ptr_eq(&first, &second),
+        "warm workflow polling copied the full image state"
+    );
+    let changed_policy = labello_domain::BoundingBoxVisibility { iou_threshold: 0.7 };
+    let changed = repo
+        .workflow_polling_state(image, changed_policy)
+        .await
+        .unwrap();
+    assert_eq!(changed.bounding_box_visibility, Some(changed_policy));
+    assert_eq!(
+        first.bounding_box_visibility,
+        Some(metadata.bounding_box_visibility)
+    );
+    assert!(!std::sync::Arc::ptr_eq(&first, &changed));
+    let repeated = repo
+        .workflow_polling_state(image, changed_policy)
+        .await
+        .unwrap();
+    assert!(std::sync::Arc::ptr_eq(&changed, &repeated));
+}

@@ -173,6 +173,20 @@ Optional `--artifacts`
 captures only the workflow selector. Storage tests cover multi-user handoff,
 prelabel replacement, migration transactions, and exact score/replay invariants.
 
+To measure navigation, build the release server and browser distribution, then
+add `--server target/release/labello-server --latency-budget-ms 500` to each
+Objects/Overview command. This opt-in Chromium check clicks the visible Submit,
+Approve and Previous buttons in annotation and review. Timing starts at pointer
+release and ends after successful display validation, the new working-image
+draw, an enabled primary action and the next animation frame. It fails if any
+measured transition reaches the budget. The probe uses the fixture's fixed
+1440 × 1000 viewport at DPR 1 and 100% zoom; pixels remain in browser memory.
+It also checks item order and completion through the API. Terminal empty queues
+are checked functionally and have no next-item latency sample. These local
+synthetic measurements exclude startup and do not establish a production
+network or hardware latency guarantee. Record larger-dataset and migration
+measurements separately, including their readiness criteria.
+
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
 It includes headless startup, MCP readiness checks, independent parallel

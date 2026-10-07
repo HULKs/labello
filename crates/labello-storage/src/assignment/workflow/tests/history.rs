@@ -326,3 +326,116 @@ async fn export_overview_history_browser_fixture() {
     }
     std::fs::rename(temp.path(), destination).unwrap();
 }
+
+#[tokio::test]
+async fn reopening_a_prefetched_item_preserves_the_requested_history_position() {
+    let (_temp, repo, task, users) =
+        crate::assignment::tests::annotation_repo(2, &["author", "other"]).await;
+    let user = &users[0];
+    let selection = WorkflowSelection {
+        task_id: task,
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Overview,
+    };
+    let first = repo
+        .claim_workflow_item(user, &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(user, context(&first))
+        .await
+        .unwrap();
+    repo.release_assignment(
+        user,
+        &first.assignment_id,
+        &first.image_id,
+        &first.task_id,
+        AssignmentKind::Annotation,
+    )
+    .await
+    .unwrap();
+    let second = repo
+        .claim_workflow_item(
+            user,
+            &selection,
+            &[WorkflowItemRef {
+                image_id: first.image_id.clone(),
+                item: WorkflowItem::Overview,
+            }],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    repo.display_workflow_item(user, context(&second))
+        .await
+        .unwrap();
+    let prefetched = repo
+        .claim_workflow_item_with_prefetch(
+            user,
+            &selection,
+            &[WorkflowItemRef {
+                image_id: second.image_id.clone(),
+                item: WorkflowItem::Overview,
+            }],
+            true,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(prefetched.image_id, first.image_id);
+    let before = repo.load_image_state(&first.image_id).await.unwrap();
+    assert!(matches!(
+        repo.reopen_workflow_item(&users[1], context(&first)).await,
+        Err(StorageError::Unauthorized(_))
+    ));
+    assert_eq!(
+        repo.load_image_state(&first.image_id).await.unwrap(),
+        before
+    );
+    let reopened = repo
+        .reopen_workflow_item(user, context(&first))
+        .await
+        .unwrap();
+    let state = repo
+        .display_workflow_item(user, context(&reopened))
+        .await
+        .unwrap();
+    assert_eq!(
+        state.workflow_assignments[&reopened.assignment_id]
+            .source_assignment_id
+            .as_ref(),
+        Some(&first.assignment_id)
+    );
+    let history = repo.workflow_history(user, &selection).await.unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .map(|entry| &entry.assignment_id)
+            .collect::<Vec<_>>(),
+        vec![&second.assignment_id, &first.assignment_id]
+    );
+    assert_eq!(
+        state
+            .assignments
+            .iter()
+            .find(|a| a.assignment_id == prefetched.assignment_id)
+            .unwrap()
+            .status,
+        AssignmentStatus::Cancelled
+    );
+    assert_eq!(
+        repo.reopen_workflow_item(user, context(&first))
+            .await
+            .unwrap()
+            .assignment_id,
+        reopened.assignment_id
+    );
+    let events = repo.load_events(&first.image_id).await.unwrap();
+    for boundary in 0..=events.len() {
+        labello_domain::rebuild_state(first.image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(
+        repo.rebuild_image_state(&first.image_id).await.unwrap(),
+        state
+    );
+}

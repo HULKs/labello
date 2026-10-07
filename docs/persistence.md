@@ -280,6 +280,9 @@ saved `false` nor an invalid value can select a larger preview. Workspace and
 draft persistence formats are unchanged. Signing out or changing endpoint clears
 image references and rejects/cancels obsolete transfers. Derived previews do not
 authorize offline work or restore a server assignment.
+The shared UI keeps at most eight decoded working previews within a 32 MiB
+memory budget. Auth/workspace invalidation clears this cache. Pixel reuse never
+replaces fresh state reads or assignment display validation.
 
 ## Completion and preload projection
 
@@ -366,6 +369,9 @@ also retains the replayed image state needed for source matching and review targ
 including annotation versions and prepared prediction geometry. Complete event
 logs are not retained. User-specific permissions and eligibility are
 still checked, and claims still reload authoritative state under the image lock.
+Workflow polling shares the cached visibility-adjusted state. It copies that
+state only when the visibility policy changes while an older reader still holds
+it; image mutations retain the existing invalidation contract.
 When an item is displayed, history reservation cleanup checks only images in the
 user's recorded workflow visits. It still reloads releasable assignments under
 the image lock. Workflow departure also scans for unseen prefetch reservations.

@@ -14,15 +14,18 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 from playwright.async_api import async_playwright
+from navigation_latency import NavigationLatency, PROBE
 from stylus_input import COLOR, Scenario, application, png, require, until
 
 
-async def run(kind, artifacts=None):
-    with application() as (origin, api, server):
+async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None):
+    with application(server_binary=server_binary) as (origin, api, server):
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(args=["--enable-unsafe-swiftshader"])
+            browser = await playwright.chromium.launch(channel="chromium" if latency_budget_ms else None, args=["--enable-unsafe-swiftshader", "--use-gl=angle", "--use-angle=swiftshader"])
             try:
                 context = await browser.new_context(viewport={"width": 1440, "height": 1000})
+                if latency_budget_ms:
+                    await context.add_init_script(PROBE)
                 scenario = Scenario(context, origin, api)
 
                 async def ready():
@@ -79,6 +82,15 @@ async def run(kind, artifacts=None):
                 context.on("response", response_ready)
                 await scenario.open(1440, 1000, False, "cdp", "chromium")
                 page = scenario.page
+                meter = NavigationLatency(page, latency_budget_ms) if latency_budget_ms else None
+                phase = "annotation_objects"
+
+                async def action(key, next_item=True):
+                    if meter and next_item:
+                        await meter.click(phase, "previous" if key == "ArrowLeft" else "submit")
+                    else:
+                        await page.keyboard.press(key)
+
 
                 async def current():
                     if not displayed or len(displayed) not in histories:
@@ -106,26 +118,26 @@ async def run(kind, artifacts=None):
                 visits = [first]
                 for _ in range(2):
                     before = len(displayed)
-                    await page.keyboard.press("Space")
+                    await action("Space")
                     visits.append(await until(lambda: next_display(before), "object-did-not-advance"))
                 require(all(visit[1]["item"]["kind"] == "object" for visit in visits), "object-queue-entered-overview")
                 require(len({visit[0]["imageId"] for visit in visits}) == 2, "objects-did-not-cross-images")
                 for previous in [visits[1], visits[0]]:
                     before = len(displayed)
-                    await page.keyboard.press("ArrowLeft")
+                    await action("ArrowLeft")
                     reopened = await until(lambda: next_display(before), "previous-item-not-displayed")
                     require(reopened[0]["imageId"] == previous[0]["imageId"] and reopened[1]["item"] == previous[1]["item"], "history-order-changed")
                 for forward in [visits[1], visits[2]]:
                     before = len(displayed)
-                    await page.keyboard.press("Space")
+                    await action("Space")
                     reopened = await until(lambda: next_display(before), "forward-item-not-displayed")
                     require(reopened[0]["imageId"] == forward[0]["imageId"] and reopened[1]["item"] == forward[1]["item"], "forward-history-not-retained")
 
                 # Finish the two remaining objects, leaving both image overviews pending.
                 before = len(displayed)
-                await page.keyboard.press("Space")
+                await action("Space")
                 await until(lambda: next_display(before), "last-object-not-displayed")
-                await page.keyboard.press("Space")
+                await action("Space", next_item=False)
                 async def objects_finished():
                     states = [await scenario.request("GET", f"/datasets/stylus/images/{image}") for image in images]
                     confirmed = set()
@@ -145,6 +157,7 @@ async def run(kind, artifacts=None):
                 require(overview[1]["item"]["kind"] == "overview", "overview-selected-object")
                 if artifacts:
                     await page.screenshot(path=str(Path(artifacts) / f"overview-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
+                phase = "annotation_overview"
                 # Revisions made in Overview must survive autosave without reopening Objects.
                 await page.wait_for_timeout(600)
                 scenario.bounds = await until(lambda: scenario.color_bounds(COLOR), "overview-image-not-rendered")
@@ -158,9 +171,14 @@ async def run(kind, artifacts=None):
                 await until(overview_edit_saved, "overview-edit-not-autosaved")
                 for index in range(2):
                     before = len(displayed)
-                    await page.keyboard.press("Space")
+                    await action("Space", next_item=index == 0)
                     if index == 0:
                         await until(lambda: next_display(before), "next-overview-not-displayed")
+                        if meter:
+                            for key in ["ArrowLeft", "Space"]:
+                                before = len(displayed)
+                                await action(key)
+                                await until(lambda: next_display(before), "annotation-overview-return-did-not-advance")
                 async def submitted():
                     states = [await scenario.request("GET", f"/datasets/stylus/images/{image}") for image in images]
                     return all(state["taskStates"][task["taskId"]]["status"] == "submitted" for state in states)
@@ -176,15 +194,21 @@ async def run(kind, artifacts=None):
                 review = await until(lambda: next_display(before), "review-object-not-displayed")
                 require(review[0]["kind"] == "review" and review[1]["item"]["kind"] == "object", "review-not-focused")
                 require(review[1]["reviewException"], "self-review-fallback-not-recorded")
+                phase = "review_objects"
                 if artifacts:
                     await page.screenshot(path=str(Path(artifacts) / f"review-{kind}.png"), clip={"x": 0, "y": 110, "width": 360, "height": 330}, scale="css")
                 before = len(displayed)
-                await page.keyboard.press("Space")
+                await action("Space")
                 review = await until(lambda: next_display(before), "review-did-not-advance")
                 require(review[1]["item"]["kind"] == "object", "review-entered-overview")
+                if meter:
+                    for key in ["ArrowLeft", "Space"]:
+                        before = len(displayed)
+                        await action(key)
+                        await until(lambda: next_display(before), "review-object-return-did-not-advance")
                 for index in range(3):
                     before = len(displayed)
-                    await page.keyboard.press("Space")
+                    await action("Space", next_item=index < 2)
                     if index < 2:
                         await until(lambda: next_display(before), "next-review-object-not-displayed")
                 async def objects_reviewed():
@@ -197,11 +221,17 @@ async def run(kind, artifacts=None):
                 await page.mouse.click(206, 200)
                 review = await until(lambda: next_display(before), "review-overview-not-selected")
                 require(review[1]["item"]["kind"] == "overview", "review-overview-selected-object")
+                phase = "review_overview"
                 for index in range(2):
                     before = len(displayed)
                     if index == 0:
-                        await page.keyboard.press("Space")
+                        await action("Space")
                         await until(lambda: next_display(before), "next-review-overview-not-displayed")
+                        if meter:
+                            for key in ["ArrowLeft", "Space"]:
+                                before = len(displayed)
+                                await action(key)
+                                await until(lambda: next_display(before), "review-overview-return-did-not-advance")
                     else:
                         await page.mouse.click(1380, 968)  # Visible Approve action in the bottom bar.
                 async def completed():
@@ -213,6 +243,9 @@ async def run(kind, artifacts=None):
                 require(sum(day["labeled"] for day in days) == 6, "annotation-item-streak-count")
                 require(sum(day["reviewed"] for day in days) == 6, "review-item-streak-count")
                 require(not scenario.errors, "browser-page-error")
+                if meter:
+                    print(json.dumps({"kind": kind, "latencySamples": meter.samples}), flush=True)
+                    require(meter.within_budget(), "navigation-exceeds-latency-budget")
                 print(json.dumps({"result": "passed", "browser": browser.version, "kind": kind,
                                   "images": 2, "objects": 4, "history": "C-B-A-B-C", "annotation_overviews": 2, "overview_edit_autosave": True,
                                   "review": "4 Objects and 2 Overview, shortcut and button", "streak_units": {"annotation": 6, "review": 6}, "viewport": [1440, 1000]}))
@@ -227,5 +260,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--kind", choices=["bounding_box", "skeleton"], default="bounding_box")
     parser.add_argument("--artifacts", help="Capture only the workflow selector, excluding image content")
+    parser.add_argument("--latency-budget-ms", type=float, help="Measure visible buttons through next-item rendering and interaction readiness")
+    parser.add_argument("--server", type=Path, help="Server binary; use a release build for latency measurements")
     args = parser.parse_args()
-    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts), timeout=180))
+    if args.latency_budget_ms is not None and args.latency_budget_ms <= 0:
+        parser.error("--latency-budget-ms must be positive")
+    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts, args.latency_budget_ms, args.server), timeout=180))

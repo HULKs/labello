@@ -247,3 +247,20 @@ fn preload_empty_work_is_not_reported_as_an_imbalance_or_load_failure() {
     assert!(!harness.state().work.queue.failed());
     assert_eq!(harness.state().work.queue.len(), 2);
 }
+
+#[test]
+fn reopening_reuses_pixels_but_reloads_authoritative_state_and_clears_on_workspace_change() {
+    let api = Rc::new(SpyApi::new());
+    api.state.borrow_mut().block_prefetch = true;
+    let mut harness = loaded_work_harness(api.clone());
+    let assignment = harness.state().work.assignment.clone().unwrap();
+    let before = api.counts();
+    harness.state_mut().request_reopen_assignment(assignment.clone());
+    step_until(&mut harness, 12, |app| !app.loading.image);
+    assert!(api.counts().get_image_state > before.get_image_state);
+    assert_eq!(api.counts().get_encoded_image_preview, before.get_encoded_image_preview);
+    harness.state_mut().begin_workspace_epoch();
+    harness.state_mut().request_reopen_assignment(assignment);
+    step_until(&mut harness, 12, |app| !app.loading.image);
+    assert_eq!(api.counts().get_encoded_image_preview, before.get_encoded_image_preview + 1);
+}

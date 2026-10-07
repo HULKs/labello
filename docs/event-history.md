@@ -253,6 +253,11 @@ and cannot introduce predictions into a displayed Overview or completed work.
 `AssignmentOpened` captures object/Overview scope, task identity, exact review target,
 any authorized fallback exception and the original history-visit identity.
 `ItemSeen` is separate from claim/prefetch, so an unseen reservation can refresh.
+Reopening history reuses an active lease only when it belongs to the requested
+visit's lineage. An owned lease for the same item with another visit identity,
+such as a fresh prefetch, is cancelled in the same event batch that opens the
+history lease. The original visit keeps its position. Role, foreign-owner,
+changed-work and history-window checks still apply before publication.
 For a history Overview, replay can derive independent eligibility from the same
 user's original displayed visit and an approved confirmation in that visit's
 lineage. Captured target and task/Overview fingerprints must agree, and the

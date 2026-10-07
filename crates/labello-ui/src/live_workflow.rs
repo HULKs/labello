@@ -1188,8 +1188,9 @@ async fn load_image(
 
     transfer: crate::image_transfer::ImageTransfer,
 ) -> labello_client::ClientResult<LoadedImage> {
+    let previews = transfer.previews.clone();
     transfer
-        .run(load_image_data(api, dataset_id, assignment))
+        .run(load_image_data(api, dataset_id, assignment, previews))
         .await
 }
 
@@ -1197,11 +1198,28 @@ async fn load_image_data(
     api: Rc<dyn LabelloApi>,
     dataset_id: labello_domain::DatasetId,
     assignment: Assignment,
+    previews: crate::image_transfer::PreviewCache,
 ) -> labello_client::ClientResult<LoadedImage> {
     let (image, state, preview, reasons, review_submitters) = futures::try_join!(
         api.get_image_record(&dataset_id, &assignment.image_id),
         api.get_image_state(&dataset_id, &assignment.image_id),
-        load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id,),
+        async {
+            if let Some(pixels) = previews.get(&dataset_id, &assignment.image_id) {
+                return Ok(pixels);
+            }
+            let preview =
+                load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id).await?;
+            let pixels = egui::ColorImage::from_rgba_unmultiplied(
+                [preview.width as usize, preview.height as usize],
+                &preview.rgba,
+            );
+            previews.insert(
+                dataset_id.clone(),
+                assignment.image_id.clone(),
+                pixels.clone(),
+            );
+            Ok(pixels)
+        },
         api.get_image_reasons(&dataset_id, &assignment.image_id),
         async {
             // Profile presentation must not block otherwise valid review work.
@@ -1214,10 +1232,7 @@ async fn load_image_data(
             })
         },
     )?;
-    let color_image = Some(egui::ColorImage::from_rgba_unmultiplied(
-        [preview.width as usize, preview.height as usize],
-        &preview.rgba,
-    ));
+    let color_image = Some(preview);
     // Display installs only the server-prepared hints for the claimed item.
     let prelabels = Vec::new();
     let annotations = state.active_annotations().cloned().collect();

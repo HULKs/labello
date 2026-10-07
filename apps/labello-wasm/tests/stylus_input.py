@@ -74,8 +74,9 @@ class QuietFiles(http.server.SimpleHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def application(handler_type=QuietFiles, dist=None):
-    require((ROOT / "target/debug/labello-server").is_file(), "server-build-missing")
+def application(handler_type=QuietFiles, dist=None, server_binary=None):
+    server_binary = (server_binary or ROOT / "target/debug/labello-server").resolve()
+    require(server_binary.is_file(), "server-build-missing")
     dist = dist or ROOT / "apps/labello-wasm/dist"
     require((dist / "index.html").is_file(), "wasm-build-missing")
     with tempfile.TemporaryDirectory(prefix="labello-stylus-") as directory:
@@ -101,7 +102,7 @@ def application(handler_type=QuietFiles, dist=None):
                    if not k.startswith(("LABELLO_", "GITHUB_"))}
             env["LABELLO_CONFIG"] = str(config)
             server = subprocess.Popen(
-                [str(ROOT / "target/debug/labello-server")], cwd=directory,
+                [str(server_binary)], cwd=directory,
                 env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             try:

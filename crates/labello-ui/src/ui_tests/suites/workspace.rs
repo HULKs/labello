@@ -1834,6 +1834,7 @@ fn failed_refill_keeps_the_one_shot_image_excluded() {
     harness.state_mut().work.queue.pop_prepared();
     let skipped = ImageId::from("img_skipped");
     harness.state_mut().work.one_shot_excluded_image_id = Some(skipped.clone());
+    harness.state_mut().work.image_transfers.clear_previews();
     api.fail_next_preview();
 
     harness.state_mut().request_prefetch();
@@ -3168,6 +3169,7 @@ fn failed_review_previous_load_preserves_correction_and_does_not_release() {
     let assignment = harness.state().work.assignment.clone().unwrap();
     let previous = harness.state().work.previous_assignment.clone();
     let released_before_previous = api.counts().release_assignment;
+    harness.state_mut().work.image_transfers.clear_previews();
     api.fail_next_preview();
 
     click(&mut harness, "Previous");
