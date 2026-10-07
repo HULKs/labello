@@ -1428,7 +1428,22 @@ impl DatasetRepository {
         let state = self.load_image_state(context.image_id).await?;
         let primary_id = command_event_id(user_id, context.assignment_id, idempotency_key, None);
         if let Some(command) = find_command(self, context.image_id, &primary_id).await? {
-            let matches = matches!(&command.primary.payload, EventPayload::MigrationFullImageConfirmed { confirmation } if confirmation.task_id == *context.task_id && confirmation.target_set_hash == *target_set_hash && confirmation.state_hash == *state_hash && confirmation.confirmation_hash == *confirmation_hash);
+            let confirmation = match &command.primary.payload {
+                EventPayload::MigrationFullImageConfirmed { confirmation } => Some(confirmation),
+                EventPayload::Workflow { event }
+                    if matches!(event.as_ref(), labello_domain::WorkflowEvent::ItemConfirmed { confirmation }
+                        if confirmation.assignment_id == *context.assignment_id && confirmation.task_id == *context.task_id && confirmation.review.is_none()) =>
+                {
+                    command.before.migration_confirmations.get(context.task_id)
+                }
+                _ => None,
+            };
+            let matches = confirmation.is_some_and(|confirmation| {
+                confirmation.task_id == *context.task_id
+                    && confirmation.target_set_hash == *target_set_hash
+                    && confirmation.state_hash == *state_hash
+                    && confirmation.confirmation_hash == *confirmation_hash
+            });
             return replay_retry(
                 matches,
                 state,
@@ -1449,7 +1464,16 @@ impl DatasetRepository {
             now,
         )?
         .clone();
-        ensure_annotation_status(&state, context.task_id)?;
+        let history_overview = state
+            .workflow_assignments
+            .get(context.assignment_id)
+            .is_some_and(|captured| {
+                captured.item == labello_domain::WorkflowItem::Overview
+                    && captured.source_assignment_id.is_some()
+            });
+        if !history_overview {
+            ensure_annotation_status(&state, context.task_id)?;
+        }
         if state.migration_cursor(context.task_id, None)? != MigrationCursor::FullImage {
             return Err(conflict(
                 "migration cannot be submitted from an object phase",
@@ -1473,6 +1497,47 @@ impl DatasetRepository {
         {
             return Err(conflict("migration confirmation digest is stale"));
         }
+        if history_overview
+            && !state.assignment_eligible(context.task_id)
+            && state
+                .migration_confirmations
+                .get(context.task_id)
+                .is_some_and(|confirmation| confirmation.confirmation_hash == *confirmation_hash)
+        {
+            // An unchanged history visit completes only its lease. Preserve the
+            // original submission, review round and migration confirmation.
+            let payload = EventPayload::Workflow {
+                event: Box::new(labello_domain::WorkflowEvent::ItemConfirmed {
+                    confirmation: labello_domain::WorkflowConfirmation {
+                        assignment_id: context.assignment_id.clone(),
+                        task_id: context.task_id.clone(),
+                        annotation: None,
+                        review: None,
+                        reviewed_targets: vec![],
+                    },
+                }),
+            };
+            let state = self
+                .append_migration_command_unlocked(
+                    context.image_id,
+                    user_id,
+                    DatasetRole::Annotator,
+                    idempotency_key,
+                    context.assignment_id,
+                    vec![payload],
+                    0,
+                    now,
+                )
+                .await?;
+            assignment = state
+                .assignments
+                .iter()
+                .find(|stored| stored.assignment_id == *context.assignment_id)
+                .expect("confirmed history assignment")
+                .clone();
+            return command_result(state, context.task_id, None, Some(assignment), None);
+        }
+        ensure_annotation_status(&state, context.task_id)?;
         let confirmation = MigrationConfirmation {
             task_id: context.task_id.clone(),
             target_set_hash: target_set_hash.clone(),

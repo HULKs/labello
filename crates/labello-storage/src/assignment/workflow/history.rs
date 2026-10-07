@@ -254,7 +254,16 @@ impl DatasetRepository {
                 && !keep.contains(root)
                 && (release_unseen || state.workflow_seen.contains_key(&assignment.assignment_id))
         };
-        for image_id in metadata.images.keys() {
+        // Display cleanup can release only seen visits. The committed history
+        // projection already identifies their images; unrelated images cannot
+        // contain a releasable visit. Departure also releases unseen prefetches.
+        let images = if release_unseen {
+            metadata.images.keys().cloned().collect()
+        } else {
+            self.review_history_cache
+                .workflow_history_images(user, selection)?
+        };
+        for image_id in &images {
             let cached = self
                 .workflow_polling_state(image_id, metadata.bounding_box_visibility)
                 .await?;

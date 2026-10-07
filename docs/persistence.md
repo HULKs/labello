@@ -366,6 +366,9 @@ also retains the replayed image state needed for source matching and review targ
 including annotation versions and prepared prediction geometry. Complete event
 logs are not retained. User-specific permissions and eligibility are
 still checked, and claims still reload authoritative state under the image lock.
+When an item is displayed, history reservation cleanup checks only images in the
+user's recorded workflow visits. It still reloads releasable assignments under
+the image lock. Workflow departure also scans for unseen prefetch reservations.
 Expiry is filtered on every presence read, independent of writes. Presence is a
 sampled view, not a transaction snapshot across datasets; reading never renews leases.
 

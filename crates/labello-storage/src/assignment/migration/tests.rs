@@ -5332,6 +5332,78 @@ async fn overview_revisits_canonical_migration_with_its_own_lease_through_replay
         repo.rebuild_image_state(&f.image_id).await.unwrap(),
         result.image_state
     );
+    let history = repo
+        .reopen_workflow_item(&f.annotator, context(&overview))
+        .await
+        .unwrap();
+    repo.display_workflow_item(&f.annotator, context(&history))
+        .await
+        .unwrap();
+    let repeated = repo
+        .confirm_and_submit_migration(
+            &f.annotator,
+            context(&history),
+            target_hash,
+            &state_hash,
+            &confirmation,
+            "reconfirm-history",
+        )
+        .await;
+    let repeated = repeated.expect("unchanged migration history submission");
+    assert_eq!(
+        repeated.assignment.as_ref().unwrap().status,
+        AssignmentStatus::Completed
+    );
+    assert_eq!(
+        repeated.image_state.task_states,
+        result.image_state.task_states
+    );
+    assert_eq!(
+        repeated.image_state.migration_confirmations,
+        result.image_state.migration_confirmations
+    );
+    assert_eq!(
+        repeated.image_state.review_rounds,
+        result.image_state.review_rounds
+    );
+    assert_eq!(
+        repo.confirm_and_submit_migration(
+            &f.annotator,
+            context(&history),
+            target_hash,
+            &state_hash,
+            &confirmation,
+            "reconfirm-history"
+        )
+        .await
+        .unwrap()
+        .image_state,
+        repeated.image_state
+    );
+    assert!(
+        repo.confirm_and_submit_migration(
+            &f.annotator,
+            context(&history),
+            target_hash,
+            &confirmation,
+            &confirmation,
+            "reconfirm-history"
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        repo.dataset_stats().await.unwrap().contributors.unwrap(),
+        contributors
+    );
+    let events = repo.load_events(&f.image_id).await.unwrap();
+    for boundary in 0..=events.len() {
+        rebuild_state(f.image_id.clone(), &events[..boundary]).unwrap();
+    }
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        repeated.image_state
+    );
 }
 
 #[tokio::test]
@@ -5710,5 +5782,107 @@ async fn previous_migration_overview_retains_independence_through_correction() {
     assert_eq!(
         repo.rebuild_image_state(&f.image_id).await.unwrap(),
         corrected
+    );
+}
+
+#[tokio::test]
+async fn completed_migration_overview_history_is_a_receipt_only_reconfirmation() {
+    use labello_domain::{WorkflowSelection, WorkflowVariant};
+    let f = fixture(ReviewWorkflow::None, 0).await;
+    let repo = &f.repository;
+    let selection = WorkflowSelection {
+        task_id: f.task_id.clone(),
+        kind: AssignmentKind::Annotation,
+        variant: WorkflowVariant::Overview,
+    };
+    let item = repo
+        .claim_workflow_item(&f.annotator, &selection, &[])
+        .await
+        .unwrap()
+        .unwrap();
+    let state = repo
+        .display_workflow_item(&f.annotator, context(&item))
+        .await
+        .unwrap();
+    let target = &state.migration_target_sets[&f.task_id].target_set_hash;
+    let hash = state.current_migration_state_hash(&f.task_id).unwrap();
+    let confirmation = migration_confirmation_hash(target, &hash).unwrap();
+    let submitted = repo
+        .confirm_and_submit_migration(
+            &f.annotator,
+            context(&item),
+            target,
+            &hash,
+            &confirmation,
+            "initial",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        submitted.image_state.task_states[&f.task_id].status,
+        TaskStatus::Completed
+    );
+    let previous = repo
+        .reopen_workflow_item(&f.annotator, context(&item))
+        .await
+        .unwrap();
+    assert!(
+        repo.confirm_and_submit_migration(
+            &f.annotator,
+            context(&previous),
+            target,
+            &hash,
+            &confirmation,
+            "unseen"
+        )
+        .await
+        .is_err()
+    );
+    let displayed = repo
+        .display_workflow_item(&f.annotator, context(&previous))
+        .await
+        .unwrap();
+    assert!(
+        repo.confirm_and_submit_migration(
+            &f.annotator,
+            context(&previous),
+            target,
+            &confirmation,
+            &confirmation,
+            "stale"
+        )
+        .await
+        .is_err()
+    );
+    let repeated = repo
+        .confirm_and_submit_migration(
+            &f.annotator,
+            context(&previous),
+            target,
+            &hash,
+            &confirmation,
+            "reconfirmed",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repeated.image_state.current_sequence,
+        displayed.current_sequence + 1
+    );
+    assert_eq!(
+        repeated.image_state.task_states,
+        submitted.image_state.task_states
+    );
+    assert_eq!(
+        repeated.image_state.migration_confirmations,
+        submitted.image_state.migration_confirmations
+    );
+    assert_eq!(
+        repeated.assignment.unwrap().status,
+        AssignmentStatus::Completed
+    );
+    assert_eq!(
+        repo.rebuild_image_state(&f.image_id).await.unwrap(),
+        repeated.image_state
     );
 }
