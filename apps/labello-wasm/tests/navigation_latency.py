@@ -9,7 +9,12 @@ import asyncio
 import time
 
 PROBE = r"""(() => {
-  const probe = window.__navigationProbe = {serial: 0, armed: false};
+  const probe = window.__navigationProbe = {serial: 0, armed: false, frameDepth: 0, inlineRequests: 0};
+  const requestFrame = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = callback => requestFrame(time => {
+    probe.frameDepth++;
+    try { callback(time); } finally { probe.frameDepth--; }
+  });
   document.addEventListener('pointerup', event => {
     if (!probe.armed || !event.isTrusted) return;
     probe.click = event.timeStamp;
@@ -21,6 +26,7 @@ PROBE = r"""(() => {
   const fetch = window.fetch;
   window.fetch = function(input, ...args) {
     const path = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href).pathname;
+    if (probe.frameDepth && path.includes('/work-items/')) probe.inlineRequests++;
     const click = probe.click;
     return fetch.call(this, input, ...args).then(response => {
       if (path.endsWith('/work-items/display') && response.ok && probe.armed && probe.click === click)

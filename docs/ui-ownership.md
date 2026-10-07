@@ -196,6 +196,12 @@ annotations. Model and generation checks gate visibility and confirmation after
 recovery. Submission cannot bypass visible pending objects. The retained workspace
 bar presentation includes the current confirmation action and object progress.
 
+Working-preview decoding in `image_transfer/browser.rs` runs asynchronously in
+the browser after the client's encoded-size and dimension validation. The bitmap
+is closed even if pixel conversion fails. Cancelled transfers cannot install a
+texture or refill a newer workspace's preview cache. Native inspection keeps the
+Rust decoder; browser failures do not fall back to another representation.
+
 ## Assignment navigation and review
 
 Annotation and Review share the measured two-line context summary and centered
@@ -636,8 +642,26 @@ already saved by the server.
 
 The command/reducer path saves partial work before Skip, Previous or departure;
 failed saves retain the editor and lease. Prefetch identities include the item,
-so multiple objects on one image remain distinct. Activation records display/seen;
-prefetch only revalidates. Reservation cleanup waits for in-flight claims before
+so multiple objects on one image remain distinct.
+
+WASM command dispatch polls each request once immediately before handing a pending
+future to the local executor. Reducer-generated commands start before rendering,
+and commands from user input start at the end of the UI pass, before painting.
+This overlaps network work with drawing without awaiting a response in the frame.
+Background statistics requests retain their ownership in the queue while an image
+loads; they resume after success or failure. An open statistics view bypasses
+this deferral. Other commands can pass a deferred statistics request.
+
+History loading performs display revalidation in the same asynchronous operation
+before sending its result to the UI. The reducer still checks exact assignment
+identity and current request ownership before activation. Activation records
+display/seen; prefetch only revalidates. New prefetch requests wait during foreground image
+navigation and while a forward history item remains. Existing prepared items
+remain reusable. Continuing a selected workflow can claim the next item
+while advisory availability refreshes. The server still validates current roles,
+limits and eligibility. An empty continuation clears the retired image and
+returns to availability-based workflow routing; initial selection still waits
+for availability. Reservation cleanup waits for in-flight claims before
 releasing the workflow. Shared rendering presents one Previous and Skip action.
 A failed save before Previous, refused Previous request or history display revalidation retains the current
 workspace and exposes a dismissible navigation error in the canvas notice area,

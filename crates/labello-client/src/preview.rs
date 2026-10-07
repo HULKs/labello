@@ -52,9 +52,12 @@ pub(crate) fn invalid_preview() -> ClientError {
 }
 
 impl EncodedImagePreview {
-    /// Decode with the same bounded Rust WebP implementation on native and WASM.
-    /// Encoded bytes never occupy ImagePreview::rgba.
-    pub fn decode(&self) -> ClientResult<ImagePreview> {
+    /// Validate encoded size and WebP dimensions before a platform decoder allocates pixels.
+    pub fn validate(&self) -> ClientResult<()> {
+        self.decoder().map(|_| ())
+    }
+
+    fn decoder(&self) -> ClientResult<impl ImageDecoder + '_> {
         if self.webp.len() > MAX_ENCODED_PREVIEW_BYTES
             || self.width == 0
             || self.height == 0
@@ -80,7 +83,13 @@ impl EncodedImagePreview {
         {
             return Err(invalid_preview());
         }
-        let image = image::DynamicImage::from_decoder(decoder)
+        Ok(decoder)
+    }
+
+    /// Decode with the bounded Rust WebP implementation.
+    /// Encoded bytes never occupy ImagePreview::rgba.
+    pub fn decode(&self) -> ClientResult<ImagePreview> {
+        let image = image::DynamicImage::from_decoder(self.decoder()?)
             .map_err(|_| invalid_preview())?
             .to_rgba8();
         Ok(ImagePreview {

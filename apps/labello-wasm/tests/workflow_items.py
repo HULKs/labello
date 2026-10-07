@@ -18,10 +18,17 @@ from navigation_latency import NavigationLatency, PROBE
 from stylus_input import COLOR, Scenario, application, png, require, until
 
 
-async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None):
+async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None, browser_name="chromium"):
     with application(server_binary=server_binary) as (origin, api, server):
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(channel="chromium" if latency_budget_ms else None, args=["--enable-unsafe-swiftshader", "--use-gl=angle", "--use-angle=swiftshader"])
+            if browser_name == "firefox":
+                # Firefox software WebGL needs a display; use the documented Xvfb setup.
+                browser = await playwright.firefox.launch(headless=False, firefox_user_prefs={
+                    "webgl.force-enabled": True, "webgl.disabled": False,
+                    "webgl.out-of-process": False,
+                })
+            else:
+                browser = await playwright.chromium.launch(channel="chromium" if latency_budget_ms else None, args=["--enable-unsafe-swiftshader", "--use-gl=angle", "--use-angle=swiftshader"])
             try:
                 context = await browser.new_context(viewport={"width": 1440, "height": 1000})
                 if latency_budget_ms:
@@ -80,7 +87,7 @@ async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None):
                         histories[history_requests.pop(response.request)] = await response.json()
                 context.on("request", record)
                 context.on("response", response_ready)
-                await scenario.open(1440, 1000, False, "cdp", "chromium")
+                await scenario.open(1440, 1000, False, "cdp" if browser_name == "chromium" else "dom", browser_name)
                 page = scenario.page
                 meter = NavigationLatency(page, latency_budget_ms) if latency_budget_ms else None
                 phase = "annotation_objects"
@@ -245,8 +252,10 @@ async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None):
                 require(not scenario.errors, "browser-page-error")
                 if meter:
                     print(json.dumps({"kind": kind, "latencySamples": meter.samples}), flush=True)
+                    require(await page.evaluate("window.__navigationProbe.inlineRequests > 0"),
+                            "workflow-fetch-must-start-before-frame-finishes")
                     require(meter.within_budget(), "navigation-exceeds-latency-budget")
-                print(json.dumps({"result": "passed", "browser": browser.version, "kind": kind,
+                print(json.dumps({"result": "passed", "browser": browser_name, "version": browser.version, "kind": kind,
                                   "images": 2, "objects": 4, "history": "C-B-A-B-C", "annotation_overviews": 2, "overview_edit_autosave": True,
                                   "review": "4 Objects and 2 Overview, shortcut and button", "streak_units": {"annotation": 6, "review": 6}, "viewport": [1440, 1000]}))
             finally:
@@ -262,7 +271,9 @@ if __name__ == "__main__":
     parser.add_argument("--artifacts", help="Capture only the workflow selector, excluding image content")
     parser.add_argument("--latency-budget-ms", type=float, help="Measure visible buttons through next-item rendering and interaction readiness")
     parser.add_argument("--server", type=Path, help="Server binary; use a release build for latency measurements")
+    parser.add_argument("--browser", choices=["chromium", "firefox"], default="chromium",
+                        help="Firefox requires a display, such as Xvfb with LIBGL_ALWAYS_SOFTWARE=1")
     args = parser.parse_args()
     if args.latency_budget_ms is not None and args.latency_budget_ms <= 0:
         parser.error("--latency-budget-ms must be positive")
-    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts, args.latency_budget_ms, args.server), timeout=180))
+    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts, args.latency_budget_ms, args.server, args.browser), timeout=180))

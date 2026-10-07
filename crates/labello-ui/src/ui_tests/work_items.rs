@@ -679,6 +679,8 @@ fn failed_history_display_revalidation_preserves_current_edits() {
         };
         let operation_id = app.begin_load();
         app.work.workflow.revalidating_history = true;
+        app.work.workflow.returning_forward = true;
+        app.work.pending_transition = Some(crate::app::PendingTransition::NextAssignment);
         let request = test_request(&app, operation_id, Some(app.config.dataset_id.as_str()));
         app.runtime.active_requests.insert(operation_id);
         app.runtime
@@ -699,6 +701,8 @@ fn failed_history_display_revalidation_preserves_current_edits() {
         assert_eq!(app.work.annotations, annotations);
         assert!(app.work.workflow.navigation_error.is_some());
         assert!(!app.work.workflow.revalidating_history);
+        assert!(!app.work.workflow.returning_forward);
+        assert!(app.work.pending_transition.is_none());
         assert!(!app.loading.image);
     }
 }
@@ -794,4 +798,175 @@ fn history_activation_drops_cancelled_prefetch_but_preserves_newer_reservations(
     assert!(!app.work.queue.contains_assignment(&cancelled.assignment));
     assert!(app.work.queue.contains_assignment(&newer.assignment));
     assert!(!app.runtime.reservation_cleanup.has_pending_releases());
+}
+
+#[test]
+fn completed_item_claims_next_before_pending_availability_finishes() {
+    for variant in [WorkflowVariant::Objects, WorkflowVariant::Overview] {
+        let mut app = object_app();
+        app.runtime.api = Some(Rc::new(SpyApi::new()));
+        app.work.workflow.variant = variant;
+        app.work.workflow.variant_selected = true;
+        app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+        app.work.availability.kind = Some(AssignmentKind::Annotation);
+        app.work.availability.resolved = false;
+        app.work.availability.loading = true;
+        app.work.pending_transition = Some(crate::app::PendingTransition::NextAssignment);
+        let current = app.work.assignment.clone().unwrap();
+        let state = app.work.current_state.clone().unwrap();
+        let operation_id = app.begin_operation();
+        let request = test_request(&app, operation_id, Some(app.config.dataset_id.as_str()));
+        app.runtime.active_requests.insert(operation_id);
+        app.runtime
+            .tx
+            .send(UiMessage::SaveFinished {
+                request,
+                operation_id,
+                assignment_id: current.assignment_id,
+                edit_generation: app.work.edit_generation,
+                completed: true,
+                result: Box::new(Ok(state)),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert!(
+            app.runtime.commands.iter().any(|command| matches!(command,
+            UiCommand::ClaimAssignment { variant: selected, .. } if *selected == variant)),
+            "completed {variant:?} must not wait for advisory availability"
+        );
+        assert!(app.loading.image);
+        assert!(app.work.availability.loading);
+    }
+}
+
+#[test]
+fn empty_continuation_returns_to_availability_routing_without_reclaiming() {
+    for kind in [AssignmentKind::Annotation, AssignmentKind::Review] {
+        let mut app = object_app();
+        app.runtime.api = Some(Rc::new(SpyApi::new()));
+        app.view = if kind == AssignmentKind::Review {
+            AppView::Review
+        } else {
+            AppView::Annotate
+        };
+        app.work.workflow.variant_selected = true;
+        app.work.availability.dataset_id = Some(app.config.dataset_id.clone());
+        app.work.availability.kind = Some(kind.clone());
+        app.work.availability.resolved = false;
+        app.retire_current_image();
+        app.request_next_image();
+        let operation_id = app.work.active_load_id.expect("continuation claim");
+        app.runtime
+            .tx
+            .send(UiMessage::ImageLoaded {
+                request: test_request(&app, operation_id, Some(app.config.dataset_id.as_str())),
+                operation_id,
+                assignment: None,
+                result: Box::new(Ok(None)),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert!(!app.work.retired_image);
+        assert!(app.work.current.is_none());
+        assert!(app.work.availability.load_after_resolution);
+        app.runtime.commands.clear();
+        app.request_next_image();
+        assert!(
+            !app.runtime
+                .commands
+                .iter()
+                .any(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
+        );
+        let request = app.request_identity(Some(app.config.dataset_id.clone()));
+        app.runtime.active_requests.insert(request.request_id);
+        app.work.availability.refresh_after_load = false;
+        app.runtime
+            .tx
+            .send(UiMessage::AssignmentAvailabilityLoaded {
+                request,
+                checked_assignments: Vec::new(),
+                result: Ok(labello_client::AssignmentAvailability {
+                    kind,
+                    workflows: vec![],
+                    queue: None,
+                    tasks: BTreeMap::from([(app.work.selected_task_id.clone().unwrap(), false)]),
+                    reasons: Default::default(),
+                    related: vec![],
+                }),
+            })
+            .unwrap();
+        app.process_messages(&egui::Context::default());
+        assert!(!app.loading.image);
+        assert!(
+            !app.runtime
+                .commands
+                .iter()
+                .any(|command| matches!(command, UiCommand::ClaimAssignment { .. }))
+        );
+    }
+}
+
+#[test]
+fn prefetch_waits_for_navigation_and_for_return_to_history_frontier() {
+    let mut app = object_app();
+    app.runtime.api = Some(Rc::new(SpyApi::new()));
+    app.work.queue.clear();
+    app.loading.image = true;
+    app.request_prefetch();
+    assert!(!app.work.queue.is_loading());
+    app.loading.image = false;
+    let assignment = app.work.assignment.clone().unwrap();
+    let current = WorkflowHistoryEntry {
+        image_id: assignment.image_id,
+        assignment_id: assignment.assignment_id,
+        seen_at: labello_domain::now(),
+    };
+    app.work.workflow.current_root = Some(current.assignment_id.clone());
+    app.work.workflow.history = vec![
+        WorkflowHistoryEntry {
+            image_id: "forward-image".into(),
+            assignment_id: "forward-item".into(),
+            seen_at: labello_domain::now(),
+        },
+        current,
+    ];
+    app.request_prefetch();
+    assert!(!app.work.queue.is_loading());
+    app.work.workflow.current_root = Some("forward-item".into());
+    app.request_prefetch();
+    assert!(app.work.queue.is_loading());
+}
+
+#[test]
+fn navigation_dispatch_defers_stats_until_the_image_is_ready() {
+    let mut app = object_app();
+    app.runtime.api = Some(Rc::new(SpyApi::new()));
+    app.runtime.commands.clear();
+    let stats = app.request_identity(Some(app.config.dataset_id.clone()));
+    let history = app.request_identity(Some(app.config.dataset_id.clone()));
+    app.queue_command(UiCommand::Stats {
+        request: stats.clone(),
+        dataset_id: app.config.dataset_id.clone(),
+    });
+    app.queue_command(UiCommand::WorkflowHistory {
+        request: history.clone(),
+        dataset_id: app.config.dataset_id.clone(),
+        selection: app.workflow_selection().unwrap(),
+    });
+    app.loading.image = true;
+    app.start_frame_commands();
+    assert!(
+        matches!(app.runtime.commands.front(), Some(UiCommand::Stats { request, .. }) if request.request_id == stats.request_id)
+    );
+    assert_eq!(app.runtime.commands.len(), 1);
+    assert!(app.runtime.active_requests.contains(&stats.request_id));
+    assert!(
+        matches!(app.runtime.rx.try_recv().unwrap(), UiMessage::WorkflowHistoryLoaded { request, .. } if request.request_id == history.request_id)
+    );
+    app.loading.image = false;
+    app.start_frame_commands();
+    assert!(app.runtime.commands.is_empty());
+    assert!(
+        matches!(app.runtime.rx.try_recv().unwrap(), UiMessage::StatsLoaded { request, .. } if request.request_id == stats.request_id)
+    );
 }

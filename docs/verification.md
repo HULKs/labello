@@ -179,13 +179,28 @@ Objects/Overview command. This opt-in Chromium check clicks the visible Submit,
 Approve and Previous buttons in annotation and review. Timing starts at pointer
 release and ends after successful display validation, the new working-image
 draw, an enabled primary action and the next animation frame. It fails if any
-measured transition reaches the budget. The probe uses the fixture's fixed
+measured transition reaches the budget and checks that workflow requests start
+before their dispatch frame finishes. The probe uses the fixture's fixed
 1440 × 1000 viewport at DPR 1 and 100% zoom; pixels remain in browser memory.
 It also checks item order and completion through the API. Terminal empty queues
 are checked functionally and have no next-item latency sample. These local
 synthetic measurements exclude startup and do not establish a production
 network or hardware latency guarantee. Record larger-dataset and migration
-measurements separately, including their readiness criteria.
+measurements separately, including their readiness criteria. Include both fresh
+forward work and history return while prefetch runs; warm history alone misses
+queue contention. Repeat with `--browser firefox` when investigating Firefox or
+Zen. Install Playwright Firefox in the same private environment and run with a
+display, or the inspector guide's Xvfb setup and `LIBGL_ALWAYS_SOFTWARE=1`.
+Record first-use samples separately from warmed operation, and report budget
+failures rather than dropping them.
+
+For working-preview decoder changes, run `python
+apps/labello-wasm/tests/preview_decode.py --server target/release/labello-server`
+in Chromium and repeat with `--browser firefox` under the same display setup.
+It loads the built production decoder module and checks asynchronous completion,
+RGBA output, malformed input, mismatched dimensions and bitmap cleanup. Client
+unit tests cover encoded-size, profile and header validation before allocation;
+the workflow matrix exercises decoding through the production WASM app.
 
 For native inspection, follow the
 [inspector guide](../apps/egui-mcp-inspector/README.md#development-and-verification-loop).
