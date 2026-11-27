@@ -1148,7 +1148,7 @@ pub(crate) struct LoadedImage {
     pub queued: QueuedImage,
     pub annotations: Vec<labello_domain::AnnotationVersion>,
     pub state: ImageState,
-    pub color_image: Option<egui::ColorImage>,
+    pub color_image: Option<std::sync::Arc<egui::ColorImage>>,
 }
 
 impl LoadedImage {

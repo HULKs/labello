@@ -8,12 +8,13 @@ impl AuthApi for HttpLabelloApi {
 
     fn auth_options<'a>(&'a self) -> crate::ApiFuture<'a, AuthOptions> {
         Box::pin(async move {
-            Self::json(self.request(Method::GET, "/auth/options")?.send().await?).await
+            self.discovery_get("/auth/options").await
         })
     }
 
     fn local_admin_login<'a>(&'a self) -> crate::ApiFuture<'a, SessionInfo> {
         Box::pin(async move {
+            self.discard_discovery();
             self.session(
                 self.request(Method::POST, "/auth/local-admin")?
                     .send()
@@ -38,6 +39,7 @@ impl AuthApi for HttpLabelloApi {
         request: OAuthCallbackRequest,
     ) -> crate::ApiFuture<'a, UserAccount> {
         Box::pin(async move {
+            self.discard_discovery();
             Self::json(
                 self.request(
                     Method::GET,
@@ -56,13 +58,15 @@ impl AuthApi for HttpLabelloApi {
 
     fn me<'a>(&'a self) -> crate::ApiFuture<'a, SessionInfo> {
         Box::pin(async move {
-            self.session(self.request(Method::GET, "/me")?.send().await?)
-                .await
+            let session = self.discovery_get("/me").await?;
+            self.remember_session(&session);
+            Ok(session)
         })
     }
 
     fn logout<'a>(&'a self) -> crate::ApiFuture<'a, ()> {
         Box::pin(async move {
+            self.discard_discovery();
             let response = self.request(Method::POST, "/logout")?.send().await?;
             Self::ensure_success(response).await?;
             self.clear_csrf_token();

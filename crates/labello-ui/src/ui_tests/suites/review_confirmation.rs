@@ -47,6 +47,46 @@ fn keypoint_review_overview(keypoint_count: usize) -> Harness<'static, LabelloAp
 }
 
 #[test]
+fn workflow_overview_reopens_the_saved_keypoint_and_resets_its_staged_edit() {
+    let mut harness = keypoint_review_overview(1);
+    let app = harness.state_mut();
+    let assignment_id = app.work.assignment.as_ref().unwrap().assignment_id.clone();
+    app.work
+        .current_state
+        .as_mut()
+        .unwrap()
+        .workflow_assignments
+        .insert(
+            assignment_id,
+            labello_domain::WorkflowAssignmentContext {
+                item: labello_domain::WorkflowItem::Overview,
+                task_fingerprint: String::new(),
+                overview_fingerprint: None,
+                review_target: None,
+                review_exception: false,
+                source_assignment_id: None,
+            },
+        );
+    let original = app.annotation_objects().remove(0);
+    app.select_review_annotation(&original.annotation_id);
+    let draft = app.work.correction_draft.as_mut().unwrap();
+    let AnnotationGeometry::Skeleton(skeleton) = &mut draft.edited_geometry else {
+        unreachable!()
+    };
+    skeleton.keypoints[0].point = Some(NormalizedPoint { x: 0.25, y: 0.75 });
+    let edited = draft.edited_geometry.clone();
+    app.stage_review_correction();
+    assert_eq!(app.work.review_corrections.changes.len(), 1);
+    app.select_review_annotation(&original.annotation_id);
+    let reopened = app.work.correction_draft.as_ref().unwrap();
+    assert_eq!(reopened.original_geometry, original.geometry);
+    assert_eq!(reopened.edited_geometry, edited);
+    app.reset_review_item();
+    assert!(app.review_can_approve());
+    assert!(app.work.review_corrections.changes.is_empty());
+}
+
+#[test]
 fn review_confirmation_keeps_multiple_missing_keypoint_objects() {
     for keypoint_count in [1, 2] {
         let mut harness = keypoint_review_overview(keypoint_count);

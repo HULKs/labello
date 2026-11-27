@@ -198,8 +198,16 @@ impl LabelloApp {
         // Background statistics can compete with image loading and response
         // processing. Keep their request ownership, but let navigation finish first.
         let defer_stats = self.loading.image && !self.statistics_visible();
-        let can_start =
-            |command: &UiCommand| !defer_stats || !matches!(command, UiCommand::Stats { .. });
+        let starting = self.runtime.starting;
+        let catalog_ready = self.datasets.summaries_loaded && !self.loading.dataset;
+        let can_start = |command: &UiCommand| match command {
+            UiCommand::Stats { .. } => !starting && !defer_stats,
+            UiCommand::Preferences { .. } => !starting || catalog_ready,
+            UiCommand::BuildInformation { .. }
+            | UiCommand::Presence { .. }
+            | UiCommand::PrefetchAssignment { .. } => !starting,
+            _ => true,
+        };
         let Some(index) = self.runtime.commands.iter().position(can_start) else {
             return;
         };

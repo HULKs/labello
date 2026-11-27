@@ -59,8 +59,8 @@ an annotation drag. These input rules do not certify hardware palm rejection.
 
 The focused check runs the production release WASM distribution against a new
 loopback API server. It creates its own synthetic image and dataset through the
-API, authenticates through local development login, and verifies saved annotation
-versions and geometry. It never connects to an existing server or browser profile.
+API, authenticates through local development login, and checks each saved workflow draft. After confirmation it verifies the
+published annotation identity, version and geometry. It never connects to an existing server or browser profile.
 Each invocation uses fresh temporary data and cleans up its server and browser
 on success, failure, timeout, or interruption.
 

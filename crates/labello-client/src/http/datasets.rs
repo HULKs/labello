@@ -105,7 +105,7 @@ impl DatasetApi for HttpLabelloApi {
     }
     fn list_datasets<'a>(&'a self) -> crate::ApiFuture<'a, Vec<DatasetSummary>> {
         Box::pin(
-            async move { Self::json(self.request(Method::GET, "/datasets")?.send().await?).await },
+            async move { self.discovery_get("/datasets").await },
         )
     }
 
@@ -122,14 +122,7 @@ impl DatasetApi for HttpLabelloApi {
         &'a self,
         dataset_id: &'a DatasetId,
     ) -> crate::ApiFuture<'a, DatasetMetadata> {
-        Box::pin(async move {
-            Self::json(
-                self.request(Method::GET, &format!("/datasets/{dataset_id}"))?
-                    .send()
-                    .await?,
-            )
-            .await
-        })
+        Box::pin(async move { self.discovery_get(&format!("/datasets/{dataset_id}")).await })
     }
 
     fn get_admin_dataset<'a>(

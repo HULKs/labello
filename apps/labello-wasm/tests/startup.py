@@ -10,6 +10,7 @@ selection check. Restored-image readiness is available as a separate endpoint.
 
 import argparse
 import asyncio
+import copy
 import http.client
 import json
 from pathlib import Path
@@ -27,8 +28,9 @@ PROBE = r"""(() => {
   window.fetch = function(input, ...args) {
     const path = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.href).pathname;
     const kind = path.endsWith('.wasm') ? 'wasm' : path.endsWith('labello.client.json') ? 'config'
-      : path.endsWith('/auth/options') ? 'auth' : path.endsWith('/me') ? 'session'
+      : path.endsWith('.ttf') ? 'font' : path.endsWith('/auth/options') ? 'auth' : path.endsWith('/me') ? 'session'
       : path.endsWith('/datasets') ? 'datasets'
+      : path.endsWith('/work-items/reopen') ? 'reopen'
       : path.endsWith('/work-items/claim') ? 'claim'
       : path.endsWith('/work-items/display') ? 'display'
       : path.endsWith('/encoded-preview') || path.endsWith('/preview') ? 'preview'
@@ -90,9 +92,12 @@ class StartupFiles(QuietFiles):
     options = None
     config_override = None
     fail_auth_options = False
+    fail_fonts = False
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if self.fail_fonts and path.endswith(".ttf"):
+            return self.respond(404, b"", [], None)
         if path.startswith("/api/"):
             return self.proxy()
         if path == "/labello.client.json":
@@ -156,6 +161,7 @@ class StartupFiles(QuietFiles):
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dist", type=Path, default=Path("apps/labello-wasm/dist"))
+    parser.add_argument("--server", type=Path, help="Production server binary for the disposable fixture")
     parser.add_argument("--browser", choices=["firefox", "chromium"], default="firefox")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--encoding", choices=["br", "gzip", "identity"], default="br")
@@ -168,7 +174,7 @@ async def main():
     probe = f"window.__startupDatasetProbe = {json.dumps(args.screen == 'datasets')};\n" + PROBE
     require(args.runs > 0 and args.mbps >= 0 and args.latency_ms >= 0, "invalid-benchmark-settings")
     StartupFiles.options = args
-    with application(handler_type=StartupFiles, dist=args.dist.resolve()) as (origin, backend, server):
+    with application(handler_type=StartupFiles, dist=args.dist.resolve(), server_binary=args.server) as (origin, backend, server):
         StartupFiles.backend = backend
         api = origin + "/api/"
         async with async_playwright() as playwright:
@@ -231,6 +237,16 @@ async def main():
                         .map(r => ({start_ms:r.startTime, end_ms:r.responseEnd,
                           encoded_bytes:r.encodedBodySize, decoded_bytes:r.decodedBodySize}))
                     })""")
+                    require(sum(f["kind"] == "font" and f.get("status") == 200 for f in row["fetches"]) == 2,
+                            "bundled-inter-faces-unavailable")
+                    for kind in ("auth", "session", "datasets"):
+                        requests = [entry for entry in row["fetches"] if entry["kind"] == kind]
+                        require(len(requests) == 1 and requests[0]["status"] == 200,
+                                f"unexpected-startup-{kind}-requests")
+                    if args.screen == "restored-image":
+                        reopen = next(entry for entry in row["fetches"] if entry["kind"] == "reopen")
+                        preview = next(entry for entry in row["fetches"] if entry["kind"] == "preview")
+                        require(preview["start"] < reopen["end"], "restore-serialized-preview-and-lease")
                     if args.screen == "datasets":
                         require(not row.get("image_ready_ms"), "dataset-list-restored-work")
                         await page.mouse.click(380, 200)
@@ -257,7 +273,7 @@ async def main():
                 await page.goto(origin + "/", wait_until="domcontentloaded")
                 await page.locator("#startup-status").wait_for(state="detached", timeout=10000)
                 await page.wait_for_timeout(100)
-                require(not await page.evaluate("Boolean(__startup.imageReady || __startup.datasetsReady)"),
+                require(not await page.evaluate("__startup.fetches.some(f => ['datasets','metadata','keybindings'].includes(f.kind)) || __startup.imageReady || __startup.datasetsReady"),
                         "failed-options-revealed-workspace")
                 StartupFiles.fail_auth_options = False
                 await context.close()
@@ -268,9 +284,39 @@ async def main():
                 await page.locator("#startup-status").wait_for(state="detached", timeout=10000)
                 await page.wait_for_function("__startup.fetches.some(f => f.kind === 'session' && f.status === 401)",
                                              timeout=10000)
-                require(not await page.evaluate("Boolean(__startup.imageReady || __startup.datasetsReady)"),
+                require(not await page.evaluate("__startup.fetches.some(f => ['datasets','metadata','keybindings'].includes(f.kind)) || __startup.imageReady || __startup.datasetsReady"),
                         "signed-out-revealed-workspace")
                 await signed_out.close()
+                failure_cases = ["invalid-config", "auth-options-unavailable", "signed-out"]
+                StartupFiles.fail_fonts = True
+                fallback = await browser.new_context(storage_state={"cookies": state["cookies"], "origins": []},
+                                                     **context_options)
+                await fallback.add_init_script("window.__startupDatasetProbe = true;\n" + PROBE)
+                page = await fallback.new_page()
+                await page.goto(origin + "/", wait_until="domcontentloaded")
+                await page.wait_for_function("() => __startup.datasetsReady", timeout=10000)
+                await page.mouse.click(380, 200)
+                await page.wait_for_function("__startup.fetches.some(f => f.kind === 'metadata' && f.status === 200)")
+                await fallback.close()
+                StartupFiles.fail_fonts = False
+                failure_cases.append("fonts-unavailable")
+                if args.screen == "restored-image":
+                    unavailable_state = copy.deepcopy(state)
+                    hints = [item for site in unavailable_state["origins"] for item in site["localStorage"]
+                             if item["name"].startswith("labello:workspace:v2:") and item["name"].endswith(":location")]
+                    require(len(hints) == 1, "expected-remembered-workspace")
+                    hint = json.loads(hints[0]["value"])
+                    hint["datasetId"] = "unavailable-fixture"
+                    hints[0]["value"] = json.dumps(hint)
+                    context = await browser.new_context(storage_state=unavailable_state, **context_options)
+                    await context.add_init_script("window.__startupDatasetProbe = true;\n" + PROBE)
+                    page = await context.new_page()
+                    await page.goto(origin + "/", wait_until="domcontentloaded")
+                    await page.wait_for_function("() => __startup.datasetsReady", timeout=10000)
+                    require(not await page.evaluate("__startup.fetches.some(f => f.kind === 'metadata')"),
+                            "unavailable-remembered-dataset-requested")
+                    await context.close()
+                    failure_cases.append("unavailable-remembered-dataset")
                 report = {"browser": args.browser, "version": browser.version, "viewport": [1440, 1000],
                     "screen": args.screen,
                     "dpr": 1, "zoom": 1, "cold_contexts": args.runs, "encoding": args.encoding,
@@ -278,7 +324,7 @@ async def main():
                     "mbps_per_response": args.mbps, "latency_ms": args.latency_ms,
                     "median_ms": round(statistics.median(times), 1), "max_ms": round(max(times), 1),
                     "budget_ms": args.budget_ms, "pass": statistics.median(times) < args.budget_ms,
-                    "failure_cases": ["invalid-config", "auth-options-unavailable", "signed-out"],
+                    "failure_cases": failure_cases,
                     "runs": rows}
                 print(json.dumps(report))
                 require(report["pass"], "signed-in-startup-budget-exceeded")

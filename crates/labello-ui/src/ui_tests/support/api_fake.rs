@@ -120,7 +120,6 @@ impl SpyApi {
         self.state.borrow_mut().migration_response = Some(result);
     }
 
-    #[cfg(feature = "inspector-presets")]
     pub(super) fn image_state(&self, image_id: &ImageId) -> ImageState {
         self.state.borrow().states[image_id].clone()
     }

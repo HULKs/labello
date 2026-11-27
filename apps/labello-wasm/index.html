@@ -33,6 +33,18 @@
       }
     </style>
     <script>
+      // These fonts ship with the web distribution. Load them alongside WASM
+      // so a cold client can compile application code while the fonts arrive.
+      window.__labelloFonts = Promise.all([
+        ["Inter-Regular.ttf", "sha384-lmVCmeKuR3tI4ED+dQj+PzzYlQ/3zx4TNbYqzhU9w1NCfaltII5siOBZJN8Igqzh"],
+        ["Inter-SemiBold.ttf", "sha384-5XcpWY1Np1yzrfXmwcE8QU3c8QOd0nOxNi/F3YuhpKcTcgJ7A9whWcBmKi40D17M"],
+      ].map(async ([name, integrity]) => {
+        const response = await fetch(new URL("./assets/fonts/inter/" + name, document.baseURI), {
+          integrity, signal: AbortSignal.timeout(3000),
+        });
+        if (!response.ok) throw new Error("font unavailable");
+        return response.arrayBuffer();
+      })).catch(() => null);
       window.__labelloRuntimeConfig = fetch(new URL("./labello.client.json", document.baseURI), {
         cache: "no-store",
         headers: { accept: "application/json" },
@@ -40,6 +52,55 @@
       // Rust reports this failure after startup, even if the request fails
       // before the WASM module has finished downloading.
       window.__labelloRuntimeConfig.catch(() => {});
+      // Start the deployed same-origin discovery reads during the WASM download.
+      // A query override or a nonstandard deployment uses normal HTTP discovery.
+      const discovery = window.__labelloDiscovery = new Map();
+      // Clearing the map also prevents an in-flight callback from offering more reads.
+      const active = Symbol();
+      discovery.set(active, true);
+      window.__labelloRuntimeConfig.then(async response => {
+        if (!response.ok || new URLSearchParams(location.search).has("api")) return;
+        const base = new URL("/api/", location.origin).href;
+        const text = await response.clone().text();
+        if (text.length > 16384) return;
+        const config = JSON.parse(text);
+        if (!discovery.has(active) || Object.keys(config).length !== 1 || config.apiBaseUrl !== base) return;
+        const read = path => fetch(base + path, {
+          credentials: "same-origin", cache: "no-store", redirect: "error"
+        }).then(response => response.ok ? response.text() : null).catch(() => null);
+        const options = read("auth/options");
+        const session = read("me");
+        const offer = (path, pending) => {
+          const key = base + path;
+          discovery.set(key, pending);
+          pending.then(text => {
+            if (discovery.get(key) === pending) discovery.set(key, text);
+          });
+        };
+        offer("auth/options", options);
+        offer("me", session);
+        const catalog = Promise.all([options, session]).then(
+          ([options, session]) => discovery.has(active) && options && session ? read("datasets") : null
+        );
+        offer("datasets", catalog);
+        setTimeout(() => discovery.clear(), 5000);
+        const [catalogText, sessionText] = await Promise.all([catalog, session]);
+        if (!catalogText || !discovery.has(base + "datasets")) return;
+        // The v2 location is scoped to the authenticated account and API. A
+        // missing or incompatible hint leaves restoration to the Rust client.
+        const user = JSON.parse(sessionText).account.userId;
+        const segment = value => encodeURIComponent(value).replace(/[!'()*~]/g,
+          char => "%" + char.charCodeAt(0).toString(16).toUpperCase());
+        const key = `labello:workspace:v2:${segment(base.slice(0, -1))}:${segment(user)}:location`;
+        const locationHint = JSON.parse(localStorage.getItem(key));
+        if (locationHint?.version !== 2) return;
+        const dataset = JSON.parse(catalogText).find(entry =>
+          entry.datasetId === locationHint.datasetId && entry.roles.length > 0);
+        if (dataset && dataset.datasetId !== "." && dataset.datasetId !== "..") {
+          const path = "datasets/" + encodeURIComponent(dataset.datasetId);
+          offer(path, read(path));
+        }
+      }).catch(() => {});
       function showStartupFailure(reason) {
         const status = document.getElementById("startup-status");
         if (!status) return;
@@ -60,5 +121,9 @@
       <span>Loading Labello...</span>
     </div>
     <canvas id="labello-canvas"></canvas>
+    <script>
+      // WebRunner reuses this context. Its WebGL 1 fallback remains available.
+      document.getElementById("labello-canvas").getContext("webgl2", {antialias: false, depth: false});
+    </script>
   </body>
 </html>

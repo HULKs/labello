@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, VecDeque},
     future::Future,
     rc::Rc,
+    sync::Arc,
 };
 
 use futures::future::{AbortHandle, AbortRegistration, Abortable};
@@ -19,14 +20,18 @@ const PREVIEW_CACHE_BYTES: usize = 32 * 1024 * 1024;
 struct CachedPreview {
     dataset: DatasetId,
     image: ImageId,
-    pixels: eframe::egui::ColorImage,
+    pixels: Arc<eframe::egui::ColorImage>,
 }
 
 #[derive(Clone, Default)]
 pub(crate) struct PreviewCache(Rc<RefCell<VecDeque<CachedPreview>>>);
 
 impl PreviewCache {
-    pub fn get(&self, dataset: &DatasetId, image: &ImageId) -> Option<eframe::egui::ColorImage> {
+    pub fn get(
+        &self,
+        dataset: &DatasetId,
+        image: &ImageId,
+    ) -> Option<Arc<eframe::egui::ColorImage>> {
         let mut entries = self.0.borrow_mut();
         let index = entries
             .iter()
@@ -37,7 +42,12 @@ impl PreviewCache {
         Some(pixels)
     }
 
-    pub fn insert(&self, dataset: DatasetId, image: ImageId, pixels: eframe::egui::ColorImage) {
+    pub fn insert(
+        &self,
+        dataset: DatasetId,
+        image: ImageId,
+        pixels: Arc<eframe::egui::ColorImage>,
+    ) {
         let mut entries = self.0.borrow_mut();
         entries.retain(|entry| entry.dataset != dataset || entry.image != image);
         entries.push_back(CachedPreview {
@@ -100,8 +110,12 @@ pub(crate) struct ImageTransfer {
     transfers: Rc<RefCell<BTreeMap<u64, AbortHandle>>>,
 }
 impl ImageTransfer {
+    pub fn is_cancelled(&self) -> bool {
+        !self.transfers.borrow().contains_key(&self.id)
+    }
+
     pub async fn run<T>(
-        mut self,
+        &mut self,
         future: impl Future<Output = ClientResult<T>>,
     ) -> ClientResult<T> {
         Abortable::new(
@@ -129,8 +143,12 @@ mod tests {
     fn preview_cache_is_bounded_scoped_and_keeps_recent_images() {
         let mut transfers = ImageTransfers::default();
         let old_scope = transfers.transfer(1).previews.clone();
-        let pixels =
-            || eframe::egui::ColorImage::filled([1024, 1024], eframe::egui::Color32::WHITE);
+        let pixels = || {
+            Arc::new(eframe::egui::ColorImage::filled(
+                [1024, 1024],
+                eframe::egui::Color32::WHITE,
+            ))
+        };
         for index in 0..8 {
             old_scope.insert("dataset".into(), format!("image-{index}").into(), pixels());
         }
@@ -168,7 +186,10 @@ mod tests {
         old_scope.insert(
             "dataset".into(),
             "oversized".into(),
-            eframe::egui::ColorImage::filled([4096, 4096], eframe::egui::Color32::WHITE),
+            Arc::new(eframe::egui::ColorImage::filled(
+                [4096, 4096],
+                eframe::egui::Color32::WHITE,
+            )),
         );
         assert!(old_scope.0.borrow().is_empty());
     }
@@ -176,7 +197,7 @@ mod tests {
     #[test]
     fn cancellation_drops_image_transfers_and_clears_the_registry() {
         let transfers = ImageTransfers::default();
-        let transfer = transfers.transfer(1);
+        let mut transfer = transfers.transfer(1);
         transfers.cancel_all();
         let result: ClientResult<()> =
             futures::executor::block_on(transfer.run(futures::future::pending()));

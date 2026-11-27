@@ -26,21 +26,27 @@ after their prerequisite response; background refreshes do not add a frame each
 before item activation. The bounded batch leaves rendering time for the UI.
 
 Initial authentication requests sign-in options and the current session in
-parallel under one request identity. The reducer publishes the session only
-after both responses arrive and sign-in options succeed. Dataset and preference
-requests then use the restored session. Browser bootstrap starts discovery
-before graphics initialization and the first layout; endpoint changes and logout
-invalidate the combined response through the central request gate.
+parallel under one request identity. The reducer publishes the session after
+both responses arrive and sign-in options succeed. In the deployed same-origin
+`/api/` configuration, the HTML starts these reads during the WASM download.
+After both succeed, it requests the catalog. If the authenticated account's
+remembered dataset appears in that catalog with a role, it also requests its
+metadata. The first HTTP client consumes each matching response at most once.
+Missing or failed reads and query overrides use normal HTTP discovery.
+Endpoint changes and logout invalidate pending work through the request gate.
 
-During browser startup the existing HTML loading placeholder remains visible
-while the shared reducers, refreshes and persistence queues restore the initial
-workspace. The UI skips intermediate login/catalog layouts until the session,
-dataset, assignment and draft recovery settle. It then renders the workspace or
-the applicable sign-in, empty or failure state. An already-ready image does not
-wait for a background availability refresh. Later navigation uses the usual
-retained UI and loading bars.
-Startup waits for browser draft readiness only while the assignment lease is
-valid; an expired assignment remains visible through the usual work UI.
+The browser loads the two Inter faces from the distribution's integrity-checked
+assets alongside WASM. If either font is unavailable, egui uses its bundled
+fallback fonts. Native builds embed Inter.
+
+The first background draw runs behind the HTML loading placeholder. The shared
+reducers and persistence queue restore the workspace before rendering the first
+interactive layout. A ready session, catalog and dataset can start the remembered
+image request before that layout. Statistics, presence, build information and
+queue prefetch wait until startup finishes. A ready image can open while a
+background availability refresh is pending.
+Startup waits for draft recovery while the assignment lease is valid. An expired
+assignment appears in the usual work UI. Later navigation uses the retained UI and loading bars.
 
 The app bar uses the bundled 256-pixel PNG copy of the SVG app icon and caches
 one texture per egui context. This keeps SVG parsing and rasterization out of the
@@ -234,9 +240,10 @@ correction input, migration placement/exclusions, and recovered drafts. Saving,
 undoing, discarding, or reloading the same assignment does not clear it. A new
 assignment resets it. Selection, pan/zoom, and target inspection alone do not set it.
 
-Previous review first reopens and loads the previous assignment, then releases the
-displaced one. Releasing first would make the displaced review the latest terminal
-assignment. The current image stays visible while opening; accepted confirmation
+A history reopen loads the requested image alongside lease reacquisition. The
+client displays it only after the server revalidates the acquired workflow item.
+Previous review then releases the displaced assignment so it cannot become
+the latest terminal assignment before the reopen. The current image stays visible while opening; accepted confirmation
 closes its modal but keeps conflicting actions blocked until completion. Errors
 preserve current work. Statistics uses its separate assignment-preserving modal.
 

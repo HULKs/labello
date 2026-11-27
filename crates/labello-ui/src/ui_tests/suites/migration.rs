@@ -1004,7 +1004,7 @@ fn migration_review_approval_promotes_cached_work_without_refetching_image_data(
         color_image: Some(egui::ColorImage::from_rgba_unmultiplied(
             [1, 1],
             &[24, 48, 72, 255],
-        )),
+        ).into()),
     }));
     api.set_no_assignment(true);
     app.runtime.api = Some(api.clone());

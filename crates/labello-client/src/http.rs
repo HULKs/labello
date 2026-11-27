@@ -38,6 +38,8 @@ pub struct HttpLabelloApi {
     client: reqwest::Client,
     csrf_token: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     request_origin: Option<String>,
+    #[cfg(target_arch = "wasm32")]
+    discovery: Option<js_sys::Map>,
 }
 
 impl HttpLabelloApi {
@@ -78,6 +80,17 @@ impl HttpLabelloApi {
             client,
             csrf_token: Default::default(),
             request_origin: None,
+            #[cfg(target_arch = "wasm32")]
+            discovery: {
+                use wasm_bindgen::JsCast;
+                let window = js_sys::global();
+                let key = wasm_bindgen::JsValue::from_str("__labelloDiscovery");
+                let map = js_sys::Reflect::get(&window, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into().ok());
+                let _ = js_sys::Reflect::delete_property(&window, &key);
+                map
+            },
         })
     }
 
@@ -110,6 +123,40 @@ impl HttpLabelloApi {
         #[cfg(target_arch = "wasm32")]
         let request = request.fetch_credentials_include();
         Ok(request)
+    }
+
+    fn discard_discovery(&self) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(map) = &self.discovery {
+            map.clear();
+        }
+    }
+
+    async fn discovery_get<T: DeserializeOwned>(&self, path: &str) -> ClientResult<T> {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(map) = &self.discovery {
+            use wasm_bindgen::JsCast;
+            let key = wasm_bindgen::JsValue::from_str(self.endpoint(path)?.as_str());
+            let value = map.get(&key);
+            if map.delete(&key) {
+                let text = match value.dyn_into::<js_sys::Promise>() {
+                    Ok(pending) => wasm_bindgen_futures::JsFuture::from(pending)
+                        .await
+                        .ok()
+                        .and_then(|v| v.as_string()),
+                    Err(ready) => ready.as_string(),
+                };
+                if let Some(text) = text {
+                    return serde_json::from_str(&text).map_err(|error| {
+                        self.discard_discovery();
+                        error.into()
+                    });
+                }
+            }
+        }
+        // A fresh session lookup must never consume an earlier account's catalog.
+        self.discard_discovery();
+        Self::json(self.request(Method::GET, path)?.send().await?).await
     }
 
     fn remember_session(&self, session: &SessionInfo) {

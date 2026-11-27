@@ -123,6 +123,7 @@ class Scenario:
     def __init__(self, context, origin, api):
         self.context, self.origin, self.api = context, origin, api.rstrip("/")
         self.headers = {"Origin": origin}
+        self.last_draft = None
 
     async def request(self, method, path, **kwargs):
         response = await self.context.request.fetch(
@@ -234,28 +235,52 @@ class Scenario:
     async def state(self):
         return await self.request("GET", self.image_path)
 
-    async def annotation(self, version):
+    async def saved_addition(self):
+        previous = self.last_draft
         async def saved():
             state = await self.state()
-            if len(state["annotations"]) != 1:
+            require(not state["annotations"], "annotation-published-before-confirmation")
+            drafts = list(state.get("workflowEditDrafts", {}).values())
+            if not drafts:
                 return False
-            versions = next(iter(state["annotations"].values()))
-            if versions[-1]["version"] < version:
+            require(len(drafts) == 1, "unexpected-draft-count")
+            draft = drafts[0]
+            if draft == previous:
                 return False
-            require(len(versions) == version and versions[-1]["version"] == version,
-                    "duplicate-annotation-revision")
-            return versions[-1]
+            require(draft["previousSequence"] == (previous["sequence"] if previous else 0),
+                    "unexpected-intermediate-draft")
+            changes = draft["edits"]["changes"]
+            require(len(changes) == 1 and changes[0]["kind"] == "add", "expected-single-addition")
+            if previous:
+                require(changes[0]["annotation_id"] == previous["edits"]["changes"][0]["annotation_id"],
+                        "edit-changed-annotation-identity")
+            return draft
 
-        annotation = await until(saved, "annotation-save-timeout")
+        self.last_draft = await until(saved, "annotation-draft-save-timeout")
         await self.page.wait_for_timeout(600)
         state = await self.state()
-        require(len(state["annotations"]) == 1, "duplicate-annotation")
-        require(len(next(iter(state["annotations"].values()))) == version,
-                "delayed-duplicate-revision")
+        require(not state["annotations"] and list(state["workflowEditDrafts"].values()) == [self.last_draft],
+                "delayed-duplicate-edit")
         async def viewport_settled():
             return await self.color_bounds(COLOR) == self.bounds
         await until(viewport_settled, "pen-changed-viewport")
-        return annotation
+        return self.last_draft["edits"]["changes"][0]
+
+    async def submit(self, kind, addition):
+        await self.page.keyboard.press("Space")
+        async def completed():
+            state = await self.state()
+            if state["taskStates"][f"{kind}:fixture"]["status"] == "completed":
+                return state
+        state = await until(completed, "workflow-confirmation-timeout")
+        annotations = state["annotations"]
+        if addition is None:
+            require(not annotations, "deleted-draft-was-published")
+        else:
+            require(list(annotations) == [addition["annotation_id"]], "published-annotation-identity")
+            versions = annotations[addition["annotation_id"]]
+            require(len(versions) == 1 and versions[0]["version"] == 1
+                    and versions[0]["geometry"] == addition["geometry"], "published-annotation-mismatch")
 
     def point(self, normalized):
         left, top, right, bottom = self.bounds
@@ -354,39 +379,39 @@ class Scenario:
 
     async def boxes(self):
         await self.gesture((0.2, 0.2), (0.5, 0.5))
-        created = await self.annotation(1)
+        created = await self.saved_addition()
         check_box(created, (0.2, 0.2, 0.3, 0.3))
         await self.gesture((0.35, 0.35), (0.45, 0.45))
-        moved = await self.annotation(2)
+        moved = await self.saved_addition()
         check_box(moved, (0.3, 0.3, 0.3, 0.3))
         await self.gesture((0.6, 0.6), (0.75, 0.75))
-        resized = await self.annotation(3)
+        resized = await self.saved_addition()
         check_box(resized, (0.3, 0.3, 0.45, 0.45))
         await self.gesture((0.5, 0.5), (0.55, 0.45), pointer="mouse")
-        check_box(await self.annotation(4), (0.35, 0.25, 0.45, 0.45))
+        check_box(await self.saved_addition(), (0.35, 0.25, 0.45, 0.45))
         await self.gesture((0.55, 0.45), (0.5, 0.5))
-        check_box(await self.annotation(5), (0.3, 0.3, 0.45, 0.45))
+        check_box(await self.saved_addition(), (0.3, 0.3, 0.45, 0.45))
         for cancellation in ["escape", "pointercancel", "lostpointercapture"]:
             before = await self.state()
             await self.gesture((0.5, 0.5), (0.6, 0.6), cancel=cancellation)
             await self.page.wait_for_timeout(1000)
-            require((await self.state())["annotations"] == before["annotations"], "cancel-saved-edit")
+            require((await self.state())["workflowEditDrafts"] == before["workflowEditDrafts"], "cancel-saved-edit")
         await self.touch_then_fit()
         await self.gesture((0.5, 0.5), (0.55, 0.45))
-        check_box(await self.annotation(6), (0.35, 0.25, 0.45, 0.45))
+        check_box(await self.saved_addition(), (0.35, 0.25, 0.45, 0.45))
 
     async def keypoints(self):
         await self.gesture((0.4, 0.4))
-        check_point(await self.annotation(1), (0.4, 0.4))
+        check_point(await self.saved_addition(), (0.4, 0.4))
         await self.gesture((0.4, 0.4), (0.6, 0.6))
-        check_point(await self.annotation(2), (0.6, 0.6))
+        check_point(await self.saved_addition(), (0.6, 0.6))
         await self.gesture((0.6, 0.6), (0.5, 0.5), pointer="mouse")
-        check_point(await self.annotation(3), (0.5, 0.5))
+        check_point(await self.saved_addition(), (0.5, 0.5))
         await self.gesture((0.5, 0.5), (0.4, 0.4))
-        check_point(await self.annotation(4), (0.4, 0.4))
+        check_point(await self.saved_addition(), (0.4, 0.4))
         await self.touch_then_fit()
         await self.gesture((0.4, 0.4), (0.6, 0.6))
-        check_point(await self.annotation(5), (0.6, 0.6))
+        check_point(await self.saved_addition(), (0.6, 0.6))
 
     async def touch_only_annotation(self):
         require(self.cdp is not None, "touch-only-check-requires-chromium")
@@ -394,7 +419,7 @@ class Scenario:
             points = [] if point is None else [{"id": 1, "x": self.point(point)[0], "y": self.point(point)[1]}]
             await self.cdp.send("Input.dispatchTouchEvent", {"type": event, "touchPoints": points})
             await self.page.wait_for_timeout(200)
-        check_box(await self.annotation(1), (0.2, 0.2, 0.3, 0.3))
+        check_box(await self.saved_addition(), (0.2, 0.2, 0.3, 0.3))
 
     async def pen_controls_do_not_scroll(self):
         original_size = self.page.viewport_size
@@ -443,9 +468,7 @@ class Scenario:
         # Each sequence finishes with Fit so the saved-geometry helpers retain
         # their original-image coordinate checks.
         for fingers_first in [False, True]:
-            before = await self.state()
-            annotation = next(iter(before["annotations"].values()))[-1]
-            version = annotation["version"]
+            annotation = self.last_draft["edits"]["changes"][0]
             geometry = annotation["geometry"]["geometry"]
             start = ((geometry["x"] + geometry["width"] / 2,
                       geometry["y"] + geometry["height"] / 2) if kind == "bounding_box"
@@ -491,7 +514,7 @@ class Scenario:
             await fingers("touchEnd")
             await self.page.keyboard.press("0")
             await self.page.wait_for_timeout(300)
-            saved = await self.annotation(version + 1)
+            saved = await self.saved_addition()
             if kind == "bounding_box":
                 check_box(saved, (geometry["x"] + 0.02, geometry["y"] - 0.02, geometry["width"], geometry["height"]))
             else:
@@ -502,7 +525,7 @@ class Scenario:
             await self.cdp.send("Input.dispatchTouchEvent", {"type": event, "touchPoints": points})
             await self.page.wait_for_timeout(100)
         await self.page.wait_for_timeout(1000)
-        require((await self.state())["annotations"] == before["annotations"], "finger-created-annotation-after-pen")
+        require((await self.state())["workflowEditDrafts"] == before["workflowEditDrafts"], "finger-created-annotation-after-pen")
 
     async def touch_then_fit(self):
         if self.cdp is None:
@@ -520,7 +543,7 @@ class Scenario:
         await self.page.keyboard.press("0")
         await self.page.wait_for_timeout(1000)
         require(await self.color_bounds(COLOR) == self.bounds, "fit-did-not-restore-viewport")
-        require((await self.state())["annotations"] == before["annotations"], "touch-edited-annotation")
+        require((await self.state())["workflowEditDrafts"] == before["workflowEditDrafts"], "touch-edited-annotation")
 
 
 def check_box(annotation, expected):
@@ -580,6 +603,7 @@ async def main():
                 if args.touch_only:
                     require(args.kind == "bounding_box", "touch-only-check-requires-boxes")
                     await scenario.touch_only_annotation()
+                    await scenario.submit(args.kind, scenario.last_draft["edits"]["changes"][0])
                     print(json.dumps({"result": "passed", "browser": browser.version,
                                       "viewport": [args.width, args.height], "dpr": args.dpr,
                                       "checks": ["touch-only-box-create-and-save-before-pen"]}))
@@ -588,8 +612,9 @@ async def main():
                 await scenario.concurrent_touch_pen(args.kind)
                 if scenario.cdp is not None:
                     await scenario.pen_controls_do_not_scroll()
+                await scenario.submit(args.kind, scenario.last_draft["edits"]["changes"][0])
                 require(not scenario.errors, "browser-pageerror")
-                checks = ["geometry", "drag-preview", "single-revision-per-edit",
+                checks = ["geometry", "drag-preview", "single-draft-per-edit", "confirmed-geometry",
                           "pen-mouse-pen", "unchanged-pen-viewport"]
                 if args.events == "dom-compat":
                     checks.append("duplicate-stylus-touch-and-mouse")
