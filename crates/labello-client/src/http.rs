@@ -38,6 +38,8 @@ pub struct HttpLabelloApi {
     client: reqwest::Client,
     csrf_token: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     request_origin: Option<String>,
+    #[cfg(target_arch = "wasm32")]
+    discovery: Option<js_sys::Map>,
 }
 
 impl HttpLabelloApi {
@@ -78,6 +80,17 @@ impl HttpLabelloApi {
             client,
             csrf_token: Default::default(),
             request_origin: None,
+            #[cfg(target_arch = "wasm32")]
+            discovery: {
+                use wasm_bindgen::JsCast;
+                let window = js_sys::global();
+                let key = wasm_bindgen::JsValue::from_str("__labelloDiscovery");
+                let map = js_sys::Reflect::get(&window, &key)
+                    .ok()
+                    .and_then(|v| v.dyn_into().ok());
+                let _ = js_sys::Reflect::delete_property(&window, &key);
+                map
+            },
         })
     }
 
@@ -110,6 +123,60 @@ impl HttpLabelloApi {
         #[cfg(target_arch = "wasm32")]
         let request = request.fetch_credentials_include();
         Ok(request)
+    }
+
+    fn discard_discovery(&self) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(map) = &self.discovery {
+            map.clear();
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn validate_discovery_session(&self, current: Option<&SessionInfo>) -> ClientResult<()> {
+        if let Some(map) = &self.discovery {
+            let key = wasm_bindgen::JsValue::from_str(self.endpoint("/me")?.as_str());
+            let earlier = map
+                .get(&key)
+                .as_string()
+                .and_then(|text| serde_json::from_str::<SessionInfo>(&text).ok());
+            map.delete(&key);
+            // Only a completed prefetch from this exact login (including its
+            // per-session token) can supply the catalog and dataset metadata.
+            if current.is_none() || earlier.as_ref() != current {
+                map.clear();
+            }
+        }
+        Ok(())
+    }
+
+    async fn discovery_get<T: DeserializeOwned>(&self, path: &str) -> ClientResult<T> {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(map) = &self.discovery
+            && (path == "/auth/options" || self.csrf_token().is_some())
+        {
+            use wasm_bindgen::JsCast;
+            let key = wasm_bindgen::JsValue::from_str(self.endpoint(path)?.as_str());
+            let value = map.get(&key);
+            if map.delete(&key) {
+                let text = match value.dyn_into::<js_sys::Promise>() {
+                    Ok(pending) => wasm_bindgen_futures::JsFuture::from(pending)
+                        .await
+                        .ok()
+                        .and_then(|v| v.as_string()),
+                    Err(ready) => ready.as_string(),
+                };
+                if let Some(text) = text {
+                    return serde_json::from_str(&text).map_err(|error| {
+                        self.discard_discovery();
+                        error.into()
+                    });
+                }
+            }
+        }
+        // On a miss, fetch this and subsequent discovery responses from the server.
+        self.discard_discovery();
+        Self::json(self.request(Method::GET, path)?.send().await?).await
     }
 
     fn remember_session(&self, session: &SessionInfo) {

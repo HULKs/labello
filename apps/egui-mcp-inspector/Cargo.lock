@@ -1969,6 +1969,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "image",
+ "js-sys",
  "labello-domain",
  "reqwest",
  "serde",
@@ -1977,6 +1978,8 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-time",
 ]
 

@@ -1,6 +1,7 @@
-use std::{collections::BTreeSet, rc::Rc};
+use std::{collections::BTreeSet, rc::Rc, sync::Arc};
 
 use eframe::egui;
+use futures::FutureExt;
 use labello_client::{AnnotationBatchRequest, AssignmentActionRequest, LabelloApi};
 use labello_domain::{
     AnnotationId, Assignment, AssignmentKind, EventPayload, ReviewDecision, ReviewId, ReviewRecord,
@@ -151,8 +152,29 @@ impl LabelloApp {
                 dataset_id,
                 item,
             } => self.spawn_message(request.clone(), async move {
-                let assignment = match api.reopen_workflow_item(&dataset_id, item).await {
-                    Ok(assignment) => assignment,
+                // History identifies the image before reacquiring its lease. Read its
+                // presentation concurrently, then display only the revalidated state.
+                let image_id = item.image_id.clone();
+                let kind = item.kind.clone();
+                let task_id = item.task_id.clone();
+                let mut transfer = transfer.expect("item image transfer");
+                let previews = transfer.previews.clone();
+                // A refused reopen cancels the speculative read. An image error must
+                // wait for the reopen so its lease stays available for cleanup.
+                let reopened = futures::try_join!(
+                    api.reopen_workflow_item(&dataset_id, item),
+                    transfer
+                        .run(load_image_data(
+                            api.as_ref(),
+                            &dataset_id,
+                            &image_id,
+                            &kind,
+                            previews
+                        ))
+                        .map(Ok),
+                );
+                let (assignment, image) = match reopened {
+                    Ok(pair) => pair,
                     Err(error) => {
                         return UiMessage::PreviousAssignmentLoaded {
                             request,
@@ -162,14 +184,20 @@ impl LabelloApp {
                         };
                     }
                 };
-                let cached = match load_image(
-                    api.clone(),
-                    dataset_id.clone(),
-                    assignment.clone(),
-                    transfer.expect("item image transfer"),
-                )
-                .await
-                {
+                let image = image.and_then(|image| {
+                    if transfer.is_cancelled()
+                        || assignment.image_id != image_id
+                        || assignment.kind != kind
+                        || assignment.task_id != task_id
+                    {
+                        Err(labello_client::ClientError::Demo(
+                            "Reopened image is no longer current.".into(),
+                        ))
+                    } else {
+                        Ok(image.with_assignment(assignment.clone()))
+                    }
+                });
+                let cached = match image {
                     Ok(cached) => cached,
                     Err(error) => {
                         return UiMessage::PreviousAssignmentLoaded {
@@ -180,7 +208,9 @@ impl LabelloApp {
                         };
                     }
                 };
-                let result = revalidate_loaded_image(api.as_ref(), &dataset_id, &cached)
+                // The concurrent image read can predate the reopened lease.
+                // The history command always owns a workflow item.
+                let result = display_workflow_image(api.as_ref(), &dataset_id, &cached.assignment)
                     .await
                     .map_err(UiRequestError::from);
                 UiMessage::PreparedReviewRevalidated {
@@ -1186,45 +1216,76 @@ async fn load_image(
     dataset_id: labello_domain::DatasetId,
     assignment: Assignment,
 
-    transfer: crate::image_transfer::ImageTransfer,
+    mut transfer: crate::image_transfer::ImageTransfer,
 ) -> labello_client::ClientResult<LoadedImage> {
     let previews = transfer.previews.clone();
-    transfer
-        .run(load_image_data(api, dataset_id, assignment, previews))
-        .await
+    let image = transfer
+        .run(load_image_data(
+            api.as_ref(),
+            &dataset_id,
+            &assignment.image_id,
+            &assignment.kind,
+            previews,
+        ))
+        .await?;
+    Ok(image.with_assignment(assignment))
+}
+
+struct ImageContents {
+    image: labello_domain::ImageRecord,
+    state: labello_domain::ImageState,
+    preview: Arc<egui::ColorImage>,
+    reasons: Vec<labello_client::WorkflowReasonEntry>,
+    review_submitters: Vec<labello_client::ReviewSubmitter>,
+}
+
+impl ImageContents {
+    fn with_assignment(self, assignment: Assignment) -> LoadedImage {
+        let annotations = self.state.active_annotations().cloned().collect();
+        LoadedImage {
+            prepared_until: None,
+            reasons: self.reasons,
+            review_submitters: self.review_submitters,
+            assignment,
+            // Display installs only the server-prepared hints for the claimed item.
+            queued: QueuedImage {
+                image: self.image,
+                prelabels: Vec::new(),
+            },
+            annotations,
+            state: self.state,
+            color_image: Some(self.preview),
+        }
+    }
 }
 
 async fn load_image_data(
-    api: Rc<dyn LabelloApi>,
-    dataset_id: labello_domain::DatasetId,
-    assignment: Assignment,
+    api: &dyn LabelloApi,
+    dataset_id: &labello_domain::DatasetId,
+    image_id: &labello_domain::ImageId,
+    kind: &AssignmentKind,
     previews: crate::image_transfer::PreviewCache,
-) -> labello_client::ClientResult<LoadedImage> {
+) -> labello_client::ClientResult<ImageContents> {
     let (image, state, preview, reasons, review_submitters) = futures::try_join!(
-        api.get_image_record(&dataset_id, &assignment.image_id),
-        api.get_image_state(&dataset_id, &assignment.image_id),
+        api.get_image_record(dataset_id, image_id),
+        api.get_image_state(dataset_id, image_id),
         async {
-            if let Some(pixels) = previews.get(&dataset_id, &assignment.image_id) {
+            if let Some(pixels) = previews.get(dataset_id, image_id) {
                 return Ok(pixels);
             }
-            let preview =
-                load_working_preview(api.as_ref(), &dataset_id, &assignment.image_id).await?;
-            let pixels = egui::ColorImage::from_rgba_unmultiplied(
+            let preview = load_working_preview(api, dataset_id, image_id).await?;
+            let pixels = Arc::new(egui::ColorImage::from_rgba_unmultiplied(
                 [preview.width as usize, preview.height as usize],
                 &preview.rgba,
-            );
-            previews.insert(
-                dataset_id.clone(),
-                assignment.image_id.clone(),
-                pixels.clone(),
-            );
+            ));
+            previews.insert(dataset_id.clone(), image_id.clone(), pixels.clone());
             Ok(pixels)
         },
-        api.get_image_reasons(&dataset_id, &assignment.image_id),
+        api.get_image_reasons(dataset_id, image_id),
         async {
             // Profile presentation must not block otherwise valid review work.
-            Ok::<_, labello_client::ClientError>(if assignment.kind == AssignmentKind::Review {
-                api.get_review_submitters(&dataset_id, &assignment.image_id)
+            Ok::<_, labello_client::ClientError>(if *kind == AssignmentKind::Review {
+                api.get_review_submitters(dataset_id, image_id)
                     .await
                     .unwrap_or_default()
             } else {
@@ -1232,19 +1293,12 @@ async fn load_image_data(
             })
         },
     )?;
-    let color_image = Some(preview);
-    // Display installs only the server-prepared hints for the claimed item.
-    let prelabels = Vec::new();
-    let annotations = state.active_annotations().cloned().collect();
-    Ok(LoadedImage {
-        prepared_until: None,
+    Ok(ImageContents {
+        image,
+        state,
+        preview,
         reasons,
         review_submitters,
-        assignment,
-        queued: QueuedImage { image, prelabels },
-        annotations,
-        state,
-        color_image,
     })
 }
 
@@ -1285,24 +1339,7 @@ async fn revalidate_loaded_image(
     cached: &LoadedImage,
 ) -> labello_client::ClientResult<Option<labello_client::AssignmentRevalidation>> {
     if cached.workflow_item().is_some() {
-        api.display_workflow_item(dataset_id, assignment_action(&cached.assignment))
-            .await
-            .and_then(|state| {
-                let assignment = state
-                    .assignments
-                    .iter()
-                    .find(|assignment| assignment.assignment_id == cached.assignment.assignment_id)
-                    .cloned()
-                    .ok_or_else(|| {
-                        labello_client::ClientError::Demo(
-                            "Displayed item is missing its assignment".into(),
-                        )
-                    })?;
-                Ok(Some(labello_client::AssignmentRevalidation {
-                    assignment,
-                    state,
-                }))
-            })
+        display_workflow_image(api, dataset_id, &cached.assignment).await
     } else {
         api.revalidate_assignment(
             dataset_id,
@@ -1311,4 +1348,29 @@ async fn revalidate_loaded_image(
         )
         .await
     }
+}
+
+async fn display_workflow_image(
+    api: &dyn LabelloApi,
+    dataset_id: &labello_domain::DatasetId,
+    expected: &Assignment,
+) -> labello_client::ClientResult<Option<labello_client::AssignmentRevalidation>> {
+    api.display_workflow_item(dataset_id, assignment_action(expected))
+        .await
+        .and_then(|state| {
+            let assignment = state
+                .assignments
+                .iter()
+                .find(|assignment| assignment.assignment_id == expected.assignment_id)
+                .cloned()
+                .ok_or_else(|| {
+                    labello_client::ClientError::Demo(
+                        "Displayed item is missing its assignment".into(),
+                    )
+                })?;
+            Ok(Some(labello_client::AssignmentRevalidation {
+                assignment,
+                state,
+            }))
+        })
 }

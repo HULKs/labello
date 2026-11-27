@@ -84,7 +84,7 @@ enum ButtonKind {
 }
 
 pub fn apply(ctx: &egui::Context) {
-    ctx.set_fonts(font_definitions());
+    ctx.set_fonts(font_definitions(bundled_inter()));
     ctx.set_global_style(app_style());
 }
 
@@ -98,7 +98,7 @@ pub(crate) fn apply_fallback(ctx: &egui::Context) -> bool {
     if fonts_ready {
         ctx.set_global_style(app_style());
     } else {
-        ctx.set_fonts(font_definitions());
+        ctx.set_fonts(font_definitions(bundled_inter()));
         ctx.request_discard("install Labello fonts before layout");
     }
     fonts_ready
@@ -127,22 +127,48 @@ pub(crate) fn app_icon(ctx: &egui::Context) -> egui::TextureHandle {
     texture
 }
 
-fn font_definitions() -> FontDefinitions {
-    let mut fonts = FontDefinitions::default();
-    fonts.font_data.insert(
-        INTER_REGULAR.to_owned(),
-        Arc::new(FontData::from_static(include_bytes!(
+#[cfg(not(target_arch = "wasm32"))]
+fn bundled_inter() -> Option<(FontData, FontData)> {
+    Some((
+        FontData::from_static(include_bytes!(
             "../../../assets/fonts/inter/Inter-Regular.ttf"
-        ))),
-    );
-    fonts.font_data.insert(
-        INTER_SEMIBOLD.to_owned(),
-        Arc::new(FontData::from_static(include_bytes!(
+        )),
+        FontData::from_static(include_bytes!(
             "../../../assets/fonts/inter/Inter-SemiBold.ttf"
-        ))),
-    );
+        )),
+    ))
+}
 
+#[cfg(target_arch = "wasm32")]
+fn bundled_inter() -> Option<(FontData, FontData)> {
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn apply_browser(ctx: &egui::Context, inter: Option<(Vec<u8>, Vec<u8>)>) {
+    ctx.set_fonts(font_definitions(inter.map(|(regular, semibold)| {
+        (
+            FontData::from_owned(regular),
+            FontData::from_owned(semibold),
+        )
+    })));
+    ctx.set_global_style(app_style());
+}
+
+fn font_definitions(inter: Option<(FontData, FontData)>) -> FontDefinitions {
+    let mut fonts = FontDefinitions::default();
     let proportional = fonts.families.entry(FontFamily::Proportional).or_default();
+    let Some((regular, semibold)) = inter else {
+        let fallback = proportional.clone();
+        fonts.families.insert(semibold_family(), fallback);
+        return fonts;
+    };
+    fonts
+        .font_data
+        .insert(INTER_REGULAR.to_owned(), Arc::new(regular));
+    fonts
+        .font_data
+        .insert(INTER_SEMIBOLD.to_owned(), Arc::new(semibold));
     proportional.insert(0, INTER_REGULAR.to_owned());
     let semibold = std::iter::once(INTER_SEMIBOLD.to_owned())
         .chain(proportional.iter().cloned())
@@ -656,7 +682,7 @@ mod tests {
 
     #[test]
     fn theme_installs_inter_and_complete_widget_states() {
-        let fonts = font_definitions();
+        let fonts = font_definitions(bundled_inter());
         assert_eq!(fonts.families[&FontFamily::Proportional][0], INTER_REGULAR);
         assert_eq!(fonts.families[&semibold_family()][0], INTER_SEMIBOLD);
 

@@ -259,7 +259,7 @@ impl LabelloApp {
                 })
             };
             let result = match transfer {
-                Some(transfer) => transfer.run(future).await,
+                Some(mut transfer) => transfer.run(future).await,
                 None => future.await,
             }
             .map_err(UiRequestError::from);

@@ -56,12 +56,13 @@ async def main():
                     }, true);
                 }""")
                 await scenario.gesture((0.25, 0.25), (0.6, 0.6), pointer="mouse")
-                await scenario.annotation(1)
+                await scenario.saved_addition()
+                saved_drafts = (await scenario.state())["workflowEditDrafts"]
                 x, y = scenario.point((0.4, 0.4))
                 await page.mouse.click(x, y, button="right")
                 await page.wait_for_timeout(1000)
                 state = await scenario.state()
-                require(not next(iter(state["annotations"].values()))[-1]["deleted"],
+                require(state["workflowEditDrafts"] == saved_drafts,
                         "modifier-required-for-mouse-binding")
                 require(await page.evaluate("window.mouseContextMenuPrevented"),
                         "browser-context-menu-not-suppressed")
@@ -69,22 +70,22 @@ async def main():
                 await page.mouse.click(4, 4, button="right")
                 await page.wait_for_timeout(1000)
                 state = await scenario.state()
-                require(not next(iter(state["annotations"].values()))[-1]["deleted"],
+                require(state["workflowEditDrafts"] == saved_drafts,
                         "mouse-binding-escaped-canvas")
                 await page.mouse.click(x, y, button="right")
                 await page.keyboard.up("Shift")
 
                 async def deleted():
                     state = await scenario.state()
-                    return next(iter(state["annotations"].values()))[-1]["deleted"]
+                    drafts = state["workflowEditDrafts"]
+                    return not any(draft["edits"]["changes"] for draft in drafts.values())
 
                 await until(deleted, "right-click-delete-not-saved")
-                state = await scenario.state()
-                versions = len(next(iter(state["annotations"].values())))
+                drafts = (await scenario.state())["workflowEditDrafts"]
                 await page.wait_for_timeout(1000)
-                state = await scenario.state()
-                require(len(next(iter(state["annotations"].values()))) == versions,
+                require((await scenario.state())["workflowEditDrafts"] == drafts,
                         "mouse-release-or-hold-repeated-delete")
+                await scenario.submit("bounding_box", None)
                 require(not scenario.errors, "browser-pageerror")
                 print(json.dumps({
                     "result": "passed", "browser": browser.version,

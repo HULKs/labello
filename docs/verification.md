@@ -169,8 +169,10 @@ For Objects/Overview queues, run `python apps/labello-wasm/tests/workflow_items.
 production data to check cross-image Objects work, C → B → A → B → C history,
 separate annotation Overview completion, focused review, review Overview submission
 through the shortcut and visible action, and one streak unit per completed item.
-Optional `--artifacts`
-captures only the workflow selector. Storage tests cover multi-user handoff,
+Run each kind with `--correct-overview` to select and move an existing box or
+keypoint in review Overview, submit the correction, and verify one new version
+and one correction receipt. Optional `--artifacts` captures only the workflow
+selector. Storage tests cover multi-user handoff,
 prelabel replacement, migration transactions, and exact score/replay invariants.
 
 To measure navigation, build the release server and browser distribution, then
@@ -232,7 +234,12 @@ clicking it opens the dataset. The draw probe uses a fixed point inside that
 button at the benchmark viewport, confirmed by an in-memory screenshot.
 It fails when median navigation-to-dataset-list-draw time reaches 1000 ms.
 Use `--screen restored-image` to carry a workspace preference and measure the
-first draw of the restored synthetic image instead. Reports contain timings,
+first draw of the restored synthetic image instead. The procedure also checks
+logout and session rotation during the WASM download, failed workflow reopens
+in both response orders, signed-out and failed startup, font fallback, and
+restoration of a dataset that is no longer in the catalog. Use
+`--server target/release/labello-server` to measure the optimized server binary.
+Reports contain timings,
 aggregate sizes and bounded request categories only. Optional `--mbps`,
 `--latency-ms`, `--runs`, `--dist` and `--budget-ms` select a measurement profile.
 This local network model does not prove production TLS, throughput, API latency

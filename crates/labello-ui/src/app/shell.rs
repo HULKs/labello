@@ -6,11 +6,16 @@ impl eframe::App for LabelloApp {
                 return;
             }
         }
-        if !self.runtime.starting {
-            ui.painter()
-                .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        // Prime the first WebGL draw under the HTML placeholder while requests
+        // are in flight. Interactive layout still waits for draft recovery.
+        ui.painter().rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        if self.runtime.starting && !self.auth.checked {
+            // Validation can finish after graphics startup. Dispatch already-ready
+            // discovery results in this frame before laying out the workspace.
+            self.prepare_first_frame(ui.ctx());
+        } else {
+            self.process_messages(ui.ctx());
         }
-        self.process_messages(ui.ctx());
         if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
             // Navigation is asynchronous. Do not accept edits after the final
             // persistence check while the browser replaces this document.
@@ -45,18 +50,11 @@ impl eframe::App for LabelloApp {
         self.refresh_export_if_due(ui.ctx());
         self.refresh_prelabels_if_due(ui.ctx());
         self.autosave_if_due();
-        if self.runtime.starting {
-            if self.initial_workspace_pending() {
-                // Keep the HTML loading placeholder while driving the same
-                // reducers and queues. Intermediate login/catalog layouts would
-                // block browser response callbacks and are immediately replaced.
-                self.start_frame_commands();
-                ui.ctx().request_repaint_after(Duration::from_millis(16));
-                return;
-            }
-            self.runtime.starting = false;
-            ui.painter()
-                .rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
+        if self.runtime.starting && self.initial_workspace_pending() {
+            // Keep the HTML placeholder while advancing session and draft recovery.
+            self.start_frame_commands();
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
+            return;
         }
         self.handle_shortcuts(ui.ctx());
         if !ui.ctx().text_edit_focused() {
@@ -231,6 +229,10 @@ impl eframe::App for LabelloApp {
         self.persist_workspace_preference();
         self.advance_build_reload(ui.ctx());
         self.start_frame_commands();
+        if std::mem::take(&mut self.runtime.starting) {
+            // Submit this frame before starting background requests for the new workspace.
+            ui.ctx().request_repaint();
+        }
         if self.work.save_status == SaveStatus::Dirty
             && let Some(edited) = self.work.last_edit_at
         {

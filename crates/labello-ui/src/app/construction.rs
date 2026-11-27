@@ -156,6 +156,14 @@ impl LabelloApp {
         self.start_frame_commands();
     }
 
+    /// Drain the session, catalog and dataset stages that are ready before layout.
+    pub fn prepare_first_frame(&mut self, ctx: &egui::Context) {
+        for _ in 0..3 {
+            self.process_messages(ctx);
+            self.start_frame_commands();
+        }
+    }
+
     pub fn starting(&self) -> bool {
         self.runtime.starting
     }

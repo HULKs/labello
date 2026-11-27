@@ -26,21 +26,30 @@ after their prerequisite response; background refreshes do not add a frame each
 before item activation. The bounded batch leaves rendering time for the UI.
 
 Initial authentication requests sign-in options and the current session in
-parallel under one request identity. The reducer publishes the session only
-after both responses arrive and sign-in options succeed. Dataset and preference
-requests then use the restored session. Browser bootstrap starts discovery
-before graphics initialization and the first layout; endpoint changes and logout
-invalidate the combined response through the central request gate.
+parallel under one request identity. The reducer publishes the session after
+both responses arrive and sign-in options succeed. In the deployed same-origin
+`/api/` configuration, the HTML starts these reads during the WASM download.
+After both succeed, it requests the catalog. If the authenticated account's
+remembered dataset appears in that catalog with a role, it also requests its
+metadata. On startup the WASM client checks the current session again using
+an uncached `/me` request. It can consume the prefetched catalog and metadata
+once if the complete session still matches, including its per-login CSRF token.
+A logout, new login or failed validation discards the speculative responses.
+Missing or failed reads and query overrides use normal HTTP discovery.
+Endpoint changes and logout invalidate pending work through the request gate.
 
-During browser startup the existing HTML loading placeholder remains visible
-while the shared reducers, refreshes and persistence queues restore the initial
-workspace. The UI skips intermediate login/catalog layouts until the session,
-dataset, assignment and draft recovery settle. It then renders the workspace or
-the applicable sign-in, empty or failure state. An already-ready image does not
-wait for a background availability refresh. Later navigation uses the usual
-retained UI and loading bars.
-Startup waits for browser draft readiness only while the assignment lease is
-valid; an expired assignment remains visible through the usual work UI.
+The browser loads the two Inter faces from the distribution's integrity-checked
+assets alongside WASM. If either font is unavailable, egui uses its bundled
+fallback fonts. Native builds embed Inter.
+
+The first background draw runs behind the HTML loading placeholder. The shared
+reducers and persistence queue restore the workspace before rendering the first
+interactive layout. A ready session, catalog and dataset can start the remembered
+image request before that layout. Statistics, presence, build information and
+queue prefetch wait until startup finishes. A ready image can open while a
+background availability refresh is pending.
+Startup waits for draft recovery while the assignment lease is valid. An expired
+assignment appears in the usual work UI. Later navigation uses the retained UI and loading bars.
 
 The app bar uses the bundled 256-pixel PNG copy of the SVG app icon and caches
 one texture per egui context. This keeps SVG parsing and rasterization out of the
@@ -234,9 +243,10 @@ correction input, migration placement/exclusions, and recovered drafts. Saving,
 undoing, discarding, or reloading the same assignment does not clear it. A new
 assignment resets it. Selection, pan/zoom, and target inspection alone do not set it.
 
-Previous review first reopens and loads the previous assignment, then releases the
-displaced one. Releasing first would make the displaced review the latest terminal
-assignment. The current image stays visible while opening; accepted confirmation
+A history reopen loads the requested image alongside lease reacquisition. The
+client displays it only after the server revalidates the acquired workflow item.
+Previous review then releases the displaced assignment so it cannot become
+the latest terminal assignment before the reopen. The current image stays visible while opening; accepted confirmation
 closes its modal but keeps conflicting actions blocked until completion. Errors
 preserve current work. Statistics uses its separate assignment-preserving modal.
 
@@ -653,8 +663,11 @@ loads; they resume after success or failure. An open statistics view bypasses
 this deferral. Other commands can pass a deferred statistics request.
 
 History loading performs display revalidation in the same asynchronous operation
-before sending its result to the UI. The reducer still checks exact assignment
-identity and current request ownership before activation. Activation records
+before sending its result to the UI. A refused reopen immediately cancels the
+speculative image read. If the image fails first, the client waits for the lease
+result and returns any acquired, unused assignment through reservation cleanup.
+The reducer still checks exact assignment identity and current request ownership
+before activation. Activation records
 display/seen; prefetch only revalidates. New prefetch requests wait during foreground image
 navigation and while a forward history item remains. Existing prepared items
 remain reusable. Continuing a selected workflow can claim the next item

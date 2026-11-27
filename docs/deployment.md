@@ -155,8 +155,11 @@ same release.
 
 Trunk release builds select the `wasm-release` Cargo profile with size
 optimization, whole-program LTO and one codegen unit, then run Binaryen 123's
-WASM size optimizer. Image decoding, pixel conversion, font shaping and
-rasterization dependencies use speed optimization within that profile.
+WASM size optimizer. The profile uses speed optimization for egui layout,
+image decoding, pixel conversion, font shaping and rasterization. The browser
+loads the two Inter font files from the release's static assets in parallel with
+WASM. When replacing those fonts, update the matching integrity hashes in
+`apps/labello-wasm/index.html`.
 Development browser builds and native release profiles
 retain their usual settings.
 The browser's Cargo configuration enables 128-bit WebAssembly SIMD for both

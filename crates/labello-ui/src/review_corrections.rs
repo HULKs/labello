@@ -207,6 +207,11 @@ impl LabelloApp {
                     }
                 }
                 self.work.review_corrections.changes = changes;
+            } else {
+                self.work
+                    .review_corrections
+                    .changes
+                    .retain(|change| !change_matches_editor(change, &editor));
             }
             self.discard_correction();
             return;
@@ -262,11 +267,7 @@ impl LabelloApp {
                 geometry: annotation.geometry,
             }
         };
-        if editor.version > 0 && !draft.geometry_changed() {
-            self.remove_staged_change(&change);
-        } else {
-            self.keep_review_change(change);
-        }
+        self.keep_review_change(change);
         if draft.reason.trim().is_empty() {
             self.work
                 .review_corrections
@@ -948,6 +949,19 @@ impl LabelloApp {
             // The completed-addition guard above starts another object on the next placement.
             self.stage_review_addition_keep_editor();
         }
+    }
+}
+
+fn change_matches_editor(change: &ReviewCorrectionChange, editor: &AnnotationVersion) -> bool {
+    match change {
+        ReviewCorrectionChange::Edit { annotation_id, .. }
+        | ReviewCorrectionChange::Add { annotation_id, .. }
+        | ReviewCorrectionChange::Remove { annotation_id, .. } => {
+            annotation_id == &editor.annotation_id
+        }
+        ReviewCorrectionChange::MigrationObject {
+            object_group_id, ..
+        } => Some(object_group_id) == editor.object_group_id.as_ref(),
     }
 }
 

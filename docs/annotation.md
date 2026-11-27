@@ -111,7 +111,8 @@ fallback. Gallery thumbnails use a separate 256-pixel profile.
 Review starts only after annotation Overview is finished. In Objects, Approve
 confirms the current object; edit it and Submit correction to publish its correction.
 Both advance directly to another Objects item. Reset restores the original editor.
-In Overview, inspect the whole image and add or correct missing annotations in place.
+In Overview, select an existing box or keypoint to move it, or add a missing
+object on the canvas. Reset item discards the selected object’s correction.
 Approve finishes an unchanged image; Submit correction publishes its changes.
 Incomplete additions block confirmation but can be saved and skipped.
 

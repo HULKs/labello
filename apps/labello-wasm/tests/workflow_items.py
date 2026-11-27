@@ -15,10 +15,10 @@ from urllib.parse import urlsplit
 from PIL import Image
 from playwright.async_api import async_playwright
 from navigation_latency import NavigationLatency, PROBE
-from stylus_input import COLOR, Scenario, application, png, require, until
+from stylus_input import COLOR, Scenario, application, check_box, check_point, png, require, until
 
 
-async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None, browser_name="chromium"):
+async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None, browser_name="chromium", correct_overview=False):
     with application(server_binary=server_binary) as (origin, api, server):
         async with async_playwright() as playwright:
             if browser_name == "firefox":
@@ -229,6 +229,40 @@ async def run(kind, artifacts=None, latency_budget_ms=None, server_binary=None, 
                 review = await until(lambda: next_display(before), "review-overview-not-selected")
                 require(review[1]["item"]["kind"] == "overview", "review-overview-selected-object")
                 phase = "review_overview"
+                if correct_overview:
+                    scenario.bounds = await until(lambda: scenario.color_bounds(COLOR), "review-image-missing")
+                    original = review[2]["annotations"]["object-0"][-1]
+                    geometry = original["geometry"]["geometry"]
+                    if kind == "bounding_box":
+                        point = (geometry["x"] + geometry["width"] / 2, geometry["y"] + geometry["height"] / 2)
+                    else:
+                        keypoint = geometry["keypoints"][0]["point"]
+                        point = (keypoint["x"], keypoint["y"])
+                    await scenario.gesture(point, pointer="mouse")
+                    destination = (point[0] + 0.05, point[1] + 0.05)
+                    await scenario.gesture(point, destination, pointer="mouse")
+                    await page.mouse.click(1380, 968)
+                    async def corrected():
+                        state = await scenario.request("GET", f'/datasets/stylus/images/{review[0]["imageId"]}')
+                        if not state.get("reviewCorrectionSubmissions"):
+                            return False
+                        edited = state["annotations"]["object-0"][-1]
+                        if kind == "bounding_box":
+                            check_box(edited, (geometry["x"] + 0.05, geometry["y"] + 0.05,
+                                              geometry["width"], geometry["height"]))
+                        else:
+                            check_point(edited, destination)
+                        require(edited["version"] == original["version"] + 1
+                                and edited["geometry"] != original["geometry"]
+                                and len(state["reviewCorrectionSubmissions"]) == 1
+                                and state["taskStates"][task["taskId"]]["status"] == "submitted",
+                                "existing-overview-correction-mismatch")
+                        return True
+                    await until(corrected, "existing-overview-correction-not-published")
+                    require(not scenario.errors, "browser-page-error")
+                    print(json.dumps({"result": "passed", "kind": kind, "browser": browser_name,
+                                      "check": "existing-object-review-overview-correction"}))
+                    return
                 for index in range(2):
                     before = len(displayed)
                     if index == 0:
@@ -273,7 +307,8 @@ if __name__ == "__main__":
     parser.add_argument("--server", type=Path, help="Server binary; use a release build for latency measurements")
     parser.add_argument("--browser", choices=["chromium", "firefox"], default="chromium",
                         help="Firefox requires a display, such as Xvfb with LIBGL_ALWAYS_SOFTWARE=1")
+    parser.add_argument("--correct-overview", action="store_true", help="Correct an existing object in review Overview")
     args = parser.parse_args()
     if args.latency_budget_ms is not None and args.latency_budget_ms <= 0:
         parser.error("--latency-budget-ms must be positive")
-    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts, args.latency_budget_ms, args.server, args.browser), timeout=180))
+    asyncio.run(asyncio.wait_for(run(args.kind, args.artifacts, args.latency_budget_ms, args.server, args.browser, args.correct_overview), timeout=180))

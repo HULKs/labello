@@ -47,17 +47,14 @@ pub fn start() {
 
 #[cfg(target_arch = "wasm32")]
 async fn run() -> Result<(), JsValue> {
-    let canvas = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id("labello-canvas"))
-        .ok_or_else(|| JsValue::from_str("missing #labello-canvas element"))?
-        .dyn_into::<web_sys::HtmlCanvasElement>()?;
     let browser_config = config::load().await?;
     let config = app_config_from_url(&browser_config)?;
     let mut app = labello_ui::LabelloApp::live_http(config);
     app.start_session();
     // Poll discovery before synchronous WebGL setup blocks the browser thread.
     wasm_bindgen_futures::JsFuture::from(js_sys::Promise::resolve(&JsValue::UNDEFINED)).await?;
+    let fonts = load_fonts().await;
+    let canvas = rendering_canvas()?;
     let options = eframe::WebOptions::default();
     let runner = eframe::WebRunner::new();
     let input_runner = runner.clone();
@@ -66,7 +63,8 @@ async fn run() -> Result<(), JsValue> {
             canvas.clone(),
             options,
             Box::new(move |creation_context| {
-                labello_ui::theme::apply(&creation_context.egui_ctx);
+                app.prepare_first_frame(&creation_context.egui_ctx);
+                labello_ui::theme::apply_browser(&creation_context.egui_ctx, fonts);
                 motion::install(&creation_context.egui_ctx);
                 build_information::install(&mut app, &creation_context.egui_ctx);
                 app.set_import_chunk_uploader(std::rc::Rc::new(|request| {
@@ -88,6 +86,46 @@ async fn run() -> Result<(), JsValue> {
         )
         .await?;
     Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn rendering_canvas() -> Result<web_sys::HtmlCanvasElement, JsValue> {
+    let canvas = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("labello-canvas"))
+        .ok_or_else(|| JsValue::from_str("missing #labello-canvas element"))?
+        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+    // A GPU process restart can invalidate the context created during download.
+    // A new canvas lets WebRunner create a fresh context or use WebGL 1.
+    if let Some(context) = canvas.get_context("webgl2")?
+        && let Ok(gl) = context.dyn_into::<web_sys::WebGl2RenderingContext>()
+        && (gl.is_context_lost() || gl.get_supported_extensions().is_none())
+    {
+        let replacement = canvas
+            .clone_node()?
+            .dyn_into::<web_sys::HtmlCanvasElement>()?;
+        canvas.replace_with_with_node_1(&replacement)?;
+        return Ok(replacement);
+    }
+    Ok(canvas)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn load_fonts() -> Option<(Vec<u8>, Vec<u8>)> {
+    let global = js_sys::global();
+    let key = JsValue::from_str("__labelloFonts");
+    let pending: js_sys::Promise = js_sys::Reflect::get(&global, &key).ok()?.dyn_into().ok()?;
+    let _ = js_sys::Reflect::delete_property(&global, &key);
+    let fonts: js_sys::Array = wasm_bindgen_futures::JsFuture::from(pending)
+        .await
+        .ok()?
+        .dyn_into()
+        .ok()?;
+    let bytes = |index| {
+        let buffer: js_sys::ArrayBuffer = fonts.get(index).dyn_into().ok()?;
+        Some(js_sys::Uint8Array::new(&buffer).to_vec())
+    };
+    Some((bytes(0)?, bytes(1)?))
 }
 
 #[cfg(target_arch = "wasm32")]

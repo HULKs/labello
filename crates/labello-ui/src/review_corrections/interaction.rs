@@ -342,8 +342,10 @@ impl LabelloApp {
                 .staged_review_decisions
                 .retain(|review| review.target != target);
         } else if let Some(editor) = &self.work.review_corrections.editor {
-            let id = editor.annotation_id.clone();
-            self.work.review_corrections.changes.retain(|change| !matches!(change, ReviewCorrectionChange::Add { annotation_id, .. } if annotation_id == &id));
+            self.work
+                .review_corrections
+                .changes
+                .retain(|change| !change_matches_editor(change, editor));
         }
         self.discard_correction();
         self.sync_review_editor();
@@ -469,6 +471,17 @@ impl LabelloApp {
         if let Some(index) = target_index {
             self.navigate_review_item(index);
         } else if self.retain_review_editor() {
+            // A workflow Overview has no focused object target. Reopen its saved
+            // annotation so Reset and subsequent edits keep the original baseline.
+            if self.review_overview()
+                && let Some(annotation) = self
+                    .annotation_objects()
+                    .into_iter()
+                    .find(|annotation| &annotation.annotation_id == id)
+            {
+                self.begin_review_correction(annotation);
+                return;
+            }
             let mut previews = Vec::new();
             self.apply_staged_review_previews(&mut previews);
             if let Some(annotation) = previews

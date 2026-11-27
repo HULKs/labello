@@ -8,7 +8,7 @@ pub mod folder_upload;
 pub mod glossary;
 mod image_transfer;
 mod import_flow;
-#[cfg(feature = "inspector-presets")]
+#[cfg(any(test, feature = "inspector-presets"))]
 pub mod inspector_presets;
 pub mod live;
 mod live_protocol;

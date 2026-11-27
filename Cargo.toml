@@ -72,8 +72,8 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 
-# Pixel conversion, image decoding and font rasterization run before the first
-# usable browser frame. Keep these loops fast while sizing the rest of the app.
+# Image decoding, text layout and rendering run before the first usable frame.
+# Optimize those paths for speed while sizing the rest of the browser app.
 [profile.wasm-release.package.image]
 opt-level = 3
 
@@ -91,3 +91,6 @@ opt-level = 3
 
 [profile.wasm-release.package.harfrust]
 opt-level = 3
+
+[profile.wasm-release.package.egui]
+opt-level = 2

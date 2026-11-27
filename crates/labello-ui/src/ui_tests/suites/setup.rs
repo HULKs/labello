@@ -1,4 +1,19 @@
 #[test]
+fn ready_discovery_can_restore_the_catalog_before_the_first_layout() {
+    let api = Rc::new(SpyApi::new());
+    let mut app = base_live_app(api.clone());
+    app.start_session();
+    app.prepare_first_frame(&egui::Context::default());
+    assert!(app.auth.account.is_some());
+    assert!(app.datasets.summaries_loaded);
+    assert_eq!(api.counts().list_datasets, 1);
+    let harness = Harness::builder()
+        .with_size(egui::vec2(1440.0, 1000.0))
+        .build_eframe(|_| app);
+    assert!(harness.query_by_label("Continue with Demo Dataset").is_some());
+}
+
+#[test]
 fn browser_startup_skips_intermediate_layouts_until_the_catalog_is_ready() {
     let api = Rc::new(SpyApi::new());
     let scheduled = Rc::new(RefCell::new(Vec::new()));

@@ -9,7 +9,7 @@ from playwright.async_api import async_playwright
 from stylus_input import application, require
 
 
-async def run(browser_name, server_binary):
+async def run(browser_name, server_binary, lose_context):
     root = Path(__file__).resolve().parents[3]
     dist = root / "apps/labello-wasm/dist"
     modules = [path for path in (dist / "snippets").rglob("*.js")
@@ -27,8 +27,26 @@ async def run(browser_name, server_binary):
                 browser = await playwright.chromium.launch(channel="chromium", args=["--enable-unsafe-swiftshader"])
             try:
                 page = await browser.new_page()
+                if lose_context:
+                    await page.add_init_script("""(() => {
+                      const get = HTMLCanvasElement.prototype.getContext;
+                      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+                        const gl = get.call(this, type, ...args);
+                        if (this.id === 'labello-canvas' && type === 'webgl2' && gl && !window.__lostStartupCanvas) {
+                          const extension = gl.getExtension('WEBGL_lose_context');
+                          if (extension) {
+                            window.__lostStartupCanvas = this;
+                            extension.loseContext();
+                          }
+                        }
+                        return gl;
+                      };
+                    })()""")
                 await page.goto(origin)
                 await page.locator("#startup-status").wait_for(state="detached", timeout=30000)
+                if lose_context:
+                    require(await page.evaluate("!!window.__lostStartupCanvas && !__lostStartupCanvas.isConnected"),
+                            "lost-startup-canvas-not-replaced")
                 result = await page.evaluate("""async ({module, fixture}) => {
                     const {decodeWorkingPreview} = await import(module);
                     const original = globalThis.createImageBitmap;
@@ -71,5 +89,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--browser", choices=["chromium", "firefox"], default="chromium")
     parser.add_argument("--server", type=Path)
+    parser.add_argument("--lose-startup-context", action="store_true")
     args = parser.parse_args()
-    asyncio.run(asyncio.wait_for(run(args.browser, args.server), timeout=60))
+    asyncio.run(asyncio.wait_for(run(args.browser, args.server, args.lose_startup_context), timeout=60))
