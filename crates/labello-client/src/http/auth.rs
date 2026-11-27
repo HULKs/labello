@@ -58,9 +58,16 @@ impl AuthApi for HttpLabelloApi {
 
     fn me<'a>(&'a self) -> crate::ApiFuture<'a, SessionInfo> {
         Box::pin(async move {
-            let session = self.discovery_get("/me").await?;
-            self.remember_session(&session);
-            Ok(session)
+            let request = self.request(Method::GET, "/me")?;
+            #[cfg(target_arch = "wasm32")]
+            let request = request.fetch_cache_no_store();
+            let session = match request.send().await {
+                Ok(response) => self.session(response).await,
+                Err(error) => Err(error.into()),
+            };
+            #[cfg(target_arch = "wasm32")]
+            self.validate_discovery_session(session.as_ref().ok())?;
+            session
         })
     }
 

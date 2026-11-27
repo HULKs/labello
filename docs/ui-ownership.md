@@ -31,7 +31,10 @@ both responses arrive and sign-in options succeed. In the deployed same-origin
 `/api/` configuration, the HTML starts these reads during the WASM download.
 After both succeed, it requests the catalog. If the authenticated account's
 remembered dataset appears in that catalog with a role, it also requests its
-metadata. The first HTTP client consumes each matching response at most once.
+metadata. On startup the WASM client checks the current session again using
+an uncached `/me` request. It can consume the prefetched catalog and metadata
+once if the complete session still matches, including its per-login CSRF token.
+A logout, new login or failed validation discards the speculative responses.
 Missing or failed reads and query overrides use normal HTTP discovery.
 Endpoint changes and logout invalidate pending work through the request gate.
 
@@ -660,8 +663,11 @@ loads; they resume after success or failure. An open statistics view bypasses
 this deferral. Other commands can pass a deferred statistics request.
 
 History loading performs display revalidation in the same asynchronous operation
-before sending its result to the UI. The reducer still checks exact assignment
-identity and current request ownership before activation. Activation records
+before sending its result to the UI. A refused reopen immediately cancels the
+speculative image read. If the image fails first, the client waits for the lease
+result and returns any acquired, unused assignment through reservation cleanup.
+The reducer still checks exact assignment identity and current request ownership
+before activation. Activation records
 display/seen; prefetch only revalidates. New prefetch requests wait during foreground image
 navigation and while a forward history item remains. Existing prepared items
 remain reusable. Continuing a selected workflow can claim the next item

@@ -132,9 +132,29 @@ impl HttpLabelloApi {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn validate_discovery_session(&self, current: Option<&SessionInfo>) -> ClientResult<()> {
+        if let Some(map) = &self.discovery {
+            let key = wasm_bindgen::JsValue::from_str(self.endpoint("/me")?.as_str());
+            let earlier = map
+                .get(&key)
+                .as_string()
+                .and_then(|text| serde_json::from_str::<SessionInfo>(&text).ok());
+            map.delete(&key);
+            // Only a completed prefetch from this exact login (including its
+            // per-session token) can supply the catalog and dataset metadata.
+            if current.is_none() || earlier.as_ref() != current {
+                map.clear();
+            }
+        }
+        Ok(())
+    }
+
     async fn discovery_get<T: DeserializeOwned>(&self, path: &str) -> ClientResult<T> {
         #[cfg(target_arch = "wasm32")]
-        if let Some(map) = &self.discovery {
+        if let Some(map) = &self.discovery
+            && (path == "/auth/options" || self.csrf_token().is_some())
+        {
             use wasm_bindgen::JsCast;
             let key = wasm_bindgen::JsValue::from_str(self.endpoint(path)?.as_str());
             let value = map.get(&key);
@@ -154,7 +174,7 @@ impl HttpLabelloApi {
                 }
             }
         }
-        // A fresh session lookup must never consume an earlier account's catalog.
+        // On a miss, fetch this and subsequent discovery responses from the server.
         self.discard_discovery();
         Self::json(self.request(Method::GET, path)?.send().await?).await
     }

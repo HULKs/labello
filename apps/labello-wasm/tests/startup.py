@@ -46,6 +46,10 @@ PROBE = r"""(() => {
       : /^\/api\/datasets\/[^/]+\/images\/[^/]+$/.test(path) ? 'image-record'
       : 'other';
     const entry = {kind, start: performance.now()}; t.fetches.push(entry);
+    if (kind === 'preview' && window.__watchPreviewCancellation) {
+      const signal = args[0]?.signal ?? input?.signal;
+      signal?.addEventListener('abort', () => { entry.aborted = true; }, {once: true});
+    }
     return fetch.call(this, input, ...args).then(response => {
       entry.end = performance.now(); entry.status = response.status; return response;
     });
@@ -158,6 +162,101 @@ class StartupFiles(QuietFiles):
             pass
 
 
+async def check_session_change(browser, context_options, origin, rotate):
+    # Change the cookie through the real API after HTML discovery, before
+    # WASM can consume the catalog. A WebGL draw is recorded even if fleeting.
+    context = await browser.new_context(**context_options)
+    resume = asyncio.Event()
+    try:
+        api = origin + "/api"
+        headers = {"Origin": origin}
+        login = await context.request.post(api + "/auth/local-admin", headers=headers)
+        require(login.ok, "session-change-login")
+        headers["x-csrf-token"] = (await login.json())["csrfToken"]
+        page = await context.new_page()
+        await page.add_init_script("window.__startupDatasetProbe = true;\n" + PROBE)
+
+        async def hold_module(route):
+            await resume.wait()
+            await route.continue_()
+
+        await page.route("**/*.wasm", hold_module)
+        async with page.expect_response(lambda r: urlsplit(r.url).path == "/api/datasets") as catalog:
+            await page.goto(origin, wait_until="commit")
+        await (await catalog.value).body()
+        require((await context.request.post(api + "/logout", headers=headers)).ok, "session-change-logout")
+        require((await context.request.get(api + "/me")).status == 401, "logout-not-effective")
+        if rotate:
+            renewed = await context.request.post(api + "/auth/local-admin", headers={"Origin": origin})
+            require(renewed.ok and (await renewed.json())["csrfToken"] != headers["x-csrf-token"],
+                    "session-not-rotated")
+        resume.set()
+        await page.locator("#startup-status").wait_for(state="detached", timeout=10000)
+        if rotate:
+            await page.wait_for_function("__startup.datasetsReady")
+            require(await page.evaluate("""() => {
+                const catalogs = __startup.fetches.filter(f => f.kind === 'datasets' && f.status === 200);
+                return catalogs.length === 2 && catalogs[1].end <= __startup.datasetsReady;
+            }"""), "rotated-login-reused-previous-catalog")
+        else:
+            await page.wait_for_function("__startup.fetches.some(f => f.kind === 'session' && f.status === 401)")
+            require(not await page.evaluate("__startup.datasetsReady || __startup.imageReady || __startup.fetches.some(f => f.kind === 'keybindings')"),
+                    "previous-account-workspace-after-logout")
+    finally:
+        resume.set()
+        await context.close()
+
+
+async def check_reopen_failure(browser, context_options, state, origin, image_fails_first):
+    context = await browser.new_context(storage_state=state, **context_options)
+    preview_started = asyncio.Event()
+    resume = asyncio.Event()
+    try:
+        page = await context.new_page()
+        await page.add_init_script("window.__watchPreviewCancellation = true;\n" + PROBE)
+
+        async def preview(route):
+            preview_started.set()
+            if image_fails_first:
+                await route.fulfill(status=503, json={"error": "preview unavailable"})
+            else:
+                await resume.wait()
+                # The client may already have cancelled its network request.
+                await route.abort()
+
+        async def reopen(route):
+            await preview_started.wait()
+            if image_fails_first:
+                await resume.wait()
+                await route.continue_()
+            else:
+                await route.fulfill(status=409, json={"error": "history unavailable"})
+
+        await page.route("**/encoded-preview?*", preview)
+        await page.route("**/work-items/reopen", reopen)
+        await page.goto(origin, wait_until="domcontentloaded")
+        if image_fails_first:
+            await page.wait_for_function("__startup.fetches.some(f => f.kind === 'preview' && f.status === 503)")
+            async with page.expect_response(lambda r: urlsplit(r.url).path.endswith("/assignments/release")) as released:
+                async with page.expect_response(lambda r: urlsplit(r.url).path.endswith("/work-items/reopen")) as acquired:
+                    resume.set()
+            response = await released.value
+            lease = await acquired.value
+            require(lease.ok and response.ok, "undisplayed-lease-release-failed")
+            require((await response.json())["assignmentId"] == (await lease.json())["assignmentId"],
+                    "released-different-assignment")
+        else:
+            await page.wait_for_function("__startup.fetches.some(f => f.kind === 'reopen' && f.status === 409)")
+            await page.wait_for_function("__startup.fetches.some(f => f.kind === 'preview' && f.aborted && !f.status)",
+                                         timeout=5000)
+        await page.locator("#startup-status").wait_for(state="detached", timeout=5000)
+        require(not await page.evaluate("__startup.imageReady || __startup.fetches.some(f => f.kind === 'display')"),
+                "failed-reopen-displayed-image")
+    finally:
+        resume.set()
+        await context.close()
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dist", type=Path, default=Path("apps/labello-wasm/dist"))
@@ -241,7 +340,8 @@ async def main():
                             "bundled-inter-faces-unavailable")
                     for kind in ("auth", "session", "datasets"):
                         requests = [entry for entry in row["fetches"] if entry["kind"] == kind]
-                        require(len(requests) == 1 and requests[0]["status"] == 200,
+                        expected_count = 2 if kind == "session" else 1
+                        require(len(requests) == expected_count and all(r["status"] == 200 for r in requests),
                                 f"unexpected-startup-{kind}-requests")
                     if args.screen == "restored-image":
                         reopen = next(entry for entry in row["fetches"] if entry["kind"] == "reopen")
@@ -317,6 +417,13 @@ async def main():
                             "unavailable-remembered-dataset-requested")
                     await context.close()
                     failure_cases.append("unavailable-remembered-dataset")
+                    await check_reopen_failure(browser, context_options, state, origin, image_fails_first=False)
+                    await check_reopen_failure(browser, context_options, state, origin, image_fails_first=True)
+                    failure_cases.extend(["reopen-refused-preview-pending", "preview-failed-reopen-pending"])
+                else:
+                    await check_session_change(browser, context_options, origin, rotate=False)
+                    await check_session_change(browser, context_options, origin, rotate=True)
+                    failure_cases.extend(["logout-during-download", "new-login-during-download"])
                 report = {"browser": args.browser, "version": browser.version, "viewport": [1440, 1000],
                     "screen": args.screen,
                     "dpr": 1, "zoom": 1, "cold_contexts": args.runs, "encoding": args.encoding,

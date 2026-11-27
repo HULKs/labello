@@ -166,19 +166,23 @@ impl LabelloApp {
                     }
                 }
                 UiMessage::PreviousAssignmentLoaded {
-                    request: _,
+                    request,
                     operation_id,
-                    assignment,
+                    mut assignment,
                     result,
                 } => {
+                    let dataset_id = request.dataset_id.expect("previous assignment is dataset-scoped");
                     if self.work.active_load_id != Some(operation_id) {
+                        if let Some(assignment) = assignment {
+                            self.release_reservation(dataset_id, assignment);
+                        }
                         return None;
                     }
                     self.work.active_load_id = None;
                     self.loading.image = false;
                     self.work.pending_transition = None;
                     let returning_forward = std::mem::take(&mut self.work.workflow.returning_forward);
-                    self.work.workflow.revalidating_history = false;
+                    let history = std::mem::take(&mut self.work.workflow.revalidating_history);
                     match *result {
                         Ok(loaded) => {
                             if loaded.workflow_item().is_some() {
@@ -211,6 +215,11 @@ impl LabelloApp {
                             self.request_assignment_availability();
                         }
                         Err(error) => {
+                            // Workflow history can reacquire this item on retry. Return
+                            // an undisplayed lease, including when advancing forward.
+                            if history && let Some(unused) = assignment.take() {
+                                self.release_reservation(dataset_id, unused);
+                            }
                             if returning_forward && !error.unauthorized {
                                 self.runtime.notice = Some("The next history item is unavailable. Continuing with available work.".into());
                                 self.retire_current_image();

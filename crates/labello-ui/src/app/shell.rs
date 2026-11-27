@@ -9,7 +9,13 @@ impl eframe::App for LabelloApp {
         // Prime the first WebGL draw under the HTML placeholder while requests
         // are in flight. Interactive layout still waits for draft recovery.
         ui.painter().rect_filled(ui.max_rect(), egui::CornerRadius::ZERO, theme::APP_BG);
-        self.process_messages(ui.ctx());
+        if self.runtime.starting && !self.auth.checked {
+            // Validation can finish after graphics startup. Dispatch already-ready
+            // discovery results in this frame before laying out the workspace.
+            self.prepare_first_frame(ui.ctx());
+        } else {
+            self.process_messages(ui.ctx());
+        }
         if matches!(self.builds.reload.phase, crate::build_information::ReloadPhase::Navigating) {
             // Navigation is asynchronous. Do not accept edits after the final
             // persistence check while the browser replaces this document.

@@ -156,8 +156,7 @@ impl LabelloApp {
         self.start_frame_commands();
     }
 
-    /// Consume the session, catalog and dataset metadata if they completed
-    /// during download, so the remembered image starts loading before layout.
+    /// Drain the session, catalog and dataset stages that are ready before layout.
     pub fn prepare_first_frame(&mut self, ctx: &egui::Context) {
         for _ in 0..3 {
             self.process_messages(ctx);

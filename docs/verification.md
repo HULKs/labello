@@ -235,7 +235,8 @@ button at the benchmark viewport, confirmed by an in-memory screenshot.
 It fails when median navigation-to-dataset-list-draw time reaches 1000 ms.
 Use `--screen restored-image` to carry a workspace preference and measure the
 first draw of the restored synthetic image instead. The procedure also checks
-single-use discovery, signed-out and failed startup, font fallback, and
+logout and session rotation during the WASM download, failed workflow reopens
+in both response orders, signed-out and failed startup, font fallback, and
 restoration of a dataset that is no longer in the catalog. Use
 `--server target/release/labello-server` to measure the optimized server binary.
 Reports contain timings,

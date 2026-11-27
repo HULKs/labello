@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, rc::Rc, sync::Arc};
 
 use eframe::egui;
+use futures::FutureExt;
 use labello_client::{AnnotationBatchRequest, AssignmentActionRequest, LabelloApi};
 use labello_domain::{
     AnnotationId, Assignment, AssignmentKind, EventPayload, ReviewDecision, ReviewId, ReviewRecord,
@@ -158,18 +159,22 @@ impl LabelloApp {
                 let task_id = item.task_id.clone();
                 let mut transfer = transfer.expect("item image transfer");
                 let previews = transfer.previews.clone();
-                let (assignment, image) = futures::join!(
+                // A refused reopen cancels the speculative read. An image error must
+                // wait for the reopen so its lease stays available for cleanup.
+                let reopened = futures::try_join!(
                     api.reopen_workflow_item(&dataset_id, item),
-                    transfer.run(load_image_data(
-                        api.as_ref(),
-                        &dataset_id,
-                        &image_id,
-                        &kind,
-                        previews
-                    )),
+                    transfer
+                        .run(load_image_data(
+                            api.as_ref(),
+                            &dataset_id,
+                            &image_id,
+                            &kind,
+                            previews
+                        ))
+                        .map(Ok),
                 );
-                let assignment = match assignment {
-                    Ok(assignment) => assignment,
+                let (assignment, image) = match reopened {
+                    Ok(pair) => pair,
                     Err(error) => {
                         return UiMessage::PreviousAssignmentLoaded {
                             request,
